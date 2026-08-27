@@ -1,0 +1,19 @@
+# 배치 파일은 반드시 CRLF 여야 한다.
+# LF 로 저장되면 cmd 가 if (...) 블록을 파싱하지 못해 실행이 조용히 실패한다.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 나머지 텍스트 파일은 저장소에 LF 로 보관
+*.py   text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.txt  text eol=lf
+*.webmanifest text eol=lf
+
+# 바이너리
+*.png  binary
+*.xlsx binary
+*.pdf  binary
