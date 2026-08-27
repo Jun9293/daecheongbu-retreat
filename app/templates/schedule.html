@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}일정 · {{ retreat.name }}{% endblock %}
+{% block content %}
+
+<h1>일정표</h1>
+
+<div class="tabs">
+  {% for d in days %}
+  <a href="/schedule?day_id={{ d.id }}" class="{% if current_day and d.id == current_day.id %}active{% endif %}">
+    {{ d.label }}{% if d.date %} <span class="tiny">({{ d.date | short_date }})</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% if not days %}
+<div class="card"><div class="empty">아직 등록된 일자가 없습니다. 아래에서 일자를 추가해주세요.</div></div>
+{% endif %}
+
+{% if current_day %}
+<div class="card">
+  <div class="section-head">
+    <h2>{{ current_day.label }}{% if current_day.date %} · {{ current_day.date | kdate }}{% endif %}</h2>
+    {% if not is_readonly(user.role) %}
+    <form method="post" action="/schedule/days/{{ current_day.id }}/delete"
+          onsubmit="return confirm('{{ current_day.label }} 전체를 삭제할까요? 하위 일정도 함께 삭제됩니다.')">
+      <button class="btn btn-sm btn-danger" type="submit">일자 삭제</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% for item in current_day.items %}
+  <div class="task {% if is_other_dept(user, item.department_id) %}dim{% endif %}">
+    <div class="task-main">
+      <div class="task-title">{{ item.title }}</div>
+      <div class="task-meta">
+        <span class="tag">{{ item.start_time or "시간 미정" }}{% if item.end_time %}–{{ item.end_time }}{% endif %}</span>
+        {% if item.location %}<span class="tag">📍 {{ item.location }}</span>{% endif %}
+        {% if item.department %}<span class="tag tag-dept">{{ item.department.name }}</span>{% endif %}
+      </div>
+      {% for task in tasks_by_item.get(item.id, []) %}
+      <div class="tiny muted" style="margin-top:4px">
+        ↳ {{ task.title }} <span class="tag st-{{ task.status }}">{{ task.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if not is_readonly(user.role) %}
+    <form method="post" action="/schedule/items/{{ item.id }}/delete" onsubmit="return confirm('이 일정을 삭제할까요?')">
+      <button class="btn btn-sm btn-danger" type="submit">삭제</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">이 날의 일정이 아직 없습니다</div>
+  {% endfor %}
+</div>
+
+{% if not is_readonly(user.role) %}
+<details class="foldable">
+  <summary>+ {{ current_day.label }}에 일정 추가</summary>
+  <div class="fold-body">
+    <form method="post" action="/schedule/days/{{ current_day.id }}/items">
+      <div class="field">
+        <label for="s-title">일정명</label>
+        <input id="s-title" name="title" required placeholder="예: 1일차 집회">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="s-start">시작</label>
+          <input id="s-start" name="start_time" type="time">
+        </div>
+        <div class="field">
+          <label for="s-end">종료</label>
+          <input id="s-end" name="end_time" type="time">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="s-loc">장소</label>
+          <input id="s-loc" name="location" placeholder="예: 대강당">
+        </div>
+        <div class="field">
+          <label for="s-dept">담당 부서</label>
+          <select id="s-dept" name="department_id">
+            <option value="">전체</option>
+            {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">일정 추가</button>
+    </form>
+  </div>
+</details>
+{% endif %}
+{% endif %}
+
+{% if not is_readonly(user.role) %}
+<details class="foldable">
+  <summary>+ 일자 추가</summary>
+  <div class="fold-body">
+    <form method="post" action="/schedule/days">
+      <div class="grid2">
+        <div class="field">
+          <label for="d-label">이름</label>
+          <input id="d-label" name="label" required placeholder="예: 1일차 / 선발대">
+        </div>
+        <div class="field">
+          <label for="d-date">날짜</label>
+          <input id="d-date" name="date" type="date">
+        </div>
+      </div>
+      <button class="btn btn-full" type="submit">일자 추가</button>
+    </form>
+  </div>
+</details>
+{% endif %}
+{% endblock %}

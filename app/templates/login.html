@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}로그인 · 대청부 수련회{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-logo">
+    <div class="t">대청부 수련회</div>
+    <div class="s">총무팀 통합 관리 시스템</div>
+  </div>
+
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  <div class="card">
+    {% if step == "phone" %}
+    <form method="post" action="/login/code">
+      <div class="field">
+        <label for="phone">휴대폰 번호</label>
+        <input id="phone" name="phone_number" type="tel" inputmode="numeric"
+               placeholder="010-1234-5678" autocomplete="tel" required autofocus>
+      </div>
+      <button class="btn btn-full" type="submit">인증번호 받기</button>
+      <p class="muted tiny" style="margin-top:10px">
+        등록된 번호로만 로그인할 수 있어요. 처음 사용하는 경우 총무팀에 계정 등록을 요청해주세요.
+      </p>
+    </form>
+
+    {% else %}
+    {% if dev_code %}
+    <div class="devcode">
+      개발 모드 — 실제 SMS 대신 화면에 표시합니다<br>
+      <b>{{ dev_code }}</b>
+    </div>
+    {% endif %}
+    <form method="post" action="/login/verify">
+      <input type="hidden" name="phone_number" value="{{ phone_number }}">
+      {% if is_first_user %}
+      <div class="alert alert-warn">
+        첫 사용자입니다. 이 번호가 <b>총무팀(관리자)</b> 계정으로 등록됩니다.
+      </div>
+      <div class="field">
+        <label for="name">이름</label>
+        <input id="name" name="name" type="text" placeholder="예: 박민준" required>
+      </div>
+      {% endif %}
+      <div class="field">
+        <label for="code">인증번호 (3분 이내)</label>
+        <input id="code" name="code" type="text" inputmode="numeric" maxlength="6"
+               placeholder="6자리" autocomplete="one-time-code" required autofocus>
+      </div>
+      <button class="btn btn-full" type="submit">로그인</button>
+      <p class="muted tiny" style="margin-top:10px">
+        {{ phone_number }} 로 인증번호를 보냈어요. <a href="/login" style="text-decoration:underline">번호 다시 입력</a>
+      </p>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

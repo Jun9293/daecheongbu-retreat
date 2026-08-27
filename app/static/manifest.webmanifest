@@ -1,0 +1,15 @@
+{
+  "name": "대청부 수련회 총무팀 관리 시스템",
+  "short_name": "대청부 수련회",
+  "description": "수련회 일정·할 일·예산을 한 곳에서 관리합니다.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1f3a5f",
+  "lang": "ko",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

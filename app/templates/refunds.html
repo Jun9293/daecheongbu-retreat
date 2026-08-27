@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}환급 대상자 · {{ retreat.name }}{% endblock %}
+{% block content %}
+
+<h1>환급 대상자</h1>
+<p class="muted tiny" style="margin-top:-10px">지출자에게 돌려줘야 할 금액입니다. (식대는 지원금액 기준)</p>
+
+<div class="tabs">
+  <a href="/refunds?unpaid_only=1" class="{% if unpaid_only %}active{% endif %}">미지급만</a>
+  <a href="/refunds?unpaid_only=0" class="{% if not unpaid_only %}active{% endif %}">전체</a>
+  <a href="/expenses">지출 내역</a>
+  <a href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀 내려받기</a>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <h2>{{ groups|length }}명</h2>
+    <span><b>{{ grand_total | won }}</b></span>
+  </div>
+
+  {% for g in groups %}
+  <details class="foldable" style="box-shadow:none; margin-bottom:8px">
+    <summary>
+      <span>
+        {{ g.payer_name }}
+        <div class="tiny muted">{{ g.payer_account or '계좌 미등록' }}</div>
+      </span>
+      <span class="nowrap"><b>{{ g.total | won }}</b></span>
+    </summary>
+    <div class="fold-body">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>번호</th><th>내용</th><th class="num">금액</th><th class="num">환급액</th><th>지급</th></tr>
+          </thead>
+          <tbody>
+            {% for e in g.entries %}
+            <tr>
+              <td>{{ e.receipt_number }}</td>
+              <td>
+                {{ e.level3b or (e.budget_category.display_name if e.budget_category else '미지정') }}
+                {% if e.is_meal_expense %}<div class="tiny muted">🍚 {{ e.meal_headcount or 0 }}명 · {{ e.expense_date | short_date }}</div>{% endif %}
+              </td>
+              <td class="num">{{ e.amount | num }}</td>
+              <td class="num">{{ e.subsidy_amount | num }}</td>
+              <td>
+                {% if can_edit_dept(user, e.department_id) %}
+                <form method="post" action="/expenses/{{ e.id }}/paid">
+                  <input type="hidden" name="redirect_to" value="/refunds">
+                  <button class="btn btn-sm {% if e.paid %}btn-accent{% else %}btn-ghost{% endif %}" type="submit">
+                    {{ '지급완료' if e.paid else '미지급' }}
+                  </button>
+                </form>
+                {% else %}
+                <span class="tag">{{ '지급완료' if e.paid else '미지급' }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+  {% else %}
+  <div class="empty">환급 대상이 없습니다</div>
+  {% endfor %}
+</div>
+{% endblock %}

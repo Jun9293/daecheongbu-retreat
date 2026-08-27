@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}예산 · {{ retreat.name }}{% endblock %}
+{% block content %}
+
+<h1>예산</h1>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between; margin-bottom:6px">
+    <span><b>{{ summary.total_spent | won }}</b> <span class="muted tiny">집행</span></span>
+    <span class="muted tiny">예산 {{ summary.total_planned | won }}</span>
+  </div>
+  <div class="bar big {% if summary.total_spent > summary.total_planned %}over{% endif %}">
+    <span style="width: {{ [summary.progress_pct, 100] | min }}%"></span>
+  </div>
+  <div class="kpi" style="margin-top:12px">
+    <div><div class="v">{{ summary.progress_pct }}%</div><div class="l">집행률</div></div>
+    <div><div class="v">{{ summary.total_remaining | num }}</div><div class="l">잔액(원)</div></div>
+    <div><div class="v">{{ summary.categories|length }}</div><div class="l">예산 항목</div></div>
+  </div>
+  {% if summary.uncategorized_spent %}
+  <div class="alert alert-warn" style="margin-top:12px">
+    예산 항목이 지정되지 않은 지출 {{ summary.uncategorized_spent | won }} 이 있습니다.
+    <a href="/expenses" style="text-decoration:underline">지출 내역 확인</a>
+  </div>
+  {% endif %}
+  <div class="row" style="margin-top:12px">
+    <a class="btn btn-ghost btn-sm" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀 내려받기</a>
+    <a class="btn btn-ghost btn-sm" href="/expenses">지출 등록</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>항목별 집행 현황</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>구분 &gt; 항목 &gt; 세부항목</th>
+          <th class="num">예산</th>
+          <th class="num">집행</th>
+          <th class="num">잔액</th>
+          <th style="min-width:90px">집행률</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in summary.categories %}
+        <tr>
+          <td>
+            {{ row.category.display_name }}
+            {% if is_admin(user) %}
+            <details class="tiny">
+              <summary class="muted" style="cursor:pointer">수정</summary>
+              <form method="post" action="/budget/categories/{{ row.category.id }}/update" style="margin-top:6px">
+                <div class="field"><input name="level1" value="{{ row.category.level1 }}" required placeholder="구분"></div>
+                <div class="field"><input name="level2" value="{{ row.category.level2 }}" required placeholder="항목"></div>
+                <div class="field"><input name="level3" value="{{ row.category.level3 or '' }}" placeholder="세부항목"></div>
+                <div class="field"><input name="planned_amount" type="number" min="0" step="1000" value="{{ row.planned }}"></div>
+                <button class="btn btn-sm" type="submit">저장</button>
+              </form>
+              <form method="post" action="/budget/categories/{{ row.category.id }}/delete" style="margin-top:6px"
+                    onsubmit="return confirm('이 예산 항목을 삭제할까요?')">
+                <button class="btn btn-sm btn-danger" type="submit">삭제</button>
+              </form>
+            </details>
+            {% endif %}
+          </td>
+          <td class="num">{{ row.planned | num }}</td>
+          <td class="num">{{ row.spent | num }}</td>
+          <td class="num" {% if row.is_over_budget %}style="color:#b23a3a;font-weight:700"{% endif %}>{{ row.remaining | num }}</td>
+          <td>
+            <div class="bar {% if row.is_over_budget %}over{% endif %}">
+              <span style="width: {{ [row.progress_pct, 100] | min }}%"></span>
+            </div>
+            <span class="tiny muted">{{ row.progress_pct }}%</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="empty">등록된 예산 항목이 없습니다</div></td></tr>
+        {% endfor %}
+        <tr class="total">
+          <td>합계</td>
+          <td class="num">{{ summary.total_planned | num }}</td>
+          <td class="num">{{ summary.total_spent | num }}</td>
+          <td class="num">{{ summary.total_remaining | num }}</td>
+          <td>{{ summary.progress_pct }}%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if is_admin(user) %}
+<details class="foldable">
+  <summary>+ 예산 항목 추가</summary>
+  <div class="fold-body">
+    <form method="post" action="/budget/categories">
+      <div class="grid2">
+        <div class="field">
+          <label for="b-l1">구분</label>
+          <input id="b-l1" name="level1" required placeholder="예: 홍보 / 식비 / 그 외">
+        </div>
+        <div class="field">
+          <label for="b-l2">항목</label>
+          <input id="b-l2" name="level2" required placeholder="예: 포스터 / 수련회 준비지원">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="b-l3">세부항목 (선택)</label>
+          <input id="b-l3" name="level3" placeholder="예: 인쇄비 / 모임 식사비">
+        </div>
+        <div class="field">
+          <label for="b-amt">예산금액</label>
+          <input id="b-amt" name="planned_amount" type="number" min="0" step="1000" value="0">
+        </div>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">예산 항목 추가</button>
+    </form>
+  </div>
+</details>
+{% else %}
+<p class="muted tiny">예산 항목의 추가·수정은 총무팀(관리자)만 할 수 있습니다.</p>
+{% endif %}
+{% endblock %}

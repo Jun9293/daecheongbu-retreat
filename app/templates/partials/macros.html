@@ -1,0 +1,54 @@
+{% macro task_row(task, user, statuses, redirect_to, today) %}
+<div class="task {% if is_other_dept(user, task.department_id) %}dim{% endif %}">
+  <div class="task-main">
+    <div class="task-title">{{ task.title }}</div>
+    <div class="task-meta">
+      {% if task.department %}
+        <span class="tag tag-dept">{{ task.department.name }}</span>
+      {% else %}
+        <span class="tag">부서 미지정</span>
+      {% endif %}
+
+      {% if task.assignee %}
+        <span class="tag">{{ task.assignee.name }}</span>
+      {% else %}
+        <span class="tag tag-none">담당자 없음</span>
+      {% endif %}
+
+      {% if task.due_date %}
+        {% set left = (task.due_date - today).days %}
+        <span class="tag tag-due {% if left < 0 %}over{% elif left <= 3 %}soon{% endif %}">
+          {{ task.due_date | short_date }} · {{ task.due_date | dday }}
+        </span>
+      {% endif %}
+
+      {% if task.schedule_item %}
+        <span class="tag">🗓 {{ task.schedule_item.title }}</span>
+      {% endif %}
+    </div>
+    {% if task.description %}<div class="muted tiny" style="margin-top:5px">{{ task.description }}</div>{% endif %}
+  </div>
+
+  <div class="nowrap">
+    {% if can_edit_dept(user, task.department_id) %}
+    <form method="post" action="/tasks/{{ task.id }}/status">
+      <input type="hidden" name="redirect_to" value="{{ redirect_to }}">
+      <select class="status-select st-{{ task.status }}" name="status" onchange="this.form.submit()">
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% else %}
+    <span class="tag st-{{ task.status }}">{{ task.status }}</span>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+
+{% macro progress(row) %}
+<div class="bar {% if row.is_over_budget %}over{% endif %}">
+  <span style="width: {{ [row.progress_pct, 100] | min if row.progress_pct else 0 }}%"></span>
+</div>
+{% endmacro %}

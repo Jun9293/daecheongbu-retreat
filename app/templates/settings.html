@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}설정{% endblock %}
+{% block content %}
+
+<h1>설정</h1>
+
+<div class="card">
+  <h2>내 정보</h2>
+  <form method="post" action="/me/update">
+    <div class="grid2">
+      <div class="field">
+        <label for="m-name">이름</label>
+        <input id="m-name" name="name" value="{{ user.name }}" required>
+      </div>
+      <div class="field">
+        <label for="m-acct">내 계좌번호 (환급용)</label>
+        <input id="m-acct" name="bank_account" value="{{ user.bank_account or '' }}" placeholder="예: 국민 123456-01-123456">
+      </div>
+    </div>
+    <div class="row">
+      <span class="tag">{{ user.phone_number }}</span>
+      <span class="tag">{{ ROLE_LABELS.get(user.role, user.role) }}</span>
+      {% if user.department %}<span class="tag tag-dept">{{ user.department.name }}</span>{% endif %}
+      <div class="spacer"></div>
+      <button class="btn btn-sm" type="submit">저장</button>
+      <a class="btn btn-sm btn-ghost" href="/logout">로그아웃</a>
+    </div>
+  </form>
+</div>
+
+{% if is_admin(user) %}
+
+{% if retreat %}
+<div class="card">
+  <h2>회차 설정 — {{ retreat.name }}</h2>
+  <form method="post" action="/retreats/{{ retreat.id }}/update">
+    <div class="field">
+      <label for="r-name">회차 이름</label>
+      <input id="r-name" name="name" value="{{ retreat.name }}" required>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="r-start">시작일</label>
+        <input id="r-start" name="start_date" type="date" value="{{ retreat.start_date.isoformat() if retreat.start_date else '' }}">
+      </div>
+      <div class="field">
+        <label for="r-end">종료일</label>
+        <input id="r-end" name="end_date" type="date" value="{{ retreat.end_date.isoformat() if retreat.end_date else '' }}">
+      </div>
+    </div>
+    <div class="field">
+      <label for="r-cap">식대 1인당 지원 상한</label>
+      <input id="r-cap" name="meal_subsidy_per_person" type="number" min="0" step="500" value="{{ retreat.meal_subsidy_per_person }}">
+      <p class="muted tiny">회차·규정에 따라 다릅니다 (여름수련회 8,000원 / 소그룹지원비 5,000~7,000원 사례). 기본값 {{ default_cap | won }}</p>
+    </div>
+    <button class="btn" type="submit">회차 설정 저장</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>부서 ({{ departments|length }})</h2>
+  <div class="stack">
+    {% for d in departments %}
+    <div class="row" style="justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:6px">
+      <span>{{ d.name }}</span>
+      <form method="post" action="/departments/{{ d.id }}/delete"
+            onsubmit="return confirm('{{ d.name }} 부서를 삭제할까요? 연결된 할일·지출은 부서 미지정 상태로 남습니다.')">
+        <button class="btn btn-sm btn-danger" type="submit">삭제</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="empty">등록된 부서가 없습니다</div>
+    {% endfor %}
+  </div>
+  <form method="post" action="/departments/create" style="margin-top:12px">
+    <div class="row">
+      <input name="name" placeholder="새 부서 이름 (예: 홍보팀)" required style="flex:1; min-width:160px">
+      <button class="btn" type="submit">추가</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>사용자 ({{ users|length }})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>이름</th><th>전화번호</th><th>역할 / 부서</th><th></th></tr></thead>
+      <tbody>
+        {% for m in users %}
+        <tr>
+          <td>{{ m.name }}{% if not m.is_active %}<div class="tiny muted">비활성</div>{% endif %}</td>
+          <td class="tiny">{{ m.phone_number }}</td>
+          <td colspan="2">
+            <form method="post" action="/users/{{ m.id }}/update" class="row">
+              <select name="role" style="width:auto">
+                {% for r in roles %}
+                <option value="{{ r }}" {% if r == m.role %}selected{% endif %}>{{ ROLE_LABELS.get(r, r) }}</option>
+                {% endfor %}
+              </select>
+              <select name="department_id" style="width:auto">
+                <option value="">부서 미지정</option>
+                {% for d in departments %}
+                <option value="{{ d.id }}" {% if d.id == m.department_id %}selected{% endif %}>{{ d.name }}</option>
+                {% endfor %}
+              </select>
+              <label class="check tiny"><input type="checkbox" name="is_active" value="1" {% if m.is_active %}checked{% endif %}> 활성</label>
+              <button class="btn btn-sm" type="submit">저장</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="foldable" style="margin-top:12px; box-shadow:none">
+    <summary>+ 사용자 등록</summary>
+    <div class="fold-body">
+      <form method="post" action="/users/create">
+        <div class="grid2">
+          <div class="field">
+            <label for="u-name">이름</label>
+            <input id="u-name" name="name" required>
+          </div>
+          <div class="field">
+            <label for="u-phone">전화번호</label>
+            <input id="u-phone" name="phone_number" type="tel" placeholder="010-1234-5678" required>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="u-role">역할</label>
+            <select id="u-role" name="role">
+              {% for r in roles %}<option value="{{ r }}" {% if r == 'member' %}selected{% endif %}>{{ ROLE_LABELS.get(r, r) }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="u-dept">부서</label>
+            <select id="u-dept" name="department_id">
+              <option value="">부서 미지정</option>
+              {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="u-acct">계좌번호 (선택)</label>
+          <input id="u-acct" name="bank_account" placeholder="환급 시 사용">
+        </div>
+        <button class="btn btn-full btn-accent" type="submit">사용자 등록</button>
+      </form>
+    </div>
+  </details>
+</div>
+{% endif %}
+
+<details class="foldable">
+  <summary>+ 새 수련회 회차 만들기</summary>
+  <div class="fold-body">
+    <form method="post" action="/retreats/create">
+      <div class="field">
+        <label for="n-name">회차 이름</label>
+        <input id="n-name" name="name" required placeholder="예: 2027 겨울수련회">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="n-start">시작일</label>
+          <input id="n-start" name="start_date" type="date">
+        </div>
+        <div class="field">
+          <label for="n-end">종료일</label>
+          <input id="n-end" name="end_date" type="date">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="n-cap">식대 1인당 상한</label>
+          <input id="n-cap" name="meal_subsidy_per_person" type="number" min="0" step="500" value="{{ default_cap }}">
+        </div>
+        <div class="field">
+          <label for="n-clone">직전 회차 복제</label>
+          <select id="n-clone" name="clone_from">
+            <option value="">복제 없이 새로 시작</option>
+            {% for r in retreats %}
+            <option value="{{ r.id }}">{{ r.name }} (부서·예산 항목 복제)</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">회차 만들기</button>
+      <p class="muted tiny" style="margin-top:8px">복제를 선택하면 부서 목록과 예산 항목이 그대로 복사됩니다. 지출·할 일은 복사되지 않습니다.</p>
+    </form>
+  </div>
+</details>
+
+{% if logs %}
+<details class="foldable">
+  <summary>최근 변경 이력 ({{ logs|length }})</summary>
+  <div class="fold-body">
+    <div class="stack">
+      {% for log in logs %}
+      <div class="tiny" style="border-bottom:1px solid var(--line); padding-bottom:5px">
+        <b>{{ log.actor_name or '시스템' }}</b> · {{ log.action }}
+        {% if log.summary %}<div class="muted">{{ log.summary }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endif %}
+
+{% else %}
+<p class="muted tiny">회차·부서·사용자 관리는 총무팀(관리자)만 할 수 있습니다.</p>
+{% endif %}
+{% endblock %}

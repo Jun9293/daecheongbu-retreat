@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import task_row %}
+{% set STATUSES = ("대기", "진행중", "피드백요청", "완료", "지연") %}
+{% block title %}홈 · {{ retreat.name }}{% endblock %}
+{% block content %}
+
+<h1>{{ retreat.name }}</h1>
+<p class="muted tiny" style="margin-top:-10px">
+  {% if retreat.start_date %}{{ retreat.start_date | kdate }} ~ {{ retreat.end_date | kdate }}
+  {% if retreat.start_date %}· 수련회 {{ retreat.start_date | dday }}{% endif %}
+  {% else %}기간 미설정{% endif %}
+  · 식대 상한 {{ retreat.meal_subsidy_per_person | won }}/인
+</p>
+
+{% if overdue_all %}
+<div class="alert alert-danger">
+  ⚠️ 기한이 지난 할 일이 <b>{{ overdue_all|length }}건</b> 있습니다.
+  <a href="/tasks?status=지연" style="text-decoration:underline">확인하기</a>
+</div>
+{% endif %}
+{% if unassigned_soon %}
+<div class="alert alert-warn">
+  🔔 담당자 없이 기한이 1주일 이내인 할 일이 <b>{{ unassigned_soon|length }}건</b> 있습니다. 총무팀 확인이 필요합니다.
+</div>
+{% endif %}
+
+<div class="kpi" style="margin-bottom:12px">
+  <div><div class="v">{{ stats.open }}</div><div class="l">남은 할 일</div></div>
+  <div><div class="v">{{ stats.done }}/{{ stats.total }}</div><div class="l">완료</div></div>
+  <div><div class="v">{{ summary.progress_pct }}%</div><div class="l">예산 집행률</div></div>
+</div>
+
+<div class="cols2">
+<div>
+  <div class="card">
+    <div class="section-head">
+      <h2>내 할 일 · 오늘까지</h2>
+      <a class="btn btn-ghost btn-sm" href="/tasks?scope=mine">전체 보기</a>
+    </div>
+    {% if my_today %}
+      {% for task in my_today %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+    {% else %}
+      <div class="empty">오늘까지 마감인 내 할 일이 없습니다 👍</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>이번 주 (7일 이내)</h2>
+    {% if my_week %}
+      {% for task in my_week %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+    {% else %}
+      <div class="empty">7일 이내 마감인 내 할 일이 없습니다</div>
+    {% endif %}
+  </div>
+
+  {% if my_undated %}
+  <details class="foldable">
+    <summary>기한 미정 내 할 일 ({{ my_undated|length }})</summary>
+    <div class="fold-body">
+      {% for task in my_undated %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</div>
+
+<div>
+  {% if today_day %}
+  <div class="card">
+    <div class="section-head">
+      <h2>오늘 일정 · {{ today_day.label }}</h2>
+      <a class="btn btn-ghost btn-sm" href="/schedule?day_id={{ today_day.id }}">일정표</a>
+    </div>
+    {% for item in today_day.items %}
+    <div class="task {% if is_other_dept(user, item.department_id) %}dim{% endif %}">
+      <div class="task-main">
+        <div class="task-title">{{ item.title }}</div>
+        <div class="task-meta">
+          <span class="tag">{{ item.start_time or "시간 미정" }}{% if item.end_time %}–{{ item.end_time }}{% endif %}</span>
+          {% if item.location %}<span class="tag">📍 {{ item.location }}</span>{% endif %}
+          {% if item.department %}<span class="tag tag-dept">{{ item.department.name }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">등록된 일정이 없습니다</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="section-head">
+      <h2>예산 집행 현황</h2>
+      <a class="btn btn-ghost btn-sm" href="/budget">자세히</a>
+    </div>
+    <div class="row" style="justify-content:space-between; margin-bottom:6px">
+      <span class="muted tiny">집행 {{ summary.total_spent | won }}</span>
+      <span class="muted tiny">예산 {{ summary.total_planned | won }}</span>
+    </div>
+    <div class="bar big {% if summary.total_spent > summary.total_planned %}over{% endif %}">
+      <span style="width: {{ [summary.progress_pct, 100] | min }}%"></span>
+    </div>
+    <div class="stack" style="margin-top:12px">
+      {% for row in summary.categories[:5] %}
+      <div>
+        <div class="row" style="justify-content:space-between">
+          <span class="tiny">{{ row.category.display_name }}</span>
+          <span class="tiny muted">{{ row.spent | num }} / {{ row.planned | num }}</span>
+        </div>
+        <div class="bar {% if row.is_over_budget %}over{% endif %}" style="margin-top:4px">
+          <span style="width: {{ [row.progress_pct, 100] | min }}%"></span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

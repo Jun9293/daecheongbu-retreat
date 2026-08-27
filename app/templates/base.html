@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f3a5f">
+  <title>{% block title %}대청부 수련회{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/css/app.css?v=1">
+</head>
+<body>
+{% if user %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">대청부 수련회</a>
+    <div class="topbar-right">
+      {% if retreats and retreats|length > 0 %}
+      <form method="get" action="{{ request.url.path }}" class="retreat-switch">
+        <select name="retreat_id" onchange="this.form.submit()" aria-label="회차 선택">
+          {% for r in retreats %}
+          <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      <a class="user-chip" href="/settings" title="{{ ROLE_LABELS.get(user.role, user.role) }}">
+        {{ user.name }}<span class="role-dot role-{{ user.role }}"></span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endif %}
+
+{% if flash %}
+<div class="flash" role="status">{{ flash }}</div>
+{% endif %}
+
+<main class="page {% if user %}with-nav{% endif %}">
+  {% block content %}{% endblock %}
+</main>
+
+{% if user %}
+<nav class="bottomnav">
+  {% set path = request.url.path %}
+  <a href="/" class="{% if path == '/' %}active{% endif %}"><span class="ic">🏠</span>홈</a>
+  <a href="/schedule" class="{% if path.startswith('/schedule') %}active{% endif %}"><span class="ic">🗓</span>일정</a>
+  <a href="/tasks" class="{% if path.startswith('/tasks') %}active{% endif %}"><span class="ic">✅</span>할 일</a>
+  <a href="/budget" class="{% if path.startswith('/budget') %}active{% endif %}"><span class="ic">📊</span>예산</a>
+  <a href="/expenses" class="{% if path.startswith('/expenses') or path.startswith('/refunds') %}active{% endif %}"><span class="ic">🧾</span>지출</a>
+  <a href="/settings" class="{% if path.startswith('/settings') %}active{% endif %}"><span class="ic">⚙️</span>설정</a>
+</nav>
+{% endif %}
+
+<script src="/static/js/app.js?v=1" defer></script>
+</body>
+</html>

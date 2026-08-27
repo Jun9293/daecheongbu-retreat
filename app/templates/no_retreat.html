@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}시작하기{% endblock %}
+{% block content %}
+<div class="card" style="max-width:460px; margin:6vh auto; text-align:center">
+  <h1>수련회 회차가 없습니다</h1>
+  <p class="muted">모든 일정·할 일·예산은 <b>수련회 회차</b> 단위로 관리됩니다.<br>먼저 회차를 만들어주세요.</p>
+  {% if user.role == 'admin' %}
+  <a class="btn btn-accent" href="/settings">회차 만들기</a>
+  {% else %}
+  <p class="muted tiny">총무팀(관리자)이 회차를 만들면 이용할 수 있습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}
