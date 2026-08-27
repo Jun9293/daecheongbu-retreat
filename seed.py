@@ -305,20 +305,24 @@ def seed_phase2(db, retreat, depts, users, tasks_by_title, today):
     )
     db.add(poster)
     db.flush()
-    for version_no, (name, note, days_ago) in enumerate(
-        [
-            ("poster_v1.png", "1차 시안 — 색감 확인 부탁", 21),
-            ("poster_v2.png", "2차 — 문구 수정 반영", 14),
-        ],
-        start=1,
-    ):
+
+    from app.config import ASSET_DIR
+
+    poster_versions = [
+        # (원본 파일명, 메모, 며칠 전, 그라데이션 색 — 버전마다 실제로 다른 이미지)
+        ("poster_v1.png", "1차 시안 — 색감 확인 부탁", 21, (31, 58, 95), (47, 125, 109)),
+        ("poster_v2.png", "2차 — 문구 수정 반영", 14, (94, 52, 120), (214, 132, 74)),
+    ]
+    for version_no, (name, note, days_ago, top, bottom) in enumerate(poster_versions, start=1):
+        stored_name = f"demo-poster-v{version_no}.png"
+        size = make_demo_png(ASSET_DIR / stored_name, top_rgb=top, bottom_rgb=bottom)
         db.add(
             FileVersion(
                 file_asset_id=poster.id,
                 version_no=version_no,
                 original_name=name,
-                stored_name=f"demo-{version_no}.png",
-                size_bytes=180_000 + version_no * 20_000,
+                stored_name=stored_name,
+                size_bytes=size,
                 note=note,
                 uploaded_by_id=users["이홍보"].id,
                 uploaded_by_name="이홍보",
@@ -335,13 +339,26 @@ def seed_phase2(db, retreat, depts, users, tasks_by_title, today):
     )
     db.add(cue)
     db.flush()
+
+    cue_stored = "demo-cue-v1.xlsx"
+    cue_size = make_demo_xlsx(
+        ASSET_DIR / cue_stored,
+        title="1일차 집회",
+        rows=[
+            ("19:30", "오프닝 찬양 3곡", "찬양팀", "인이어 체크 19:10"),
+            ("19:50", "광고 및 공지", "총무팀", "PPT 준비"),
+            ("20:00", "말씀", "주강사", "무선마이크 2번"),
+            ("20:40", "결단 찬양", "찬양팀", "조명 어둡게"),
+            ("21:10", "조모임 안내", "새가족팀", "조 편성표 배부"),
+        ],
+    )
     db.add(
         FileVersion(
             file_asset_id=cue.id,
             version_no=1,
             original_name="cue_sheet_v1.xlsx",
-            stored_name="demo-cue.xlsx",
-            size_bytes=42_000,
+            stored_name=cue_stored,
+            size_bytes=cue_size,
             note="초안",
             uploaded_by_id=users["박찬양"].id,
             uploaded_by_name="박찬양",
@@ -426,6 +443,69 @@ def seed_phase2(db, retreat, depts, users, tasks_by_title, today):
         )
 
     db.commit()
+
+
+# --------------------------------------------------------------------------
+# 데모용 실제 파일 생성
+#
+# 예전에는 파일명과 크기만 DB에 넣고 디스크에는 아무것도 쓰지 않아서,
+# 데모 파일을 내려받으면 404가 났고 화면에는 없는 파일의 크기가 표시됐다.
+# 이제는 실제로 열리는 파일을 만들어 두고, 기록하는 크기도 실제 크기를 쓴다.
+# 외부 라이브러리를 새로 늘리지 않으려고 PNG는 표준 라이브러리로 직접 만든다.
+# --------------------------------------------------------------------------
+
+
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    import struct
+    import zlib
+
+    return (
+        struct.pack(">I", len(payload))
+        + kind
+        + payload
+        + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+    )
+
+
+def make_demo_png(path, *, width=480, height=640, top_rgb=(31, 58, 95), bottom_rgb=(47, 125, 109)) -> int:
+    """세로 그라데이션 PNG 를 만든다. 실제로 열리는 이미지 파일."""
+    import struct
+    import zlib
+
+    rows = bytearray()
+    for y in range(height):
+        ratio = y / max(1, height - 1)
+        pixel = bytes(
+            int(top_rgb[i] + (bottom_rgb[i] - top_rgb[i]) * ratio) for i in range(3)
+        )
+        rows.append(0)  # 필터 타입 (None)
+        rows.extend(pixel * width)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    data = (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", header)
+        + _png_chunk(b"IDAT", zlib.compress(bytes(rows), 6))
+        + _png_chunk(b"IEND", b"")
+    )
+    path.write_bytes(data)
+    return len(data)
+
+
+def make_demo_xlsx(path, *, title: str, rows: list) -> int:
+    """실제로 엑셀에서 열리는 큐시트 파일."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = title
+    ws.append(["시간", "순서", "담당", "비고"])
+    for row in rows:
+        ws.append(list(row))
+    for column, width in zip("ABCD", (12, 24, 12, 28)):
+        ws.column_dimensions[column].width = width
+    wb.save(path)
+    return path.stat().st_size
 
 
 if __name__ == "__main__":

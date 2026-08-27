@@ -6,9 +6,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DCB_DATA_DIR", BASE_DIR / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
+# 작업 파일(Phase 2) 저장 위치. 영수증과 섞이지 않게 분리한다.
+ASSET_DIR = UPLOAD_DIR / "assets"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = os.environ.get("DCB_DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
 

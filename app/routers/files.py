@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.config import ALLOWED_ASSET_EXTS, MAX_ASSET_BYTES, UPLOAD_DIR
+from app.config import ALLOWED_ASSET_EXTS, ASSET_DIR, MAX_ASSET_BYTES
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
 from app.models import (
@@ -29,9 +29,6 @@ from app.security import assert_can_edit_department, get_current_user, require_e
 from app.templating import redirect, render
 
 router = APIRouter()
-
-ASSET_DIR = UPLOAD_DIR / "assets"
-ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _now() -> dt.datetime:
