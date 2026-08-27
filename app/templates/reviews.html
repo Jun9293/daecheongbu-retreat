@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}확인 요청{% endblock %}
+{% block content %}
+
+<h1>확인 요청</h1>
+<p class="muted tiny" style="margin-top:-10px">부서 간에 "이거 확인해주세요"를 남기고, 승인/반려를 코멘트와 함께 받습니다.</p>
+
+<div class="card">
+  <div class="section-head">
+    <h2>나에게 온 요청</h2>
+    {% if incoming %}<span class="tag tag-none">{{ incoming|length }}건 대기</span>{% endif %}
+  </div>
+  {% for r in incoming %}
+  <div class="review">
+    <div class="review-head">
+      <div>
+        <div class="task-title">{{ r.subject }}</div>
+        <div class="task-meta">
+          <span class="tag tag-dept">{{ r.department.name }}</span>
+          <span class="tag">{{ r.requester_name }} 요청</span>
+          {% if r.file_asset %}<span class="tag">📁 파일</span>{% else %}<span class="tag">✅ 할 일</span>{% endif %}
+          <span class="tag">{{ r.created_at.strftime('%m/%d') }}</span>
+        </div>
+        {% if r.message %}<div class="muted tiny" style="margin-top:5px">“{{ r.message }}”</div>{% endif %}
+        {% if r.file_asset and r.file_asset.latest %}
+        <div class="tiny" style="margin-top:5px">
+          <a href="/files/{{ r.file_asset.id }}/download/{{ r.file_asset.latest.version_no }}"
+             style="text-decoration:underline">v{{ r.file_asset.latest.version_no }} 내려받기</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if can_edit_dept(user, r.department_id) %}
+    <form method="post" action="/reviews/{{ r.id }}/respond" class="review-actions">
+      <input name="comment" placeholder="코멘트 (선택)">
+      <div class="row">
+        <button class="btn btn-sm btn-accent" type="submit" name="decision" value="승인">승인</button>
+        <button class="btn btn-sm btn-danger" type="submit" name="decision" value="반려">반려</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="muted tiny">이 부서의 구성원만 응답할 수 있습니다.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">대기 중인 확인 요청이 없습니다 👍</div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>내가 보낸 요청</h2>
+  {% for r in outgoing %}
+  <div class="task">
+    <div class="task-main">
+      <div class="task-title">{{ r.subject }}</div>
+      <div class="task-meta">
+        <span class="tag tag-dept">{{ r.department.name }}</span>
+        <span class="tag review-{{ r.status }}">{{ r.status }}</span>
+        {% if r.responder_name %}<span class="tag">{{ r.responder_name }}</span>{% endif %}
+      </div>
+      {% if r.response_comment %}<div class="muted tiny" style="margin-top:4px">“{{ r.response_comment }}”</div>{% endif %}
+    </div>
+    {% if r.status == '대기' %}
+    <form method="post" action="/reviews/{{ r.id }}/cancel" onsubmit="return confirm('요청을 취소할까요?')">
+      <button class="btn btn-sm btn-ghost" type="submit">취소</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">보낸 요청이 없습니다</div>
+  {% endfor %}
+</div>
+
+{% if answered %}
+<details class="foldable">
+  <summary>처리된 요청 ({{ answered|length }})</summary>
+  <div class="fold-body">
+    {% for r in answered %}
+    <div class="task {% if is_other_dept(user, r.department_id) %}dim{% endif %}">
+      <div class="task-main">
+        <div class="task-title">{{ r.subject }}</div>
+        <div class="task-meta">
+          <span class="tag tag-dept">{{ r.department.name }}</span>
+          <span class="tag review-{{ r.status }}">{{ r.status }}</span>
+          <span class="tag">{{ r.responder_name or '-' }}</span>
+        </div>
+        {% if r.response_comment %}<div class="muted tiny">“{{ r.response_comment }}”</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+{% endblock %}

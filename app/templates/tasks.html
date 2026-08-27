@@ -80,8 +80,56 @@
     <span class="muted tiny">타 부서 항목은 흐리게 표시됩니다</span>
   </div>
   {% for task in tasks %}
-    {{ task_row(task, user, statuses, "/tasks", today()) }}
+    {% set blockers = blockers_by_task.get(task.id, []) %}
+    {{ task_row(task, user, statuses, "/tasks", today(), blockers) }}
+
+    {% set reviews = reviews_by_task.get(task.id, []) %}
+    {% if reviews %}
+    <div class="tiny" style="margin:-6px 0 8px; padding-left:2px">
+      {% for r in reviews %}
+      <span class="tag review-{{ r.status }}">📩 {{ r.department.name }} {{ r.status }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {% if can_edit_dept(user, task.department_id) %}
+    <details class="tiny" style="margin:-4px 0 8px">
+      <summary class="muted" style="cursor:pointer">선행 작업 · 확인 요청</summary>
+      <div class="fold-body" style="padding:10px 0 0">
+        <form method="post" action="/tasks/{{ task.id }}/blockers">
+          <label>이 작업보다 먼저 끝나야 하는 작업</label>
+          <div class="blocker-list">
+            {% for other in all_tasks %}
+            {% if other.id != task.id %}
+            <label class="check tiny">
+              <input type="checkbox" name="blocker_ids" value="{{ other.id }}"
+                     {% if other.id in (task.blocked_by_task_ids or []) %}checked{% endif %}>
+              <span class="tag st-{{ other.status }}">{{ other.status }}</span> {{ other.title }}
+            </label>
+            {% endif %}
+            {% endfor %}
+          </div>
+          <button class="btn btn-sm" type="submit" style="margin-top:6px">선행 작업 저장</button>
+        </form>
+
+        <form method="post" action="/tasks/{{ task.id }}/review-request" style="margin-top:12px">
+          <label>확인을 요청할 관련 부서</label>
+          <div class="row" style="margin-bottom:6px">
+            {% for d in departments %}
+            {% if d.id != task.department_id %}
+            <label class="check tiny">
+              <input type="checkbox" name="department_ids" value="{{ d.id }}"> {{ d.name }}
+            </label>
+            {% endif %}
+            {% endfor %}
+          </div>
+          <div class="row">
+            <input name="message" placeholder="요청 메시지 (선택)" style="flex:1; min-width:150px">
+            <button class="btn btn-sm" type="submit">확인 요청</button>
+          </div>
+        </form>
+      </div>
+    </details>
     <details class="tiny" style="margin:-4px 0 8px">
       <summary class="muted" style="cursor:pointer">수정 / 삭제</summary>
       <form method="post" action="/tasks/{{ task.id }}/update" style="margin-top:8px">

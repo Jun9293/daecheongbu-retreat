@@ -8,7 +8,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=1">
+  <link rel="stylesheet" href="/static/css/app.css?v=2">
 </head>
 <body>
 {% if user %}
@@ -25,6 +25,9 @@
         </select>
       </form>
       {% endif %}
+      <a class="bell" href="/notifications" aria-label="알림">
+        🔔{% if unread_count %}<span class="badge">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}
+      </a>
       <a class="user-chip" href="/settings" title="{{ ROLE_LABELS.get(user.role, user.role) }}">
         {{ user.name }}<span class="role-dot role-{{ user.role }}"></span>
       </a>
@@ -42,17 +45,19 @@
 </main>
 
 {% if user %}
+{% set path = request.url.path %}
+{% set more_paths = ['/budget', '/files', '/checklists', '/meetings', '/reviews', '/notifications', '/settings', '/more'] %}
 <nav class="bottomnav">
-  {% set path = request.url.path %}
   <a href="/" class="{% if path == '/' %}active{% endif %}"><span class="ic">🏠</span>홈</a>
   <a href="/schedule" class="{% if path.startswith('/schedule') %}active{% endif %}"><span class="ic">🗓</span>일정</a>
   <a href="/tasks" class="{% if path.startswith('/tasks') %}active{% endif %}"><span class="ic">✅</span>할 일</a>
-  <a href="/budget" class="{% if path.startswith('/budget') %}active{% endif %}"><span class="ic">📊</span>예산</a>
   <a href="/expenses" class="{% if path.startswith('/expenses') or path.startswith('/refunds') %}active{% endif %}"><span class="ic">🧾</span>지출</a>
-  <a href="/settings" class="{% if path.startswith('/settings') %}active{% endif %}"><span class="ic">⚙️</span>설정</a>
+  <a href="/more" class="{% if path in more_paths %}active{% endif %}">
+    <span class="ic">⋯</span>더보기{% if pending_review_count %}<span class="dot-alert"></span>{% endif %}
+  </a>
 </nav>
 {% endif %}
 
-<script src="/static/js/app.js?v=1" defer></script>
+<script src="/static/js/app.js?v=2" defer></script>
 </body>
 </html>

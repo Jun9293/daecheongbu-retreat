@@ -30,3 +30,18 @@ DEFAULT_MEAL_SUBSIDY_PER_PERSON = 8_000
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".heic"}
+
+# ------------------------------------------------------------------ Phase 2
+
+# 작업 파일은 영수증보다 크다 (포스터 원본, 영상 등)
+MAX_ASSET_BYTES = int(os.environ.get("DCB_MAX_ASSET_MB", "50")) * 1024 * 1024
+ALLOWED_ASSET_EXTS = ALLOWED_UPLOAD_EXTS | {
+    ".psd", ".ai", ".zip", ".pptx", ".ppt", ".xlsx", ".xls", ".docx", ".doc",
+    ".hwp", ".hwpx", ".mp4", ".mov", ".mp3", ".wav", ".txt", ".csv", ".svg",
+}
+
+# 웹 푸시 VAPID 연락처 (규격상 mailto: 또는 https: 여야 함)
+PUSH_CONTACT = os.environ.get("DCB_PUSH_CONTACT", "mailto:admin@example.com")
+
+# 위험 자동 점검 주기 (초). 0이면 자동 점검을 끈다.
+RISK_SCAN_INTERVAL_SECONDS = int(os.environ.get("DCB_RISK_SCAN_INTERVAL", str(60 * 60)))

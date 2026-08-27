@@ -86,6 +86,25 @@ templates.env.globals["is_readonly"] = perm.is_readonly
 templates.env.globals["is_admin"] = lambda user: user is not None and perm.can_manage_retreat(user.role)
 
 
+def _badge_counts(context: dict) -> dict:
+    """모든 화면 상단에 표시할 미확인 알림 / 대기 중인 확인 요청 수."""
+    user = context.get("user")
+    if user is None:
+        return {"unread_count": 0, "pending_review_count": 0}
+
+    from app.db import SessionLocal
+    from app.notifications import unread_count
+
+    with SessionLocal() as db:
+        counts = {"unread_count": unread_count(db, user), "pending_review_count": 0}
+        retreat = context.get("retreat")
+        if retreat is not None:
+            from app.routers.reviews import pending_for_user
+
+            counts["pending_review_count"] = len(pending_for_user(db, user, retreat))
+    return counts
+
+
 def render(
     request: Request, template_name: str, context: dict, status_code: int = 200
 ) -> HTMLResponse:
@@ -93,6 +112,7 @@ def render(
     ctx = {
         "request": request,
         "flash": urllib.parse.unquote(flash) if flash else None,
+        **_badge_counts(context),
         **context,
     }
     response = templates.TemplateResponse(

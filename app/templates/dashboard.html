@@ -23,6 +23,17 @@
   🔔 담당자 없이 기한이 1주일 이내인 할 일이 <b>{{ unassigned_soon|length }}건</b> 있습니다. 총무팀 확인이 필요합니다.
 </div>
 {% endif %}
+{% if pending_reviews %}
+<div class="alert alert-warn">
+  📩 우리 부서에 온 확인 요청이 <b>{{ pending_reviews|length }}건</b> 있습니다.
+  <a href="/reviews" style="text-decoration:underline">응답하기</a>
+</div>
+{% endif %}
+{% if startable_mine %}
+<div class="alert" style="background:var(--accent-soft); border-color:#bfe0d7; color:#17594c">
+  ▶ 선행 작업이 끝나 <b>지금 시작할 수 있는</b> 할 일이 {{ startable_mine|length }}건 있습니다.
+</div>
+{% endif %}
 
 <div class="kpi" style="margin-bottom:12px">
   <div><div class="v">{{ stats.open }}</div><div class="l">남은 할 일</div></div>

@@ -11,11 +11,54 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat
 from app.domain.budget import build_budget_summary
-from app.models import Retreat, ScheduleDay, Task, User
+from app.domain.dependencies import blocking_tasks
+from app.models import (
+    Checklist,
+    FileAsset,
+    Meeting,
+    Retreat,
+    ScheduleDay,
+    Task,
+    User,
+)
 from app.security import get_current_user
 from app.templating import render
 
 router = APIRouter()
+
+
+@router.get("/more")
+def more_menu(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """모바일 하단바에 다 넣을 수 없는 화면들을 모은 허브."""
+    retreats = all_retreats(db)
+    if not retreats:
+        return render(request, "no_retreat.html", {"user": user})
+
+    retreat = get_current_retreat(request, db, user)
+    counts = {
+        "files": len(
+            db.scalars(select(FileAsset).where(FileAsset.retreat_id == retreat.id)).all()
+        ),
+        "checklists": len(
+            db.scalars(select(Checklist).where(Checklist.retreat_id == retreat.id)).all()
+        ),
+        "meetings": len(
+            db.scalars(
+                select(Meeting).where(
+                    (Meeting.retreat_id == retreat.id) | (Meeting.retreat_id.is_(None))
+                )
+            ).all()
+        ),
+    }
+    return render(
+        request,
+        "more.html",
+        {"user": user, "retreat": retreat, "retreats": retreats, "counts": counts},
+    )
 
 
 @router.get("/")
@@ -70,6 +113,23 @@ def dashboard(
         if t.status in open_statuses and t.due_date is not None and t.due_date < today
     ]
 
+    # Phase 2: 선행 작업에 막힌 할 일 / 나에게 온 확인 요청
+    tasks_by_id = {t.id: t for t in tasks}
+    blocked_mine = [
+        (task, blocking_tasks(task, tasks_by_id))
+        for task in my_open
+        if blocking_tasks(task, tasks_by_id)
+    ]
+    startable_mine = [
+        task
+        for task in my_open
+        if task.blocked_by_task_ids and not blocking_tasks(task, tasks_by_id)
+    ]
+
+    from app.routers.reviews import pending_for_user
+
+    pending_reviews = pending_for_user(db, user, retreat)
+
     summary = build_budget_summary(db, retreat=retreat)
 
     days = list(
@@ -93,6 +153,9 @@ def dashboard(
             "my_undated": my_undated,
             "unassigned_soon": unassigned_soon,
             "overdue_all": overdue_all,
+            "blocked_mine": blocked_mine,
+            "startable_mine": startable_mine,
+            "pending_reviews": pending_reviews,
             "summary": summary,
             "today_day": today_day,
             "stats": {

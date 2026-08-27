@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -10,21 +11,69 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-from app.config import BASE_DIR
+from app.config import BASE_DIR, RISK_SCAN_INTERVAL_SECONDS
 from app.db import init_db
-from app.routers import auth, budget, dashboard, expenses, export, schedule, settings, tasks
+from app.routers import (
+    auth,
+    budget,
+    checklists,
+    dashboard,
+    expenses,
+    export,
+    files,
+    meetings,
+    notifications,
+    reviews,
+    schedule,
+    settings,
+    tasks,
+)
 from app.security import get_optional_user
 from app.templating import render
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("dcb.main")
 
 STATIC_DIR = BASE_DIR / "app" / "static"
+
+
+async def _risk_scan_loop() -> None:
+    """주기적으로 모든 회차의 위험(지연·기한임박·담당자 미지정)을 점검한다.
+
+    사람이 매번 확인하러 다니지 않아도 시스템이 스스로 알아차리게 하는 부분.
+    """
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import Retreat
+    from app.notifications import run_risk_scan
+
+    while True:
+        try:
+            await asyncio.sleep(RISK_SCAN_INTERVAL_SECONDS)
+            with SessionLocal() as db:
+                total = 0
+                for retreat in db.scalars(select(Retreat).where(~Retreat.is_archived)):
+                    total += run_risk_scan(db, retreat=retreat)
+                if total:
+                    logger.info("정기 점검: 알림 %d건 생성", total)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # pragma: no cover - 점검 실패가 서버를 멈추면 안 된다
+            logger.exception("정기 위험 점검 실패")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    yield
+    scanner = None
+    if RISK_SCAN_INTERVAL_SECONDS > 0:
+        scanner = asyncio.create_task(_risk_scan_loop())
+    try:
+        yield
+    finally:
+        if scanner is not None:
+            scanner.cancel()
 
 
 app = FastAPI(title="대청부 수련회 관리 시스템", lifespan=lifespan)
@@ -38,6 +87,12 @@ app.include_router(budget.router)
 app.include_router(expenses.router)
 app.include_router(settings.router)
 app.include_router(export.router)
+# Phase 2
+app.include_router(notifications.router)
+app.include_router(reviews.router)
+app.include_router(files.router)
+app.include_router(checklists.router)
+app.include_router(meetings.router)
 
 
 @app.get("/manifest.webmanifest", include_in_schema=False)

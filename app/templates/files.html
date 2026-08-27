@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}작업 파일{% endblock %}
+{% block content %}
+
+<h1>작업 파일</h1>
+<p class="muted tiny" style="margin-top:-10px">포스터·큐시트·영상 등 부서 산출물. 새 버전을 올리면 이력이 남습니다.</p>
+
+<div class="tabs">
+  <a href="/files" class="{% if not filters.status and not filters.department_id %}active{% endif %}">전체</a>
+  {% for s in statuses %}
+  <a href="/files?status={{ s }}" class="{% if filters.status == s %}active{% endif %}">{{ s }}</a>
+  {% endfor %}
+  {% for d in departments %}
+  <a href="/files?department_id={{ d.id }}" class="{% if filters.department_id == d.id %}active{% endif %}">{{ d.name }}</a>
+  {% endfor %}
+</div>
+
+{% if not is_readonly(user.role) %}
+<details class="foldable" {% if not assets %}open{% endif %}>
+  <summary>+ 파일 등록</summary>
+  <div class="fold-body">
+    <form method="post" action="/files/create" enctype="multipart/form-data">
+      <div class="field">
+        <label for="f-title">제목</label>
+        <input id="f-title" name="title" required placeholder="예: 수련회 포스터 최종안">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="f-dept">부서</label>
+          <select id="f-dept" name="department_id">
+            <option value="">부서 미지정</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-task">연결할 할 일 (선택)</label>
+          <select id="f-task" name="task_id">
+            <option value="">연결 없음</option>
+            {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="f-desc">설명 (선택)</label>
+        <input id="f-desc" name="description" placeholder="어떤 파일인지 간단히">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="f-file">파일</label>
+          <input id="f-file" name="upload" type="file" required>
+        </div>
+        <div class="field">
+          <label for="f-note">버전 메모</label>
+          <input id="f-note" name="note" placeholder="예: 1차 시안">
+        </div>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">등록</button>
+    </form>
+  </div>
+</details>
+{% endif %}
+
+<div class="card">
+  <div class="section-head">
+    <h2>{{ assets|length }}개</h2>
+    <span class="muted tiny">타 부서 파일은 흐리게 표시됩니다</span>
+  </div>
+
+  {% for a in assets %}
+  <div class="asset {% if is_other_dept(user, a.department_id) %}dim{% endif %}">
+    <div class="asset-head">
+      <div style="min-width:0">
+        <div class="task-title">{{ a.title }}</div>
+        <div class="task-meta">
+          <span class="tag file-{{ a.status }}">{{ a.status }}</span>
+          {% if a.department %}<span class="tag tag-dept">{{ a.department.name }}</span>{% endif %}
+          {% if a.latest %}<span class="tag">v{{ a.latest.version_no }}</span>{% endif %}
+          {% if a.task %}<span class="tag">✅ {{ a.task.title }}</span>{% endif %}
+        </div>
+        {% if a.description %}<div class="muted tiny" style="margin-top:4px">{{ a.description }}</div>{% endif %}
+      </div>
+      {% if a.latest %}
+      <a class="btn btn-sm" href="/files/{{ a.id }}/download/{{ a.latest.version_no }}">최신 내려받기</a>
+      {% endif %}
+    </div>
+
+    <details class="tiny" style="margin-top:6px">
+      <summary class="muted" style="cursor:pointer">버전 이력 ({{ a.versions|length }})</summary>
+      <div class="table-wrap" style="margin-top:6px">
+        <table>
+          <thead><tr><th>버전</th><th>파일명</th><th class="num">크기</th><th>올린 사람</th><th>메모</th><th></th></tr></thead>
+          <tbody>
+            {% for v in a.versions %}
+            <tr>
+              <td>v{{ v.version_no }}</td>
+              <td>{{ v.original_name }}</td>
+              <td class="num">{{ (v.size_bytes / 1024) | round | int }}KB</td>
+              <td class="nowrap">{{ v.uploaded_by_name or '-' }}<div class="tiny muted">{{ v.uploaded_at.strftime('%m/%d %H:%M') }}</div></td>
+              <td>{{ v.note or '' }}</td>
+              <td><a href="/files/{{ a.id }}/download/{{ v.version_no }}" style="text-decoration:underline">받기</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    {% if can_edit_dept(user, a.department_id) %}
+    <details class="tiny" style="margin-top:4px">
+      <summary class="muted" style="cursor:pointer">새 버전 올리기 · 확인 요청 · 상태 변경</summary>
+      <div class="fold-body" style="padding:10px 0 0">
+        <form method="post" action="/files/{{ a.id }}/versions" enctype="multipart/form-data" class="stack">
+          <div class="row">
+            <input type="file" name="upload" required style="flex:1; min-width:150px">
+            <input name="note" placeholder="버전 메모" style="flex:1; min-width:120px">
+            <button class="btn btn-sm btn-accent" type="submit">새 버전</button>
+          </div>
+        </form>
+
+        <form method="post" action="/files/{{ a.id }}/review-request" style="margin-top:10px">
+          <label>확인을 요청할 부서</label>
+          <div class="row" style="margin-bottom:6px">
+            {% for d in departments %}
+            {% if d.id != a.department_id %}
+            <label class="check tiny">
+              <input type="checkbox" name="department_ids" value="{{ d.id }}"> {{ d.name }}
+            </label>
+            {% endif %}
+            {% endfor %}
+          </div>
+          <div class="row">
+            <input name="message" placeholder="요청 메시지 (선택)" style="flex:1; min-width:150px">
+            <button class="btn btn-sm" type="submit">확인 요청</button>
+          </div>
+        </form>
+
+        <form method="post" action="/files/{{ a.id }}/status" class="row" style="margin-top:10px">
+          <select name="status" style="width:auto">
+            {% for s in statuses %}<option value="{{ s }}" {% if s == a.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm btn-ghost" type="submit">상태 저장</button>
+          <div class="spacer"></div>
+        </form>
+
+        <form method="post" action="/files/{{ a.id }}/delete" style="margin-top:8px"
+              onsubmit="return confirm('이 파일과 모든 버전을 삭제할까요?')">
+          <button class="btn btn-sm btn-danger" type="submit">파일 삭제</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">등록된 파일이 없습니다</div>
+  {% endfor %}
+</div>
+{% endblock %}

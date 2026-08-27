@@ -7,3 +7,4 @@ data/uploads/
 .env
 *.xlsx
 !docs/*.xlsx
+data/*.pem

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}체크리스트{% endblock %}
+{% block content %}
+
+<h1>체크리스트</h1>
+<p class="muted tiny" style="margin-top:-10px">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</p>
+
+{% if not is_readonly(user.role) %}
+<details class="foldable" {% if not checklists %}open{% endif %}>
+  <summary>+ 체크리스트 만들기</summary>
+  <div class="fold-body">
+    <form method="post" action="/checklists/create">
+      <div class="field">
+        <label for="c-name">이름</label>
+        <input id="c-name" name="name" required placeholder="예: 1일차 집회 비품">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="c-dept">부서</label>
+          <select id="c-dept" name="department_id">
+            <option value="">부서 미지정</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="c-task">연결할 할 일 (선택)</label>
+          <select id="c-task" name="task_id">
+            <option value="">연결 없음</option>
+            {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="c-items">항목 (한 줄에 하나씩)</label>
+        <textarea id="c-items" name="items" rows="5" placeholder="무선마이크 4개&#10;마이크 배터리&#10;노트북 HDMI 케이블"></textarea>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">만들기</button>
+    </form>
+  </div>
+</details>
+{% endif %}
+
+{% for c in checklists %}
+<div class="card {% if is_other_dept(user, c.department_id) %}dim{% endif %}">
+  <div class="section-head">
+    <div style="min-width:0">
+      <h2 style="margin:0">{{ c.name }}</h2>
+      <div class="task-meta">
+        {% if c.department %}<span class="tag tag-dept">{{ c.department.name }}</span>{% endif %}
+        {% if c.task %}<span class="tag">✅ {{ c.task.title }}</span>{% endif %}
+        <span class="tag">{{ c.checked_count }}/{{ c.items|length }}</span>
+      </div>
+    </div>
+    {% if can_edit_dept(user, c.department_id) %}
+    <form method="post" action="/checklists/{{ c.id }}/delete" onsubmit="return confirm('이 체크리스트를 삭제할까요?')">
+      <button class="btn btn-sm btn-danger" type="submit">삭제</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="bar" style="margin-bottom:10px"><span style="width: {{ c.progress_pct }}%"></span></div>
+
+  <div class="stack">
+    {% for item in c.items %}
+    <div class="check-row {% if item.checked %}done{% endif %}">
+      {% if can_edit_dept(user, c.department_id) %}
+      <form method="post" action="/checklists/items/{{ item.id }}/toggle">
+        <button class="check-box {% if item.checked %}on{% endif %}" type="submit"
+                aria-label="{{ item.label }} 체크">{% if item.checked %}✓{% endif %}</button>
+      </form>
+      {% else %}
+      <span class="check-box {% if item.checked %}on{% endif %}">{% if item.checked %}✓{% endif %}</span>
+      {% endif %}
+      <span class="check-label">
+        {{ item.label }}
+        {% if item.quantity %}<span class="tag tiny">{{ item.quantity }}</span>{% endif %}
+        {% if item.checked and item.checked_by_name %}
+        <span class="tiny muted">— {{ item.checked_by_name }} {{ item.checked_at.strftime('%m/%d') }}</span>
+        {% endif %}
+      </span>
+      {% if can_edit_dept(user, c.department_id) %}
+      <form method="post" action="/checklists/items/{{ item.id }}/delete">
+        <button class="btn btn-sm btn-ghost" type="submit" aria-label="삭제">×</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="empty">항목이 없습니다</div>
+    {% endfor %}
+  </div>
+
+  {% if can_edit_dept(user, c.department_id) %}
+  <form method="post" action="/checklists/{{ c.id }}/items" class="row" style="margin-top:10px">
+    <input name="label" placeholder="항목 추가" required style="flex:2; min-width:140px">
+    <input name="quantity" placeholder="수량" style="flex:1; min-width:70px">
+    <button class="btn btn-sm" type="submit">추가</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<div class="card"><div class="empty">아직 체크리스트가 없습니다</div></div>
+{% endfor %}
+{% endblock %}

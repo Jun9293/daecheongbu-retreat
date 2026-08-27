@@ -1,6 +1,5 @@
-// 서비스워커 — Phase 1은 오프라인 정적자원 캐시까지만.
-// Phase 2에서 웹 푸시(push/notificationclick) 처리를 여기에 추가한다.
-const CACHE = "dcb-v1";
+// 서비스워커 — 정적자원 캐시 + 웹 푸시 수신
+const CACHE = "dcb-v2";
 const ASSETS = ["/static/css/app.css", "/static/js/app.js", "/static/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -19,4 +18,41 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || !url.pathname.startsWith("/static/")) return;
   event.respondWith(caches.match(event.request).then((hit) => hit || fetch(event.request)));
+});
+
+self.addEventListener("push", (event) => {
+  let payload = { title: "대청부 수련회", body: "", link: "/notifications" };
+  if (event.data) {
+    try {
+      payload = Object.assign(payload, event.data.json());
+    } catch (e) {
+      payload.body = event.data.text();
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/static/icons/icon-192.png",
+      badge: "/static/icons/icon-192.png",
+      tag: payload.tag || undefined,
+      data: { link: payload.link || "/notifications" },
+      lang: "ko",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || "/notifications";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.navigate(link);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(link);
+    })
+  );
 });

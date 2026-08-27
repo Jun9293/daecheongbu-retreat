@@ -1,7 +1,16 @@
-{% macro task_row(task, user, statuses, redirect_to, today) %}
+{% macro task_row(task, user, statuses, redirect_to, today, blockers=None) %}
 <div class="task {% if is_other_dept(user, task.department_id) %}dim{% endif %}">
   <div class="task-main">
-    <div class="task-title">{{ task.title }}</div>
+    <div class="task-title">
+      {% if blockers %}<span class="blocked-mark" title="선행 작업 대기 중">⛔</span>
+      {% elif task.blocked_by_task_ids and task.status == '대기' %}<span class="ready-mark" title="선행 작업이 모두 끝나 시작할 수 있음">▶</span>
+      {% endif %}{{ task.title }}
+    </div>
+    {% if blockers %}
+    <div class="tiny blocked-note">
+      선행 대기: {% for b in blockers %}{{ b.title }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
     <div class="task-meta">
       {% if task.department %}
         <span class="tag tag-dept">{{ task.department.name }}</span>

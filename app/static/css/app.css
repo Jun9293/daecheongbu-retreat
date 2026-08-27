@@ -258,3 +258,90 @@ details.foldable > .fold-body { padding: 0 14px 14px; }
   .topbar, .bottomnav, .flash, form, .btn { display: none !important; }
   .card { break-inside: avoid; box-shadow: none; }
 }
+
+/* ================= Phase 2 ================= */
+
+/* 알림 벨 */
+.bell { position: relative; font-size: 17px; padding: 4px 6px; line-height: 1; }
+.bell .badge {
+  position: absolute; top: -2px; right: -4px;
+  background: #e04a4a; color: #fff; font-size: 10px; font-weight: 700;
+  border-radius: 999px; padding: 1px 5px; min-width: 16px; text-align: center;
+}
+.dot-alert {
+  position: absolute; top: 5px; right: 50%; transform: translateX(14px);
+  width: 7px; height: 7px; border-radius: 50%; background: #e04a4a;
+}
+.bottomnav a { position: relative; }
+
+/* 더보기 메뉴 */
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.menu-card {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 14px;
+}
+.menu-card .mi { font-size: 21px; }
+.menu-card .mt { font-weight: 700; font-size: 14.5px; }
+.menu-card .ms { font-size: 11.5px; color: var(--ink-3); }
+.menu-card.highlight { border-color: #f0d3b4; background: var(--warn-soft); }
+
+/* 알림함 */
+.noti { display: flex; gap: 10px; align-items: flex-start; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.noti:last-child { border-bottom: 0; }
+.noti-main { flex: 1; min-width: 0; }
+.noti-title { font-weight: 600; font-size: 14px; word-break: break-word; }
+.noti.unread .noti-title::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 6px; vertical-align: middle;
+}
+.noti:not(.unread) { opacity: .55; }
+
+/* 선후행 의존성 */
+.blocked-mark { color: var(--danger); margin-right: 3px; }
+.ready-mark { color: var(--accent); margin-right: 3px; }
+.blocked-note { color: var(--warn); margin-top: 3px; }
+.blocker-list {
+  max-height: 190px; overflow-y: auto; border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px; background: #fbfcfd;
+}
+.blocker-list .check { padding: 3px 0; font-weight: 500; align-items: flex-start; }
+
+/* 확인 요청 */
+.review { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.review:last-child { border-bottom: 0; }
+.review-head { display: flex; justify-content: space-between; gap: 10px; }
+.review-actions { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.review-대기 { background: var(--warn-soft); color: #8a4110; }
+.review-승인 { background: var(--accent-soft); color: #17594c; }
+.review-반려 { background: var(--danger-soft); color: #8f2c2c; }
+
+/* 파일 */
+.asset { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.asset:last-child { border-bottom: 0; }
+.asset-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.file-작업중 { background: #eef1f4; color: var(--ink-2); }
+.file-검토요청 { background: var(--warn-soft); color: #8a4110; }
+.file-승인 { background: var(--accent-soft); color: #17594c; }
+.file-반려 { background: var(--danger-soft); color: #8f2c2c; }
+
+/* 체크리스트 */
+.check-row { display: flex; align-items: center; gap: 9px; padding: 5px 0; }
+.check-row.done .check-label { text-decoration: line-through; color: var(--ink-3); }
+.check-box {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px;
+  border: 1.5px solid var(--line); background: #fff; cursor: pointer;
+  font-size: 15px; line-height: 1; color: transparent; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.check-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.check-label { flex: 1; font-size: 14px; word-break: break-word; }
+
+/* 회의록 */
+.prewrap { white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+
+@media (min-width: 760px) {
+  .menu-grid { grid-template-columns: repeat(4, 1fr); }
+  .review-actions { flex-direction: row; align-items: center; }
+  .review-actions input { flex: 1; }
+}

@@ -159,20 +159,22 @@ def seed() -> None:
                 )
 
         assignees = {"홍보팀": "이홍보", "찬양팀": "박찬양", "총무팀": "김총무"}
+        tasks_by_title = {}
         for title, dept_name, offset, status in TASKS:
             assignee = users.get(assignees.get(dept_name, ""))
-            db.add(
-                Task(
-                    retreat_id=retreat.id,
-                    title=title,
-                    department_id=depts[dept_name].id,
-                    assignee_id=assignee.id if assignee else None,
-                    due_date=start + dt.timedelta(days=offset),
-                    status=status,
-                    blocked_by_task_ids=[],
-                    related_department_ids=[],
-                )
+            task = Task(
+                retreat_id=retreat.id,
+                title=title,
+                department_id=depts[dept_name].id,
+                assignee_id=assignee.id if assignee else None,
+                due_date=start + dt.timedelta(days=offset),
+                status=status,
+                blocked_by_task_ids=[],
+                related_department_ids=[],
             )
+            db.add(task)
+            db.flush()
+            tasks_by_title[title] = task
 
         receipt_no = 0
         meal_cat = cats[("그 외", "수련회 준비지원")]
@@ -227,10 +229,203 @@ def seed() -> None:
 
         db.commit()
 
-    print("데모 데이터를 만들었습니다.")
+        seed_phase2(db, retreat, depts, users, tasks_by_title, today)
+
+    print("데모 데이터를 만들었습니다. (Phase 1 + Phase 2)")
     print("\n로그인용 전화번호 (개발 모드에서는 인증코드가 화면에 표시됩니다):")
     for name, phone, role, dept in USERS:
         print(f"  {phone}  {name:5s} {role:10s} {dept or '-'}")
+
+
+
+
+# ==========================================================================
+# Phase 2 데모 데이터
+# ==========================================================================
+
+CHECKLISTS = [
+    ("1일차 집회 비품", "찬양팀", [
+        ("무선마이크", "4개", True),
+        ("마이크 배터리", "AA 20개", True),
+        ("인이어 모니터", "2세트", False),
+        ("보면대", "5개", False),
+    ]),
+    ("등록 데스크 준비물", "총무팀", [
+        ("명찰 + 목걸이", "180개", True),
+        ("네임펜", "10자루", False),
+        ("현금 잔돈", "20만원", False),
+        ("영수증 보관 파일", "1개", False),
+    ]),
+]
+
+MEETING_ITEMS = [
+    ("안건", "숙소 최종 인원 확정 시점", None, None, None),
+    ("안건", "굿즈 티셔츠 발주 수량", None, None, None),
+    ("결정사항", "숙소 인원은 7/10까지 확정해서 리조트에 통보한다", None, None, None),
+    ("결정사항", "티셔츠는 여유분 10% 포함해서 발주한다", None, None, None),
+    ("액션아이템", "인쇄소 견적 3곳 비교해서 공유", "홍보팀", "이홍보", -18),
+    ("액션아이템", "티셔츠 사이즈 최종 취합", "홍보팀", "최부원", -14),
+    ("액션아이템", "리조트에 최종 인원 통보", "총무팀", "김총무", -5),
+]
+
+
+def seed_phase2(db, retreat, depts, users, tasks_by_title, today):
+    """선후행 의존성 · 확인 요청 · 파일 · 체크리스트 · 회의록 데모."""
+    import datetime as _dt
+
+    from app.models import (
+        Checklist,
+        ChecklistItem,
+        FileAsset,
+        FileVersion,
+        Meeting,
+        MeetingItem,
+        ReviewRequest,
+    )
+
+    # 1) 선후행 의존성: 시안 확정 → 인쇄 발주 (선행이 아직 진행중이라 후행은 막힘)
+    design = tasks_by_title.get("포스터 시안 확정")
+    printing = tasks_by_title.get("포스터 인쇄 발주")
+    goods = tasks_by_title.get("굿즈 티셔츠 사이즈 취합")
+    if design and printing:
+        printing.blocked_by_task_ids = [design.id]
+    if printing and goods:
+        # 인쇄 발주가 끝나야 굿즈 발주도 진행 (2단계 체인)
+        goods.blocked_by_task_ids = [printing.id]
+
+    # 2) 파일: 포스터 v1 → v2, 찬양팀에 확인 요청 대기 중
+    poster = FileAsset(
+        retreat_id=retreat.id,
+        department_id=depts["홍보팀"].id,
+        task_id=design.id if design else None,
+        title="수련회 포스터",
+        description="A2 인쇄용 최종 시안",
+        status="검토요청",
+        created_by_id=users["이홍보"].id,
+    )
+    db.add(poster)
+    db.flush()
+    for version_no, (name, note, days_ago) in enumerate(
+        [
+            ("poster_v1.png", "1차 시안 — 색감 확인 부탁", 21),
+            ("poster_v2.png", "2차 — 문구 수정 반영", 14),
+        ],
+        start=1,
+    ):
+        db.add(
+            FileVersion(
+                file_asset_id=poster.id,
+                version_no=version_no,
+                original_name=name,
+                stored_name=f"demo-{version_no}.png",
+                size_bytes=180_000 + version_no * 20_000,
+                note=note,
+                uploaded_by_id=users["이홍보"].id,
+                uploaded_by_name="이홍보",
+                uploaded_at=_dt.datetime.now() - _dt.timedelta(days=days_ago),
+            )
+        )
+
+    cue = FileAsset(
+        retreat_id=retreat.id,
+        department_id=depts["찬양팀"].id,
+        title="1일차 집회 큐시트",
+        status="작업중",
+        created_by_id=users["박찬양"].id,
+    )
+    db.add(cue)
+    db.flush()
+    db.add(
+        FileVersion(
+            file_asset_id=cue.id,
+            version_no=1,
+            original_name="cue_sheet_v1.xlsx",
+            stored_name="demo-cue.xlsx",
+            size_bytes=42_000,
+            note="초안",
+            uploaded_by_id=users["박찬양"].id,
+            uploaded_by_name="박찬양",
+        )
+    )
+
+    # 3) 확인 요청: 홍보팀 → 찬양팀 (대기), 홍보팀 → 미디어팀 (승인 완료)
+    db.add(
+        ReviewRequest(
+            retreat_id=retreat.id,
+            file_asset_id=poster.id,
+            department_id=depts["찬양팀"].id,
+            requester_id=users["이홍보"].id,
+            requester_name="이홍보",
+            message="포스터에 들어간 찬양팀 소개 문구 확인 부탁드려요",
+        )
+    )
+    if design:
+        db.add(
+            ReviewRequest(
+                retreat_id=retreat.id,
+                task_id=design.id,
+                department_id=depts["미디어팀"].id,
+                requester_id=users["이홍보"].id,
+                requester_name="이홍보",
+                message="영상 썸네일도 같은 톤으로 갈지 확인 부탁",
+                status="승인",
+                responder_id=users["김총무"].id,
+                responder_name="김총무",
+                response_comment="같은 톤으로 진행하겠습니다",
+                responded_at=_dt.datetime.now() - _dt.timedelta(days=3),
+            )
+        )
+
+    # 4) 체크리스트
+    for order, (name, dept_name, items) in enumerate(CHECKLISTS):
+        checklist = Checklist(
+            retreat_id=retreat.id,
+            name=name,
+            department_id=depts[dept_name].id,
+            sort_order=order,
+        )
+        db.add(checklist)
+        db.flush()
+        for item_order, (label, quantity, checked) in enumerate(items):
+            db.add(
+                ChecklistItem(
+                    checklist_id=checklist.id,
+                    label=label,
+                    quantity=quantity,
+                    checked=checked,
+                    checked_by_id=users["김총무"].id if checked else None,
+                    checked_by_name="김총무" if checked else None,
+                    checked_at=_dt.datetime.now() if checked else None,
+                    sort_order=item_order,
+                )
+            )
+
+    # 5) 회의록 + 액션아이템 (일부만 할 일로 전환된 상태 = 현실적인 모습)
+    meeting = Meeting(
+        retreat_id=retreat.id,
+        title="3차 총무팀 준비 회의",
+        meeting_date=today - _dt.timedelta(days=20),
+        attendee_names=["김총무", "이홍보", "박찬양", "최부원"],
+        body="예산 집행 현황 공유 후 부서별 준비 상황 점검.\n숙소·식사 관련 결정 필요 사항 정리.",
+        created_by_id=users["김총무"].id,
+    )
+    db.add(meeting)
+    db.flush()
+
+    for order, (kind, content, dept_name, assignee_name, offset) in enumerate(MEETING_ITEMS):
+        db.add(
+            MeetingItem(
+                meeting_id=meeting.id,
+                kind=kind,
+                content=content,
+                department_id=depts[dept_name].id if dept_name else None,
+                assignee_id=users[assignee_name].id if assignee_name else None,
+                due_date=(today + _dt.timedelta(days=offset)) if offset else None,
+                sort_order=order,
+            )
+        )
+
+    db.commit()
 
 
 if __name__ == "__main__":

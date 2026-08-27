@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}회의록{% endblock %}
+{% block content %}
+
+<h1>회의록</h1>
+<p class="muted tiny" style="margin-top:-10px">액션아이템은 클릭 한 번으로 할 일이 됩니다 — 회의 따로 실행 따로가 되지 않게.</p>
+
+{% if not is_readonly(user.role) %}
+<details class="foldable" {% if not meetings %}open{% endif %}>
+  <summary>+ 회의록 작성</summary>
+  <div class="fold-body">
+    <form method="post" action="/meetings/create">
+      <div class="field">
+        <label for="m-title">제목</label>
+        <input id="m-title" name="title" required placeholder="예: 3차 총무팀 회의">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="m-date">일시</label>
+          <input id="m-date" name="meeting_date" type="date" value="{{ today }}">
+        </div>
+        <div class="field">
+          <label for="m-link">수련회 연결</label>
+          <select id="m-link" name="link_retreat">
+            <option value="retreat">{{ retreat.name }}</option>
+            <option value="none">연결 안 함 (일반 회의)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="m-att">참석자</label>
+        <textarea id="m-att" name="attendees" rows="2" placeholder="이름을 띄어쓰기·쉼표로 구분 (예: 박민준 홍성헌 민주아)"></textarea>
+      </div>
+      <div class="field">
+        <label for="m-body">회의 내용</label>
+        <textarea id="m-body" name="body" rows="4" placeholder="자유롭게 기록"></textarea>
+      </div>
+      <button class="btn btn-full btn-accent" type="submit">회의록 만들기</button>
+    </form>
+  </div>
+</details>
+{% endif %}
+
+<div class="card">
+  {% for m in meetings %}
+  <a class="task" href="/meetings/{{ m.id }}" style="text-decoration:none">
+    <div class="task-main">
+      <div class="task-title">{{ m.title }}</div>
+      <div class="task-meta">
+        <span class="tag">{{ m.meeting_date | kdate }}</span>
+        {% if m.retreat_id is none %}<span class="tag">일반 회의</span>{% endif %}
+        {% if m.attendee_names %}<span class="tag">참석 {{ m.attendee_names|length }}명</span>{% endif %}
+        {% set actions = m.items | selectattr('kind', 'equalto', '액션아이템') | list %}
+        {% if actions %}
+        <span class="tag {% if actions | rejectattr('converted_task_id') | list %}tag-none{% endif %}">
+          액션 {{ actions | selectattr('converted_task_id') | list | length }}/{{ actions|length }} 등록
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    <span class="muted">›</span>
+  </a>
+  {% else %}
+  <div class="empty">작성된 회의록이 없습니다</div>
+  {% endfor %}
+</div>
+{% endblock %}

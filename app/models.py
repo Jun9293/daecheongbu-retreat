@@ -282,3 +282,267 @@ class UserRetreatState(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+
+
+# ==========================================================================
+# Phase 2 — 안전망 강화
+# ==========================================================================
+
+FILE_STATUSES = ("작업중", "검토요청", "승인", "반려")
+REVIEW_STATUSES = ("대기", "승인", "반려")
+MEETING_ITEM_KINDS = ("안건", "결정사항", "액션아이템")
+
+
+class Notification(Base):
+    """앱 안에서 보이는 알림.
+
+    웹 푸시가 실패하거나 구독을 안 한 사용자도 놓치지 않도록,
+    푸시와 별개로 항상 DB에 남긴다. (단일 실패점 제거 원칙)
+    """
+
+    __tablename__ = "notifications"
+    __table_args__ = (UniqueConstraint("user_id", "dedupe_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    retreat_id: Mapped[int | None] = mapped_column(
+        ForeignKey("retreats.id", ondelete="CASCADE"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    link: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    target_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 같은 상황으로 매일 중복 알림이 쌓이지 않게 하는 키
+    dedupe_key: Mapped[str] = mapped_column(String(120))
+    read_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    pushed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now, index=True)
+
+    user: Mapped[User] = relationship()
+
+
+class PushSubscription(Base):
+    """브라우저 웹 푸시 구독 정보."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(500), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    last_failed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
+class FileAsset(Base):
+    """부서별 작업 파일 (포스터·큐시트·영상 등). 버전 이력을 갖는다."""
+
+    __tablename__ = "file_assets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="작업중")
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    department: Mapped[Department | None] = relationship()
+    task: Mapped[Task | None] = relationship()
+    versions: Mapped[list[FileVersion]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+        order_by="FileVersion.version_no.desc()",
+    )
+
+    @property
+    def latest(self) -> FileVersion | None:
+        return self.versions[0] if self.versions else None
+
+
+class FileVersion(Base):
+    __tablename__ = "file_versions"
+    __table_args__ = (UniqueConstraint("file_asset_id", "version_no"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    file_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("file_assets.id", ondelete="CASCADE")
+    )
+    version_no: Mapped[int] = mapped_column(Integer)
+    original_name: Mapped[str] = mapped_column(String(300))
+    stored_name: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uploaded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_by_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    asset: Mapped[FileAsset] = relationship(back_populates="versions")
+
+
+class ReviewRequest(Base):
+    """부서 간 확인 요청 — 할 일 또는 파일에 대해 관련 부서의 승인/반려를 받는다."""
+
+    __tablename__ = "review_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    file_asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("file_assets.id", ondelete="CASCADE"), nullable=True
+    )
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE")
+    )
+    requester_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requester_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="대기")
+    responder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    responder_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    response_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    responded_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    task: Mapped[Task | None] = relationship()
+    file_asset: Mapped[FileAsset | None] = relationship()
+    department: Mapped[Department] = relationship()
+
+    @property
+    def subject(self) -> str:
+        if self.task is not None:
+            return self.task.title
+        if self.file_asset is not None:
+            return self.file_asset.title
+        return "(삭제된 항목)"
+
+
+class Checklist(Base):
+    """비품·준비물 체크리스트. Task와 별개지만 Task에 종속시킬 수도 있다."""
+
+    __tablename__ = "checklists"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    department: Mapped[Department | None] = relationship()
+    task: Mapped[Task | None] = relationship()
+    items: Mapped[list[ChecklistItem]] = relationship(
+        back_populates="checklist",
+        cascade="all, delete-orphan",
+        order_by="ChecklistItem.sort_order, ChecklistItem.id",
+    )
+
+    @property
+    def checked_count(self) -> int:
+        return sum(1 for item in self.items if item.checked)
+
+    @property
+    def progress_pct(self) -> float:
+        if not self.items:
+            return 0.0
+        return round(self.checked_count / len(self.items) * 100, 1)
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    checklist_id: Mapped[int] = mapped_column(
+        ForeignKey("checklists.id", ondelete="CASCADE")
+    )
+    label: Mapped[str] = mapped_column(String(200))
+    quantity: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    checked_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    checked_by_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    checked_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    checklist: Mapped[Checklist] = relationship(back_populates="items")
+
+
+class Meeting(Base):
+    """회의록. 수련회와 무관한 일반 회의도 담을 수 있게 retreat_id는 선택."""
+
+    __tablename__ = "meetings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int | None] = mapped_column(
+        ForeignKey("retreats.id", ondelete="CASCADE"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    meeting_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    attendee_names: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    items: Mapped[list[MeetingItem]] = relationship(
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        order_by="MeetingItem.sort_order, MeetingItem.id",
+    )
+
+
+class MeetingItem(Base):
+    """안건 / 결정사항 / 액션아이템. 액션아이템은 Task로 전환할 수 있다."""
+
+    __tablename__ = "meeting_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20), default="안건")
+    content: Mapped[str] = mapped_column(Text)
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    assignee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    converted_task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    meeting: Mapped[Meeting] = relationship(back_populates="items")
+    department: Mapped[Department | None] = relationship()
+    assignee: Mapped[User | None] = relationship()
+    converted_task: Mapped[Task | None] = relationship()
