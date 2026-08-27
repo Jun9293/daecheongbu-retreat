@@ -1,59 +1,52 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% block title %}더보기{% endblock %}
 {% block content %}
 
-<h1>더보기</h1>
+<div class="page-head"><h1>더보기</h1></div>
 
 <div class="menu-grid">
-  <a class="menu-card" href="/notifications">
-    <span class="mi">🔔</span>
-    <span class="mt">알림함</span>
-    <span class="ms">{% if unread_count %}읽지 않음 {{ unread_count }}건{% else %}모두 확인함{% endif %}</span>
+  <a class="menu-card {% if unread_count %}alert{% endif %}" href="/notifications">
+    {{ icon('bell', 22) }}
+    <span class="t">알림함</span>
+    <span class="d">{% if unread_count %}읽지 않음 {{ unread_count }}건{% else %}모두 확인함{% endif %}</span>
   </a>
-  <a class="menu-card {% if pending_review_count %}highlight{% endif %}" href="/reviews">
-    <span class="mi">📩</span>
-    <span class="mt">확인 요청</span>
-    <span class="ms">{% if pending_review_count %}대기 {{ pending_review_count }}건{% else %}대기 중 없음{% endif %}</span>
+  <a class="menu-card {% if pending_review_count %}alert{% endif %}" href="/reviews">
+    {{ icon('inbox', 22) }}
+    <span class="t">확인 요청</span>
+    <span class="d">{% if pending_review_count %}대기 {{ pending_review_count }}건{% else %}대기 중 없음{% endif %}</span>
   </a>
   <a class="menu-card" href="/files">
-    <span class="mi">📁</span>
-    <span class="mt">작업 파일</span>
-    <span class="ms">{{ counts.files }}개</span>
+    {{ icon('folder', 22) }}<span class="t">작업 파일</span><span class="d">{{ counts.files }}개</span>
   </a>
   <a class="menu-card" href="/checklists">
-    <span class="mi">☑️</span>
-    <span class="mt">체크리스트</span>
-    <span class="ms">{{ counts.checklists }}개</span>
+    {{ icon('checklist', 22) }}<span class="t">체크리스트</span><span class="d">{{ counts.checklists }}개</span>
   </a>
   <a class="menu-card" href="/meetings">
-    <span class="mi">📝</span>
-    <span class="mt">회의록</span>
-    <span class="ms">{{ counts.meetings }}건</span>
+    {{ icon('notes', 22) }}<span class="t">회의록</span><span class="d">{{ counts.meetings }}건</span>
   </a>
   <a class="menu-card" href="/budget">
-    <span class="mi">📊</span>
-    <span class="mt">예산</span>
-    <span class="ms">항목별 집행 현황</span>
+    {{ icon('chart', 22) }}<span class="t">예산</span><span class="d">항목별 집행 현황</span>
   </a>
   <a class="menu-card" href="/refunds">
-    <span class="mi">💸</span>
-    <span class="mt">환급 대상자</span>
-    <span class="ms">지출자별 환급액</span>
+    {{ icon('wallet', 22) }}<span class="t">환급 대상자</span><span class="d">지출자별 환급액</span>
   </a>
   <a class="menu-card" href="/settings">
-    <span class="mi">⚙️</span>
-    <span class="mt">설정</span>
-    <span class="ms">회차·부서·사용자</span>
+    {{ icon('settings', 22) }}<span class="t">설정</span><span class="d">회차·부서·사용자</span>
   </a>
 </div>
 
 {% if is_admin(user) %}
 <div class="card">
-  <h2>총무팀 도구</h2>
-  <p class="muted tiny">기한이 지났거나 담당자가 없는 할 일을 지금 바로 점검합니다. (평소에는 1시간마다 자동 실행)</p>
-  <form method="post" action="/risk-scan">
-    <button class="btn btn-full" type="submit">지금 위험 점검하기</button>
-  </form>
+  <div class="card-head"><h2>총무팀 도구</h2></div>
+  <div class="card-body">
+    <p class="muted" style="margin:0 0 10px">
+      기한이 지났거나 담당자가 없는 할 일을 지금 점검합니다. 평소에는 1시간마다 자동 실행됩니다.
+    </p>
+    <form method="post" action="/risk-scan">
+      <button class="btn btn-ghost btn-block" type="submit">{{ icon('refresh', 17) }}지금 위험 점검하기</button>
+    </form>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

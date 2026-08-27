@@ -92,9 +92,8 @@ def task_list(
 
     all_tasks = _all_tasks(db, retreat)
     tasks_by_id = {task.id: task for task in all_tasks}
-    blockers_by_task = {
-        task.id: blocking_tasks(task, tasks_by_id) for task in tasks
-    }
+    blockers_by_task = {task.id: blocking_tasks(task, tasks_by_id) for task in tasks}
+
     reviews_by_task: dict[int, list[ReviewRequest]] = {}
     for review in db.scalars(
         select(ReviewRequest).where(
@@ -120,6 +119,60 @@ def task_list(
             "scope": scope,
             "status_filter": status,
             "department_filter": department_id,
+            # 새 할 일 만들기 폼에서 쓰는 목록 (셀렉트 하나뿐이라 부담 없음)
+            "schedule_items": list(
+                db.scalars(
+                    select(ScheduleItem)
+                    .join(ScheduleItem.day)
+                    .where(ScheduleItem.day.has(retreat_id=retreat.id))
+                    .order_by(ScheduleItem.id)
+                )
+            ),
+        },
+    )
+
+
+@router.get("/{task_id}")
+def task_detail(
+    task_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """할 일 상세.
+
+    선행 작업 선택지는 회차 전체 할 일이라 목록 화면에 매 행마다 그리면
+    페이지가 수 MB 로 불어난다. 그래서 상세 화면에서만 그린다.
+    """
+    task = db.get(Task, task_id)
+    if task is None or task.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="할 일을 찾을 수 없습니다.")
+
+    all_tasks = _all_tasks(db, retreat)
+    tasks_by_id = {t.id: t for t in all_tasks}
+
+    return render(
+        request,
+        "task_detail.html",
+        {
+            "user": user,
+            "retreat": retreat,
+            "retreats": all_retreats(db),
+            "task": task,
+            "all_tasks": [t for t in all_tasks if t.id != task.id],
+            "blockers": blocking_tasks(task, tasks_by_id),
+            "followers": [
+                t for t in all_tasks if task.id in (t.blocked_by_task_ids or [])
+            ],
+            "reviews": list(
+                db.scalars(
+                    select(ReviewRequest).where(ReviewRequest.task_id == task.id)
+                )
+            ),
+            "departments": _departments(db, retreat),
+            "members": _members(db),
+            "statuses": TASK_STATUSES,
             "schedule_items": list(
                 db.scalars(
                     select(ScheduleItem)

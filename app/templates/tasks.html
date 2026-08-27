@@ -1,29 +1,54 @@
 {% extends "base.html" %}
-{% from "partials/macros.html" import task_row %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import task_row, dept_tag, empty %}
 {% block title %}할 일 · {{ retreat.name }}{% endblock %}
 {% block content %}
 
-<h1>할 일</h1>
+<div class="page-head">
+  <h1>할 일</h1>
+  <p class="sub">타 부서 항목은 흐리게 표시됩니다. 존재는 보이되 내 일에 집중할 수 있게.</p>
+</div>
 
-<div class="tabs">
-  <a href="/tasks?scope=mine" class="{% if scope == 'mine' %}active{% endif %}">내 부서</a>
-  <a href="/tasks?scope=all" class="{% if scope != 'mine' %}active{% endif %}">전체</a>
+{% set qs = '?scope=' ~ scope %}
+<div class="chips">
+  <a href="/tasks?scope=mine{% if status_filter %}&status={{ status_filter }}{% endif %}"
+     class="chip {% if scope == 'mine' %}on{% endif %}">내 부서</a>
+  <a href="/tasks?scope=all{% if status_filter %}&status={{ status_filter }}{% endif %}"
+     class="chip {% if scope != 'mine' %}on{% endif %}">전체</a>
+  <span style="width:1px;background:var(--line);margin:4px 3px;flex:0 0 auto"></span>
   {% for s in statuses %}
-  <a href="/tasks?scope={{ scope }}&status={{ s }}" class="{% if status_filter == s %}active{% endif %}">{{ s }}</a>
+  {% set cnt = all_tasks | selectattr('status', 'equalto', s) | list | length %}
+  <a href="/tasks{{ qs }}&status={{ s }}" class="chip {% if status_filter == s %}on{% endif %}">
+    {{ s }}<span class="cnt">{{ cnt }}</span>
+  </a>
   {% endfor %}
-  {% if status_filter %}<a href="/tasks?scope={{ scope }}">필터 해제</a>{% endif %}
+  {% if status_filter or department_filter %}
+  <a href="/tasks{{ qs }}" class="chip">{{ icon('x', 14) }}필터 해제</a>
+  {% endif %}
+</div>
+
+<div class="chips">
+  {% for d in departments %}
+  {% set cnt = all_tasks | selectattr('department_id', 'equalto', d.id) | list | length %}
+  {% if cnt %}
+  <a href="/tasks{{ qs }}{% if status_filter %}&status={{ status_filter }}{% endif %}&department_id={{ d.id }}"
+     class="chip {% if department_filter == d.id %}on{% endif %}" style="--dept: {{ d.color_tag or '#878d97' }}">
+    <span class="swatch"></span>{{ d.name }}<span class="cnt">{{ cnt }}</span>
+  </a>
+  {% endif %}
+  {% endfor %}
 </div>
 
 {% if not is_readonly(user.role) %}
-<details class="foldable">
-  <summary>+ 새 할 일 추가</summary>
-  <div class="fold-body">
+<details class="panel">
+  <summary>{{ icon('plus', 17) }}<span class="grow">새 할 일 추가</span></summary>
+  <div class="panel-body">
     <form method="post" action="/tasks/create">
       <div class="field">
         <label for="t-title">할 일</label>
-        <input id="t-title" name="title" required placeholder="예: 포스터 시안 확정">
+        <input id="t-title" name="title" required placeholder="예: 포스터 인쇄 발주">
       </div>
-      <div class="grid2">
+      <div class="grid-2">
         <div class="field">
           <label for="t-dept">담당 부서</label>
           <select id="t-dept" name="department_id">
@@ -37,17 +62,12 @@
           <label for="t-assignee">담당자</label>
           <select id="t-assignee" name="assignee_id">
             <option value="">미지정</option>
-            {% for m in members %}
-            <option value="{{ m.id }}">{{ m.name }}</option>
-            {% endfor %}
+            {% for m in members %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
           </select>
         </div>
       </div>
-      <div class="grid2">
-        <div class="field">
-          <label for="t-due">기한</label>
-          <input id="t-due" name="due_date" type="date">
-        </div>
+      <div class="grid-2">
+        <div class="field"><label for="t-due">기한</label><input id="t-due" name="due_date" type="date"></div>
         <div class="field">
           <label for="t-status">상태</label>
           <select id="t-status" name="status">
@@ -56,125 +76,46 @@
         </div>
       </div>
       <div class="field">
-        <label for="t-item">연결할 일정 (선택)</label>
+        <label for="t-item">연결할 일정 <span class="muted">· 선택</span></label>
         <select id="t-item" name="schedule_item_id">
           <option value="">일정에 종속되지 않는 할 일</option>
           {% for item in schedule_items %}
-          <option value="{{ item.id }}">{{ item.day.label }} · {{ item.start_time or '' }} {{ item.title }}</option>
+          <option value="{{ item.id }}">{{ item.day.label }} {{ item.start_time or '' }} · {{ item.title }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field">
-        <label for="t-desc">설명 (선택)</label>
+        <label for="t-desc">설명 <span class="muted">· 선택</span></label>
         <textarea id="t-desc" name="description" placeholder="필요한 내용을 적어주세요"></textarea>
       </div>
-      <button class="btn btn-full btn-accent" type="submit">할 일 추가</button>
+      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}할 일 추가</button>
     </form>
   </div>
 </details>
 {% endif %}
 
 <div class="card">
-  <div class="section-head">
-    <h2>{{ tasks|length }}건</h2>
-    <span class="muted tiny">타 부서 항목은 흐리게 표시됩니다</span>
-  </div>
-  {% for task in tasks %}
-    {% set blockers = blockers_by_task.get(task.id, []) %}
-    {{ task_row(task, user, statuses, "/tasks", today(), blockers) }}
-
-    {% set reviews = reviews_by_task.get(task.id, []) %}
-    {% if reviews %}
-    <div class="tiny" style="margin:-6px 0 8px; padding-left:2px">
-      {% for r in reviews %}
-      <span class="tag review-{{ r.status }}">📩 {{ r.department.name }} {{ r.status }}</span>
+  <div class="card-head"><h2>{{ tasks|length }}건</h2></div>
+  <div class="card-body flush">
+    {% if tasks %}
+    <div class="list">
+      {% for task in tasks %}
+      {% set blockers = blockers_by_task.get(task.id, []) %}
+      <div>
+        {{ task_row(task, user, statuses, "/tasks", today(), blockers) }}
+        {% set reviews = reviews_by_task.get(task.id, []) %}
+        <div class="row tight" style="padding: 0 16px 11px 16px">
+          {% for r in reviews %}
+          <span class="tag rv-{{ r.status }}">{{ icon('inbox') }}{{ r.department.name }} {{ r.status }}</span>
+          {% endfor %}
+          <a class="tag tag-outline" href="/tasks/{{ task.id }}">{{ icon('chevron-right') }}상세 · 선행 작업 · 확인 요청</a>
+        </div>
+      </div>
       {% endfor %}
     </div>
+    {% else %}
+      {{ empty('조건에 맞는 할 일이 없습니다', 'check') }}
     {% endif %}
-
-    {% if can_edit_dept(user, task.department_id) %}
-    <details class="tiny" style="margin:-4px 0 8px">
-      <summary class="muted" style="cursor:pointer">선행 작업 · 확인 요청</summary>
-      <div class="fold-body" style="padding:10px 0 0">
-        <form method="post" action="/tasks/{{ task.id }}/blockers">
-          <label>이 작업보다 먼저 끝나야 하는 작업</label>
-          <div class="blocker-list">
-            {% for other in all_tasks %}
-            {% if other.id != task.id %}
-            <label class="check tiny">
-              <input type="checkbox" name="blocker_ids" value="{{ other.id }}"
-                     {% if other.id in (task.blocked_by_task_ids or []) %}checked{% endif %}>
-              <span class="tag st-{{ other.status }}">{{ other.status }}</span> {{ other.title }}
-            </label>
-            {% endif %}
-            {% endfor %}
-          </div>
-          <button class="btn btn-sm" type="submit" style="margin-top:6px">선행 작업 저장</button>
-        </form>
-
-        <form method="post" action="/tasks/{{ task.id }}/review-request" style="margin-top:12px">
-          <label>확인을 요청할 관련 부서</label>
-          <div class="row" style="margin-bottom:6px">
-            {% for d in departments %}
-            {% if d.id != task.department_id %}
-            <label class="check tiny">
-              <input type="checkbox" name="department_ids" value="{{ d.id }}"> {{ d.name }}
-            </label>
-            {% endif %}
-            {% endfor %}
-          </div>
-          <div class="row">
-            <input name="message" placeholder="요청 메시지 (선택)" style="flex:1; min-width:150px">
-            <button class="btn btn-sm" type="submit">확인 요청</button>
-          </div>
-        </form>
-      </div>
-    </details>
-    <details class="tiny" style="margin:-4px 0 8px">
-      <summary class="muted" style="cursor:pointer">수정 / 삭제</summary>
-      <form method="post" action="/tasks/{{ task.id }}/update" style="margin-top:8px">
-        <div class="field"><input name="title" value="{{ task.title }}" required></div>
-        <div class="grid2">
-          <div class="field">
-            <select name="department_id">
-              <option value="">부서 미지정</option>
-              {% for d in departments %}
-              <option value="{{ d.id }}" {% if d.id == task.department_id %}selected{% endif %}>{{ d.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="field">
-            <select name="assignee_id">
-              <option value="">담당자 미지정</option>
-              {% for m in members %}
-              <option value="{{ m.id }}" {% if m.id == task.assignee_id %}selected{% endif %}>{{ m.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <input name="due_date" type="date" value="{{ task.due_date.isoformat() if task.due_date else '' }}">
-          </div>
-          <div class="field">
-            <select name="status">
-              {% for s in statuses %}<option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="field"><textarea name="description" placeholder="설명">{{ task.description or '' }}</textarea></div>
-        <div class="row">
-          <button class="btn btn-sm" type="submit">저장</button>
-        </div>
-      </form>
-      <form method="post" action="/tasks/{{ task.id }}/delete" style="margin-top:6px"
-            onsubmit="return confirm('이 할 일을 삭제할까요?')">
-        <button class="btn btn-sm btn-danger" type="submit">삭제</button>
-      </form>
-    </details>
-    {% endif %}
-  {% else %}
-  <div class="empty">조건에 맞는 할 일이 없습니다</div>
-  {% endfor %}
+  </div>
 </div>
 {% endblock %}

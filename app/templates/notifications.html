@@ -1,52 +1,62 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import empty %}
 {% block title %}알림함{% endblock %}
 {% block content %}
 
-<div class="section-head">
-  <h1 style="margin:0">알림함</h1>
+<div class="page-head" style="display:flex;align-items:flex-end;gap:10px">
+  <div class="grow"><h1>알림함</h1><p class="sub">푸시를 켜지 않아도 알림은 여기에 계속 쌓입니다.</p></div>
   {% if unread_count %}
   <form method="post" action="/notifications/read-all">
-    <button class="btn btn-sm btn-ghost" type="submit">모두 읽음</button>
+    <button class="btn btn-ghost btn-sm" type="submit">{{ icon('check', 15) }}모두 읽음</button>
   </form>
   {% endif %}
 </div>
 
 <div class="card" id="push-card" data-vapid="{{ push_public_key }}">
-  <h2>휴대폰 푸시 알림</h2>
-  <p class="muted tiny" id="push-status">확인 중…</p>
-  <div class="row" style="margin-top:8px">
-    <button class="btn btn-sm btn-accent" type="button" id="push-enable" hidden>알림 켜기</button>
-    <button class="btn btn-sm btn-ghost" type="button" id="push-disable" hidden>알림 끄기</button>
-    <form method="post" action="/push/test" id="push-test-form" hidden>
-      <button class="btn btn-sm btn-ghost" type="submit">테스트 알림 보내기</button>
-    </form>
+  <div class="card-head"><h2>휴대폰 푸시 알림</h2></div>
+  <div class="card-body">
+    <p class="sub" id="push-status" style="margin:0">확인 중…</p>
+    <div class="row" style="margin-top:10px">
+      <button class="btn btn-sm" type="button" id="push-enable" hidden>{{ icon('bell', 15) }}알림 켜기</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="push-disable" hidden>알림 끄기</button>
+      <form method="post" action="/push/test" id="push-test-form" hidden>
+        <button class="btn btn-ghost btn-sm" type="submit">테스트 보내기</button>
+      </form>
+    </div>
+    <p class="muted" style="margin:10px 0 0">
+      브라우저 메뉴에서 <b>홈 화면에 추가</b>를 하면 앱처럼 알림을 받을 수 있습니다.
+    </p>
   </div>
-  <p class="muted tiny" style="margin-top:8px">
-    브라우저 메뉴에서 <b>홈 화면에 추가</b>를 하면 앱처럼 알림을 받을 수 있습니다.
-    푸시를 켜지 않아도 알림은 이 화면에 계속 쌓입니다.
-  </p>
 </div>
 
 <div class="card">
-  {% for n in notifications %}
-  <div class="noti {% if not n.read_at %}unread{% endif %}">
-    <div class="noti-main">
-      <div class="noti-title">{{ n.title }}</div>
-      {% if n.body %}<div class="muted tiny">{{ n.body }}</div>{% endif %}
-      <div class="tiny muted" style="margin-top:3px">
-        {{ n.created_at.strftime('%m/%d %H:%M') }}
-        {% if n.link %}· <a href="{{ n.link }}" style="text-decoration:underline">바로가기</a>{% endif %}
+  <div class="card-body flush">
+    {% if notifications %}
+    <div class="list">
+      {% for n in notifications %}
+      <div class="item" style="{% if n.read_at %}opacity:.6{% endif %}">
+        <span style="margin-top:3px;color:{% if n.read_at %}var(--ink-3){% else %}var(--brand){% endif %}">
+          {{ icon('bell', 17) }}
+        </span>
+        <div class="item-main">
+          <div class="item-title">{{ n.title }}</div>
+          {% if n.body %}<div class="item-note">{{ n.body }}</div>{% endif %}
+          <div class="item-meta">
+            <span class="muted tiny num">{{ n.created_at.strftime('%m/%d %H:%M') }}</span>
+            {% if n.link %}<a class="tag tag-brand" href="{{ n.link }}">{{ icon('chevron-right') }}바로가기</a>{% endif %}
+          </div>
+        </div>
+        {% if not n.read_at %}
+        <form method="post" action="/notifications/{{ n.id }}/read">
+          <input type="hidden" name="redirect_to" value="/notifications">
+          <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="읽음">{{ icon('check', 15) }}</button>
+        </form>
+        {% endif %}
       </div>
+      {% endfor %}
     </div>
-    {% if not n.read_at %}
-    <form method="post" action="/notifications/{{ n.id }}/read">
-      <input type="hidden" name="redirect_to" value="/notifications">
-      <button class="btn btn-sm btn-ghost" type="submit">확인</button>
-    </form>
-    {% endif %}
+    {% else %}{{ empty('알림이 없습니다', 'bell') }}{% endif %}
   </div>
-  {% else %}
-  <div class="empty">알림이 없습니다</div>
-  {% endfor %}
 </div>
 {% endblock %}

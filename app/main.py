@@ -100,6 +100,12 @@ def manifest():
     return FileResponse(STATIC_DIR / "manifest.webmanifest", media_type="application/manifest+json")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """브라우저가 기본으로 요청하는 경로. 없으면 로그에 404 가 계속 남는다."""
+    return FileResponse(STATIC_DIR / "icons" / "icon-192.png", media_type="image/png")
+
+
 @app.get("/sw.js", include_in_schema=False)
 def service_worker():
     """서비스워커는 루트 경로에서 서빙되어야 앱 전체를 제어할 수 있다."""
@@ -119,6 +125,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
     user = None
     try:
+        from sqlalchemy import select
+        from sqlalchemy.orm import joinedload
+
         from app.db import SessionLocal
         from app.models import User
         from app.security import _user_id_from_request
@@ -126,7 +135,10 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         uid = _user_id_from_request(request)
         if uid:
             with SessionLocal() as db:
-                user = db.get(User, uid)
+                # 세션이 닫힌 뒤 화면에서 user.department 를 읽으므로 미리 같이 로드한다
+                user = db.scalars(
+                    select(User).options(joinedload(User.department)).where(User.id == uid)
+                ).first()
     except Exception:  # pragma: no cover - 오류 화면에서 또 터지지 않게
         user = None
 

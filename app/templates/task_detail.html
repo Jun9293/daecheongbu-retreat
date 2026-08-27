@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import dept_tag, due_tag, empty %}
+{% block title %}{{ task.title }}{% endblock %}
+{% block content %}
+
+<a class="tag tag-outline" href="/tasks" style="margin-bottom:12px">{{ icon('chevron-left') }}할 일 목록</a>
+
+<div class="card">
+  <div class="card-body">
+    <h1 style="font-size:18px;margin-bottom:8px">
+      {%- if blockers %}<span class="mark-blocked">{{ icon('blocked', 17) }}</span>
+      {%- elif task.blocked_by_task_ids and task.status == '대기' %}<span class="mark-ready">{{ icon('play', 17) }}</span>
+      {%- endif %}{{ task.title }}
+    </h1>
+    <div class="item-meta">
+      <span class="tag st-{{ task.status }}">{{ task.status }}</span>
+      {{ dept_tag(task.department) }}
+      {% if task.assignee %}<span class="tag">{{ icon('user') }}{{ task.assignee.name }}</span>
+      {% else %}<span class="tag tag-danger">담당자 없음</span>{% endif %}
+      {{ due_tag(task.due_date, today()) }}
+      {% if task.schedule_item %}<span class="tag">{{ icon('calendar') }}{{ task.schedule_item.title }}</span>{% endif %}
+    </div>
+    {% if task.description %}<p class="sub" style="margin:12px 0 0">{{ task.description }}</p>{% endif %}
+  </div>
+</div>
+
+{% if blockers %}
+<div class="banner banner-warn">
+  {{ icon('blocked', 17) }}
+  <span>선행 작업이 끝나지 않아 아직 시작할 수 없습니다:
+    <b>{% for b in blockers %}{{ b.title }}{% if not loop.last %}, {% endif %}{% endfor %}</b></span>
+</div>
+{% elif task.blocked_by_task_ids and task.status == '대기' %}
+<div class="banner banner-ok">
+  {{ icon('play', 17) }}<span>선행 작업이 모두 끝났습니다. 지금 시작할 수 있습니다.</span>
+</div>
+{% endif %}
+
+{% if followers %}
+<div class="card">
+  <div class="card-head"><h2>이 작업을 기다리는 할 일</h2><span class="tag">{{ followers|length }}</span></div>
+  <div class="card-body flush">
+    <div class="list">
+      {% for f in followers %}
+      <a class="item" href="/tasks/{{ f.id }}">
+        <div class="item-main">
+          <div class="item-title">{{ f.title }}</div>
+          <div class="item-meta">{{ dept_tag(f.department) }}<span class="tag st-{{ f.status }}">{{ f.status }}</span></div>
+        </div>
+        <span style="color:var(--ink-3)">{{ icon('chevron-right', 16) }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if reviews %}
+<div class="card">
+  <div class="card-head"><h2>확인 요청</h2></div>
+  <div class="card-body flush">
+    <div class="list">
+      {% for r in reviews %}
+      <div class="item">
+        <div class="item-main">
+          <div class="item-meta">
+            {{ dept_tag(r.department) }}
+            <span class="tag rv-{{ r.status }}">{{ r.status }}</span>
+            {% if r.responder_name %}<span class="tag">{{ icon('user') }}{{ r.responder_name }}</span>{% endif %}
+          </div>
+          {% if r.message %}<div class="item-note">“{{ r.message }}”</div>{% endif %}
+          {% if r.response_comment %}<div class="item-note">↳ {{ r.response_comment }}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if can_edit_dept(user, task.department_id) %}
+
+<div class="card">
+  <div class="card-head"><h2>선행 작업</h2><span class="muted">먼저 끝나야 하는 작업</span></div>
+  <div class="card-body">
+    <form method="post" action="/tasks/{{ task.id }}/blockers">
+      <input type="search" class="filter-input" placeholder="작업 이름으로 좁히기" data-filter="#blocker-list"
+             style="margin-bottom:8px">
+      <div class="pick-list scroll-y" id="blocker-list">
+        {% for other in all_tasks %}
+        <label class="check" data-text="{{ other.title }}">
+          <input type="checkbox" name="blocker_ids" value="{{ other.id }}"
+                 {% if other.id in (task.blocked_by_task_ids or []) %}checked{% endif %}>
+          <span><span class="tag st-{{ other.status }}">{{ other.status }}</span> {{ other.title }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:10px">선행 작업 저장</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>확인 요청 보내기</h2></div>
+  <div class="card-body">
+    <form method="post" action="/tasks/{{ task.id }}/review-request">
+      <label class="lbl">관련 부서</label>
+      <div class="row tight" style="margin-bottom:10px">
+        {% for d in departments %}
+        {% if d.id != task.department_id %}
+        <label class="check tiny"><input type="checkbox" name="department_ids" value="{{ d.id }}">{{ d.name }}</label>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div class="row">
+        <input name="message" placeholder="요청 메시지 (선택)" class="grow" style="min-width:160px">
+        <button class="btn btn-ghost btn-sm" type="submit">{{ icon('send', 15) }}확인 요청</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>수정</h2></div>
+  <div class="card-body">
+    <form method="post" action="/tasks/{{ task.id }}/update">
+      <div class="field"><label for="e-title">할 일</label><input id="e-title" name="title" value="{{ task.title }}" required></div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="e-dept">담당 부서</label>
+          <select id="e-dept" name="department_id">
+            <option value="">부서 미지정</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}" {% if d.id == task.department_id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="e-assignee">담당자</label>
+          <select id="e-assignee" name="assignee_id">
+            <option value="">담당자 미지정</option>
+            {% for m in members %}
+            <option value="{{ m.id }}" {% if m.id == task.assignee_id %}selected{% endif %}>{{ m.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="e-due">기한</label>
+          <input id="e-due" name="due_date" type="date" value="{{ task.due_date.isoformat() if task.due_date else '' }}">
+        </div>
+        <div class="field">
+          <label for="e-status">상태</label>
+          <select id="e-status" name="status">
+            {% for s in statuses %}<option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="field"><label for="e-desc">설명</label><textarea id="e-desc" name="description">{{ task.description or '' }}</textarea></div>
+      <div class="row">
+        <button class="btn" type="submit">저장</button>
+        <span class="grow"></span>
+      </div>
+    </form>
+    <form method="post" action="/tasks/{{ task.id }}/delete" style="margin-top:10px"
+          onsubmit="return confirm('이 할 일을 삭제할까요?')">
+      <button class="btn btn-danger btn-sm" type="submit">삭제</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

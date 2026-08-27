@@ -1,57 +1,73 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
 {% block title %}로그인 · 대청부 수련회{% endblock %}
-{% block content %}
-<div class="login-wrap">
-  <div class="login-logo">
-    <div class="t">대청부 수련회</div>
-    <div class="s">총무팀 통합 관리 시스템</div>
-  </div>
 
-  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
-
-  <div class="card">
-    {% if step == "phone" %}
-    <form method="post" action="/login/code">
-      <div class="field">
-        <label for="phone">휴대폰 번호</label>
-        <input id="phone" name="phone_number" type="tel" inputmode="numeric"
-               placeholder="010-1234-5678" autocomplete="tel" required autofocus>
-      </div>
-      <button class="btn btn-full" type="submit">인증번호 받기</button>
-      <p class="muted tiny" style="margin-top:10px">
-        등록된 번호로만 로그인할 수 있어요. 처음 사용하는 경우 총무팀에 계정 등록을 요청해주세요.
-      </p>
-    </form>
-
-    {% else %}
-    {% if dev_code %}
-    <div class="devcode">
-      개발 모드 — 실제 SMS 대신 화면에 표시합니다<br>
-      <b>{{ dev_code }}</b>
+{% block auth_content %}
+<div class="auth-wrap">
+  <div class="auth">
+    <div class="auth-brand">
+      <div class="mark">대</div>
+      <div class="t">대청부 수련회</div>
+      <div class="s">총무팀 통합 관리 시스템</div>
     </div>
+
+    {% if error %}
+    <div class="banner banner-danger">{{ icon('alert', 17) }}<span>{{ error }}</span></div>
     {% endif %}
-    <form method="post" action="/login/verify">
-      <input type="hidden" name="phone_number" value="{{ phone_number }}">
-      {% if is_first_user %}
-      <div class="alert alert-warn">
-        첫 사용자입니다. 이 번호가 <b>총무팀(관리자)</b> 계정으로 등록됩니다.
+
+    <div class="card">
+      <div class="card-body">
+        {% if step == "phone" %}
+        <form method="post" action="/login/code">
+          <div class="field">
+            <label for="phone">휴대폰 번호</label>
+            <input id="phone" name="phone_number" type="tel" inputmode="numeric"
+                   placeholder="010-1234-5678" autocomplete="tel" required autofocus>
+          </div>
+          <button class="btn btn-block" type="submit">{{ icon('send', 17) }}인증번호 받기</button>
+        </form>
+        <p class="muted" style="margin:12px 0 0">
+          등록된 번호로만 로그인할 수 있습니다. 처음이라면 총무팀에 계정 등록을 요청해주세요.
+        </p>
+
+        {% else %}
+        {% if dev_code %}
+        {# data-dev-code 는 테스트가 마크업 변경에 흔들리지 않게 하기 위한 고정 진입점 #}
+        <div class="devcode" data-dev-code="{{ dev_code }}">
+          {{ icon('lock', 20) }}
+          <div class="grow">
+            <div class="lbl">개발 모드 — 실제 SMS 대신 화면에 표시합니다</div>
+            <div class="code">{{ dev_code }}</div>
+          </div>
+        </div>
+        {% endif %}
+
+        <form method="post" action="/login/verify">
+          <input type="hidden" name="phone_number" value="{{ phone_number }}">
+          {% if is_first_user %}
+          <div class="banner banner-info">
+            {{ icon('user', 17) }}
+            <span>첫 사용자입니다. 이 번호가 <b>총무팀(관리자)</b> 계정으로 등록됩니다.</span>
+          </div>
+          <div class="field">
+            <label for="name">이름</label>
+            <input id="name" name="name" type="text" placeholder="예: 박민준" required>
+          </div>
+          {% endif %}
+          <div class="field">
+            <label for="code">인증번호 <span class="muted">· 3분 이내</span></label>
+            <input id="code" name="code" class="otp" type="text" inputmode="numeric" maxlength="6"
+                   placeholder="······" autocomplete="one-time-code" required autofocus>
+          </div>
+          <button class="btn btn-block" type="submit">로그인</button>
+        </form>
+        <p class="muted" style="margin:12px 0 0">
+          {{ phone_number }} 로 인증번호를 보냈습니다.
+          <a href="/login" style="color:var(--brand);font-weight:650">번호 다시 입력</a>
+        </p>
+        {% endif %}
       </div>
-      <div class="field">
-        <label for="name">이름</label>
-        <input id="name" name="name" type="text" placeholder="예: 박민준" required>
-      </div>
-      {% endif %}
-      <div class="field">
-        <label for="code">인증번호 (3분 이내)</label>
-        <input id="code" name="code" type="text" inputmode="numeric" maxlength="6"
-               placeholder="6자리" autocomplete="one-time-code" required autofocus>
-      </div>
-      <button class="btn btn-full" type="submit">로그인</button>
-      <p class="muted tiny" style="margin-top:10px">
-        {{ phone_number }} 로 인증번호를 보냈어요. <a href="/login" style="text-decoration:underline">번호 다시 입력</a>
-      </p>
-    </form>
-    {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -28,13 +28,17 @@
     var subsidy = Math.min(amount, head * cap);
     var burden = amount - subsidy;
 
+    // 배너 안의 텍스트 영역만 갈아끼운다 (아이콘은 유지)
+    var slot = preview.querySelector("span") || preview;
     if (!amount || !head) {
-      preview.textContent = "인원수와 금액을 입력하면 지원금액이 자동 계산됩니다.";
+      slot.textContent = "인원수와 금액을 입력하면 지원금액이 자동 계산됩니다.";
+      preview.className = "banner banner-info";
       return;
     }
-    preview.innerHTML =
+    slot.innerHTML =
       "지원금액 <b>" + formatWon(subsidy) + "</b> · 개인부담 <b>" + formatWon(burden) + "</b>" +
-      '<div class="tiny">min(' + formatWon(amount) + ", " + head + "명 × " + formatWon(cap) + ")";
+      '<br><span class="tiny">min(' + formatWon(amount) + ", " + head + "명 × " + formatWon(cap) + ")</span>";
+    preview.className = burden > 0 ? "banner banner-warn" : "banner banner-ok";
   }
 
   function updateAttCount() {
@@ -195,4 +199,21 @@
   });
 
   refresh();
+})();
+
+// ---------------------------------------------------------------- 목록 좁히기
+// 선행 작업처럼 항목이 많은 선택 목록을 이름으로 필터링한다.
+(function () {
+  "use strict";
+  document.querySelectorAll("input[data-filter]").forEach(function (input) {
+    var list = document.querySelector(input.dataset.filter);
+    if (!list) return;
+    var rows = Array.prototype.slice.call(list.querySelectorAll("[data-text]"));
+    input.addEventListener("input", function () {
+      var q = input.value.trim().toLowerCase();
+      rows.forEach(function (row) {
+        row.hidden = q !== "" && row.dataset.text.toLowerCase().indexOf(q) === -1;
+      });
+    });
+  });
 })();

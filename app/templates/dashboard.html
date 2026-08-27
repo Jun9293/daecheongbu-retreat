@@ -1,129 +1,151 @@
 {% extends "base.html" %}
-{% from "partials/macros.html" import task_row %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import task_row, dept_tag, empty %}
 {% set STATUSES = ("대기", "진행중", "피드백요청", "완료", "지연") %}
 {% block title %}홈 · {{ retreat.name }}{% endblock %}
 {% block content %}
 
-<h1>{{ retreat.name }}</h1>
-<p class="muted tiny" style="margin-top:-10px">
-  {% if retreat.start_date %}{{ retreat.start_date | kdate }} ~ {{ retreat.end_date | kdate }}
-  {% if retreat.start_date %}· 수련회 {{ retreat.start_date | dday }}{% endif %}
-  {% else %}기간 미설정{% endif %}
-  · 식대 상한 {{ retreat.meal_subsidy_per_person | won }}/인
-</p>
+<div class="page-head">
+  <h1>{{ retreat.name }}</h1>
+  <p class="sub">
+    {% if retreat.start_date %}
+      {{ retreat.start_date | kdate }} – {{ retreat.end_date | kdate }}
+      <span class="tag tag-brand" style="margin-left:4px">수련회 {{ retreat.start_date | dday }}</span>
+    {% else %}기간 미설정{% endif %}
+  </p>
+</div>
 
 {% if overdue_all %}
-<div class="alert alert-danger">
-  ⚠️ 기한이 지난 할 일이 <b>{{ overdue_all|length }}건</b> 있습니다.
-  <a href="/tasks?status=지연" style="text-decoration:underline">확인하기</a>
+<div class="banner banner-danger">
+  {{ icon('alert', 17) }}
+  <span>기한이 지난 할 일이 <b>{{ overdue_all|length }}건</b> 있습니다.
+    <a href="/tasks?status=지연">확인하기</a></span>
 </div>
 {% endif %}
 {% if unassigned_soon %}
-<div class="alert alert-warn">
-  🔔 담당자 없이 기한이 1주일 이내인 할 일이 <b>{{ unassigned_soon|length }}건</b> 있습니다. 총무팀 확인이 필요합니다.
+<div class="banner banner-warn">
+  {{ icon('user', 17) }}
+  <span>담당자 없이 기한이 1주일 이내인 할 일이 <b>{{ unassigned_soon|length }}건</b> 있습니다. 총무팀 확인이 필요합니다.</span>
 </div>
 {% endif %}
 {% if pending_reviews %}
-<div class="alert alert-warn">
-  📩 우리 부서에 온 확인 요청이 <b>{{ pending_reviews|length }}건</b> 있습니다.
-  <a href="/reviews" style="text-decoration:underline">응답하기</a>
+<div class="banner banner-warn">
+  {{ icon('inbox', 17) }}
+  <span>우리 부서에 온 확인 요청이 <b>{{ pending_reviews|length }}건</b> 있습니다.
+    <a href="/reviews">응답하기</a></span>
 </div>
 {% endif %}
 {% if startable_mine %}
-<div class="alert" style="background:var(--accent-soft); border-color:#bfe0d7; color:#17594c">
-  ▶ 선행 작업이 끝나 <b>지금 시작할 수 있는</b> 할 일이 {{ startable_mine|length }}건 있습니다.
+<div class="banner banner-ok">
+  {{ icon('play', 17) }}
+  <span>선행 작업이 끝나 <b>지금 시작할 수 있는</b> 할 일이 {{ startable_mine|length }}건 있습니다.</span>
 </div>
 {% endif %}
 
-<div class="kpi" style="margin-bottom:12px">
-  <div><div class="v">{{ stats.open }}</div><div class="l">남은 할 일</div></div>
-  <div><div class="v">{{ stats.done }}/{{ stats.total }}</div><div class="l">완료</div></div>
-  <div><div class="v">{{ summary.progress_pct }}%</div><div class="l">예산 집행률</div></div>
+<div class="stats">
+  <div class="stat"><div class="k">남은 할 일</div><div class="v num">{{ stats.open }}</div></div>
+  <div class="stat"><div class="k">완료</div><div class="v num">{{ stats.done }}<small> / {{ stats.total }}</small></div></div>
+  <div class="stat accent"><div class="k">예산 집행률</div><div class="v num">{{ summary.progress_pct }}<small>%</small></div></div>
+  <div class="stat {% if overdue_all %}danger{% endif %}"><div class="k">지연</div><div class="v num">{{ overdue_all|length }}</div></div>
 </div>
 
-<div class="cols2">
-<div>
-  <div class="card">
-    <div class="section-head">
-      <h2>내 할 일 · 오늘까지</h2>
-      <a class="btn btn-ghost btn-sm" href="/tasks?scope=mine">전체 보기</a>
+<div class="cols">
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h2>내 할 일 · 오늘까지</h2>
+        <a class="btn btn-ghost btn-sm" href="/tasks?scope=mine">전체 보기</a>
+      </div>
+      <div class="card-body flush">
+        {% if my_today %}
+        <div class="list">
+          {% for task in my_today %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+        </div>
+        {% else %}{{ empty('오늘까지 마감인 내 할 일이 없습니다', 'check') }}{% endif %}
+      </div>
     </div>
-    {% if my_today %}
-      {% for task in my_today %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
-    {% else %}
-      <div class="empty">오늘까지 마감인 내 할 일이 없습니다 👍</div>
+
+    <div class="card">
+      <div class="card-head"><h2>이번 주 <span class="muted">· 7일 이내</span></h2></div>
+      <div class="card-body flush">
+        {% if my_week %}
+        <div class="list">
+          {% for task in my_week %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+        </div>
+        {% else %}{{ empty('7일 이내 마감인 내 할 일이 없습니다', 'calendar') }}{% endif %}
+      </div>
+    </div>
+
+    {% if my_undated %}
+    <details class="panel">
+      <summary>{{ icon('chevron-right', 16) }}<span class="grow">기한 미정 내 할 일</span>
+        <span class="tag">{{ my_undated|length }}</span></summary>
+      <div class="card-body flush">
+        <div class="list">
+          {% for task in my_undated %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
+        </div>
+      </div>
+    </details>
     {% endif %}
   </div>
 
-  <div class="card">
-    <h2>이번 주 (7일 이내)</h2>
-    {% if my_week %}
-      {% for task in my_week %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
-    {% else %}
-      <div class="empty">7일 이내 마감인 내 할 일이 없습니다</div>
+  <div>
+    {% if today_day %}
+    <div class="card">
+      <div class="card-head">
+        <h2>오늘 일정 <span class="muted">· {{ today_day.label }}</span></h2>
+        <a class="btn btn-ghost btn-sm" href="/schedule?day_id={{ today_day.id }}">시간표</a>
+      </div>
+      <div class="card-body flush">
+        <div class="list">
+          {% for item in today_day.items[:8] %}
+          <div class="item {% if item.department_id and is_other_dept(user, item.department_id) %}faded{% endif %}">
+            <span class="tl-range">{{ item.start_time or '–' }}</span>
+            <div class="item-main">
+              <div class="item-title">{{ item.title }}</div>
+              <div class="item-meta">
+                {% if item.location %}<span class="tag">{{ icon('map-pin') }}{{ item.location }}</span>{% endif %}
+                {% if item.department %}{{ dept_tag(item.department) }}{% endif %}
+              </div>
+            </div>
+          </div>
+          {% else %}
+          {{ empty('등록된 일정이 없습니다', 'calendar') }}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
     {% endif %}
-  </div>
 
-  {% if my_undated %}
-  <details class="foldable">
-    <summary>기한 미정 내 할 일 ({{ my_undated|length }})</summary>
-    <div class="fold-body">
-      {% for task in my_undated %}{{ task_row(task, user, STATUSES, "/", today()) }}{% endfor %}
-    </div>
-  </details>
-  {% endif %}
-</div>
+    <div class="card">
+      <div class="card-head">
+        <h2>예산 집행</h2>
+        <a class="btn btn-ghost btn-sm" href="/budget">자세히</a>
+      </div>
+      <div class="card-body">
+        <div class="row" style="justify-content:space-between;margin-bottom:7px">
+          <b class="num">{{ summary.total_spent | won }}</b>
+          <span class="muted num">예산 {{ summary.total_planned | won }}</span>
+        </div>
+        <div class="bar lg {% if summary.total_spent > summary.total_planned %}over{% endif %}">
+          <i style="width: {{ [summary.progress_pct, 100] | min }}%"></i>
+        </div>
 
-<div>
-  {% if today_day %}
-  <div class="card">
-    <div class="section-head">
-      <h2>오늘 일정 · {{ today_day.label }}</h2>
-      <a class="btn btn-ghost btn-sm" href="/schedule?day_id={{ today_day.id }}">일정표</a>
-    </div>
-    {% for item in today_day.items %}
-    <div class="task {% if is_other_dept(user, item.department_id) %}dim{% endif %}">
-      <div class="task-main">
-        <div class="task-title">{{ item.title }}</div>
-        <div class="task-meta">
-          <span class="tag">{{ item.start_time or "시간 미정" }}{% if item.end_time %}–{{ item.end_time }}{% endif %}</span>
-          {% if item.location %}<span class="tag">📍 {{ item.location }}</span>{% endif %}
-          {% if item.department %}<span class="tag tag-dept">{{ item.department.name }}</span>{% endif %}
+        <div class="stack" style="margin-top:14px;gap:11px">
+          {% for row in summary.categories[:6] %}
+          <div>
+            <div class="row" style="justify-content:space-between;gap:10px">
+              <span class="tiny">{{ row.category.display_name }}</span>
+              <span class="muted num tiny">{{ row.spent | num }} / {{ row.planned | num }}</span>
+            </div>
+            <div class="bar {% if row.is_over_budget %}over{% endif %}" style="margin-top:4px">
+              <i style="width: {{ [row.progress_pct, 100] | min }}%"></i>
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
-    {% else %}
-    <div class="empty">등록된 일정이 없습니다</div>
-    {% endfor %}
   </div>
-  {% endif %}
-
-  <div class="card">
-    <div class="section-head">
-      <h2>예산 집행 현황</h2>
-      <a class="btn btn-ghost btn-sm" href="/budget">자세히</a>
-    </div>
-    <div class="row" style="justify-content:space-between; margin-bottom:6px">
-      <span class="muted tiny">집행 {{ summary.total_spent | won }}</span>
-      <span class="muted tiny">예산 {{ summary.total_planned | won }}</span>
-    </div>
-    <div class="bar big {% if summary.total_spent > summary.total_planned %}over{% endif %}">
-      <span style="width: {{ [summary.progress_pct, 100] | min }}%"></span>
-    </div>
-    <div class="stack" style="margin-top:12px">
-      {% for row in summary.categories[:5] %}
-      <div>
-        <div class="row" style="justify-content:space-between">
-          <span class="tiny">{{ row.category.display_name }}</span>
-          <span class="tiny muted">{{ row.spent | num }} / {{ row.planned | num }}</span>
-        </div>
-        <div class="bar {% if row.is_over_budget %}over{% endif %}" style="margin-top:4px">
-          <span style="width: {{ [row.progress_pct, 100] | min }}%"></span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</div>
 </div>
 {% endblock %}

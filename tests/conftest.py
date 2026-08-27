@@ -113,7 +113,8 @@ def login_as(client, phone: str, name: str = "테스터"):
     """전화번호 인증 로그인 (개발 모드에서 화면에 노출되는 코드를 사용)."""
     response = client.post("/login/code", data={"phone_number": phone})
     assert response.status_code == 200, response.text
-    match = re.search(r"<b>(\d{6})</b>", response.text)
+    # 화면 마크업이 바뀌어도 깨지지 않도록 전용 속성을 사용한다
+    match = re.search(r'data-dev-code="(\d{6})"', response.text)
     assert match, "개발 모드 인증코드를 찾을 수 없습니다."
     code = match.group(1)
 

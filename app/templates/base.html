@@ -3,61 +3,128 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1f3a5f">
+  <meta name="theme-color" content="#ffffff">
   <title>{% block title %}대청부 수련회{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=2">
+  <link rel="stylesheet" href="/static/css/app.css?v=3">
 </head>
 <body>
-{% if user %}
-<header class="topbar">
-  <div class="topbar-inner">
-    <a class="brand" href="/">대청부 수련회</a>
-    <div class="topbar-right">
-      {% if retreats and retreats|length > 0 %}
-      <form method="get" action="{{ request.url.path }}" class="retreat-switch">
-        <select name="retreat_id" onchange="this.form.submit()" aria-label="회차 선택">
+{% from "partials/icons.html" import icon %}
+{% set path = request.url.path %}
+
+{% if not user %}
+  {% block auth_content %}{% endblock %}
+{% else %}
+
+{% set nav_items = [
+  ('/',            'home',      '홈',        [ '/' ]),
+  ('/schedule',    'calendar',  '일정표',     [ '/schedule' ]),
+  ('/tasks',       'check',     '할 일',      [ '/tasks' ]),
+  ('/expenses',    'receipt',   '지출',       [ '/expenses', '/refunds' ]),
+  ('/budget',      'chart',     '예산',       [ '/budget' ]),
+] %}
+{% set nav_more = [
+  ('/reviews',     'inbox',     '확인 요청',   [ '/reviews' ]),
+  ('/files',       'folder',    '작업 파일',   [ '/files' ]),
+  ('/checklists',  'checklist', '체크리스트',  [ '/checklists' ]),
+  ('/meetings',    'notes',     '회의록',     [ '/meetings' ]),
+  ('/notifications','bell',     '알림함',     [ '/notifications' ]),
+  ('/settings',    'settings',  '설정',       [ '/settings' ]),
+] %}
+
+<div class="shell">
+
+  {# ---------------- 데스크톱 사이드바 ---------------- #}
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="mark">대</span>대청부 수련회</a>
+
+    {% if retreats %}
+    <form method="get" action="{{ path }}" class="retreat-pick">
+      <select name="retreat_id" onchange="this.form.submit()" aria-label="회차 선택">
+        {% for r in retreats %}
+        <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
+
+    <nav class="nav">
+      {% for href, ico, label, actives in nav_items %}
+      <a href="{{ href }}" class="{% if path in actives or (href != '/' and path.startswith(href)) %}on{% endif %}">
+        {{ icon(ico, 19) }}{{ label }}
+      </a>
+      {% endfor %}
+
+      <div class="nav-label">협업</div>
+      {% for href, ico, label, actives in nav_more %}
+      <a href="{{ href }}" class="{% if path.startswith(href) %}on{% endif %}">
+        {{ icon(ico, 19) }}{{ label }}
+        {% if href == '/reviews' and pending_review_count %}<span class="count">{{ pending_review_count }}</span>{% endif %}
+        {% if href == '/notifications' and unread_count %}<span class="count">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+
+    <div class="side-foot">
+      <a class="side-user" href="/settings">
+        <span class="avatar">{{ user.name[:1] }}</span>
+        <span class="grow">
+          <span class="nm">{{ user.name }}</span><br>
+          <span class="rl">{{ ROLE_LABELS.get(user.role, user.role) }}{% if user.department %} · {{ user.department.name }}{% endif %}</span>
+        </span>
+      </a>
+    </div>
+  </aside>
+
+  <div>
+    {# ---------------- 모바일 상단바 ---------------- #}
+    <header class="topbar">
+      <a class="brand" href="/"><span class="mark">대</span></a>
+      {% if retreats %}
+      <form method="get" action="{{ path }}" style="min-width:0">
+        <select name="retreat_id" onchange="this.form.submit()" aria-label="회차 선택"
+                style="height:32px;font-size:12.5px;font-weight:600;border-color:transparent;background-color:var(--surface-3);max-width:46vw">
           {% for r in retreats %}
           <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
           {% endfor %}
         </select>
       </form>
       {% endif %}
-      <a class="bell" href="/notifications" aria-label="알림">
-        🔔{% if unread_count %}<span class="badge">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}
+      <span class="spacer"></span>
+      <a class="icon-btn" href="/notifications" aria-label="알림">
+        {{ icon('bell') }}
+        {% if unread_count %}<span class="badge">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}
       </a>
-      <a class="user-chip" href="/settings" title="{{ ROLE_LABELS.get(user.role, user.role) }}">
-        {{ user.name }}<span class="role-dot role-{{ user.role }}"></span>
-      </a>
-    </div>
+      <a class="icon-btn" href="/settings" aria-label="내 정보"><span class="avatar">{{ user.name[:1] }}</span></a>
+    </header>
+
+    <main class="page">
+      {% block content %}{% endblock %}
+    </main>
   </div>
-</header>
-{% endif %}
+</div>
 
-{% if flash %}
-<div class="flash" role="status">{{ flash }}</div>
-{% endif %}
-
-<main class="page {% if user %}with-nav{% endif %}">
-  {% block content %}{% endblock %}
-</main>
-
-{% if user %}
-{% set path = request.url.path %}
-{% set more_paths = ['/budget', '/files', '/checklists', '/meetings', '/reviews', '/notifications', '/settings', '/more'] %}
-<nav class="bottomnav">
-  <a href="/" class="{% if path == '/' %}active{% endif %}"><span class="ic">🏠</span>홈</a>
-  <a href="/schedule" class="{% if path.startswith('/schedule') %}active{% endif %}"><span class="ic">🗓</span>일정</a>
-  <a href="/tasks" class="{% if path.startswith('/tasks') %}active{% endif %}"><span class="ic">✅</span>할 일</a>
-  <a href="/expenses" class="{% if path.startswith('/expenses') or path.startswith('/refunds') %}active{% endif %}"><span class="ic">🧾</span>지출</a>
-  <a href="/more" class="{% if path in more_paths %}active{% endif %}">
-    <span class="ic">⋯</span>더보기{% if pending_review_count %}<span class="dot-alert"></span>{% endif %}
+{# ---------------- 모바일 하단 탭 ---------------- #}
+<nav class="tabbar">
+  {% for href, ico, label, actives in nav_items[:4] %}
+  <a href="{{ href }}" class="{% if path in actives or (href != '/' and path.startswith(href)) %}on{% endif %}">
+    {{ icon(ico, 21) }}{{ label }}
+  </a>
+  {% endfor %}
+  {% set more_paths = ['/more', '/budget', '/reviews', '/files', '/checklists', '/meetings', '/notifications', '/settings'] %}
+  <a href="/more" class="{% if path in more_paths %}on{% endif %}">
+    {{ icon('grid', 21) }}더보기
+    {% if pending_review_count %}<span class="dot"></span>{% endif %}
   </a>
 </nav>
 {% endif %}
 
-<script src="/static/js/app.js?v=2" defer></script>
+{% if flash %}
+<div class="flash" role="status">{{ icon('check', 17) }}{{ flash }}</div>
+{% endif %}
+
+<script src="/static/js/app.js?v=3" defer></script>
 </body>
 </html>

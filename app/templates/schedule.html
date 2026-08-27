@@ -1,92 +1,132 @@
 {% extends "base.html" %}
-{% block title %}일정 · {{ retreat.name }}{% endblock %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import dept_tag, empty %}
+{% block title %}일정표 · {{ retreat.name }}{% endblock %}
 {% block content %}
 
-<h1>일정표</h1>
+<div class="page-head">
+  <h1>봉사자 일차별 시간표</h1>
+  <p class="sub">시각별로 봉사자 공통 일정과 총무팀 역할별 업무를 함께 봅니다.</p>
+</div>
 
-<div class="tabs">
+{# ---- 일자 탭 ---- #}
+<div class="chips">
   {% for d in days %}
-  <a href="/schedule?day_id={{ d.id }}" class="{% if current_day and d.id == current_day.id %}active{% endif %}">
-    {{ d.label }}{% if d.date %} <span class="tiny">({{ d.date | short_date }})</span>{% endif %}
+  <a href="/schedule?day_id={{ d.id }}{% if dept_filter %}&dept={{ dept_filter }}{% endif %}"
+     class="chip {% if current_day and d.id == current_day.id %}on{% endif %}">
+    {{ d.label }}{% if d.date %}<span class="cnt">{{ d.date.strftime('%m/%d') }}</span>{% endif %}
   </a>
   {% endfor %}
 </div>
 
 {% if not days %}
-<div class="card"><div class="empty">아직 등록된 일자가 없습니다. 아래에서 일자를 추가해주세요.</div></div>
+<div class="card"><div class="card-body">{{ empty('아직 등록된 일자가 없습니다. 아래에서 일자를 추가해주세요.', 'calendar') }}</div></div>
 {% endif %}
 
 {% if current_day %}
-<div class="card">
-  <div class="section-head">
-    <h2>{{ current_day.label }}{% if current_day.date %} · {{ current_day.date | kdate }}{% endif %}</h2>
-    {% if not is_readonly(user.role) %}
-    <form method="post" action="/schedule/days/{{ current_day.id }}/delete"
-          onsubmit="return confirm('{{ current_day.label }} 전체를 삭제할까요? 하위 일정도 함께 삭제됩니다.')">
-      <button class="btn btn-sm btn-danger" type="submit">일자 삭제</button>
-    </form>
-    {% endif %}
-  </div>
 
-  {% for item in current_day.items %}
-  <div class="task {% if is_other_dept(user, item.department_id) %}dim{% endif %}">
-    <div class="task-main">
-      <div class="task-title">{{ item.title }}</div>
-      <div class="task-meta">
-        <span class="tag">{{ item.start_time or "시간 미정" }}{% if item.end_time %}–{{ item.end_time }}{% endif %}</span>
-        {% if item.location %}<span class="tag">📍 {{ item.location }}</span>{% endif %}
-        {% if item.department %}<span class="tag tag-dept">{{ item.department.name }}</span>{% endif %}
-      </div>
-      {% for task in tasks_by_item.get(item.id, []) %}
-      <div class="tiny muted" style="margin-top:4px">
-        ↳ {{ task.title }} <span class="tag st-{{ task.status }}">{{ task.status }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% if not is_readonly(user.role) %}
-    <form method="post" action="/schedule/items/{{ item.id }}/delete" onsubmit="return confirm('이 일정을 삭제할까요?')">
-      <button class="btn btn-sm btn-danger" type="submit">삭제</button>
-    </form>
-    {% endif %}
-  </div>
-  {% else %}
-  <div class="empty">이 날의 일정이 아직 없습니다</div>
+{# ---- 부서 필터 ---- #}
+{% set base = '/schedule?day_id=' ~ current_day.id %}
+<div class="chips">
+  <a href="{{ base }}" class="chip {% if not dept_filter %}on{% endif %}">
+    전체<span class="cnt">{{ total_count }}</span>
+  </a>
+  {% if user.department_id %}
+  <a href="{{ base }}&dept=mine" class="chip {% if dept_filter == 'mine' %}on{% endif %}"
+     style="--dept: {{ user.department.color_tag or '#878d97' }}">
+    <span class="swatch"></span>내 부서
+  </a>
+  {% endif %}
+  {% for d in departments %}
+  {% if dept_counts.get(d.id) %}
+  <a href="{{ base }}&dept={{ d.id }}" class="chip {% if dept_filter == d.id|string %}on{% endif %}"
+     style="--dept: {{ d.color_tag or '#878d97' }}">
+    <span class="swatch"></span>{{ d.name }}<span class="cnt">{{ dept_counts[d.id] }}</span>
+  </a>
+  {% endif %}
   {% endfor %}
 </div>
 
+<div class="card">
+  <div class="card-head">
+    <h2>{{ current_day.label }}{% if current_day.date %}<span class="muted"> · {{ current_day.date | kdate }}</span>{% endif %}</h2>
+    <span class="tag">{{ shown_count }}건</span>
+    {% if not is_readonly(user.role) %}
+    <form method="post" action="/schedule/days/{{ current_day.id }}/delete"
+          onsubmit="return confirm('{{ current_day.label }} 전체를 삭제할까요? 하위 일정도 함께 삭제됩니다.')">
+      <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="일자 삭제">{{ icon('x', 16) }}</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card-body flush">
+    {% if timeline %}
+    <div class="timeline">
+      {% for hour, items in timeline %}
+      <div class="tl-hour {% if is_today and hour == now_hour %}now{% endif %}">
+        <div class="tl-time">{% if hour == '--' %}시간<br>미정{% else %}{{ hour }}:00{% endif %}</div>
+        <div class="tl-items">
+          {% for item in items %}
+          {% set is_program = '[프로그램' in item.title or '집회' in item.title or '예배' in item.title %}
+          <div class="tl-item {% if not item.department_id %}{% if is_program %}program{% else %}common{% endif %}{% endif %}
+                      {% if item.department_id and is_other_dept(user, item.department_id) %}faded{% endif %}"
+               style="--dept: {{ item.department.color_tag if item.department else '#878d97' }}">
+            <span class="tl-range">
+              {{ item.start_time or '–' }}{% if item.end_time %}<br>{{ item.end_time }}{% endif %}
+            </span>
+            <div class="tl-body">
+              <div class="tl-title">{{ item.title }}</div>
+              <div class="tl-meta">
+                {% if item.department %}{{ dept_tag(item.department) }}
+                {% else %}<span class="tag tag-outline">공통</span>{% endif %}
+                {% if item.location %}<span class="tag">{{ icon('map-pin') }}{{ item.location }}</span>{% endif %}
+              </div>
+              {% for task in tasks_by_item.get(item.id, []) %}
+              <div class="item-note">↳ {{ task.title }} <span class="tag st-{{ task.status }}">{{ task.status }}</span></div>
+              {% endfor %}
+            </div>
+            {% if not is_readonly(user.role) %}
+            <form method="post" action="/schedule/items/{{ item.id }}/delete"
+                  onsubmit="return confirm('이 일정을 삭제할까요?')">
+              <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 15) }}</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      {{ empty('조건에 맞는 일정이 없습니다', 'calendar') }}
+    {% endif %}
+  </div>
+</div>
+
 {% if not is_readonly(user.role) %}
-<details class="foldable">
-  <summary>+ {{ current_day.label }}에 일정 추가</summary>
-  <div class="fold-body">
+<details class="panel">
+  <summary>{{ icon('plus', 17) }}<span class="grow">{{ current_day.label }}에 일정 추가</span></summary>
+  <div class="panel-body">
     <form method="post" action="/schedule/days/{{ current_day.id }}/items">
       <div class="field">
         <label for="s-title">일정명</label>
-        <input id="s-title" name="title" required placeholder="예: 1일차 집회">
+        <input id="s-title" name="title" required placeholder="예: 강당 의자 세팅 (전체)">
       </div>
-      <div class="grid2">
-        <div class="field">
-          <label for="s-start">시작</label>
-          <input id="s-start" name="start_time" type="time">
-        </div>
-        <div class="field">
-          <label for="s-end">종료</label>
-          <input id="s-end" name="end_time" type="time">
-        </div>
+      <div class="grid-3">
+        <div class="field"><label for="s-start">시작</label><input id="s-start" name="start_time" type="time"></div>
+        <div class="field"><label for="s-end">종료</label><input id="s-end" name="end_time" type="time"></div>
+        <div class="field"><label for="s-loc">장소</label><input id="s-loc" name="location" placeholder="대강당"></div>
       </div>
-      <div class="grid2">
-        <div class="field">
-          <label for="s-loc">장소</label>
-          <input id="s-loc" name="location" placeholder="예: 대강당">
-        </div>
-        <div class="field">
-          <label for="s-dept">담당 부서</label>
-          <select id="s-dept" name="department_id">
-            <option value="">전체</option>
-            {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-          </select>
-        </div>
+      <div class="field">
+        <label for="s-dept">담당 부서</label>
+        <select id="s-dept" name="department_id">
+          <option value="">공통 (봉사자 전체 / 전체 일정)</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <button class="btn btn-full btn-accent" type="submit">일정 추가</button>
+      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}일정 추가</button>
     </form>
   </div>
 </details>
@@ -94,21 +134,15 @@
 {% endif %}
 
 {% if not is_readonly(user.role) %}
-<details class="foldable">
-  <summary>+ 일자 추가</summary>
-  <div class="fold-body">
+<details class="panel">
+  <summary>{{ icon('plus', 17) }}<span class="grow">일자 추가</span></summary>
+  <div class="panel-body">
     <form method="post" action="/schedule/days">
-      <div class="grid2">
-        <div class="field">
-          <label for="d-label">이름</label>
-          <input id="d-label" name="label" required placeholder="예: 1일차 / 선발대">
-        </div>
-        <div class="field">
-          <label for="d-date">날짜</label>
-          <input id="d-date" name="date" type="date">
-        </div>
+      <div class="grid-2">
+        <div class="field"><label for="d-label">이름</label><input id="d-label" name="label" required placeholder="예: 4일차"></div>
+        <div class="field"><label for="d-date">날짜</label><input id="d-date" name="date" type="date"></div>
       </div>
-      <button class="btn btn-full" type="submit">일자 추가</button>
+      <button class="btn btn-ghost btn-block" type="submit">일자 추가</button>
     </form>
   </div>
 </details>

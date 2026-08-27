@@ -1,69 +1,78 @@
 {% extends "base.html" %}
-{% block title %}환급 대상자 · {{ retreat.name }}{% endblock %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import empty %}
+{% block title %}환급 대상자{% endblock %}
 {% block content %}
 
-<h1>환급 대상자</h1>
-<p class="muted tiny" style="margin-top:-10px">지출자에게 돌려줘야 할 금액입니다. (식대는 지원금액 기준)</p>
+<div class="page-head">
+  <h1>환급 대상자</h1>
+  <p class="sub">지출자에게 돌려줘야 할 금액입니다. 식대는 지원금액 기준.</p>
+</div>
 
-<div class="tabs">
-  <a href="/refunds?unpaid_only=1" class="{% if unpaid_only %}active{% endif %}">미지급만</a>
-  <a href="/refunds?unpaid_only=0" class="{% if not unpaid_only %}active{% endif %}">전체</a>
-  <a href="/expenses">지출 내역</a>
-  <a href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀 내려받기</a>
+<div class="chips">
+  <a href="/refunds?unpaid_only=1" class="chip {% if unpaid_only %}on{% endif %}">미지급만</a>
+  <a href="/refunds?unpaid_only=0" class="chip {% if not unpaid_only %}on{% endif %}">전체</a>
+  <a href="/expenses" class="chip">{{ icon('receipt', 14) }}지출 내역</a>
+  <a href="/export/expenses.xlsx?retreat_id={{ retreat.id }}" class="chip">{{ icon('download', 14) }}엑셀</a>
 </div>
 
 <div class="card">
-  <div class="section-head">
+  <div class="card-head">
     <h2>{{ groups|length }}명</h2>
-    <span><b>{{ grand_total | won }}</b></span>
+    <b class="num">{{ grand_total | won }}</b>
   </div>
+  <div class="card-body flush">
+    {% if groups %}
+    <div class="list">
+      {% for g in groups %}
+      <div class="item" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div>
+            <div class="item-title">{{ g.payer_name }}</div>
+            <div class="muted tiny">{{ g.payer_account or '계좌 미등록' }}</div>
+          </div>
+          <b class="num">{{ g.total | won }}</b>
+        </div>
 
-  {% for g in groups %}
-  <details class="foldable" style="box-shadow:none; margin-bottom:8px">
-    <summary>
-      <span>
-        {{ g.payer_name }}
-        <div class="tiny muted">{{ g.payer_account or '계좌 미등록' }}</div>
-      </span>
-      <span class="nowrap"><b>{{ g.total | won }}</b></span>
-    </summary>
-    <div class="fold-body">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>번호</th><th>내용</th><th class="num">금액</th><th class="num">환급액</th><th>지급</th></tr>
-          </thead>
-          <tbody>
-            {% for e in g.entries %}
-            <tr>
-              <td>{{ e.receipt_number }}</td>
-              <td>
-                {{ e.level3b or (e.budget_category.display_name if e.budget_category else '미지정') }}
-                {% if e.is_meal_expense %}<div class="tiny muted">🍚 {{ e.meal_headcount or 0 }}명 · {{ e.expense_date | short_date }}</div>{% endif %}
-              </td>
-              <td class="num">{{ e.amount | num }}</td>
-              <td class="num">{{ e.subsidy_amount | num }}</td>
-              <td>
-                {% if can_edit_dept(user, e.department_id) %}
-                <form method="post" action="/expenses/{{ e.id }}/paid">
-                  <input type="hidden" name="redirect_to" value="/refunds">
-                  <button class="btn btn-sm {% if e.paid %}btn-accent{% else %}btn-ghost{% endif %}" type="submit">
-                    {{ '지급완료' if e.paid else '미지급' }}
-                  </button>
-                </form>
-                {% else %}
-                <span class="tag">{{ '지급완료' if e.paid else '미지급' }}</span>
-                {% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <details class="inline">
+          <summary>{{ icon('receipt', 13) }}내역 {{ g.entries|length }}건</summary>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>번호</th><th>내용</th><th class="r">금액</th><th class="r">환급액</th><th>지급</th></tr></thead>
+              <tbody>
+                {% for e in g.entries %}
+                <tr>
+                  <td class="num">{{ e.receipt_number }}</td>
+                  <td>
+                    {{ e.level3b or (e.budget_category.display_name if e.budget_category else '미지정') }}
+                    {% if e.is_meal_expense %}
+                    <div class="muted tiny">{{ e.meal_headcount or 0 }}명 · {{ e.expense_date | short_date }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="r">{{ e.amount | num }}</td>
+                  <td class="r">{{ e.subsidy_amount | num }}</td>
+                  <td>
+                    {% if can_edit_dept(user, e.department_id) %}
+                    <form method="post" action="/expenses/{{ e.id }}/paid">
+                      <input type="hidden" name="redirect_to" value="/refunds">
+                      <button class="btn btn-sm {% if e.paid %}btn-ok{% else %}btn-ghost{% endif %}" type="submit">
+                        {{ '지급완료' if e.paid else '미지급' }}
+                      </button>
+                    </form>
+                    {% else %}
+                    <span class="tag {% if e.paid %}tag-ok{% endif %}">{{ '지급완료' if e.paid else '미지급' }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
+      {% endfor %}
     </div>
-  </details>
-  {% else %}
-  <div class="empty">환급 대상이 없습니다</div>
-  {% endfor %}
+    {% else %}{{ empty('환급 대상이 없습니다', 'wallet') }}{% endif %}
+  </div>
 </div>
 {% endblock %}

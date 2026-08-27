@@ -1,51 +1,63 @@
+{% from "partials/icons.html" import icon %}
+
+{# 부서 색상 칩 #}
+{% macro dept_tag(department) -%}
+{%- if department -%}
+<span class="tag tag-dept" style="--dept: {{ department.color_tag or '#878d97' }}">
+  <span class="swatch"></span>{{ department.name }}
+</span>
+{%- else -%}
+<span class="tag tag-outline">부서 미지정</span>
+{%- endif -%}
+{%- endmacro %}
+
+
+{# 마감일 태그 #}
+{% macro due_tag(due, today) -%}
+{%- if due -%}
+{%- set left = (due - today).days -%}
+<span class="tag {% if left < 0 %}tag-danger{% elif left <= 3 %}tag-warn{% endif %}">
+  {{ icon('clock') }}{{ due.strftime('%m/%d') }} · {{ due | dday }}
+</span>
+{%- endif -%}
+{%- endmacro %}
+
+
+{# 할 일 한 줄 #}
 {% macro task_row(task, user, statuses, redirect_to, today, blockers=None) %}
-<div class="task {% if is_other_dept(user, task.department_id) %}dim{% endif %}">
-  <div class="task-main">
-    <div class="task-title">
-      {% if blockers %}<span class="blocked-mark" title="선행 작업 대기 중">⛔</span>
-      {% elif task.blocked_by_task_ids and task.status == '대기' %}<span class="ready-mark" title="선행 작업이 모두 끝나 시작할 수 있음">▶</span>
-      {% endif %}{{ task.title }}
+<div class="item {% if is_other_dept(user, task.department_id) %}faded{% endif %}">
+  <div class="item-main">
+    <div class="item-title">
+      {%- if blockers %}<span class="mark-blocked">{{ icon('blocked', 15) }}</span>
+      {%- elif task.blocked_by_task_ids and task.status == '대기' %}<span class="mark-ready">{{ icon('play', 15) }}</span>
+      {%- endif %}{{ task.title }}
     </div>
+
     {% if blockers %}
-    <div class="tiny blocked-note">
-      선행 대기: {% for b in blockers %}{{ b.title }}{% if not loop.last %}, {% endif %}{% endfor %}
+    <div class="blocked-note">
+      {{ icon('link', 13) }}선행 대기: {% for b in blockers %}{{ b.title }}{% if not loop.last %}, {% endif %}{% endfor %}
     </div>
     {% endif %}
-    <div class="task-meta">
-      {% if task.department %}
-        <span class="tag tag-dept">{{ task.department.name }}</span>
-      {% else %}
-        <span class="tag">부서 미지정</span>
-      {% endif %}
 
+    <div class="item-meta">
+      {{ dept_tag(task.department) }}
       {% if task.assignee %}
-        <span class="tag">{{ task.assignee.name }}</span>
+        <span class="tag">{{ icon('user') }}{{ task.assignee.name }}</span>
       {% else %}
-        <span class="tag tag-none">담당자 없음</span>
+        <span class="tag tag-danger">담당자 없음</span>
       {% endif %}
-
-      {% if task.due_date %}
-        {% set left = (task.due_date - today).days %}
-        <span class="tag tag-due {% if left < 0 %}over{% elif left <= 3 %}soon{% endif %}">
-          {{ task.due_date | short_date }} · {{ task.due_date | dday }}
-        </span>
-      {% endif %}
-
-      {% if task.schedule_item %}
-        <span class="tag">🗓 {{ task.schedule_item.title }}</span>
-      {% endif %}
+      {{ due_tag(task.due_date, today) }}
+      {% if task.schedule_item %}<span class="tag">{{ icon('calendar') }}{{ task.schedule_item.title }}</span>{% endif %}
     </div>
-    {% if task.description %}<div class="muted tiny" style="margin-top:5px">{{ task.description }}</div>{% endif %}
   </div>
 
-  <div class="nowrap">
+  <div class="item-side">
     {% if can_edit_dept(user, task.department_id) %}
     <form method="post" action="/tasks/{{ task.id }}/status">
       <input type="hidden" name="redirect_to" value="{{ redirect_to }}">
-      <select class="status-select st-{{ task.status }}" name="status" onchange="this.form.submit()">
-        {% for s in statuses %}
-        <option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
+      <select class="status-select st-{{ task.status }}" name="status" onchange="this.form.submit()"
+              aria-label="{{ task.title }} 상태">
+        {% for s in statuses %}<option value="{{ s }}" {% if s == task.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
       </select>
     </form>
     {% else %}
@@ -56,8 +68,7 @@
 {% endmacro %}
 
 
-{% macro progress(row) %}
-<div class="bar {% if row.is_over_budget %}over{% endif %}">
-  <span style="width: {{ [row.progress_pct, 100] | min if row.progress_pct else 0 }}%"></span>
-</div>
+{# 빈 상태 #}
+{% macro empty(text, ico='inbox') %}
+<div class="empty">{{ icon(ico, 28) }}{{ text }}</div>
 {% endmacro %}

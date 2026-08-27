@@ -30,10 +30,18 @@ def _owned_day(db: Session, day_id: int, retreat: Retreat) -> ScheduleDay:
     return day
 
 
+def _hour_of(item: ScheduleItem) -> str:
+    """정렬·그룹핑용 시각. 시간이 없으면 맨 뒤로 보낸다."""
+    if not item.start_time:
+        return "--"
+    return item.start_time[:2]
+
+
 @router.get("")
 def schedule_page(
     request: Request,
     day_id: int | None = None,
+    dept: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
@@ -53,14 +61,46 @@ def schedule_page(
         else:
             current = next((d for d in days if d.date == today), days[0])
 
+    departments = list(
+        db.scalars(
+            select(Department)
+            .where(Department.retreat_id == retreat.id)
+            .order_by(Department.sort_order, Department.id)
+        )
+    )
+
+    items = list(current.items) if current is not None else []
+
+    # 부서 필터 — '내 부서'와 '공통 일정'은 함께 보여야 의미가 있다
+    if dept == "mine" and user.department_id:
+        items = [i for i in items if i.department_id in (None, user.department_id)]
+    elif dept.isdigit():
+        picked = int(dept)
+        items = [i for i in items if i.department_id in (None, picked)]
+
+    # 시각별로 묶어 타임라인으로 표시
+    hours: dict[str, list[ScheduleItem]] = {}
+    for item in items:
+        hours.setdefault(_hour_of(item), []).append(item)
+    for bucket in hours.values():
+        # 시각 우선, 같은 시각이면 공통 일정을 부서 업무보다 위에
+        bucket.sort(key=lambda i: (i.start_time or "", i.department_id is not None, i.id))
+    timeline = sorted(hours.items(), key=lambda kv: (kv[0] == "--", kv[0]))
+
     tasks_by_item: dict[int, list[Task]] = {}
-    if current is not None:
-        item_ids = [item.id for item in current.items]
-        if item_ids:
-            for task in db.scalars(
-                select(Task).where(Task.schedule_item_id.in_(item_ids))
-            ):
-                tasks_by_item.setdefault(task.schedule_item_id, []).append(task)
+    if items:
+        for task in db.scalars(
+            select(Task).where(Task.schedule_item_id.in_([i.id for i in items]))
+        ):
+            tasks_by_item.setdefault(task.schedule_item_id, []).append(task)
+
+    dept_counts = {d.id: 0 for d in departments}
+    common_count = 0
+    for item in (current.items if current is not None else []):
+        if item.department_id is None:
+            common_count += 1
+        elif item.department_id in dept_counts:
+            dept_counts[item.department_id] += 1
 
     return render(
         request,
@@ -71,14 +111,16 @@ def schedule_page(
             "retreats": all_retreats(db),
             "days": days,
             "current_day": current,
+            "timeline": timeline,
+            "shown_count": len(items),
+            "total_count": len(current.items) if current is not None else 0,
+            "common_count": common_count,
+            "dept_counts": dept_counts,
             "tasks_by_item": tasks_by_item,
-            "departments": list(
-                db.scalars(
-                    select(Department)
-                    .where(Department.retreat_id == retreat.id)
-                    .order_by(Department.sort_order, Department.id)
-                )
-            ),
+            "departments": departments,
+            "dept_filter": dept,
+            "now_hour": dt.datetime.now().strftime("%H"),
+            "is_today": current is not None and current.date == today,
         },
     )
 

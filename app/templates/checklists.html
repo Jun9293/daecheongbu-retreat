@@ -1,20 +1,24 @@
 {% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/macros.html" import dept_tag, empty %}
 {% block title %}체크리스트{% endblock %}
 {% block content %}
 
-<h1>체크리스트</h1>
-<p class="muted tiny" style="margin-top:-10px">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</p>
+<div class="page-head">
+  <h1>체크리스트</h1>
+  <p class="sub">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</p>
+</div>
 
 {% if not is_readonly(user.role) %}
-<details class="foldable" {% if not checklists %}open{% endif %}>
-  <summary>+ 체크리스트 만들기</summary>
-  <div class="fold-body">
+<details class="panel" {% if not checklists %}open{% endif %}>
+  <summary>{{ icon('plus', 17) }}<span class="grow">체크리스트 만들기</span></summary>
+  <div class="panel-body">
     <form method="post" action="/checklists/create">
       <div class="field">
         <label for="c-name">이름</label>
         <input id="c-name" name="name" required placeholder="예: 1일차 집회 비품">
       </div>
-      <div class="grid2">
+      <div class="grid-2">
         <div class="field">
           <label for="c-dept">부서</label>
           <select id="c-dept" name="department_id">
@@ -25,7 +29,7 @@
           </select>
         </div>
         <div class="field">
-          <label for="c-task">연결할 할 일 (선택)</label>
+          <label for="c-task">연결할 할 일 <span class="muted">· 선택</span></label>
           <select id="c-task" name="task_id">
             <option value="">연결 없음</option>
             {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
@@ -33,73 +37,80 @@
         </div>
       </div>
       <div class="field">
-        <label for="c-items">항목 (한 줄에 하나씩)</label>
-        <textarea id="c-items" name="items" rows="5" placeholder="무선마이크 4개&#10;마이크 배터리&#10;노트북 HDMI 케이블"></textarea>
+        <label for="c-items">항목 <span class="muted">· 한 줄에 하나씩</span></label>
+        <textarea id="c-items" name="items" rows="5" placeholder="무선마이크 4개&#10;마이크 배터리&#10;HDMI 케이블"></textarea>
       </div>
-      <button class="btn btn-full btn-accent" type="submit">만들기</button>
+      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}만들기</button>
     </form>
   </div>
 </details>
 {% endif %}
 
 {% for c in checklists %}
-<div class="card {% if is_other_dept(user, c.department_id) %}dim{% endif %}">
-  <div class="section-head">
-    <div style="min-width:0">
-      <h2 style="margin:0">{{ c.name }}</h2>
-      <div class="task-meta">
-        {% if c.department %}<span class="tag tag-dept">{{ c.department.name }}</span>{% endif %}
-        {% if c.task %}<span class="tag">✅ {{ c.task.title }}</span>{% endif %}
-        <span class="tag">{{ c.checked_count }}/{{ c.items|length }}</span>
+<div class="card {% if is_other_dept(user, c.department_id) %}faded{% endif %}">
+  <div class="card-head">
+    <div class="grow">
+      <h2>{{ c.name }}</h2>
+      <div class="item-meta">
+        {% if c.department %}{{ dept_tag(c.department) }}{% endif %}
+        {% if c.task %}<span class="tag">{{ icon('check') }}{{ c.task.title }}</span>{% endif %}
+        <span class="tag {% if c.progress_pct == 100 %}tag-ok{% endif %}">{{ c.checked_count }}/{{ c.items|length }}</span>
       </div>
     </div>
     {% if can_edit_dept(user, c.department_id) %}
     <form method="post" action="/checklists/{{ c.id }}/delete" onsubmit="return confirm('이 체크리스트를 삭제할까요?')">
-      <button class="btn btn-sm btn-danger" type="submit">삭제</button>
+      <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 15) }}</button>
     </form>
     {% endif %}
   </div>
 
-  <div class="bar" style="margin-bottom:10px"><span style="width: {{ c.progress_pct }}%"></span></div>
+  <div style="padding: 0 16px">
+    <div class="bar {% if c.progress_pct == 100 %}ok{% endif %}" style="margin:12px 0 4px">
+      <i style="width: {{ c.progress_pct }}%"></i>
+    </div>
+  </div>
 
-  <div class="stack">
+  <div class="card-body flush">
     {% for item in c.items %}
-    <div class="check-row {% if item.checked %}done{% endif %}">
+    <div class="tick-row {% if item.checked %}done{% endif %}">
       {% if can_edit_dept(user, c.department_id) %}
       <form method="post" action="/checklists/items/{{ item.id }}/toggle">
-        <button class="check-box {% if item.checked %}on{% endif %}" type="submit"
-                aria-label="{{ item.label }} 체크">{% if item.checked %}✓{% endif %}</button>
+        <button class="tick {% if item.checked %}on{% endif %}" type="submit" aria-label="{{ item.label }} 체크">
+          {{ icon('check', 15) }}
+        </button>
       </form>
       {% else %}
-      <span class="check-box {% if item.checked %}on{% endif %}">{% if item.checked %}✓{% endif %}</span>
+      <span class="tick {% if item.checked %}on{% endif %}">{{ icon('check', 15) }}</span>
       {% endif %}
-      <span class="check-label">
+      <span class="tick-label">
         {{ item.label }}
-        {% if item.quantity %}<span class="tag tiny">{{ item.quantity }}</span>{% endif %}
+        {% if item.quantity %}<span class="tag">{{ item.quantity }}</span>{% endif %}
         {% if item.checked and item.checked_by_name %}
-        <span class="tiny muted">— {{ item.checked_by_name }} {{ item.checked_at.strftime('%m/%d') }}</span>
+        <span class="muted tiny">— {{ item.checked_by_name }} {{ item.checked_at.strftime('%m/%d') }}</span>
         {% endif %}
       </span>
       {% if can_edit_dept(user, c.department_id) %}
       <form method="post" action="/checklists/items/{{ item.id }}/delete">
-        <button class="btn btn-sm btn-ghost" type="submit" aria-label="삭제">×</button>
+        <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="항목 삭제">{{ icon('x', 14) }}</button>
       </form>
       {% endif %}
     </div>
     {% else %}
-    <div class="empty">항목이 없습니다</div>
+    {{ empty('항목이 없습니다', 'checklist') }}
     {% endfor %}
   </div>
 
   {% if can_edit_dept(user, c.department_id) %}
-  <form method="post" action="/checklists/{{ c.id }}/items" class="row" style="margin-top:10px">
-    <input name="label" placeholder="항목 추가" required style="flex:2; min-width:140px">
-    <input name="quantity" placeholder="수량" style="flex:1; min-width:70px">
-    <button class="btn btn-sm" type="submit">추가</button>
-  </form>
+  <div class="card-body" style="border-top:1px solid var(--line)">
+    <form method="post" action="/checklists/{{ c.id }}/items" class="row">
+      <input name="label" placeholder="항목 추가" required class="grow" style="min-width:140px">
+      <input name="quantity" placeholder="수량" style="width:80px;flex:0 0 auto">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('plus', 15) }}</button>
+    </form>
+  </div>
   {% endif %}
 </div>
 {% else %}
-<div class="card"><div class="empty">아직 체크리스트가 없습니다</div></div>
+<div class="card"><div class="card-body">{{ empty('아직 체크리스트가 없습니다', 'checklist') }}</div></div>
 {% endfor %}
 {% endblock %}

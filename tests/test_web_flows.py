@@ -53,9 +53,11 @@ def _dim_by_task_title(html: str) -> dict[str, bool]:
 
     result = {}
     for match in re.finditer(
-        r'<div class="task (dim)?">.*?<div class="task-title">(.*?)</div>', html, re.S
+        r'<div class="item ([^"]*)">.*?<div class="item-title">(.*?)</div>', html, re.S
     ):
-        result[match.group(2).strip()] = match.group(1) == "dim"
+        title = re.sub(r"<[^>]+>", "", match.group(2)).strip()
+        if title:
+            result[title] = "faded" in match.group(1)
     return result
 
 
