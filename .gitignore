@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 data/uploads/
 .env
 *.xlsx
