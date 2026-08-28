@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>새 수련회 회차 만들기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2F4F3; --paper-2:#FAFBFA;
+  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
+  --rule:#DDE2DE; --rule-2:#C7CEC9;
+  --now:#C8442E; --go:#3F6B5D; --link:#1668E3; --warn:#9A6B12; --ai:#4C4193;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+
+header{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:16px 26px 0;flex:none}
+.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
+.title em{font-style:normal;color:var(--ink-3);font-weight:400}
+.steps{display:flex;margin-top:16px}
+.steps div{display:flex;align-items:center;gap:9px;padding:10px 20px 12px;font-size:13.5px;
+  color:var(--ink-3);border-bottom:2px solid transparent}
+.steps div b{width:22px;height:22px;border-radius:50%;background:var(--rule);color:var(--ink-2);
+  display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;
+  font-size:12px;font-weight:600;flex:none}
+.steps div.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.steps div.on b{background:var(--ink);color:var(--paper-2)}
+.steps div.past b{background:var(--go);color:#fff}
+
+main{flex:1;overflow-y:auto;padding:26px 26px 40px}
+.pane{display:none;max-width:1000px}
+.pane.on{display:block}
+h2{font-size:18px;font-weight:600;margin-bottom:6px}
+.lead{font-size:13.5px;color:var(--ink-2);line-height:1.65;margin-bottom:22px}
+
+.field{margin-bottom:18px;max-width:460px}
+.field label{display:block;font-size:12.5px;color:var(--ink-3);margin-bottom:6px}
+.field input,.field select{width:100%;font:inherit;font-size:14.5px;padding:9px 12px;
+  border:1px solid var(--rule-2);border-radius:4px;background:var(--paper-2);color:var(--ink)}
+.row2{display:flex;gap:14px;max-width:460px}
+.row2 .field{flex:1;max-width:none}
+
+.card{border:1px solid var(--rule-2);border-radius:6px;background:var(--paper-2);padding:16px 18px;margin-bottom:16px}
+.card h3{font-size:13px;font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.card h3 .n{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);font-weight:400}
+
+.wk{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
+.wk div{border:1px solid var(--rule);border-radius:4px;padding:7px 9px;background:var(--paper)}
+.wk b{display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-2);font-weight:600}
+.wk span{display:block;font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin-top:2px}
+.wk div.clash{border-color:var(--warn);background:#FBF3E3}
+.wk div.clash span{color:#7A5410;font-weight:600}
+.wk div.clash i{display:block;font-style:normal;font-size:10.5px;color:#7A5410;margin-top:2px}
+.wk div.day{background:#EDF0EE}
+
+.alert{display:flex;gap:11px;padding:13px 15px;border-radius:0 4px 4px 0;font-size:13px;
+  line-height:1.6;margin-bottom:14px;border-left:3px solid}
+.alert.warn{background:#FBF3E3;border-color:var(--warn);color:#5E4109}
+.alert.warn b{color:#7A5410}
+.alert.info{background:#EDF3F0;border-color:#5B8C7E;color:var(--ink-2)}
+.alert.info b{color:#2F5A4C}
+.alert.stop{background:#FBEAE6;border-color:var(--now);color:#7A2517}
+.alert.stop b{color:#8E2A19}
+.alert .ic{font-family:'IBM Plex Mono',monospace;font-size:11px;flex:none;font-weight:600;padding-top:1px}
+
+.teams{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;gap:8px;border:1px solid var(--rule-2);border-radius:20px;
+  padding:6px 14px;font-size:13.5px;cursor:pointer;background:var(--paper-2);user-select:none}
+.chip i{width:8px;height:8px;border-radius:50%;display:block;flex:none}
+.chip.off{opacity:.42;text-decoration:line-through;text-decoration-color:var(--rule-2)}
+.chip .x{color:var(--ink-3);font-size:15px;line-height:1}
+.addteam{border-style:dashed;color:var(--ink-3)}
+
+.tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tools button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);display:flex;align-items:center;gap:7px}
+.tools button[aria-pressed=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+.tools button .n{font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.7}
+.tools .cnt{margin-left:auto;font-size:13px;color:var(--ink-2)}
+.tools .cnt b{font-family:'IBM Plex Mono',monospace;font-size:14px}
+.histhead{display:flex;justify-content:flex-end;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;color:var(--ink-3);margin-bottom:6px;padding-right:124px}
+.histhead span{width:22px;text-align:center}
+
+.lib{border:1px solid var(--rule-2);border-radius:6px;background:var(--paper-2);overflow:hidden}
+.trow{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
+.trow:last-child{border-bottom:none}
+.trow:hover{background:var(--paper)}
+.box{width:18px;height:18px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
+  display:flex;align-items:center;justify-content:center;background:var(--paper-2)}
+.box::after{content:'';width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
+  transform:rotate(-45deg) translate(1px,-1px);opacity:0}
+.trow.on .box{background:var(--go);border-color:var(--go)}
+.trow.on .box::after{opacity:1}
+.trow .main{flex:1;min-width:0}
+.trow .nm{font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.trow.off .nm{color:var(--ink-3)}
+.trow .why{font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:5px;
+  padding-left:10px;border-left:2px solid #C9C3E8}
+.trow .tm{font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px;flex:none;width:78px}
+.trow .tm i{width:7px;height:7px;border-radius:50%;flex:none}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:2px;flex:none}
+.tag.must{background:#DDEAE4;color:#2F5A4C}
+.tag.rec{background:#FAEEDA;color:#7A5410}
+.tag.low{background:#E8EAE8;color:#5A625D}
+.tag.new{background:#E4E1F1;color:var(--ai)}
+.hist{display:flex;flex:none}
+.hist i{width:22px;display:flex;justify-content:center}
+.hist i b{width:9px;height:9px;border-radius:2px;display:block;background:var(--go)}
+.hist i.no b{background:none;border:1px solid var(--rule-2)}
+.dw{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-3);flex:none;width:44px;text-align:right}
+.dt{font-family:'IBM Plex Mono',monospace;font-size:12.5px;flex:none;width:58px;text-align:right}
+.trow.clash .dt{color:#7A5410;font-weight:600}
+
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:11px;margin-bottom:18px}
+.sum div{border:1px solid var(--rule-2);border-radius:6px;padding:13px 15px;background:var(--paper-2)}
+.sum b{display:block;font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-.02em}
+.sum span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:3px}
+
+footer{border-top:1px solid var(--rule-2);background:var(--paper-2);padding:14px 26px;flex:none;
+  display:flex;gap:9px;align-items:center}
+footer .hint{font-size:12.5px;color:var(--ink-3)}
+footer .sp{margin-left:auto}
+button.btn{font:inherit;font-size:14px;padding:9px 18px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
+button.btn.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink);font-weight:500}
+button.btn:disabled{opacity:.4;cursor:default}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">새 수련회 회차 만들기 <em>· 대청부</em></div>
+  <div class="steps" id="steps">
+    <div class="on"><b>1</b>회차 정보</div>
+    <div><b>2</b>부서 확정</div>
+    <div><b>3</b>업무 라이브러리</div>
+    <div><b>4</b>확인 및 생성</div>
+  </div>
+</header>
+
+<main>
+  <section class="pane on" id="p1">
+    <h2>회차 정보</h2>
+    <p class="lead">개회일만 입력하면 D-주차가 자동으로 계산됩니다. 교회 일정이 주일 중심으로 돌아가기 때문에,
+      개회일 직전 일요일을 D-1주차로 잡고 거슬러 올라갑니다.</p>
+    <div class="field"><label for="nm">회차 이름</label><input id="nm" value="2027 겨울수련회"></div>
+    <div class="row2">
+      <div class="field"><label for="op">개회일</label><input id="op" type="date" value="2027-01-15"></div>
+      <div class="field"><label for="cl">폐회일</label><input id="cl" type="date" value="2027-01-17"></div>
+    </div>
+    <div class="card"><h3>D-주차 자동 계산 <span class="n">개회일 기준</span></h3><div class="wk" id="wk"></div></div>
+    <div id="clashBox"></div>
+  </section>
+
+  <section class="pane" id="p2">
+    <h2>부서 확정</h2>
+    <p class="lead">직전 회차의 부서 목록입니다. 이번 회차에 없는 부서는 눌러서 제외하세요.
+      제외해도 그 부서가 맡던 업무는 사라지지 않고, 담당 없는 업무로 표시됩니다.</p>
+    <div class="teams" id="teams"></div>
+  </section>
+
+  <section class="pane" id="p3">
+    <h2>업무 라이브러리</h2>
+    <p class="lead">지금까지 진행한 모든 회차의 업무가 쌓여 있습니다. 실행 이력에 따라 자동으로 분류되며,
+      이번 회차에서 빼더라도 <b>삭제되지 않고 미실행으로 기록</b>됩니다. 그 기록이 다음 회차의 분류에 다시 반영됩니다.</p>
+    <div class="tools" id="tools"></div>
+    <div class="histhead" id="histhead"></div>
+    <div class="lib" id="lib"></div>
+  </section>
+
+  <section class="pane" id="p4">
+    <h2>확인 및 생성</h2>
+    <p class="lead">아래 내용으로 새 회차를 만듭니다. 생성 후에도 업무를 추가하거나 날짜를 조정할 수 있습니다.</p>
+    <div class="sum" id="sum"></div>
+    <div id="warns"></div>
+    <div class="card"><h3>함께 넘어가는 것</h3>
+      <div style="font-size:13.5px;line-height:1.9;color:var(--ink-2)">
+        업무 계층(Main·하위)과 업무 간 연결 관계<br>
+        담당 부서와 관련팀 지정<br>
+        수련회 진행 단계의 전·중·후 실행 항목<br>
+        <span style="color:var(--ink-3)">지난 회차 논의 내역 — 접힌 상태로 붙어 있어 필요할 때 펼쳐볼 수 있습니다</span>
+      </div></div>
+    <div class="card"><h3>넘어가지 않는 것</h3>
+      <div style="font-size:13.5px;line-height:1.9;color:var(--ink-2)">
+        담당자 개인 이름 — 사람이 바뀌므로 새로 배정합니다<br>
+        진행 상태 — 전부 대기로 초기화됩니다<br>
+        절대 날짜 — D-주차 기준으로 다시 계산됩니다
+      </div></div>
+  </section>
+</main>
+
+<footer>
+  <span class="hint" id="hint"></span><span class="sp"></span>
+  <button class="btn" id="prev" disabled>이전</button>
+  <button class="btn pri" id="next">다음</button>
+</footer>
+
+<script>
+const TEAMS=[
+ {id:'chongmuM',n:'총무M',c:'#2F4858'},{id:'chongmu',n:'총무팀',c:'#77848F'},
+ {id:'seongyo',n:'선교사회',c:'#3B6EA5'},{id:'sketch',n:'스케치',c:'#B95A83'},
+ {id:'hebron',n:'헤브론',c:'#4A8A5C'},{id:'koram',n:'코람데오',c:'#B44B42'},
+ {id:'jaejeong',n:'재정',c:'#8A6A4F'},{id:'gaegija',n:'개기자',c:'#7A5BA6'},
+ {id:'saechingu',n:'새친구팀',c:'#A98A1E'},
+];
+const TC=Object.fromEntries(TEAMS.map(t=>[t.id,t]));
+const off=new Set();
+const ROUNDS=['24여','25겨','25여','26겨','26여'];
+
+/* 누적 라이브러리: [부서, 업무명, 실행이력(5회차), D-주차, 제안근거?] */
+const LIB=[
+ ['chongmuM','시설 협조요청 (사전·직전)',[1,1,1,1,1],13],
+ ['chongmuM','수련회장 계약내용 최종 조정·확인',[1,1,1,1,1],1],
+ ['chongmuM','차량 신청',[1,1,1,1,1],2],
+ ['chongmuM','집회 운영 준비',[1,1,1,1,1],6],
+ ['chongmuM','선발대 운영',[0,1,1,1,1],4],
+ ['chongmuM','봉사자 시간표 제작',[1,1,1,1,1],4],
+ ['chongmuM','교개협 주보광고',[1,1,1,1,1],3],
+ ['chongmuM','실무진 답사',[1,0,1,1,1],7],
+ ['chongmuM','사전 GBS',[0,0,1,0,1],3],
+ ['chongmu','홍보물 출력·게시',[1,1,1,1,1],8],
+ ['chongmu','GBS 교재 출력·제작',[1,1,1,1,1],5],
+ ['chongmu','비품·물품 준비',[1,1,1,1,1],2],
+ ['chongmu','대청 최종안내 (교통편·준비물)',[1,1,1,1,1],1],
+ ['chongmu','수련회 티셔츠 제작',[1,1,0,0,0],9],
+ ['chongmu','수련회 책자 인쇄',[1,1,0,0,0],6],
+ ['seongyo','침례·성령기도 인원 확인',[1,1,1,1,1],7],
+ ['seongyo','성찬 준비',[1,1,1,1,1],5],
+ ['seongyo','프로그램 자료 준비',[1,1,1,1,1],2],
+ ['seongyo','GBS 리딩자 모집',[1,1,1,0,1],10],
+ ['sketch','포스터 제작',[1,1,1,1,1],13],
+ ['sketch','GBS 교재 편집디자인',[1,1,1,1,1],13],
+ ['sketch','명찰 디자인',[1,1,1,1,1],5],
+ ['sketch','PPT 제작',[1,1,1,1,1],4],
+ ['sketch','장소 배치도',[0,1,1,1,1],6],
+ ['sketch','홍보물 세트 (현수막·배너·썸네일)',[1,1,0,1,1],10],
+ ['sketch','시간표 이미지',[0,1,0,1,1],10],
+ ['sketch','네컷 프레임',[0,1,0,1,1],6],
+ ['sketch','방명록',[1,0,1,0,1],6],
+ ['sketch','포토존',[0,1,1,0,1],6],
+ ['hebron','홍보영상',[1,1,1,1,1],13],
+ ['hebron','영상·음향 장비 준비',[1,1,1,1,1],6],
+ ['hebron','플리 영상',[1,0,0,1,1],6],
+ ['hebron','수련회 결과보고 영상',[0,0,1,0,1],13],
+ ['koram','코람데오 연습',[1,1,1,1,1],6],
+ ['koram','객원 모집',[0,0,1,0,1],13],
+ ['koram','장기자랑 예선',[1,1,0,0,0],5],
+ ['jaejeong','수련회비 수납 관리',[1,1,1,1,1],10],
+ ['jaejeong','결산 보고서 본부 제출',[1,1,1,1,1],1],
+ ['gaegija','CBA커넥트 수련회 기능',[0,0,0,1,1],8],
+ ['saechingu','새친구 초청 준비',[1,1,1,1,1],5],
+ ['chongmu','야외 체육대회',[1,0,0,0,0],7],
+ ['chongmuM','셔틀버스 2차 운행',[1,1,0,0,0],3],
+ ['hebron','영상 출연자 섭외·일정 확정',null,8,
+  '지난 회차 <b>홍보영상 (롱폼2 참교육)</b>이 출연자 일정 문제로 촬영되지 못했고, 대체 일정도 잡히지 않은 채 끝났습니다. 촬영 전 섭외를 별도 업무로 떼어내면 같은 지연을 막을 수 있습니다.'],
+ ['chongmuM','수련회장 계약 1차 체결',null,6,
+  '지난 회차에는 계약 확인이 <b>D-1주</b> 한 번뿐이었고, 담당자 부재로 불발되어 개회 직전까지 미확정으로 남았습니다. 확인을 두 단계로 나눠 앞당기는 것을 제안합니다.'],
+ ['sketch','디자인 발주 사양 확정',null,7,
+  '지난 회차 명찰 사이즈가 스트랩 재고 문제로 <b>90×130에서 100×140</b>으로 뒤늦게 변경됐습니다. 발주 전에 사양을 확정하는 단계가 없었습니다.'],
+ ['chongmu','방한·난방 물품 점검',null,3,
+  '이번은 <b>겨울 회차</b>입니다. 복제 원본인 여름 회차의 비품 목록에는 난방·방한 관련 항목이 전혀 없습니다.'],
+ ['chongmuM','폭설 대비 교통 대안 계획',null,2,
+  '<b>1월 개회</b>입니다. 차량 신청만으로는 결항이나 도로 통제 상황에 대응할 수 없습니다.'],
+ ['chongmu','참가자 피드백 설문 준비',null,1,
+  '지난 회차에 부서별 피드백은 있었으나 <b>참가자 대상 설문</b>은 없었습니다. 다음 회차 기획의 근거가 됩니다.'],
+];
+
+function cls(h){
+  if(!h)return'new';
+  const r=h.slice(-3).reduce((a,b)=>a+b,0);
+  return r===3?'must':r===0?'low':'rec';
+}
+const LABEL={must:'필수',rec:'추천',low:'후순위',new:'Claude 제안'};
+const sel=new Set(LIB.map((x,i)=>[x,i]).filter(([x])=>cls(x[2])!=='low').map(([,i])=>i));
+
+const D=iso=>{const[y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d)};
+const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
+function anchorSunday(){const o=D(document.getElementById('op').value);
+  const k=o.getDay()===0?7:o.getDay();return new Date(o.getTime()-k*864e5)}
+function weekDate(n){return new Date(anchorSunday().getTime()-(n-1)*7*864e5)}
+const HOLI=[['12-25','성탄'],['12-24','성탄 전야'],['01-01','신정'],['12-31','송구영신']];
+function clash(d){for(let i=0;i<7;i++){const x=new Date(d.getTime()+i*864e5);
+  const k=`${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+  const h=HOLI.find(v=>v[0]===k);if(h)return h[1]}return null}
+
+function renderWeeks(){
+  const el=document.getElementById('wk');let h='';
+  for(let n=13;n>=1;n--){const d=weekDate(n),c=clash(d);
+    h+=`<div class="${c?'clash':''}"><b>D-${n}주</b><span>${fmt(d)}</span>${c?`<i>${c} 주간</i>`:''}</div>`}
+  h+=`<div class="day"><b>개회</b><span>${fmt(D(document.getElementById('op').value))}</span></div>`;
+  el.innerHTML=h;
+  const bad=[];for(let n=13;n>=1;n--){const c=clash(weekDate(n));if(c)bad.push([n,c,weekDate(n)])}
+  document.getElementById('clashBox').innerHTML=bad.length?`<div class="alert warn"><span class="ic">확인</span><span>
+    <b>${bad.map(b=>`D-${b[0]}주(${fmt(b[2])}) ${b[1]}`).join(' · ')}</b> 주간과 겹칩니다.
+    논의와 검토가 주말에 이뤄지는데 그 주말이 교회 일정으로 막힙니다. 해당 주 업무를 앞당기는 것을 검토하세요.</span></div>`:'';
+}
+
+function renderTeams(){
+  document.getElementById('teams').innerHTML=TEAMS.map(t=>
+    `<div class="chip${off.has(t.id)?' off':''}" data-t="${t.id}">
+      <i style="background:${t.c}"></i>${t.n}<span class="x">${off.has(t.id)?'+':'×'}</span></div>`).join('')
+    +`<div class="chip addteam">+ 부서 추가</div>`;
+  document.querySelectorAll('[data-t]').forEach(c=>c.onclick=()=>{
+    const id=c.dataset.t;off.has(id)?off.delete(id):off.add(id);renderTeams()});
+}
+
+let filt='all';
+function renderLib(){
+  const cnt={all:LIB.length,must:0,rec:0,low:0,new:0};
+  LIB.forEach(x=>cnt[cls(x[2])]++);
+  document.getElementById('tools').innerHTML=
+    ['all','must','rec','low','new'].map(k=>
+      `<button data-f="${k}" aria-pressed="${filt===k}">${k==='all'?'전체':LABEL[k]}
+        <span class="n">${cnt[k]}</span></button>`).join('')
+    +`<span class="cnt">이번 회차 선택 <b>${sel.size}</b> / ${LIB.length}건</span>`;
+  document.getElementById('histhead').innerHTML=ROUNDS.map(r=>`<span>${r}</span>`).join('');
+
+  document.getElementById('lib').innerHTML=LIB.map((x,i)=>[x,i])
+    .filter(([x])=>filt==='all'||cls(x[2])===filt)
+    .map(([x,i])=>{
+      const k=cls(x[2]),t=TC[x[0]],d=weekDate(x[3]),c=clash(d);
+      const hist=x[2]?x[2].map(v=>`<i class="${v?'':'no'}"><b></b></i>`).join('')
+                     :'<i></i><i></i><i></i><i></i><i></i>';
+      return `<div class="trow${sel.has(i)?' on':' off'}${c?' clash':''}" data-i="${i}">
+        <span class="box"></span>
+        <span class="main"><span class="nm">${x[1]}<span class="tag ${k}">${LABEL[k]}</span></span>
+          ${x[4]?`<span class="why">${x[4]}</span>`:''}</span>
+        <span class="tm"><i style="background:${t.c}"></i>${t.n}</span>
+        <span class="hist">${hist}</span>
+        <span class="dw">D-${x[3]}주</span><span class="dt">${fmt(d)}</span></div>`}).join('');
+
+  document.querySelectorAll('#tools [data-f]').forEach(b=>b.onclick=()=>{filt=b.dataset.f;renderLib()});
+  document.querySelectorAll('#lib [data-i]').forEach(r=>r.onclick=()=>{
+    const i=+r.dataset.i;sel.has(i)?sel.delete(i):sel.add(i);renderLib()});
+}
+
+function renderSummary(){
+  const n=k=>LIB.filter((x,i)=>sel.has(i)&&cls(x[2])===k).length;
+  const skip=LIB.length-sel.size;
+  document.getElementById('sum').innerHTML=`
+    <div><b>${sel.size}</b><span>이번 회차 실행</span></div>
+    <div><b>${n('must')}</b><span>필수</span></div>
+    <div><b>${n('rec')}</b><span>추천</span></div>
+    <div><b>${n('new')}</b><span>신규 제안 채택</span></div>
+    <div><b>${skip}</b><span>미실행으로 기록</span></div>`;
+  let w='';
+  const miss=LIB.filter((x,i)=>!sel.has(i)&&cls(x[2])==='must');
+  if(miss.length)w+=`<div class="alert stop"><span class="ic">경고</span><span>
+    <b>필수 업무 ${miss.length}건이 빠졌습니다.</b> 최근 3회차 모두 실행된 업무입니다 —
+    ${miss.map(x=>x[1]).join(', ')}. 정말 이번에 하지 않는지 확인하세요.</span></div>`;
+  const orphan=LIB.filter((x,i)=>sel.has(i)&&off.has(x[0]));
+  if(orphan.length)w+=`<div class="alert stop"><span class="ic">경고</span><span>
+    제외한 부서가 맡던 업무 <b>${orphan.length}건</b>에 담당이 없습니다 —
+    ${orphan.map(x=>x[1]).join(', ')}.</span></div>`;
+  const bad=[];for(let i=13;i>=1;i--)if(clash(weekDate(i)))bad.push(i);
+  const hit=LIB.filter((x,i)=>sel.has(i)&&bad.includes(x[3]));
+  if(hit.length)w+=`<div class="alert warn"><span class="ic">확인</span><span>
+    성탄·연말 주간에 <b>${hit.length}건</b>이 배정됩니다 — ${hit.map(x=>x[1]).join(', ')}.</span></div>`;
+  w+=`<div class="alert info"><span class="ic">기록</span><span>
+    이번에 선택하지 않은 <b>${skip}건</b>은 삭제되지 않고 <b>미실행</b>으로 기록됩니다.
+    이 기록이 쌓여 다음 회차의 필수·추천·후순위 분류에 반영됩니다.</span></div>`;
+  document.getElementById('warns').innerHTML=w;
+}
+
+let step=1;
+const HINTS={1:'개회일을 바꾸면 모든 업무 날짜가 함께 이동합니다.',
+ 2:'부서를 눌러 제외하거나 되돌릴 수 있습니다.',
+ 3:'분류는 실행 이력에서 자동 계산됩니다 — 최근 3회 모두 실행하면 필수, 3회 모두 없으면 후순위.',
+ 4:'생성 후에도 언제든 수정할 수 있습니다.'};
+function go(n){
+  step=n;
+  document.querySelectorAll('.pane').forEach((p,i)=>p.classList.toggle('on',i+1===n));
+  document.querySelectorAll('.steps div').forEach((d,i)=>{
+    d.classList.toggle('on',i+1===n);d.classList.toggle('past',i+1<n)});
+  document.getElementById('prev').disabled=n===1;
+  document.getElementById('next').textContent=n===4?'회차 만들기':'다음';
+  document.getElementById('hint').textContent=HINTS[n];
+  if(n===3)renderLib(); if(n===4)renderSummary();
+  document.querySelector('main').scrollTop=0;
+}
+document.getElementById('prev').onclick=()=>go(Math.max(1,step-1));
+document.getElementById('next').onclick=()=>step<4?go(step+1):alert('데모 화면입니다.');
+['op','cl'].forEach(id=>document.getElementById(id).onchange=()=>{renderWeeks();if(step===3)renderLib()});
+
+renderWeeks();renderTeams();go(1);
+</script>
+</body>
+</html>

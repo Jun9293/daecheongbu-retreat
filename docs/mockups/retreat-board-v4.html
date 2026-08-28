@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>대청부 수련회 준비 보드 — BELONG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2F4F3; --paper-2:#FAFBFA;
+  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
+  --rule:#DDE2DE; --rule-2:#C7CEC9;
+  --now:#C8442E; --link:#1668E3;
+  --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
+  --h-team:35px; --h-main:34px; --h-sub:29px;
+  --dw:400px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden;
+  padding-right:0;transition:padding-right .22s cubic-bezier(.4,0,.2,1)}
+body.dopen{padding-right:var(--dw)}
+body.sizing{transition:none}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+
+header{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:13px 22px 0;flex:none}
+.mast{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
+.title em{font-style:normal;color:var(--ink-3);font-weight:400}
+.countdown{margin-left:auto;display:flex;align-items:baseline;gap:7px;padding:4px 12px;border:1px solid var(--now);border-radius:2px}
+.countdown b{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:var(--now)}
+.countdown span{font-size:12px;color:var(--ink-3);letter-spacing:.04em}
+nav{display:flex;gap:2px;margin-top:13px}
+nav button{font:inherit;font-size:14.5px;padding:8px 17px;border:1px solid transparent;border-bottom:none;
+  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
+nav button[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
+nav button:focus-visible{outline:2px solid var(--now);outline-offset:-2px}
+
+.toolbar{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:10px 22px;
+  border-bottom:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);flex:none}
+.ctl{display:flex;align-items:center;gap:7px}
+.ctl label{color:var(--ink-3);font-size:12.5px}
+select{font:inherit;font-size:13.5px;padding:4px 8px;border:1px solid var(--rule-2);border-radius:2px;background:var(--paper-2);color:var(--ink)}
+.tog{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)}
+.fchip{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:3px;cursor:pointer;
+  background:var(--ink);color:var(--paper-2);border:none;display:flex;align-items:center;gap:7px}
+.fchip[hidden]{display:none}
+.fchip b{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.fchip span{opacity:.65;font-size:14px;line-height:1}
+.legend{margin-left:auto;display:flex;gap:15px;align-items:center;font-size:12.5px;color:var(--ink-3)}
+.lg{display:flex;align-items:center;gap:5px}
+.lg i{display:block;background:var(--ink-3);font-style:normal}
+.lg .k-main{width:22px;height:13px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
+.lg .k-sub{width:22px;height:9px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
+.lg .k-sch{width:22px;height:11px;border-radius:2px;background:var(--paper-2);border:1px solid #3B6EA5;border-left:4px solid #3B6EA5}
+.lg .k-done{width:22px;height:13px;border-radius:2px;background:#DFE3E0;border:1px solid #C4CBC6}
+.lg .k-gh{width:22px;height:13px;background:none;border:1px dashed var(--rule-2)}
+.lg .k-lit{width:20px;height:0;border-top:2px dashed var(--link)}
+
+.board{flex:1;overflow:auto;position:relative}
+.sheet{min-width:max-content;position:relative}
+.row{display:grid;grid-template-columns:var(--label-w) repeat(11,var(--wk)) repeat(12,var(--day)) var(--retreat)}
+
+.row.head{position:sticky;top:0;z-index:24}
+.hc{cursor:pointer;background:var(--paper-2);border-bottom:1px solid var(--rule-2);border-right:1px solid var(--rule);
+  padding:8px 0 7px;text-align:center}
+.hc .dw{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;display:block;color:var(--ink-2)}
+.hc .dt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);display:block;margin-top:2px}
+.hc.day{background:#EAEEEB}
+.hc.day .dw{font-size:11.5px;color:var(--ink-3);font-weight:500}
+.hc.day .dt{font-size:12.5px;color:var(--ink);font-weight:600}
+.hc.shift{border-left:2px solid var(--ink)}
+.hc:hover{background:#E4E9E6}
+.hc.sel{background:var(--ink)!important;border-right-color:var(--ink)}
+.hc.sel .dw,.hc.sel .dt{color:var(--paper-2)!important}
+.hc.rt{background:var(--ink);border-right-color:var(--ink)}
+.hc.rt .dw{color:var(--paper-2)} .hc.rt .dt{color:#A9B3AE}
+.hlbl{position:sticky;left:0;z-index:26;background:var(--paper-2);border-bottom:1px solid var(--rule-2);
+  border-right:1px solid var(--rule-2);display:flex;flex-direction:column;justify-content:center;padding-left:13px}
+.hlbl b{font-size:13px;font-weight:600}
+.hlbl span{font-size:11px;color:var(--ink-3);margin-top:2px}
+
+.lc{position:sticky;left:0;z-index:20;background:var(--lct,var(--paper-2));
+  border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule);
+  display:flex;align-items:center;gap:7px;padding-left:14px;padding-right:10px;font-size:13.5px;overflow:hidden}
+.lc .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.main .lc,.row.sub .lc{cursor:pointer}
+.row.main .lc:hover,.row.sub .lc:hover{background:#EDF1EE}
+
+.row.team .lc{height:var(--h-team);background:var(--teamt,#E9EDEA);cursor:pointer;font-weight:600;font-size:14px;border-bottom:1px solid var(--rule-2)}
+.row.team .lc .caret{font-size:10px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
+.row.team.collapsed .lc .caret{transform:rotate(-90deg)}
+.row.team .lc .sw{width:3px;height:17px;border-radius:2px;flex:none}
+.row.team .lc .ct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
+.row.team .cell{height:var(--h-team);background:var(--teamt,#E9EDEA);border-bottom:1px solid var(--rule-2)}
+
+.row.main .lc{height:var(--h-main);padding-left:28px;font-weight:500}
+.row.sub  .lc{height:var(--h-sub);padding-left:46px;font-size:12.5px;color:var(--ink-2)}
+.row.main .lane{height:var(--h-main)} .row.sub .lane{height:var(--h-sub)}
+.row.main .lane,.row.sub .lane{border-bottom:1px solid var(--rule)}
+.lane{position:relative;background:var(--rowt,transparent)}
+.gl{border-right:1px solid var(--rule);pointer-events:none}
+.gl.shift{border-left:2px solid var(--ink)}
+
+.owner{font-size:11.5px;color:var(--ink-3);flex:none;display:flex;align-items:center;gap:5px;
+  margin-left:auto;padding-left:8px}
+.owner i{width:6px;height:6px;border-radius:50%;flex:none;display:block}
+
+/* ── bars ── */
+.bar{position:relative;align-self:center;border-radius:3px;display:flex;align-items:center;gap:5px;
+  padding:0 8px;font-size:12.5px;line-height:1;cursor:pointer;border:1px solid transparent;
+  white-space:nowrap;z-index:3;margin:0 1px;min-width:8px;overflow:visible;color:var(--ink)}
+.bar.m{height:24px;font-weight:500}
+.bar.s{height:19px;font-size:12px;border-radius:2px}
+.bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+/* 라벨은 바 안에서 시작해, 바보다 길면 그대로 밖으로 흘러나감 */
+.bar .txt{overflow:visible;white-space:nowrap;flex:none;position:relative;z-index:2}
+
+.bar.done{color:var(--ink)}
+.bar.late{color:#8E2A19;font-weight:600}
+.bar.late .flag{position:relative;z-index:2;font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--now);color:#fff;padding:2px 4px;border-radius:2px;flex:none}
+.bar.ghost{border-style:dashed!important;color:var(--ink-2)!important}
+.bar.ghost .txt{font-style:italic}
+.bar.sch{height:21px;border-width:1px;border-style:solid;border-left-width:4px;
+  font-size:12px;font-weight:500;z-index:4}
+
+/* ── 연결: 보드는 건드리지 않고 선으로 잇는다 ── */
+#wires{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:visible}
+#wires path{fill:none;stroke:var(--link);stroke-width:1.6;stroke-dasharray:4 3;opacity:.95}
+#wires circle{fill:var(--link)}
+.bar.anchor{box-shadow:0 0 0 3px var(--link);z-index:9!important;opacity:1!important;font-weight:700}
+.bar.anchor .txt{text-decoration:none}
+.bar.lit{box-shadow:0 0 0 2px var(--ink);z-index:8!important;opacity:1!important}
+.bar.lit .txt{text-decoration:none}
+  .row.anchorrow>.lc{box-shadow:inset 4px 0 0 var(--link);background:#EAF1FC;font-weight:700}
+.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink);background:#EBEEEC}
+
+
+/* ── drawer ── */
+.drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);min-width:320px;max-width:min(900px,95vw);
+  background:var(--paper-2);border-left:1px solid var(--rule-2);transform:translateX(100%);
+  transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:35;display:flex;flex-direction:column;
+  box-shadow:-14px 0 34px -22px rgba(27,33,31,.5)}
+.drawer.open{transform:none}
+.drawer.sizing{transition:none;user-select:none}
+.grip{position:absolute;left:-3px;top:0;width:9px;height:100%;cursor:col-resize;z-index:3}
+.grip::after{content:'';position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:38px;
+  border-radius:3px;background:var(--rule-2)}
+.grip:hover::after,.drawer.sizing .grip::after{background:var(--link)}
+.dhead{padding:20px 22px 0;border-bottom:1px solid var(--rule)}
+.dkick{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;padding:4px 8px;
+  border-radius:2px;border:1px solid var(--rule-2);color:var(--ink-3);background:none}
+.chip.solid{color:#fff;border-color:transparent}
+.chip.stat{cursor:pointer;font-family:'IBM Plex Sans KR',sans-serif;font-size:12.5px;font-weight:500;
+  display:flex;align-items:center;gap:5px}
+.chip.stat:hover{background:var(--paper)}
+.chip.stat .cv{width:8px;height:8px;border-radius:50%}
+.dtitle{font-size:18.5px;font-weight:600;line-height:1.35}
+.dmeta{margin-top:12px;display:grid;grid-template-columns:62px 1fr;gap:6px 12px;font-size:13px}
+.dmeta dt{color:var(--ink-3)} .dmeta dd{color:var(--ink-2)}
+.dtabs{display:flex;gap:2px;margin-top:16px}
+.dtabs button{font:inherit;font-size:13.5px;padding:8px 15px;border:1px solid transparent;border-bottom:none;
+  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
+.dtabs button[aria-selected=true]{background:var(--paper-2);border-color:var(--rule);color:var(--ink);font-weight:500}
+.dtabs .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:4px}
+.dbody{flex:1;overflow-y:auto;padding:18px 22px 30px}
+.pane{display:none} .pane.on{display:block}
+.log{font-size:13.5px;line-height:1.68}
+.log .entry{padding:10px 0;border-bottom:1px dotted var(--rule)}
+.log .entry:last-child{border:none}
+.log .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);margin-right:7px}
+.log s{color:var(--ink-3)}
+.log .fix{display:block;margin-top:5px;padding-left:12px;border-left:2px solid var(--rule-2)}
+
+/* 연결 목록 */
+.rel{display:flex;flex-direction:column;gap:2px}
+.relitem{position:relative}
+.relitem>button.rb{width:100%;font:inherit;display:flex;align-items:center;gap:9px;padding:11px 11px;
+  background:none;border:1px solid transparent;border-radius:3px;cursor:pointer;font-size:13.5px;color:var(--ink);text-align:left}
+.relitem>button.rb:hover{background:var(--paper);border-color:var(--rule)}
+.relitem .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.relitem .rl{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
+.menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper-2);border:1px solid var(--rule-2);
+  border-radius:4px;box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:5;display:none;min-width:146px;overflow:hidden}
+.menu.on{display:block}
+.menu button{display:flex;width:100%;font:inherit;font-size:13.5px;padding:11px 14px;background:none;border:none;
+  cursor:pointer;color:var(--ink);text-align:left;gap:8px;align-items:center}
+.menu button:hover{background:var(--paper)}
+.menu button+button{border-top:1px solid var(--rule)}
+.menu .mi{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);margin-left:auto}
+
+/* 상태 메뉴 */
+#statmenu{position:fixed;background:var(--paper-2);border:1px solid var(--rule-2);border-radius:4px;
+  box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:40;display:none;overflow:hidden;min-width:132px}
+#statmenu.on{display:block}
+#statmenu button{display:flex;align-items:center;gap:9px;width:100%;font:inherit;font-size:13.5px;
+  padding:10px 14px;background:none;border:none;cursor:pointer;text-align:left;color:var(--ink)}
+#statmenu button:hover{background:var(--paper)}
+#statmenu .cv{width:9px;height:9px;border-radius:50%}
+
+/* 달력 */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal .cm{grid-column:1/-1;font-size:14px;font-weight:600;margin:16px 0 8px;display:flex;align-items:baseline;gap:7px}
+.cal .cm:first-child{margin-top:0}
+.cal .cm span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
+.cal .wd{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);text-align:center;padding:4px 0}
+.cal .wd.s{color:var(--now)}
+.cal .dcell{aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;font-family:'IBM Plex Mono',monospace;
+  font-size:12.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--ink-2);background:var(--paper-2);position:relative}
+.cal .dcell.pad{border-color:transparent;background:none;color:transparent}
+.cal .dcell.in{background:#E7EEF9;border-color:#B9CFEE;color:var(--ink)}
+.cal .dcell.edge{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
+.cal .dcell.late{background:#FBE9E5;border-color:var(--now);color:#8E2A19;font-weight:600}
+.cal .dots{display:flex;gap:2px;height:5px}
+.cal .dots i{width:5px;height:5px;border-radius:50%;display:block}
+.callegend{margin-top:16px;font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
+.callegend div{display:flex;align-items:center;gap:7px}
+.callegend i{width:10px;height:10px;border-radius:2px;display:block}
+
+/* Claude 진단 패널 */
+.diag{border-top:1px solid var(--rule);background:#F4F6F5;flex:none;max-height:38vh;display:flex;flex-direction:column}
+.dg-h{display:flex;align-items:center;gap:8px;padding:10px 22px 8px;flex:none}
+.dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none;
+  box-shadow:0 0 0 3px rgba(139,148,143,.2)}
+.diag.g-block .dg-h .dot{background:var(--now);box-shadow:0 0 0 3px rgba(200,68,46,.2)}
+.diag.g-block .dg-h .ttl{color:#8E2A19}
+.diag.g-part  .dg-h .dot{background:#C9902B;box-shadow:0 0 0 3px rgba(201,144,43,.22)}
+.diag.g-part  .dg-h .ttl{color:#8A6216}
+.diag.g-go    .dg-h .dot{background:#4A8A5C;box-shadow:0 0 0 3px rgba(74,138,92,.2)}
+.diag.g-go    .dg-h .ttl{color:#3F6B5D}
+.diag.g-done  .dg-h .ttl{color:var(--ink-2)}
+.dg-h .ttl{font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.dg-h .ts{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3)}
+.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:3px;
+  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);cursor:pointer}
+.dg-h button:hover{background:var(--paper)}
+.dg-b{overflow-y:auto;padding:0 22px 14px;font-size:12.5px;line-height:1.6}
+.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;
+  padding-left:11px;border-left:3px solid var(--ink-3)}
+.dg-v.block{border-left-color:var(--now);color:#8E2A19}
+.dg-v.warn{border-left-color:#C9902B}
+.dg-v.ok{border-left-color:#5B8C7E;color:#3F6B5D}
+.dg-b ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+.dg-b li{display:flex;gap:7px;color:var(--ink-2);font-size:12px;line-height:1.5}
+.dg-b li b{font-weight:600;color:var(--ink)}
+.dg-b li .ic{flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:2px;padding:1px 4px;background:var(--paper-2);
+  min-width:38px;text-align:center}
+.dg-b .src{margin-top:9px;font-size:10.5px;color:var(--ink-3);line-height:1.5}
+.diag.busy .dg-b{opacity:.35}
+.diag.busy .dg-h .dot{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+
+.dfoot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:8px}
+.dfoot button{font:inherit;font-size:13.5px;padding:9px 14px;border-radius:3px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
+.dfoot button.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+.dclose{position:absolute;top:15px;right:16px;width:30px;height:30px;border:none;background:none;
+  cursor:pointer;color:var(--ink-3);font-size:22px;border-radius:3px;z-index:4}
+.dclose:hover{background:var(--paper);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mast">
+    <div class="title">BELONG <em>· 2026 여름수련회 준비 보드</em></div>
+    <div class="countdown"><b class="mono">D-5</b><span>2026.08.21 개회</span></div>
+  </div>
+  <nav role="tablist">
+    <button role="tab" aria-selected="false">회의록</button>
+    <button role="tab" aria-selected="true">준비 단계</button>
+    <button role="tab" aria-selected="false">수련회 진행</button>
+    <button role="tab" aria-selected="false">재정</button>
+  </nav>
+</header>
+
+<div class="toolbar">
+  <div class="ctl"><label for="me">내 소속</label>
+    <select id="me">
+      <option value="all">전체</option><option value="sketch" selected>4 스케치</option>
+      <option value="chongmuM">1 총무M</option><option value="chongmu">1 총무팀</option>
+      <option value="hebron">5 헤브론</option><option value="koram">6 코람데오</option>
+      <option value="seongyo">3 선교사회</option>
+    </select></div>
+  <label class="tog"><input type="checkbox" id="opT"> 미완료만</label>
+  <button class="fchip" id="fchip" hidden></button>
+  <div class="legend">
+    <span class="lg"><i class="k-main"></i>Main</span>
+    <span class="lg"><i class="k-sub"></i>하위</span>
+    <span class="lg"><i class="k-sch"></i>일정</span>
+    <span class="lg"><i class="k-done"></i>완료</span>
+    <span class="lg"><i class="k-gh"></i>관련업무</span>
+    <span class="lg"><i class="k-lit"></i>연결선</span>
+  </div>
+</div>
+
+<div class="board" id="board"><div class="sheet" id="sheet"><svg id="wires"></svg></div></div>
+
+<div id="statmenu"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="grip" id="grip" title="드래그해서 폭 조절"></div>
+  <button class="dclose" id="dclose" aria-label="닫기">×</button>
+  <div class="dhead">
+    <div class="dkick" id="dkick"></div>
+    <div class="dtitle" id="dtitle"></div>
+    <dl class="dmeta" id="dmeta"></dl>
+    <div class="dtabs" id="dtabs">
+      <button data-p="log" aria-selected="true">논의 내역</button>
+      <button data-p="cal" aria-selected="false">달력</button>
+      <button data-p="rel" aria-selected="false">연결된 업무<span class="n" id="relN"></span></button>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="pane on" id="p-log"><div class="log" id="dlog"></div></div>
+    <div class="pane" id="p-cal"><div class="cal" id="dcal"></div>
+      <div class="callegend">
+        <div><i style="background:var(--link)"></i>시작일 · 마감일</div>
+        <div><i style="background:#E7EEF9;border:1px solid #B9CFEE"></i>진행 기간</div>
+        <div><i style="background:#FBE9E5;border:1px solid var(--now)"></i>지연</div>
+        <div><i style="background:none;border:1px solid var(--rule-2)"></i>· 점 = 연결된 업무 일정</div>
+      </div></div>
+    <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+  </div>
+  <div class="diag" id="diag">
+    <div class="dg-h"><span class="dot"></span><span class="ttl">시작하지 못하는 이유</span>
+      <span class="ts" id="dgTs"></span><button id="dgR">다시 분석</button></div>
+    <div class="dg-b" id="dgB"></div>
+  </div>
+  <div class="dfoot"><button class="pri">논의 추가</button><button>파일 첨부</button><button>하위 업무 추가</button></div>
+</aside>
+
+<script>
+const TEAMS=[
+ {id:'chongmuM',n:'1 총무M',s:'총무M',c:'#2F4858'},
+ {id:'chongmu', n:'1 총무팀',s:'총무팀',c:'#77848F'},
+ {id:'seongyo', n:'3 선교사회',s:'선교사회',c:'#3B6EA5'},
+ {id:'sketch',  n:'4 스케치',s:'스케치',c:'#B95A83'},
+ {id:'hebron',  n:'5 헤브론',s:'헤브론',c:'#4A8A5C'},
+ {id:'koram',   n:'6 코람데오',s:'코람데오',c:'#B44B42'},
+ {id:'jaejeong',n:'7 재정',s:'재정',c:'#8A6A4F'},
+ {id:'gaegija', n:'8 개기자',s:'개기자',c:'#7A5BA6'},
+ {id:'saechingu',n:'9 새친구팀',s:'새친구',c:'#A98A1E'},
+];
+const TC=Object.fromEntries(TEAMS.map(t=>[t.id,t]));
+const STATUS={done:{l:'완료',c:'#8B948F'},wip:{l:'진행중',c:'#1668E3'},todo:{l:'예정',c:'#4A544F'},late:{l:'지연',c:'#C8442E'}};
+
+const DATA={
+chongmuM:[
+ {t:'봉사팀 개별 미팅',s:'2026-05-24',e:'2026-05-31',st:'done',subs:[
+   {t:'디자인 제작 범위 설정',s:'2026-05-24',e:'2026-06-07',st:'done',ghost:['sketch']},
+ ]},
+ {t:'시설 협조요청 (사전·직전)',s:'2026-05-28',e:'2026-08-16',st:'done',subs:[
+   {t:'실무진 답사',s:'2026-07-05',st:'done',rx:'담당팀이 <b>2 봉사팀 공통</b>이었으나 실제로는 총무M이 주관하는 답사입니다. → <b>1 총무M</b>으로 재배정.'},
+   {t:'수련회장 계약내용 최종 조정·확인',s:'2026-08-17',st:'late',rel:['차량 신청','장소 배치도']},
+ ]},
+ {t:'차량 신청',s:'2026-08-09',e:'2026-08-15',st:'done',subs:[]},
+ {t:'집회 운영 준비',s:'2026-07-13',e:'2026-08-09',st:'done',
+  rx:'노션에는 집회 관련 항목이 <b>큐시트 제작</b>(총무M) · <b>큐시트 확정</b>(봉사팀 공통) · <b>진행요원 지정</b>(봉사팀 공통)으로 흩어져 있었습니다. 하나의 Main 아래 하위로 통합했습니다.',subs:[
+   {t:'프로그램별 큐시트 제작',s:'2026-07-13',e:'2026-07-25',st:'done'},
+   {t:'집회 진행요원 지정',s:'2026-07-26',e:'2026-08-09',st:'done',ghost:['seongyo','hebron','koram'],
+    rx:'담당 <b>2 봉사팀 공통</b> → <b>1 총무M</b>. 각 팀 인원을 총무M이 취합·배정하는 구조라 선교사회·헤브론·코람데오를 관련팀으로 연결했습니다.'},
+   {t:'집회 큐시트 확정',s:'2026-08-02',st:'done',ghost:['hebron','koram'],
+    rx:'담당 <b>2 봉사팀 공통</b> → <b>1 총무M</b>. 큐시트를 받아 움직이는 헤브론·코람데오를 관련팀으로 지정.'},
+ ]},
+ {t:'선발대 운영',s:'2026-07-26',e:'2026-08-20',st:'done',
+  rx:'<b>선발대 모집·스케줄 논의</b>와 <b>선발대 인원·스케줄 확정</b>이 각각 독립 Sub로 떠 있어 상위 Main이 없었습니다. Main을 신설해 묶었습니다.',subs:[
+   {t:'선발대 모집·스케줄 논의',s:'2026-07-26',st:'done'},
+   {t:'선발대 인원·스케줄 확정',s:'2026-08-09',st:'done'},
+ ]},
+ {t:'사전 GBS',s:'2026-08-02',e:'2026-08-16',st:'done',subs:[
+   {t:'중그룹나눔GBS 나눔지완성',s:'2026-08-03',e:'2026-08-08',st:'done'},
+ ]},
+ {t:'봉사자 시간표 제작',s:'2026-07-26',e:'2026-08-16',st:'done',
+  rx:'담당 <b>2 봉사팀 공통</b> → <b>1 총무M</b>. 전 팀 시간표를 총무M이 작성합니다.',subs:[]},
+ {t:'교개협 주보광고',s:'2026-08-02',e:'2026-08-16',st:'done',subs:[
+   {t:'홍보영상 상영 (교개협)',s:'2026-08-16',st:'done',ghost:['hebron']},
+ ]},
+ {sch:1,t:'수련회 기도회',s:'2026-08-16',st:'done'},
+ {sch:1,t:'사전OT 진행',s:'2026-08-16',st:'done'},
+],
+chongmu:[
+ {t:'홍보물 출력·게시',s:'2026-06-28',e:'2026-08-20',st:'wip',subs:[
+   {t:'홍보물 출력',s:'2026-06-28',st:'done',ghost:['sketch']},
+   {t:'포스터 부착',s:'2026-07-12',e:'2026-08-20',st:'wip'},
+   {t:'현수막 게시',s:'2026-07-19',e:'2026-08-16',st:'done'},
+   {t:'엑스배너 게시',s:'2026-07-19',e:'2026-08-16',st:'done'},
+ ]},
+ {t:'GBS 교재 출력·제작',s:'2026-07-19',e:'2026-07-19',st:'done',ghost:['sketch'],subs:[]},
+ {t:'비품·물품 준비',s:'2026-08-10',e:'2026-08-16',st:'done',
+  rx:'<b>비품·간식 주문</b>, <b>웰컴키트 제작</b>, <b>물품 패킹</b>이 각각 독립 일정이었습니다. 순차 의존 관계라 하나의 Main으로 묶었습니다.',subs:[
+   {t:'비품·간식 주문',s:'2026-08-10',e:'2026-08-14',st:'done'},
+   {t:'웰컴키트 제작',s:'2026-08-15',st:'done'},
+   {t:'수련회 물품 패킹',s:'2026-08-15',e:'2026-08-16',st:'done'},
+ ]},
+ {t:'대청 최종안내 (교통편·준비물)',s:'2026-08-16',st:'done',subs:[]},
+ {sch:1,t:'총무팀 중간점검',s:'2026-07-26',st:'done'},
+],
+seongyo:[
+ {t:'GBS 리딩자 모집',s:'2026-06-14',e:'2026-07-04',st:'done',subs:[]},
+ {t:'침례·성령기도 인원 확인',s:'2026-07-05',e:'2026-07-26',st:'done',
+  rx:'노션에서 <b>인원 확인</b>이 Sub, <b>확인완료 및 전달</b>이 Main으로 <b>상하 관계가 뒤집혀</b> 있었습니다. 확인 → 전달 순서가 맞으므로 정정했습니다.',subs:[
+   {t:'인원 확인',s:'2026-07-05',e:'2026-07-19',st:'done'},
+   {t:'확인완료 및 전달',s:'2026-07-26',st:'done',ghost:['chongmuM']},
+ ]},
+ {t:'프로그램 자료 준비',s:'2026-08-09',e:'2026-08-14',st:'todo',
+  rx:'전달 일정 2건만 있고 상위 Main이 없었습니다. Main을 신설했습니다.',subs:[
+   {t:'프로그램 자료 헤브론 전달',s:'2026-08-09',st:'todo',ghost:['hebron']},
+   {t:'외부강사 설교·찬양 PPT 전달',s:'2026-08-14',st:'todo',ghost:['sketch'],rel:['PPT 입력']},
+ ]},
+ {t:'성찬 준비',s:'2026-07-19',e:'2026-08-16',st:'done',
+  rx:'담당 <b>2 봉사팀 공통</b> → <b>3 선교사회</b>. 성찬 집례는 선교사회 영역입니다.',subs:[
+   {t:'성찬 세부 논의',s:'2026-07-19',st:'done',ghost:['chongmu']},
+ ]},
+ {sch:1,t:'기도회 곡 전달',s:'2026-07-19',st:'done',ghost:['koram']},
+],
+sketch:[
+ {t:'포스터 제작',s:'2026-05-24',e:'2026-06-14',st:'done',ghost:['chongmuM'],subs:[
+   {t:'포스터 1차 완성 및 피드백',s:'2026-06-06',e:'2026-06-08',st:'done'},
+   {t:'포스터 확정',s:'2026-06-14',st:'done'},
+ ]},
+ {t:'GBS 교재 편집디자인',s:'2026-05-24',e:'2026-07-12',st:'done',ghost:['chongmu'],subs:[
+   {t:'교재 편집디자인 완료',s:'2026-07-12',st:'done'},
+ ]},
+ {t:'홍보물 세트 (현수막·배너·썸네일)',s:'2026-06-14',e:'2026-07-05',st:'done',
+  rx:'<b>현수막</b>·<b>X배너</b>·<b>기본 썸네일</b>·<b>어플 리사이징</b>이 모두 같은 기간·같은 의뢰건인데 각각 독립 Main이었습니다. 하나로 묶었습니다.',subs:[
+   {t:'현수막',s:'2026-06-14',e:'2026-06-28',st:'done'},
+   {t:'X배너',s:'2026-06-14',e:'2026-06-28',st:'done'},
+   {t:'기본 썸네일',s:'2026-06-14',e:'2026-06-28',st:'done'},
+   {t:'어플 리사이징',s:'2026-06-28',e:'2026-07-05',st:'done'},
+ ]},
+ {t:'시간표 이미지',s:'2026-06-14',e:'2026-07-02',st:'done',ghost:['chongmuM'],subs:[]},
+ {t:'명찰 디자인',s:'2026-07-19',e:'2026-08-02',st:'done',ghost:['chongmuM'],subs:[
+   {t:'명찰디자인 완료',s:'2026-07-12',st:'done',warn:1,
+    rx:'<b>날짜 모순.</b> 이 항목의 날짜(7/12)가 상위 <b>명찰 디자인</b>의 시작일(7/19)보다 앞섭니다. 노션에서 두 항목이 별개로 입력되며 생긴 오류로 보입니다.<br><br>정정안 ① 상위 시작일을 7/5로 당김 ② 이 항목을 7/26으로 옮김'},
+ ]},
+ {t:'PPT 제작',s:'2026-07-26',e:'2026-08-16',st:'wip',
+  rx:'<b>PPT 템플릿 제작</b>과 <b>PPT 입력 시작</b>이 각각 독립 Main이었습니다. 템플릿 완료가 입력의 선행 조건이므로 하나의 Main 아래 순차 하위로 재구성했습니다.',subs:[
+   {t:'PPT 템플릿 제작',s:'2026-07-26',e:'2026-08-09',st:'done'},
+   {t:'PPT 입력',s:'2026-08-09',e:'2026-08-16',st:'wip',ghost:['seongyo'],rel:['외부강사 설교·찬양 PPT 전달','총 리허설']},
+ ]},
+ {t:'장소 배치도',s:'2026-07-12',e:'2026-08-09',st:'done',ghost:['chongmuM'],subs:[
+   {t:'장소 배치도 제작 완료',s:'2026-08-09',st:'done'},
+ ]},
+ {t:'네컷 프레임',s:'2026-07-12',e:'2026-08-09',st:'done',subs:[]},
+ {t:'방명록',s:'2026-07-12',e:'2026-07-26',st:'done',subs:[
+   {t:'방명록 디자인 완료',s:'2026-07-26',st:'done'},
+ ]},
+ {t:'포토존',s:'2026-07-12',e:'2026-07-26',st:'done',subs:[]},
+ {t:'프로그램 썸네일 제작',s:'2026-07-12',e:'2026-07-26',st:'done',subs:[]},
+ {sch:1,t:'밴드 스킨',s:'2026-07-05',st:'done'},
+ {sch:1,t:'송리스트 게시',s:'2026-07-26',st:'done'},
+],
+hebron:[
+ {t:'수련회 결과보고 영상',s:'2026-05-24',e:'2026-08-30',st:'todo',subs:[]},
+ {t:'홍보영상',s:'2026-05-24',e:'2026-08-09',st:'done',ghost:['chongmuM'],subs:[
+   {t:'홍보영상 (롱폼2 참교육)',s:'2026-07-18',st:'late'},
+   {t:'홍보영상 (숏폼2)',s:'2026-08-09',st:'done'},
+ ]},
+ {t:'플리 영상',s:'2026-07-12',e:'2026-07-26',st:'done',ghost:['sketch'],subs:[
+   {t:'플리 영상 디자인 완료',s:'2026-07-12',st:'done'},
+   {t:'플리 영상 게시 완료',s:'2026-07-26',st:'done'},
+ ]},
+ {t:'영상·음향 장비 준비',s:'2026-07-12',e:'2026-08-16',st:'done',
+  rx:'담당 <b>2 봉사팀 공통</b>이던 장비 항목들을 실제 장비를 다루는 <b>5 헤브론</b>으로 이관하고, 음향을 맡는 코람데오를 관련팀으로 지정했습니다.',subs:[
+   {t:'장비 리스트업 확정',s:'2026-07-12',st:'done',ghost:['koram']},
+   {t:'장비 포장',s:'2026-08-15',e:'2026-08-16',st:'done',ghost:['koram']},
+ ]},
+ {sch:1,t:'총 리허설',s:'2026-08-16',st:'done',
+  rx:'노션에서 <b>Main</b>으로 코람데오·헤브론에 <b>각각 중복 등록</b>돼 있었습니다. 산출물 없이 정해진 시각에 참석만 하는 성격이라 <b>일정</b>으로 재분류하고 1건으로 통합했습니다.'},
+],
+koram:[
+ {t:'객원 모집',s:'2026-05-24',e:'2026-06-14',st:'done',
+  rx:'담당 <b>2 봉사팀 공통</b> → <b>6 코람데오</b>. 찬양팀 객원 연주자 모집입니다.',subs:[
+   {t:'객원 모집 시작',s:'2026-05-24',e:'2026-06-14',st:'done'},
+   {t:'객원 모집 마감',s:'2026-06-14',st:'done',ghost:['seongyo']},
+ ]},
+ {t:'코람데오 연습',s:'2026-07-12',e:'2026-08-16',st:'done',subs:[
+   {t:'연습 1',s:'2026-07-12',st:'done'},{t:'연습 3',s:'2026-07-19',st:'done'},
+   {t:'연습 5',s:'2026-07-26',st:'done'},{t:'연습 7 + 기도회',s:'2026-08-02',st:'done'},
+   {t:'연습 9 + 기도회',s:'2026-08-09',st:'done'},
+ ]},
+ {sch:1,t:'선곡 공유',s:'2026-06-14',st:'done',ghost:['sketch','hebron']},
+],
+jaejeong:[
+ {t:'수련회비 수납 관리',s:'2026-06-14',e:'2026-08-16',st:'wip',subs:[
+   {t:'미납자 최종 확인',s:'2026-08-16',st:'todo',ghost:['chongmu']},
+ ]},
+],
+gaegija:[
+ {t:'CBA커넥트 수련회 기능',s:'2026-06-28',e:'2026-08-16',st:'done',subs:[
+   {t:'주요기능 오픈',s:'2026-06-28',st:'done'},
+   {t:'명단 확정 데이터 전달',s:'2026-08-16',st:'done',ghost:['chongmu']},
+ ]},
+],
+saechingu:[
+ {t:'새친구 초청 준비',s:'2026-07-19',e:'2026-08-16',st:'done',subs:[
+   {t:'초청카드 이미지 제작·공유',s:'2026-07-26',st:'done',ghost:['sketch']},
+   {t:'새친구 명단 확정',s:'2026-08-16',st:'done',ghost:['chongmu']},
+ ]},
+],
+};
+
+const LOG={
+ '수련회장 계약내용 최종 조정·확인':[['08/09','IYC 담당자와 1차 통화. 대강당 사용시간 22시까지 협의 필요.'],
+   ['08/16','<s>8/17 방문하여 계약서 최종 확인</s>','담당자 휴가로 방문 불발. <b>재확인 일정 미정 — 선발대 출발 전 반드시 완료 필요.</b>']],
+ 'PPT 입력':[['08/09','템플릿 확정본으로 입력 시작. 집회 4세션 + GBS 3세션.'],
+   ['08/14','선교사회 설교 PPT 미도착으로 3세션 대기. 나머지 입력 완료.']],
+ '명찰디자인 완료':[['07/19','스케치팀에 의뢰서 전달. 180명 기준 + 예비 20장.'],
+   ['07/26','<s>명찰 사이즈 90×130mm</s>','스트랩 재고가 100×140 기준. → <b>100×140mm</b>로 확정.']],
+ '집회 진행요원 지정':[['07/26','<s>8/2까지 각 팀 진행요원 명단 취합</s>','팀별 인원 확정 지연으로 8/9로 연기.'],
+   ['08/09','명단 확정. 봉사자 시간표에 반영 완료.']],
+ '총 리허설':[['08/16','전 팀 합동 리허설 진행. PPT 3세션 미완성 상태로 진행.']],
+ '홍보영상 (롱폼2 참교육)':[['07/12','촬영 일정 조율 중.'],['07/18','<s>7/18 업로드</s>','출연자 일정으로 촬영 미진행. <b>대체 일정 미정.</b>']],
+ '포스터 확정':[['06/06','1차 시안 3종 공유. 총무M 피드백 대기.'],
+   ['06/14','<s>B안으로 확정</s>','주제 성구 가독성 문제로 <b>C안 + B안 색상</b> 조합으로 최종 확정.']],
+};
+
+/* ── 축: 주 11칸(D-13~D-3) → 일 12칸(8/9~8/20) → 수련회 ── */
+const NW=11;
+const W0=new Date('2026-05-24'), DAY0=new Date('2026-08-09');
+const WEEKS=[];for(let i=0;i<NW;i++){const d=new Date(W0.getTime()+i*6048e5);
+  WEEKS.push(['D-'+(13-i),(d.getMonth()+1)+'/'+d.getDate()])}
+const DAYS=[];for(let i=0;i<12;i++){const d=new Date(DAY0.getTime()+i*864e5);
+  DAYS.push([['일','월','화','수','목','금','토'][d.getDay()],(d.getMonth()+1)+'/'+d.getDate()])}
+function col(iso){const d=new Date(iso);
+  if(d>=new Date('2026-08-21'))return NW+13;
+  if(d>=DAY0)return NW+1+Math.min(11,Math.round((d-DAY0)/864e5));
+  return Math.max(1,Math.min(NW,1+Math.floor((d-W0)/6048e5)))}
+const LBLW=322,WKW=118,DAYW=58;
+function colX(i){let x=LBLW;for(let k=1;k<i;k++)x+=k<=NW?WKW:DAYW;return x}
+
+/* ── 인덱스 + 관계 ── */
+const IX={},REL={};
+function addRel(a,b){(REL[a]=REL[a]||new Set()).add(b);(REL[b]=REL[b]||new Set()).add(a)}
+Object.entries(DATA).forEach(([tid,list])=>list.forEach(m=>{
+  IX[m.t]={...m,team:tid,kind:m.sch?'일정':'Main'};
+  (m.rel||[]).forEach(r=>addRel(m.t,r));
+  (m.subs||[]).forEach(s=>{IX[s.t]={...s,team:tid,kind:'하위',parent:m.t};
+    addRel(m.t,s.t);(s.rel||[]).forEach(r=>addRel(s.t,r))})}));
+
+/* ── 렌더 ── */
+let curLink=null,dragEnd=0;
+const sheet=document.getElementById('sheet'),wires=document.getElementById('wires');
+let H=`<div class="row head"><div class="hlbl"><b>부서 · 업무</b><span>Main ▸ 하위 ▸ 관련업무</span></div>`;
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+WEEKS.forEach(([a,b],i)=>{const st=new Date(W0.getTime()+i*6048e5),en=new Date(st.getTime()+6*864e5);
+  H+=`<div class="hc" data-cs="${iso(st)}" data-ce="${iso(en)}" data-lb="${a} (${b} 주)"><span class="dw">${a}</span><span class="dt">${b}</span></div>`});
+DAYS.forEach(([w,d],i)=>{const dt=new Date(DAY0.getTime()+i*864e5);
+  H+=`<div class="hc day${i===0?' shift':''}" data-cs="${iso(dt)}" data-ce="${iso(dt)}" data-lb="${d}"><span class="dw">${w}</span><span class="dt">${d}</span></div>`});
+H+=`<div class="hc rt" data-cs="2026-08-21" data-ce="2026-08-23" data-lb="수련회 기간"><span class="dw">수련회</span><span class="dt">8/21–23</span></div></div>`;
+const NC=NW+13;
+const gl=(()=>{let s='';for(let i=1;i<=NC;i++)s+=`<div class="gl${i===NW+1?' shift':''}" style="grid-column:${i}"></div>`;return s})();
+
+/* 상태별 채움색 — 글자가 검정이므로 모두 연한 톤 */
+function tint(hex,a){const n=parseInt(hex.slice(1),16);
+  const r=(n>>16)&255,g=(n>>8)&255,b=n&255,m=(v,p)=>Math.round(v*a+p*(1-a));
+  return `rgb(${m(r,250)},${m(g,251)},${m(b,250)})`}
+function fill(st,c,sch,ghost){
+  if(ghost)return{bg:'none',bd:'var(--rule-2)'};
+  if(st==='done')return{bg:'#DFE3E0',bd:'#C4CBC6'};   // 일정 포함 모든 완료 = 회색
+  if(st==='late')return{bg:'#FBE4DF',bd:'#C8442E'};
+  if(sch||st==='todo')return{bg:'var(--paper-2)',bd:c};
+  return{bg:tint(c,.20),bd:c}}          // 진행중 = 팀 색상의 옅은 톤
+
+function bar(x,c,depth,ghost){
+  const a=col(x.s),b=x.e?col(x.e):a,id=encodeURIComponent(x.t);
+  const cls=['bar',x.sch?'sch':depth?'s':'m',ghost?'ghost':(x.st||'done')].filter(Boolean).join(' ');
+  const f=fill(x.st||'done',c,x.sch,ghost);
+  const fl=x.st==='late'?'<span class="flag">지연</span>':'';
+  const lb=ghost?'↳ '+x.t:x.t;
+  return `<div class="${cls}" style="grid-column:${a}/${b+1};background:${f.bg};border-color:${f.bd}"
+    tabindex="0" data-t="${id}">${fl}<span class="txt">${lb}</span></div>`}
+
+TEAMS.forEach(tm=>{
+  const list=DATA[tm.id]||[],gh=[];
+  Object.entries(DATA).forEach(([ot,ol])=>{if(ot===tm.id)return;ol.forEach(m=>{
+    if(m.ghost&&m.ghost.includes(tm.id))gh.push({...m,_from:ot});
+    (m.subs||[]).forEach(s=>{if(s.ghost&&s.ghost.includes(tm.id))gh.push({...s,_from:ot})})})});
+  const n=list.length+list.reduce((s,m)=>s+(m.subs?m.subs.length:0),0);
+  const TT=`--teamt:${tint(tm.c,.20)};--rowt:${tint(tm.c,.055)};--lct:${tint(tm.c,.03)}`;
+  H+=`<div class="row team" data-team="${tm.id}" style="${TT}"><div class="lc">
+      <span class="caret">▼</span><span class="sw" style="background:${tm.c}"></span>
+      <span class="nm">${tm.n}</span><span class="ct">${n}건${gh.length?' +'+gh.length:''}</span></div>
+      <div class="cell" style="grid-column:2/-1"></div></div>`;
+  list.forEach(m=>{
+    H+=`<div class="row main" data-of="${tm.id}" style="${TT}" data-title="${encodeURIComponent(m.t)}" data-s="${m.s}" data-e="${m.e||m.s}"><div class="lc" data-go="${encodeURIComponent(m.t)}">
+        <span class="nm">${m.t}</span></div>
+        <div class="lane" style="grid-column:2/-1;display:grid;grid-template-columns:subgrid">${gl}${bar(m,tm.c,0)}</div></div>`;
+    (m.subs||[]).forEach(s=>{
+      H+=`<div class="row sub" data-of="${tm.id}" style="${TT}" data-title="${encodeURIComponent(s.t)}" data-s="${s.s}" data-e="${s.e||s.s}"><div class="lc" data-go="${encodeURIComponent(s.t)}">
+          <span class="nm">${s.t}</span></div>
+          <div class="lane" style="grid-column:2/-1;display:grid;grid-template-columns:subgrid">${gl}${bar(s,tm.c,1)}</div></div>`})});
+  gh.forEach(g=>{const oc=TC[g._from];
+    H+=`<div class="row sub ghostrow" data-of="${tm.id}" style="${TT}" data-title="${encodeURIComponent(g.t)}" data-s="${g.s}" data-e="${g.e||g.s}"><div class="lc" data-go="${encodeURIComponent(g.t)}">
+        <span class="nm">↳ ${g.t}</span>
+        <span class="owner"><i style="background:${oc.c}"></i>${oc.s}</span></div>
+        <div class="lane" style="grid-column:2/-1;display:grid;grid-template-columns:subgrid">${gl}${bar(g,oc.c,1,1)}</div></div>`})});
+sheet.insertAdjacentHTML('beforeend',H);
+
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawWires);
+
+/* ── 필터 통합: 소속 · 미완료만 · 날짜 선택 ── */
+const me=document.getElementById('me'),opT=document.getElementById('opT'),fchip=document.getElementById('fchip');
+let dateSel=null;                       // [시작ISO, 종료ISO] 또는 null
+
+function applyFilters(){
+  const v=me.value,onlyOpen=opT.checked,cnt={};
+  sheet.querySelectorAll('.row.main,.row.sub').forEach(r=>{
+    let ok=true;
+    if(dateSel){const a=r.dataset.s,b=r.dataset.e||a;
+      if(b<dateSel[0]||a>dateSel[1])ok=false}        // 기간이 선택 날짜와 겹치는지
+    if(onlyOpen&&r.querySelector('.bar.done'))ok=false;
+    r.dataset.ok=ok?'1':'';
+    if(ok)cnt[r.dataset.of]=(cnt[r.dataset.of]||0)+1});
+  sheet.querySelectorAll('.row.team').forEach(t=>{
+    const id=t.dataset.team,n=cnt[id]||0;let open;
+    if(dateSel){                                     // 날짜 선택 시: 해당 업무 있는 부서만, 그만큼만
+      t.style.display=n?'':'none';open=!!n;
+      t.classList.toggle('collapsed',!open);t.style.opacity=''}
+    else{t.style.display='';const mine=(v==='all'||id===v);
+      t.classList.toggle('collapsed',!mine);t.style.opacity=mine?'':'.6';open=mine}
+    t.querySelector('.ct').textContent=dateSel?`${n}건`:t.dataset.ct;
+    sheet.querySelectorAll(`.row[data-of="${id}"]`).forEach(r=>
+      r.style.display=(open&&r.dataset.ok)?'':'none')});
+  drawWires()}
+
+sheet.querySelectorAll('.row.team').forEach(r=>{
+  r.dataset.ct=r.querySelector('.ct').textContent;
+  r.querySelector('.lc').onclick=()=>{
+    r.classList.toggle('collapsed');const h=r.classList.contains('collapsed');
+    sheet.querySelectorAll(`.row[data-of="${r.dataset.team}"]`).forEach(x=>
+      x.style.display=(!h&&x.dataset.ok)?'':'none');
+    drawWires()}});
+
+me.onchange=()=>{clearDate();applyFilters()};
+opT.onchange=applyFilters;
+
+/* ── 날짜 헤더 클릭 → 그 날짜가 기간에 포함된 업무만 ── */
+function clearDate(){dateSel=null;sheet.querySelectorAll('.hc.sel').forEach(x=>x.classList.remove('sel'));
+  fchip.hidden=true}
+sheet.querySelector('.row.head').addEventListener('click',e=>{
+  const hc=e.target.closest('.hc');if(!hc||!hc.dataset.cs)return;
+  const same=dateSel&&dateSel[0]===hc.dataset.cs&&dateSel[1]===hc.dataset.ce;
+  clearDate();
+  if(!same){dateSel=[hc.dataset.cs,hc.dataset.ce];hc.classList.add('sel');
+    fchip.innerHTML=`<b>${hc.dataset.lb}</b> 포함 업무<span>×</span>`;fchip.hidden=false}
+  applyFilters()});
+fchip.onclick=()=>{clearDate();applyFilters()};
+applyFilters();
+
+/* ── 업무가 접힌 부서에 있어도 펼쳐서 보이게 ── */
+function reveal(title){
+  const x=IX[title];if(!x)return;
+  const t=sheet.querySelector(`.row.team[data-team="${x.team}"]`);
+  if(t){t.style.display='';t.classList.remove('collapsed');t.style.opacity=''}
+  const key=encodeURIComponent(title);
+  sheet.querySelectorAll(`.row[data-of="${x.team}"]`).forEach(r=>{
+    if(r.dataset.title===key){r.dataset.ok='1';r.style.display=''}
+    else if(r.dataset.ok)r.style.display=''})}
+
+/* ── 정렬 이동 ── */
+const board=document.getElementById('board');
+function alignLeft(title){const x=IX[title];if(!x)return;
+  reveal(title);                                    // 담당부서 탭을 먼저 펼침
+  const left=Math.max(0,colX(Math.max(1,col(x.s)-1))-LBLW);   // 한 칸 전 날짜부터 보이게
+  let top=board.scrollTop;
+  const el=findBar(title);
+  if(el&&el.offsetParent){const r=el.closest('.row'),
+    br=board.getBoundingClientRect(),rr=r.getBoundingClientRect();
+    top=Math.max(0,board.scrollTop+(rr.top-br.top)-Math.max(110,br.height/2-70))}
+  board.scrollTo({left,top,behavior:'smooth'})}      // 가로·세로를 한 번에 지정
+
+/* 선택 → 부서 펼침 · 강조 · 상세 · 위치 이동을 한 흐름으로 */
+function goTo(title){
+  const wasOpen=dw.classList.contains('open');
+  reveal(title);link(title);open(title);
+  if(wasOpen)alignLeft(title);
+  else setTimeout(()=>alignLeft(title),250)}       // 패널이 새로 열리면 폭 변화 후 이동
+function findBar(title){return [...sheet.querySelectorAll('[data-t]')]
+  .find(x=>decodeURIComponent(x.dataset.t)===title&&!x.classList.contains('ghost'))
+  ||[...sheet.querySelectorAll('[data-t]')].find(x=>decodeURIComponent(x.dataset.t)===title)}
+
+/* ── 연결: 선으로 잇는다 ── */
+function unlink(){curLink=null;wires.innerHTML='';
+  sheet.querySelectorAll('.lit,.anchor').forEach(e=>e.classList.remove('lit','anchor'));
+  sheet.querySelectorAll('.hl,.anchorrow').forEach(e=>e.classList.remove('hl','anchorrow'))}
+function link(title){
+  unlink();curLink=title;
+  const set=REL[title]||new Set();          // 관련업무가 없어도 선택 표시는 항상
+  sheet.querySelectorAll('[data-t]').forEach(el=>{
+    const n=decodeURIComponent(el.dataset.t),row=el.closest('.row');
+    if(n===title){el.classList.add('anchor');row.classList.add('anchorrow')}
+    else if(set.has(n)){el.classList.add('lit');row.classList.add('hl')}});
+  drawWires()}
+function drawWires(){
+  wires.innerHTML='';if(!curLink)return;
+  // 같은 업무가 관련팀에 고스트 바로 중복 존재할 수 있으므로,
+  // 화면에 실제로 보이는 바 중 원본(고스트 아님)을 우선해 출발점으로 삼는다
+  const vis=[...sheet.querySelectorAll('.bar.anchor')].filter(e=>e.offsetParent);
+  const a=vis.find(e=>!e.classList.contains('ghost'))||vis[0];
+  if(!a)return;
+  const sr=sheet.getBoundingClientRect(),ar=a.getBoundingClientRect();
+  const ax=ar.left-sr.left+ar.width/2, ay=ar.top-sr.top+ar.height/2;
+  let d='';
+  sheet.querySelectorAll('.bar.lit').forEach(l=>{
+    if(!l.offsetParent)return;
+    const lr=l.getBoundingClientRect();
+    const lx=lr.left-sr.left+lr.width/2, ly=lr.top-sr.top+lr.height/2;
+    const mx=(ax+lx)/2;
+    d+=`<path d="M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${ly}, ${lx} ${ly}"/>`;
+    d+=`<circle cx="${lx}" cy="${ly}" r="2.6"/>`});
+  d+=d?`<circle cx="${ax}" cy="${ay}" r="4.5" fill="#1668E3"/>`:'';
+  wires.innerHTML=d;
+  wires.setAttribute('width',sheet.scrollWidth);wires.setAttribute('height',sheet.scrollHeight)}
+addEventListener('resize',drawWires);
+
+/* ── 드로어 ── */
+
+/* ── Claude 진단: 보드 전체를 훑어 '왜 시작 못 하고 있는지' 판단 ── */
+const TODAY=new Date('2026-08-16');                 // 보드 기준일 (D-5)
+const dayGap=(a,b)=>Math.round((a-b)/864e5);
+const md=iso=>iso.slice(5).replace('-','/');
+
+/* 사람이 남긴 맥락(회의·돌발이슈) — 자동 분석과 합쳐서 서술 */
+const CONTEXT={
+ '수련회장 계약내용 최종 조정·확인':'8/16 논의 기록에 담당자 휴가로 방문이 불발됐고 재확인 일정이 잡히지 않았다는 내용이 있습니다.',
+ 'PPT 입력':'8/14 기록 기준 집회 3세션이 외부강사 자료 미도착으로 입력 대기 상태입니다.',
+ '홍보영상 (롱폼2 참교육)':'7/18 기록에 출연자 일정으로 촬영이 진행되지 않았고 대체 일정이 미정으로 남아 있습니다.',
+};
+
+function diagnose(title){
+  const x=IX[title];if(!x)return{v:['ok','정보 없음'],items:[]};
+  const st=x.st||'done', s0=new Date(x.s), e0=new Date(x.e||x.s);
+  const rels=[...(REL[title]||[])].map(n=>IX[n]).filter(Boolean);
+  const items=[];
+  if(st==='done')return{gate:{k:'done',t:'완료'},
+    v:['ok',`${md(x.e||x.s)}에 완료되었습니다. 후속 업무를 막고 있지 않습니다.`],items:[],ctx:CONTEXT[title]};
+
+  // 1) 선행 조건 — 이 업무보다 먼저 끝나야 하는데 안 끝난 것
+  const pre=rels.filter(r=>r.t!==title&&r.t!==x.parent   // 상위 업무는 선행 조건이 아님
+    &&new Date(r.e||r.s)<=e0&&(r.st||'done')!=='done');
+  pre.forEach(r=>items.push(['선행',`<b>${r.t}</b> (${TC[r.team].n}) 미완료 · ${STATUS[r.st||'done'].l}`]));
+
+  // 2) 상위 업무 상태
+  if(x.parent){const pa=IX[x.parent];
+    if(pa&&(pa.st||'done')!=='done')items.push(['상위',`상위 <b>${x.parent}</b>가 아직 ${STATUS[pa.st||'done'].l}`])}
+
+  // 3) 기한
+  if(st!=='done'){
+    const over=dayGap(TODAY,e0);
+    if(over>0)items.push(['기한',`마감 ${md(x.e||x.s)} 기준 <b>${over}일 경과</b>`]);
+    else if(over>-4)items.push(['기한',`마감 ${md(x.e||x.s)}까지 <b>${-over}일</b> 남음`]);
+    if(dayGap(TODAY,s0)>0&&st==='todo')
+      items.push(['착수',`시작 예정일 ${md(x.s)}에서 <b>${dayGap(TODAY,s0)}일</b> 지나도록 미착수`]);
+  }
+
+  // 4) 담당 부서 동시 부하
+  const load=(DATA[x.team]||[]).flatMap(m=>[m,...(m.subs||[])])
+    .filter(t=>t.t!==title&&(t.st||'done')!=='done'
+      &&new Date(t.s)<=e0&&new Date(t.e||t.s)>=s0);
+  if(load.length>=3)items.push(['부하',`같은 기간 <b>${TC[x.team].n}</b>에 미완료 업무 ${load.length}건 집중`]);
+
+  // 5) 후속 영향
+  const post=rels.filter(r=>r.t!==title&&r.t!==x.parent
+    &&new Date(r.s)>=e0&&(r.st||'done')!=='done');
+  post.forEach(r=>items.push(['영향',`지연 시 <b>${r.t}</b> (${TC[r.team].n})가 연쇄 지연`]));
+
+  // 판단
+  const overdue=dayGap(TODAY,e0)>0;
+  let v;
+  if(pre.length&&st==='wip')
+    v=['warn',`착수했으나 선행 ${pre.length}건이 도착하지 않아 일부가 대기 중입니다.`];
+  else if(pre.length)
+    v=['block',`선행 업무 ${pre.length}건이 끝나지 않아 착수할 수 없습니다.`];
+  else if(st==='late')
+    v=['block',overdue?'예정일이 지났는데 완료되지 않았습니다.'
+                      :'예정일이 임박했으나 진행 일정이 확정되지 않았습니다.'];
+  else if(overdue)v=['block','마감이 지났는데 아직 끝나지 않았습니다.'];
+  else if(st==='wip')v=['warn','진행 중이며 현재 확인되는 차질 요인은 없습니다.'];
+  else if(items.length)v=['warn','아직 시작되지 않았으며 아래 요인이 확인됩니다.'];
+  else v=['ok','현재 확인되는 차질 요인이 없습니다.'];
+
+  /* 패널 이름 = 지금 이 업무를 손댈 수 있는지 여부로 판단
+     (기한이 지났어도 막는 요인이 없으면 '진행 가능' — 남의 문제가 아니라 우리 문제) */
+  const gate = pre.length&&st!=='wip' ? {k:'block',t:'진행 불가'}
+             : pre.length              ? {k:'part', t:'일부 진행 가능'}
+             :                           {k:'go',   t:'진행 가능'};
+  return{gate,v,items,ctx:CONTEXT[title]};
+}
+
+function renderDiag(title){
+  const d=diagnose(title),b=document.getElementById('dgB'),dg=document.getElementById('diag');
+  dg.className='diag g-'+d.gate.k;
+  dg.querySelector('.ttl').textContent=d.gate.t;
+  b.innerHTML=`<div class="dg-v ${d.v[0]}">${d.v[1]}</div>`
+    +(d.items.length?`<ul>${d.items.map(([k,t])=>
+        `<li><span class="ic">${k}</span><span>${t}</span></li>`).join('')}</ul>`:'')
+    +`<div class="src">${d.ctx?d.ctx+'<br>':''}보드 전체의 일정·상태·연결 관계와 논의 기록을 함께 분석했습니다. 상황이 바뀌면 주기적으로 다시 판단합니다.</div>`;
+}
+let dgMin=12;
+function stampDiag(){document.getElementById('dgTs').textContent=dgMin?`${dgMin}분 전 분석`:'방금 분석'}
+document.getElementById('dgR').onclick=()=>{
+  const dg=document.getElementById('diag');dg.classList.add('busy');
+  setTimeout(()=>{dg.classList.remove('busy');dgMin=0;stampDiag();if(cur)renderDiag(cur)},700)};
+
+const dw=document.getElementById('drawer');let cur=null;
+function fmt(d){return d.slice(5).replace('-','/')}
+function open(title){
+  const x=IX[title];if(!x)return;cur=title;
+  const c=TC[x.team].c,st=x.st||'done';
+  document.getElementById('dkick').innerHTML=
+    `<span class="chip solid" style="background:${c}">${TC[x.team].n}</span><span class="chip">${x.kind}</span>
+     <button class="chip stat" id="statchip"><span class="cv" style="background:${STATUS[st].c}"></span>${STATUS[st].l} ▾</button>`;
+  document.getElementById('statchip').onclick=e=>{e.stopPropagation();statMenu(e.currentTarget)};
+  document.getElementById('dtitle').textContent=title;
+  const rels=[...(REL[title]||[])].filter(n=>IX[n]);
+  document.getElementById('dmeta').innerHTML=
+    `<dt>기간</dt><dd class="mono">${x.e?fmt(x.s)+' → '+fmt(x.e):fmt(x.s)}</dd>
+     <dt>담당</dt><dd>${TC[x.team].n}</dd><dt>상위</dt><dd>${x.parent||'—'}</dd>
+     <dt>관련팀</dt><dd>${(x.ghost||[]).map(g=>TC[g].n).join(', ')||'—'}</dd>`;
+  document.getElementById('dlog').innerHTML=(LOG[title]||[['—','아직 기록된 논의가 없습니다.']])
+    .map(([d,a,b])=>`<div class="entry"><span class="d">${d}</span>${a}${b?`<span class="fix">${b}</span>`:''}</div>`).join('');
+  document.getElementById('relN').textContent=rels.length||'';
+  document.getElementById('drel').innerHTML=rels.length?rels.map(n=>{const r=IX[n];
+    return `<div class="relitem"><button class="rb" data-rel="${encodeURIComponent(n)}">
+      <span class="dot" style="background:${TC[r.team].c}"></span>${n}<span class="rl">${r.kind} · ${TC[r.team].s}</span></button>
+      <div class="menu"><button data-act="open">열기<span class="mi">상세</span></button>
+      <button data-act="move">이동<span class="mi">보드</span></button></div></div>`}).join('')
+    :'<div style="font-size:12px;color:var(--ink-3)">연결된 업무 없음</div>';
+  calendar(x,rels);
+  renderDiag(title);stampDiag();
+  dw.classList.add('open');dw.setAttribute('aria-hidden','false');
+  document.body.classList.add('dopen');
+  setTimeout(drawWires,240)}
+function close(){dw.classList.remove('open');dw.setAttribute('aria-hidden','true');
+  document.body.classList.remove('dopen');unlink()}
+document.getElementById('dclose').onclick=close;
+addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenus();close()}});
+
+/* 탭 */
+document.getElementById('dtabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#dtabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+b.dataset.p))};
+
+/* 연결 목록 메뉴 */
+function closeMenus(){document.querySelectorAll('.menu.on').forEach(m=>m.classList.remove('on'));
+  document.getElementById('statmenu').classList.remove('on')}
+document.getElementById('drel').onclick=e=>{
+  const act=e.target.closest('[data-act]');
+  if(act){const item=act.closest('.relitem'),n=decodeURIComponent(item.querySelector('.rb').dataset.rel);
+    closeMenus();
+    if(act.dataset.act==='open'){open(n);link(n)}
+    else{goTo(n);setTimeout(()=>{const el=findBar(n);
+      if(el)el.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:520,iterations:2})},300)}
+    return}
+  const rb=e.target.closest('.rb');
+  if(rb){const m=rb.nextElementSibling,was=m.classList.contains('on');closeMenus();m.classList.toggle('on',!was)}};
+addEventListener('click',e=>{if(Date.now()-dragEnd<400)return;
+  if(!e.target.closest('.relitem')&&!e.target.closest('#statmenu')&&!e.target.closest('#statchip'))closeMenus()});
+
+/* 빈 영역 클릭 → 상세 패널 닫기 */
+addEventListener('click',e=>{
+  if(Date.now()-dragEnd<400)return;              // 폭 조절 드래그 직후의 클릭은 무시
+  if(!dw.classList.contains('open'))return;
+  if(e.target.closest('#drawer')||e.target.closest('#statmenu'))return;
+  if(e.target.closest('[data-t],[data-go]'))return;
+  if(e.target.closest('header')||e.target.closest('.toolbar'))return;
+  close()});
+
+/* 상태 변경 */
+function statMenu(btn){
+  const m=document.getElementById('statmenu'),r=btn.getBoundingClientRect();
+  m.innerHTML=Object.entries(STATUS).map(([k,v])=>
+    `<button data-s="${k}"><span class="cv" style="background:${v.c}"></span>${v.l}</button>`).join('');
+  m.style.left=r.left+'px';m.style.top=(r.bottom+4)+'px';m.classList.add('on');
+  m.onclick=e=>{const b=e.target.closest('[data-s]');if(!b)return;
+    setStatus(cur,b.dataset.s);closeMenus()}}
+function setStatus(title,st){
+  const x=IX[title];if(!x)return;x.st=st;
+  Object.values(DATA).forEach(l=>l.forEach(m=>{if(m.t===title)m.st=st;
+    (m.subs||[]).forEach(s=>{if(s.t===title)s.st=st})}));
+  sheet.querySelectorAll('[data-t]').forEach(el=>{
+    if(decodeURIComponent(el.dataset.t)!==title||el.classList.contains('ghost'))return;
+    el.classList.remove('done','wip','todo','late');el.classList.add(st);
+    const c=TC[x.team].c;
+    const fs=fill(st,TC[x.team].c,x.sch,false);
+    el.style.background=fs.bg;el.style.borderColor=fs.bd;el.style.color='';
+    const f=el.querySelector('.flag');if(f)f.remove();
+    if(st==='late')el.insertAdjacentHTML('afterbegin','<span class="flag">지연</span>')});
+  open(title);drawWires()}
+
+/* 달력 */
+function calendar(x,rels){
+  const el=document.getElementById('dcal');
+  const s=new Date(x.s),e=x.e?new Date(x.e):new Date(x.s);
+  const marks={};rels.forEach(n=>{const r=IX[n];if(!r)return;
+    (marks[r.s]=marks[r.s]||[]).push(TC[r.team].c);
+    if(r.e)(marks[r.e]=marks[r.e]||[]).push(TC[r.team].c)});
+  let out='';const cur=new Date(s.getFullYear(),s.getMonth(),1),end=new Date(e.getFullYear(),e.getMonth(),1);
+  while(cur<=end){
+    const y=cur.getFullYear(),m=cur.getMonth();
+    out+=`<div class="cm">${y}년 ${m+1}월<span>${['일','월','화','수','목','금','토'][0]}~</span></div>`;
+    ['일','월','화','수','목','금','토'].forEach((w,i)=>out+=`<div class="wd${i===0?' s':''}">${w}</div>`);
+    const first=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate();
+    for(let i=0;i<first;i++)out+='<div class="dcell pad"></div>';
+    for(let d=1;d<=last;d++){
+      const dt=new Date(y,m,d),iso=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const inR=dt>=new Date(s.toDateString())&&dt<=new Date(e.toDateString());
+      const edge=iso===x.s||iso===x.e;
+      const cls=['dcell',inR?'in':'',edge?(x.st==='late'?'late':'edge'):''].filter(Boolean).join(' ');
+      const dots=(marks[iso]||[]).slice(0,4).map(c=>`<i style="background:${c}"></i>`).join('');
+      out+=`<div class="${cls}">${d}<span class="dots">${dots}</span></div>`}
+    cur.setMonth(cur.getMonth()+1)}
+  el.innerHTML=out}
+
+/* 폭 조절 */
+const grip=document.getElementById('grip');let sx=0,sw=0;
+grip.addEventListener('mousedown',e=>{e.preventDefault();sx=e.clientX;sw=dw.offsetWidth;
+  let moved=false;
+  dw.classList.add('sizing');document.body.classList.add('sizing');
+  const mv=ev=>{if(Math.abs(ev.clientX-sx)>2)moved=true;
+    const w=Math.min(Math.min(900,innerWidth*.7),Math.max(320,sw+(sx-ev.clientX)));
+    document.documentElement.style.setProperty('--dw',w+'px')};
+  const up=()=>{dw.classList.remove('sizing');document.body.classList.remove('sizing');
+    if(moved)dragEnd=Date.now();
+    drawWires();
+    removeEventListener('mousemove',mv);removeEventListener('mouseup',up)};
+  addEventListener('mousemove',mv);addEventListener('mouseup',up)});
+
+/* 보드 이벤트 */
+sheet.addEventListener('click',e=>{
+  if(Date.now()-dragEnd<400)return;
+  const go=e.target.closest('[data-go]');
+  if(go){goTo(decodeURIComponent(go.dataset.go));return}
+  const b=e.target.closest('[data-t]');
+  if(b){const t=decodeURIComponent(b.dataset.t);link(t);open(t)}});
+sheet.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){
+  const b=e.target.closest('[data-t]');if(b){e.preventDefault();const t=decodeURIComponent(b.dataset.t);link(t);open(t)}}});
+
+setTimeout(()=>goTo('PPT 입력'),450);
+</script>
+</body>
+</html>

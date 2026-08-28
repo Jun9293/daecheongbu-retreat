@@ -15,6 +15,7 @@ from app.config import BASE_DIR, RISK_SCAN_INTERVAL_SECONDS
 from app.db import init_db
 from app.routers import (
     auth,
+    board,
     budget,
     checklists,
     dashboard,
@@ -26,6 +27,7 @@ from app.routers import (
     reviews,
     schedule,
     settings,
+    setup,
     tasks,
 )
 from app.security import get_optional_user
@@ -80,6 +82,9 @@ app = FastAPI(title="대청부 수련회 관리 시스템", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth.router)
+# 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
+app.include_router(board.router)
+app.include_router(setup.router)
 app.include_router(dashboard.router)
 app.include_router(schedule.router)
 app.include_router(tasks.router)

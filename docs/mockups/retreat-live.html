@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BELONG · 수련회 진행</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2F4F3; --paper-2:#FAFBFA;
+  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
+  --rule:#DDE2DE; --rule-2:#C7CEC9;
+  --now:#C8442E; --go:#3F6B5D; --link:#1668E3;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+
+/* masthead */
+header{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:13px 22px 0;flex:none}
+.mast{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
+.title em{font-style:normal;color:var(--ink-3);font-weight:400}
+.clock{margin-left:auto;display:flex;align-items:baseline;gap:9px;padding:4px 13px;
+  border:1px solid var(--now);border-radius:2px}
+.clock b{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:var(--now)}
+.clock span{font-size:12px;color:var(--ink-3)}
+nav{display:flex;gap:2px;margin-top:13px}
+nav button{font:inherit;font-size:14.5px;padding:8px 17px;border:1px solid transparent;border-bottom:none;
+  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
+nav button[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
+
+/* day strip */
+.days{display:flex;gap:2px;align-items:center;padding:9px 22px;border-bottom:1px solid var(--rule);
+  background:var(--paper-2);flex:none;flex-wrap:wrap}
+.days button{font:inherit;font-size:13.5px;padding:6px 14px;border:1px solid var(--rule-2);
+  background:var(--paper-2);color:var(--ink-2);cursor:pointer;border-radius:3px;display:flex;
+  align-items:baseline;gap:7px}
+.days button[aria-selected=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink);font-weight:500}
+.days button i{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.7}
+.days .prog{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2)}
+.days .bar{width:150px;height:7px;background:var(--rule);border-radius:4px;overflow:hidden}
+.days .bar i{display:block;height:100%;background:var(--go);border-radius:4px;transition:width .3s}
+.days .prog b{font-family:'IBM Plex Mono',monospace;font-size:13px}
+
+/* layout */
+.wrap{flex:1;display:grid;grid-template-columns:336px 1fr;overflow:hidden}
+
+/* rail */
+.rail{border-right:1px solid var(--rule-2);overflow-y:auto;background:var(--paper-2)}
+.pgm{display:flex;gap:11px;padding:11px 16px;border-bottom:1px solid var(--rule);cursor:pointer;
+  position:relative;align-items:flex-start}
+.pgm:hover{background:var(--paper)}
+.pgm[aria-current=true]{background:#E9EFEB;box-shadow:inset 4px 0 0 var(--go)}
+.pgm .t{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);flex:none;width:42px;padding-top:1px}
+.pgm .b{flex:1;min-width:0}
+.pgm .nm{font-size:14px;font-weight:500;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm .sub{font-size:11.5px;color:var(--ink-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm .ct{flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:10px;padding:2px 7px;background:var(--paper-2);margin-top:1px}
+.pgm.done .nm{color:var(--ink-2)}
+.pgm.done .ct{background:#E4EAE6;border-color:#C2CFC7;color:var(--go)}
+.pgm.live .ct{background:#FBE9E5;border-color:var(--now);color:var(--now);font-weight:600}
+.pgm.free{opacity:.8}
+.nowline{display:flex;align-items:center;gap:9px;padding:0 16px;height:0;position:relative;z-index:2}
+.nowline::before{content:'';flex:1;height:2px;background:var(--now)}
+.nowline b{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#fff;background:var(--now);
+  padding:2px 7px;border-radius:2px;letter-spacing:.05em}
+
+/* detail */
+.detail{overflow-y:auto;padding:22px 26px 40px}
+.dh{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.dh h1{font-size:23px;font-weight:600;letter-spacing:-.02em;line-height:1.25}
+.dh .when{font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink-2);
+  border:1px solid var(--rule-2);border-radius:3px;padding:4px 10px;background:var(--paper-2);flex:none}
+.dmeta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-bottom:18px}
+.dmeta span b{color:var(--ink-3);font-weight:400;margin-right:5px}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--rule)}
+.filters button{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.filters button i{width:7px;height:7px;border-radius:50%;display:block}
+.filters button[aria-pressed=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+
+.phase{margin-bottom:26px}
+.ph-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.ph-h h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.ph-h h2 .tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;
+  padding:2px 7px;border-radius:2px;color:#fff}
+.ph-h .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-3);margin-left:auto}
+.ph-h .hint{font-size:12px;color:var(--ink-3)}
+
+.item{display:flex;gap:11px;padding:10px 12px;border:1px solid var(--rule);border-radius:4px;
+  background:var(--paper-2);margin-bottom:5px;align-items:flex-start;cursor:pointer}
+.item:hover{border-color:var(--rule-2);background:#fff}
+.item .box{width:19px;height:19px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--paper-2)}
+.item .box::after{content:'';width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
+  transform:rotate(-45deg) translate(1px,-1px);opacity:0}
+.item.on .box{background:var(--go);border-color:var(--go)}
+.item.on .box::after{opacity:1}
+.item .txt{flex:1;font-size:13.5px;line-height:1.5}
+.item.on .txt{color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--rule-2)}
+.item .who{flex:none;display:flex;align-items:center;gap:7px;padding-top:1px}
+.item .part{font-size:11px;font-family:'IBM Plex Mono',monospace;padding:2px 6px;border-radius:2px;color:#fff}
+.item .as{font-size:12px;color:var(--ink-2)}
+.item.dim{opacity:.32}
+.item .flag{font-size:10.5px;font-family:'IBM Plex Mono',monospace;background:var(--now);color:#fff;
+  padding:2px 5px;border-radius:2px;flex:none;margin-top:1px}
+
+.note{font-size:12.5px;line-height:1.6;background:#EDF3F0;border-left:3px solid #5B8C7E;
+  padding:11px 13px;border-radius:0 3px 3px 0;color:var(--ink-2);margin-bottom:18px}
+.note b{color:#3F6B5D}
+.empty{font-size:13px;color:var(--ink-3);padding:14px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mast">
+    <div class="title">BELONG <em>· 수련회 진행</em></div>
+    <div class="clock"><b class="mono">15:20</b><span>8/22(토) 2일차</span></div>
+  </div>
+  <nav role="tablist">
+    <button role="tab" aria-selected="false">회의록</button>
+    <button role="tab" aria-selected="false">준비 단계</button>
+    <button role="tab" aria-selected="true">수련회 진행</button>
+    <button role="tab" aria-selected="false">재정</button>
+  </nav>
+</header>
+
+<div class="days" id="days"></div>
+
+<div class="wrap">
+  <div class="rail" id="rail"></div>
+  <div class="detail" id="detail"></div>
+</div>
+
+<script>
+/* ── 총무팀 파트 (실제 시간표의 열 구성) ── */
+const PARTS={
+  행정:'#2F4858', 현장관리:'#4A8A5C', 비품:'#C0782F',
+  음식:'#B44B42', 재정:'#8A6A4F', 교역자:'#7A5BA6',
+  헤브론:'#4A8A5C', 코람데오:'#B44B42', 전체:'#77848F'
+};
+const NOW='15:20', TODAY='d2';
+
+/* ── 실제 일정표(본시간표·봉사자 시간표·일자별 총무팀 시트) 기반 ── */
+const DAYS=[
+ {id:'d0',label:'8/20(목)',sub:'선발대'},
+ {id:'d1',label:'8/21(금)',sub:'1일차'},
+ {id:'d2',label:'8/22(토)',sub:'2일차'},
+ {id:'d3',label:'8/23(일)',sub:'폐회'},
+];
+
+const PGM={
+d0:[
+ {t:'09:30',n:'본당 집합',who:'총무팀',pre:[],mid:[],post:[]},
+ {t:'10:00',n:'짐 정리 · 패킹',who:'총무팀 전체',loc:'본당',
+  pre:[['행정','하람','비품리스트 확인 후 총무팀 전체 짐 취합'],
+       ['비품','도현','침례짐(침례복·침례탕) 패킹'],
+       ['비품','서윤','성찬기 패킹']],
+  mid:[['비품','전체','박스 상단에 패킹 목록·번호 작성 (예: 2/8)']],
+  post:[['행정','민준M','패킹 목록 사진 촬영해 공유']]},
+ {t:'12:00',n:'수련회장 이동',who:'자차 + 봉고',pre:[['행정','하람','선발대 인원 최종 확인']],mid:[],post:[]},
+ {t:'13:00',n:'짐 하차',who:'전체',loc:'수련회장',
+  pre:[],
+  mid:[['현장관리','시우','장소 사진 촬영 (원상복구용) — 진행실·창고1'],
+       ['현장관리','서윤','강대상 물 놓을 공간 확인 (없으면 협탁)'],
+       ['현장관리','하람','본부 옆 창고1 원형테이블·의자 빼놓기'],
+       ['현장관리','하람','창고1에 봉사팀 짐 적재 안내'],
+       ['비품','서윤','총무팀 짐 강당 우측 뒤 임시 배치 후 재배치']],
+  post:[['행정','민준M','선발대 숙소 배치 (10인실 4개 · 남2 여2)']]},
+ {t:'14:00',n:'음향 및 무대 설치',who:'헤브론 · 코람데오',dur:'3.5h',
+  pre:[['현장관리','전체','강당 의자 세팅 (전체)'],
+       ['행정','민준M','본부 세팅 — 카드키, 릴선, 멀티탭'],
+       ['비품','준서','비품 정리']],
+  mid:[],post:[]},
+ {t:'18:00',n:'저녁식사',who:'총무팀',time:'17:30~18:30',
+  pre:[['비품','하람','식수계수 — 시설 측 계수방법 확인 (식판/사람)']],
+  mid:[],
+  post:[['현장관리','전체','헌금함 설치 · 포토존 설치 · 방석 강당 뒤 적재'],
+        ['비품','서윤','헤브론 포토월 자리 확인']]},
+ {t:'20:00',n:'수련회 리허설',who:'전체',dur:'3h',pre:[],mid:[],post:[]},
+ {t:'21:00',n:'개기자 미팅',who:'건우',
+  pre:[['행정','민준M','등록·관리자 페이지·푸시 전송 교육 (하윤M 대상)']],mid:[],post:[]},
+ {t:'22:00',n:'영수증 정리 · 정산 업데이트',who:'재정',
+  pre:[],mid:[['재정','준서','당일 영수증 취합 및 정산 시트 반영']],post:[]},
+],
+d1:[
+ {t:'08:00',n:'아침식사',who:'총무팀',time:'배식 08:00~09:00',
+  pre:[['비품','서윤','식수계수']],mid:[],post:[]},
+ {t:'09:00',n:'퇴실 준비',who:'봉사자',
+  pre:[],mid:[['현장관리','전체','퇴실 숙소 상태 확인 및 점검'],['비품','서윤','물 세팅']],post:[]},
+ {t:'10:00',n:'봉사자 예배',who:'한지훈 목사',loc:'강당',
+  pre:[['행정','전체','봉사자 식사 빠르게 마치도록 공지']],
+  mid:[['비품','온','인원계수']],post:[]},
+ {t:'11:30',n:'점심식사',who:'총무팀',time:'배식 11:30~12:30',
+  pre:[['행정','민준','카드키 배부 받기 확인'],['비품','온','식수계수']],
+  mid:[],
+  post:[['비품','다은·온·시우','웰컴키트 방마다 배치'],
+        ['현장관리','전체','각 층 엘리베이터 주의사항·카드키 안내 부착'],
+        ['현장관리','서윤·나윤','1층 X배너·방명록·짐 두는 곳·포토존 안내문 설치'],
+        ['현장관리','서윤·나윤','강당 Belong FM 진행자 자리 세팅 · 의자 정렬'],
+        ['행정','준서·하람','새가족팀 세팅 — X배너·테이블·의자·접견실(6인)·다과']]},
+ {t:'14:00',n:'Belong FM',who:'도현M',loc:'강당',
+  pre:[['행정','민준','롤링배너 교체'],['헤브론','건우','팟캐스트 장비 준비']],
+  mid:[['비품','온','인원계수']],
+  post:[['현장관리','서윤','진행자 자리 원복']]},
+ {t:'15:00',n:'오리엔테이션',who:'하윤M',loc:'강당',
+  pre:[['행정','민준M','방 인원 명단 출력 (현장 변동 가능성 있음)'],
+       ['행정','민준M','기도실·유아실 세팅 — 노트북·HDMI·블루투스 스피커·빔프로젝터']],
+  mid:[['행정','다은','등록 안내'],['행정','서윤','등록 안 한 사람 확인'],
+       ['재정','준서','회비 안 낸 사람 확인'],['행정','건우','회원가입 안 한 사람 확인'],
+       ['비품','나윤·하람·온','명찰 배부'],['교역자','하윤M','당첨자 명단 확인'],
+       ['현장관리','예솔M','인원 숙소 인솔']],
+  post:[]},
+ {t:'16:00',n:'등록 / 입실',who:'총무팀',time:'숙소입실 15:00부터',
+  pre:[],mid:[['비품','온','인원계수']],post:[]},
+ {t:'17:00',n:'저녁식사',who:'총무팀',time:'배식 17:00~18:00',
+  pre:[['비품','서윤','식수계수']],mid:[],post:[]},
+ {t:'18:00',n:'집회1 준비',who:'헤브론 · 코람데오',
+  pre:[['코람데오','전체','리허설 시작 (18:00)'],['헤브론','건우','송출 시작 · 18:50 스탠바이']],
+  mid:[],post:[]},
+ {t:'19:00',n:'집회1',who:'오세영 목사',loc:'강당',
+  pre:[['교역자','도현M','외부강사 영접 및 대기실 안내 (차량 21수4532)'],
+       ['교역자','예린M','새친구 힐링30 인솔'],
+       ['재정','준서','헌금함 설치 — 상시간식 옆']],
+  mid:[['비품','온','인원계수'],['행정','민준M·준서','본부 대기']],
+  post:[['재정','준서','헌금 계수 및 기록'],['재정','준서','강사 사례비 전달']]},
+ {t:'21:00',n:'기도회1',who:'최도현M',loc:'강당',pre:[],mid:[],post:[]},
+ {t:'23:00',n:'광고',who:'민준M',pre:[],mid:[],post:[
+   ['재정','준서','영수증 정리 / 정산 업데이트']]},
+],
+d2:[
+ {t:'06:00',n:'침묵기도 · 새벽기도',who:'백목·소율M',free:1,loc:'산책로 · 세미나실',
+  pre:[['현장관리','하윤','자율 참여 안내 게시']],mid:[],post:[]},
+ {t:'07:00',n:'기상 & 준비',free:1,who:'전체',pre:[],mid:[],post:[]},
+ {t:'08:00',n:'아침식사',who:'총무팀',time:'배식 08:00~09:00',
+  pre:[['비품','서윤','식수계수'],['음식','서윤·나윤','다과 세팅']],
+  mid:[['비품','하람','인원계수']],
+  post:[['재정','준서','식수 최종 집계 → 정산 반영']]},
+ {t:'09:00',n:'휴식',free:1,who:'—',pre:[],mid:[],post:[]},
+ {t:'11:30',n:'점심식사',who:'총무팀',time:'배식 11:30~12:30',
+  pre:[['비품','온','식수계수']],mid:[['비품','온','인원계수']],post:[]},
+ {t:'13:00',n:'특강 — 관계 중독',who:'임채원 목사',loc:'강당',
+  pre:[['교역자','하윤','정 진행 준비'],['교역자','미르','부 진행 준비'],
+       ['교역자','예린M','새친구 힐링30 인솔'],
+       ['헤브론','건우','강당 송출 준비']],
+  mid:[['비품','온','인원계수'],['행정','민준M·준서','본부 대기']],
+  post:[]},
+ {t:'14:00',n:'Belong FM',who:'도현M',loc:'강당',
+  pre:[['현장관리','서윤·나윤','진행자 자리 세팅 · 의자 정렬'],
+       ['행정','민준','롤링배너 교체']],
+  mid:[['비품','온','인원계수']],
+  post:[['현장관리','서윤','자리 원복']]},
+ {t:'15:00',n:'중그룹 나눔 GBS',who:'하윤M',loc:'강당 & 힐링45',
+  pre:[['행정','총무팀','GBS 나눔지 준비 · 자리 세팅'],
+       ['현장관리','하람','힐링45 세팅'],
+       ['교역자','예린M','새친구 힐링30 인솔']],
+  mid:[['행정','다은','리딩자 문의 대응'],['비품','온','인원계수']],
+  post:[['행정','서윤','나눔지 회수 및 취합']]},
+ {t:'16:00',n:'침례',who:'최도현M',loc:'3층 발코니',
+  pre:[['현장관리','하람','침례탕 설치 및 수온 확인'],
+       ['비품','서윤','침례복 준비 및 배부'],
+       ['행정','민준M','침례 인원 최종 명단 확인 (선교사회 전달본)'],
+       ['현장관리','시우','3층 발코니 동선 통제 안내'],
+       ['교역자','도현M','사진스탭·목사님·총무스탭 배치']],
+  mid:[['현장관리','시우','순서 안내 및 대기 통제'],
+       ['헤브론','건우','촬영'],
+       ['비품','다은','수건·환복 공간 안내']],
+  post:[['현장관리','하람','침례탕 배수 및 정리'],
+        ['비품','서윤','침례복 회수 · 세탁 분류'],
+        ['헤브론','건우','사진 원본 취합']]},
+ {t:'17:00',n:'저녁식사',who:'총무팀',time:'배식 17:00~18:30',
+  pre:[['비품','서윤','식수계수']],mid:[],post:[]},
+ {t:'18:00',n:'집회2 준비',who:'헤브론 · 코람데오',
+  pre:[['코람데오','전체','리허설 시작 (18:00)'],
+       ['헤브론','건우','송출 시작 · 18:50 스탠바이']],
+  mid:[],post:[]},
+ {t:'19:00',n:'집회2',who:'신태호 목사',loc:'강당',
+  pre:[['교역자','도현M','외부강사 영접 및 대기실 안내'],
+       ['교역자','예린M','새친구 힐링30 인솔'],
+       ['현장관리','서윤·나윤','강당 의자 정렬'],
+       ['재정','준서','헌금함 설치 — 상시간식 옆']],
+  mid:[['비품','온','인원계수'],['행정','민준M·준서','본부 대기'],
+       ['재정','준서','헌금 수거']],
+  post:[['재정','준서','헌금 계수 및 기록'],
+        ['재정','준서','강사 사례비 전달'],
+        ['현장관리','서윤','의자 재정렬']]},
+ {t:'21:00',n:'기도회2',who:'박민준M',loc:'강당',pre:[],mid:[],post:[]},
+ {t:'23:00',n:'성찬 리허설',who:'최도현M',
+  pre:[['비품','서윤','성찬기 준비 및 세팅']],mid:[],post:[]},
+ {t:'00:00',n:'광고 · 야식',who:'민준M',
+  pre:[['음식','나윤','야식 세팅']],mid:[],
+  post:[['재정','준서','영수증 정리 / 정산 업데이트']]},
+],
+d3:[
+ {t:'08:00',n:'아침식사',who:'총무팀',time:'숙소퇴실 10:00까지',
+  pre:[['비품','서윤','식수계수']],
+  mid:[['현장관리','전체','퇴실 숙소 상태 점검']],post:[]},
+ {t:'09:00',n:'골든벨',who:'예솔 · 하윤M',loc:'강당',
+  pre:[['헤브론','건우','골든벨 준비 (담당M·헤브론·총무팀)'],
+       ['현장관리','하람','강당 의자 재배치']],
+  mid:[['비품','온','인원계수']],post:[]},
+ {t:'10:00',n:'숙소 퇴실 & 강당 이동',who:'총무팀',
+  pre:[],mid:[['현장관리','전체','객실 최종 점검 · 분실물 확인'],
+              ['비품','서윤','카드키 회수']],post:[]},
+ {t:'10:00',n:'폐회 예배 · 성찬',who:'한지훈 목사 · 도현M',loc:'강당',
+  pre:[['비품','서윤','성찬기 세팅'],['교역자','도현M','성찬 진행 준비'],
+       ['재정','준서','헌금함 입구 간이테이블 설치']],
+  mid:[['비품','온','인원계수'],['재정','준서','헌금 수거']],
+  post:[['재정','준서','헌금 계수 및 기록'],['비품','서윤','성찬기 회수 및 세척']]},
+ {t:'11:00',n:'단체사진',who:'태윤M',loc:'강당',
+  pre:[['현장관리','전체','강당 앞 정렬 안내']],
+  mid:[['헤브론','건우','촬영']],post:[]},
+ {t:'11:30',n:'점심식사',who:'총무팀',time:'배식 11:30~12:30',
+  pre:[['비품','온','식수계수']],mid:[],
+  post:[['현장관리','전체','복귀 짐 패킹 · 상차'],
+        ['현장관리','시우','원상복구 확인 (20일 촬영 사진 대조)']]},
+ {t:'12:00',n:'광고',who:'하윤M',pre:[],mid:[],post:[]},
+ {t:'13:00',n:'복귀 이동 · 하차',who:'전체',
+  pre:[],mid:[],
+  post:[['재정','준서','최종 영수증 취합'],
+        ['비품','서윤','비품 반납 및 재고 정리']]},
+],
+};
+
+/* ── 상태 ── */
+let day=TODAY, part='전체', sel=0;
+const doneKey=(d,i,ph,k)=>`${d}|${i}|${ph}|${k}`;
+const done=new Set();
+/* 데모: 지난 프로그램은 완료 처리 */
+(function seed(){
+  ['d0','d1'].forEach(d=>PGM[d].forEach((p,i)=>['pre','mid','post'].forEach(ph=>
+    (p[ph]||[]).forEach((_,k)=>done.add(doneKey(d,i,ph,k))))));
+  PGM.d2.forEach((p,i)=>{if(p.t<'15:00')['pre','mid','post'].forEach(ph=>
+    (p[ph]||[]).forEach((_,k)=>done.add(doneKey('d2',i,ph,k))))});
+  // 진행 중인 GBS: 준비는 끝, 진행 일부만
+  done.add(doneKey('d2',7,'pre',0));done.add(doneKey('d2',7,'pre',1));
+  done.add(doneKey('d2',7,'pre',2));done.add(doneKey('d2',7,'mid',1));
+})();
+
+const cnt=(d,i)=>{const p=PGM[d][i];let t=0,c=0;
+  ['pre','mid','post'].forEach(ph=>(p[ph]||[]).forEach((_,k)=>{t++;if(done.has(doneKey(d,i,ph,k)))c++}));
+  return[c,t]};
+const state=(d,i)=>{const p=PGM[d][i];
+  if(d<TODAY)return'done'; if(d>TODAY)return'todo';
+  const nx=PGM[d][i+1];
+  if(nx&&nx.t<=NOW)return'done'; if(p.t<=NOW)return'live'; return'todo'};
+
+/* ── 날짜 스트립 ── */
+function renderDays(){
+  const el=document.getElementById('days');
+  let done_=0,tot=0;PGM[day].forEach((_,i)=>{const[c,t]=cnt(day,i);done_+=c;tot+=t});
+  el.innerHTML=DAYS.map(d=>
+    `<button data-d="${d.id}" aria-selected="${d.id===day}">${d.label}<i>${d.sub}</i></button>`).join('')
+    +`<div class="prog">오늘 진행률<div class="bar"><i style="width:${tot?done_/tot*100:0}%"></i></div>
+      <b>${done_}/${tot}</b></div>`;
+  el.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{day=b.dataset.d;sel=0;renderAll()});
+}
+
+/* ── 좌측 프로그램 목록 ── */
+function renderRail(){
+  const el=document.getElementById('rail');let h='',put=day===TODAY;
+  PGM[day].forEach((p,i)=>{
+    if(put&&p.t>NOW){h+=`<div class="nowline"><b>NOW ${NOW}</b></div>`;put=false}
+    const st=state(day,i),[c,t]=cnt(day,i);
+    h+=`<div class="pgm ${st}${p.free?' free':''}" data-i="${i}" aria-current="${i===sel}">
+      <span class="t">${p.t}</span>
+      <span class="b"><span class="nm">${p.n}</span>
+        <span class="sub">${[p.who,p.loc,p.time].filter(Boolean).join(' · ')}</span></span>
+      ${t?`<span class="ct">${c}/${t}</span>`:''}</div>`});
+  if(put)h+=`<div class="nowline"><b>NOW ${NOW}</b></div>`;
+  el.innerHTML=h;
+  el.querySelectorAll('[data-i]').forEach(d=>d.onclick=()=>{sel=+d.dataset.i;renderAll()});
+}
+
+/* ── 상세: 전 / 중 / 후 ── */
+const PH=[['pre','준비','전','#5B8C7E','프로그램 시작 전에 끝나 있어야 하는 것'],
+          ['mid','진행','중','#C8442E','프로그램이 도는 동안 챙길 것'],
+          ['post','정리','후','#4A544F','끝나고 반드시 처리할 것']];
+function renderDetail(){
+  const p=PGM[day][sel],el=document.getElementById('detail'),st=state(day,sel);
+  const parts=[...new Set(['pre','mid','post'].flatMap(ph=>(p[ph]||[]).map(r=>r[0])))];
+  let h=`<div class="dh"><h1>${p.n}</h1><span class="when">${p.t}${p.dur?' · '+p.dur:''}</span></div>
+    <div class="dmeta">
+      ${p.who?`<span><b>담당</b>${p.who}</span>`:''}
+      ${p.loc?`<span><b>장소</b>${p.loc}</span>`:''}
+      ${p.time?`<span><b>운영</b>${p.time}</span>`:''}
+      <span><b>상태</b>${st==='live'?'진행 중':st==='done'?'지남':'예정'}</span></div>`;
+
+  if(st==='live')h+=`<div class="note"><b>지금 진행 중입니다.</b> 아래 <b>진행</b> 항목을 먼저 확인하세요.
+    끝나면 <b>정리</b> 항목이 다음 프로그램 준비와 겹치지 않도록 바로 처리해야 합니다.</div>`;
+
+  h+=`<div class="filters">
+    <button data-p="전체" aria-pressed="${part==='전체'}">전체</button>`
+    +parts.map(k=>`<button data-p="${k}" aria-pressed="${part===k}">
+        <i style="background:${PARTS[k]||'#888'}"></i>${k}</button>`).join('')+`</div>`;
+
+  PH.forEach(([key,name,tag,color,hint])=>{
+    const rows=p[key]||[];
+    const vis=rows.filter(r=>part==='전체'||r[0]===part);
+    const c=rows.filter((_,k)=>done.has(doneKey(day,sel,key,k))).length;
+    h+=`<div class="phase"><div class="ph-h">
+      <h2><span class="tag" style="background:${color}">${tag}</span>${name}</h2>
+      <span class="hint">${hint}</span><span class="n">${c}/${rows.length}</span></div>`;
+    if(!rows.length)h+=`<div class="empty">등록된 항목이 없습니다.</div>`;
+    else if(!vis.length)h+=`<div class="empty">${part} 파트가 맡은 항목이 없습니다.</div>`;
+    else rows.forEach((r,k)=>{
+      if(part!=='전체'&&r[0]!==part)return;
+      const on=done.has(doneKey(day,sel,key,k));
+      const late=st==='live'&&key==='pre'&&!on;
+      h+=`<div class="item${on?' on':''}" data-k="${key}|${k}">
+        <span class="box"></span><span class="txt">${r[2]}</span>
+        ${late?'<span class="flag">지연</span>':''}
+        <span class="who"><span class="part" style="background:${PARTS[r[0]]||'#888'}">${r[0]}</span>
+        <span class="as">${r[1]}</span></span></div>`});
+    h+=`</div>`});
+  el.innerHTML=h;
+  el.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{part=b.dataset.p;renderDetail()});
+  el.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>{
+    const[ph,k]=d.dataset.k.split('|'),key=doneKey(day,sel,ph,+k);
+    done.has(key)?done.delete(key):done.add(key);renderAll()});
+}
+function renderAll(){renderDays();renderRail();renderDetail();
+  const cur=document.querySelector('.pgm[aria-current=true]');
+  if(cur)cur.scrollIntoView({block:'nearest'})}
+renderAll();
+/* 진행 중인 프로그램으로 시작 */
+(function(){const i=PGM[day].findIndex((_,i)=>state(day,i)==='live');
+  if(i>=0){sel=i;renderAll();document.querySelector('.pgm[aria-current=true]')
+    ?.scrollIntoView({block:'center'})}})();
+</script>
+</body>
+</html>

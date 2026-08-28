@@ -1,0 +1,131 @@
+{% extends "retreat_base.html" %}
+{% block title %}준비 단계 · {{ retreat.name }}{% endblock %}
+
+{% block body %}
+<div class="toolbar">
+  <div class="ctl">
+    <label for="me">내 소속</label>
+    <select id="me">
+      <option value="all">전체</option>
+      {% for dept in board.departments %}
+      <option value="{{ dept.key }}" {% if dept.key == my_department_key %}selected{% endif %}>{{ dept.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <label class="tog"><input type="checkbox" id="opT"> 미완료만</label>
+  <button class="fchip" id="fchip" hidden></button>
+  <span class="mono" style="font-size:12.5px;color:var(--ink-3)">
+    {{ board.done }}/{{ board.total }} 완료{% if board.late %} · 지연 {{ board.late }}건{% endif %}
+  </span>
+  <div class="legend">
+    <span class="lg"><i class="k-main"></i>Main</span>
+    <span class="lg"><i class="k-sub"></i>하위</span>
+    <span class="lg"><i class="k-sch"></i>일정</span>
+    <span class="lg"><i class="k-done"></i>완료</span>
+    <span class="lg"><i class="k-gh"></i>관련업무</span>
+    <span class="lg"><i class="k-lit"></i>연결선</span>
+  </div>
+</div>
+
+{% macro bar(row) -%}
+<div class="bar {{ 'sch' if row.kind == 'schedule' else ('s' if row.depth else 'm') }}
+            {{ 'ghost' if row.ghost else row.status }}"
+     style="grid-column:{{ row.col_start }}/{{ row.col_end }};background:{{ row.background }};border-color:{{ row.border }}"
+     tabindex="0" data-run="{{ row.run_id }}"{% if row.ghost %} data-ghost="1"{% endif %}>
+  {%- if row.status == '지연' and not row.ghost %}<span class="flag">지연</span>{% endif -%}
+  <span class="txt">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
+</div>
+{%- endmacro %}
+
+{% macro task_row(row, dept) -%}
+<div class="row {{ 'sub' if row.depth or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}"
+     data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
+     data-status="{{ row.status }}"
+     style="--teamt:{{ dept.team_tint }};--rowt:{{ dept.row_tint }};--lct:{{ dept.label_tint }}">
+  <div class="lc" data-go="{{ row.run_id }}">
+    <span class="nm">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
+    {%- if row.ghost %}
+    <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>
+    {%- endif %}
+    <span class="mdate"><i style="background:{{ row.border }}"></i>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
+  </div>
+  <div class="lane">
+    {{ bar(row) }}
+  </div>
+</div>
+{%- endmacro %}
+
+<div class="board" id="board">
+  <div class="sheet" id="sheet" style="--grid:{{ board.grid }}">
+    <svg id="wires"></svg>
+
+    <div class="row head">
+      <div class="hlbl"><b>부서 · 업무</b><span>Main ▸ 하위 ▸ 관련업무</span></div>
+      {% for cell in board.headers %}
+      <div class="hc {{ cell.kind if cell.kind != 'week' else '' }}{{ ' shift' if cell.shift }}{{ ' rt' if cell.kind == 'retreat' }}"
+           data-cs="{{ cell.start }}" data-ce="{{ cell.end }}" data-lb="{{ cell.label }}">
+        <span class="dw">{{ cell.top }}</span><span class="dt">{{ cell.bottom }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% for dept in board.departments %}
+    <div class="row team" data-team="{{ dept.key }}"
+         style="--teamt:{{ dept.team_tint }};--rowt:{{ dept.row_tint }};--lct:{{ dept.label_tint }}">
+      <div class="lc">
+        <span class="caret">▼</span>
+        <span class="sw" style="background:{{ dept.color }}"></span>
+        <span class="nm">{{ dept.name }}</span>
+        <span class="ct">{{ dept.count }}건{% if dept.ghost_count %} +{{ dept.ghost_count }}{% endif %}</span>
+      </div>
+      <div class="cell" style="grid-column:2/-1"></div>
+    </div>
+    {% for row in dept.rows %}{{ task_row(row, dept) }}{% endfor %}
+    {% for row in dept.ghost_rows %}{{ task_row(row, dept) }}{% endfor %}
+    {% endfor %}
+  </div>
+</div>
+
+<div id="statmenu"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="grip" id="grip" title="드래그해서 폭 조절"></div>
+  <button class="dclose" id="dclose" aria-label="닫기">×</button>
+  <div class="dhead">
+    <div class="dkick" id="dkick"></div>
+    <div class="dtitle" id="dtitle"></div>
+    <dl class="dmeta" id="dmeta"></dl>
+    <div class="dtabs" id="dtabs">
+      <button data-p="log" aria-selected="true">논의 내역</button>
+      <button data-p="cal" aria-selected="false">달력</button>
+      <button data-p="rel" aria-selected="false">연결된 업무<span class="n" id="relN"></span></button>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="pane on" id="p-log">
+      <div class="log" id="dlog"></div>
+      <div id="dnote"></div>
+      <div class="addlog" id="daddlog" hidden>
+        <textarea id="dbody" placeholder="논의 내용을 적으면 기록으로 남습니다. 이전 기록은 지워지지 않습니다."></textarea>
+        <label class="opt"><input type="checkbox" id="dsuper"> 마지막 기록을 대체 (이전 내용에 취소선)</label>
+        <button id="dsave">논의 추가</button>
+      </div>
+    </div>
+    <div class="pane" id="p-cal">
+      <div class="cal" id="dcal"></div>
+      <div class="callegend">
+        <div><i style="background:var(--link)"></i>시작일 · 마감일</div>
+        <div><i style="background:#E7EEF9;border:1px solid #B9CFEE"></i>진행 기간</div>
+        <div><i style="background:#FBE9E5;border:1px solid var(--now)"></i>지연</div>
+        <div><i style="background:none;border:1px solid var(--rule-2)"></i>· 점 = 연결된 업무 일정</div>
+      </div>
+    </div>
+    <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+  </div>
+</aside>
+{% endblock %}
+
+{% block scripts %}
+<script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
+<script src="/static/js/board.js?v=1" defer></script>
+{% endblock %}

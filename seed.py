@@ -16,6 +16,8 @@ import zlib
 from sqlalchemy import select
 
 import seed_data as D
+import seed_library
+import seed_library_data as L
 from app.config import ASSET_DIR
 from app.db import Base, SessionLocal, engine, init_db
 from app.domain.meal import calculate_meal_settlement
@@ -36,6 +38,24 @@ from app.models import (
     Task,
     User,
 )
+
+
+LEGACY_DEPARTMENTS = {
+    "총무M": "chongmuM",
+    "행정": "chongmu",
+    "현장관리": "chongmu",
+    "비품": "chongmu",
+    "음식": "chongmu",
+    "교역자": "chongmu",
+    "봉사팀공통": "chongmu",
+    "재정": "jaejeong",
+    "선교사회": "seongyo",
+    "스케치": "sketch",
+    "헤브론": "hebron",
+    "코람데오": "koram",
+    "개기자": "gaegija",
+    "새친구팀": "saechingu",
+}
 
 
 # ---------------------------------------------------------------- 데모 파일 생성
@@ -106,15 +126,21 @@ def seed() -> None:
         db.add(retreat)
         db.flush()
 
-        # 부서
-        depts: dict[str, Department] = {}
-        for order, (name, color) in enumerate(D.DEPARTMENTS):
+        # 부서 — CLAUDE.md 2장의 9개. 봉사팀 공통은 해체됐다.
+        by_key: dict[str, Department] = {}
+        for order, (key, name, color) in enumerate(L.DEPARTMENTS):
             dept = Department(
-                retreat_id=retreat.id, name=name, color_tag=color, sort_order=order
+                retreat_id=retreat.id, key=key, name=name, color_tag=color, sort_order=order
             )
             db.add(dept)
             db.flush()
-            depts[name] = dept
+            by_key[key] = dept
+
+        # 기존 시트/노션의 팀 이름 → 새 부서.
+        # 행정·현장관리·비품·음식·교역자는 부서가 아니라 총무팀 안의 '파트'다.
+        depts: dict[str, Department] = {
+            legacy: by_key[key] for legacy, key in LEGACY_DEPARTMENTS.items()
+        }
 
         # 사용자
         users: dict[str, User] = {}
@@ -389,8 +415,12 @@ def seed() -> None:
 
         db.commit()
 
+        # 업무 라이브러리 + 지난 회차 실행 이력 (준비 단계 보드 · 세팅 마법사)
+        seed_library.seed_all(db, retreat)
+
     print(f"'{D.RETREAT_NAME}' 데이터를 만들었습니다.")
-    print(f"  부서 {len(D.DEPARTMENTS)}개 · 사용자 {len(D.USERS)}명")
+    print(f"  부서 {len(L.DEPARTMENTS)}개 · 사용자 {len(D.USERS) + len(seed_library.EXTRA_USERS)}명")
+    print(f"  업무 라이브러리 {len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 · 지난 회차 {len(L.PAST_RETREATS)}개")
     print(f"  일정 {len(D.SCHEDULE_DAYS)}일차 / 총 {sum(len(d['items']) for d in D.SCHEDULE_DAYS)}건")
     print(f"  할 일 {len(D.TASKS)}건 · 체크리스트 {len(D.CHECKLISTS)}개 · 회의록 {len(D.MEETINGS)}건")
     print(f"  지출 {len(D.MEAL_EXPENSES) + len(D.GENERAL_EXPENSES)}건")

@@ -280,7 +280,7 @@ def test_지출을_등록하면_예산_진행률에_바로_반영된다(admin_cl
     assert "33.3" in budget_page.text  # 100,000 / 300,000
     assert "200,000" in budget_page.text  # 잔액
 
-    dashboard = admin_client.get("/")
+    dashboard = admin_client.get("/dashboard")
     assert "100,000" in dashboard.text
 
 

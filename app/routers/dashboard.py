@@ -61,7 +61,8 @@ def more_menu(
     )
 
 
-@router.get("/")
+# 새 준비 단계 보드가 홈이 됐다. 기존 대시보드는 /dashboard 로 옮겼다.
+@router.get("/dashboard")
 def dashboard(
     request: Request,
     db: Session = Depends(get_db),

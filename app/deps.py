@@ -31,7 +31,13 @@ def resolve_retreat(db: Session, user: User, retreat_id: int | None) -> Retreat 
         if retreat is not None:
             return retreat
 
-    return db.scalars(select(Retreat).order_by(Retreat.id.desc())).first()
+    # 보관 처리되지 않은 회차 중 개회일이 가장 늦은 것 = 지금 준비 중인 회차
+    live = db.scalars(
+        select(Retreat).where(~Retreat.is_archived).order_by(Retreat.start_date.desc())
+    ).first()
+    if live is not None:
+        return live
+    return db.scalars(select(Retreat).order_by(Retreat.start_date.desc())).first()
 
 
 def remember_retreat(db: Session, user: User, retreat: Retreat) -> None:
@@ -88,4 +94,4 @@ def log_activity(
 
 
 def all_retreats(db: Session) -> list[Retreat]:
-    return list(db.scalars(select(Retreat).order_by(Retreat.id.desc())))
+    return list(db.scalars(select(Retreat).order_by(Retreat.start_date.desc())))

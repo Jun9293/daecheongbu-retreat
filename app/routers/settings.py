@@ -135,11 +135,19 @@ def update_retreat(
         "name": retreat.name,
         "meal_subsidy_per_person": retreat.meal_subsidy_per_person,
     }
+    old_open = retreat.start_date
     retreat.name = name.strip()
     retreat.start_date = _parse_date(start_date)
     retreat.end_date = _parse_date(end_date)
     retreat.meal_subsidy_per_person = max(0, meal_subsidy_per_person)
     db.commit()
+
+    # 개회일이 바뀌면 준비 업무 날짜가 D-주차를 유지한 채 함께 이동한다
+    moved = 0
+    if retreat.start_date != old_open:
+        from app.domain.library import reschedule
+
+        moved = reschedule(db, retreat)
     log_activity(
         db,
         retreat_id=retreat.id,
@@ -156,7 +164,11 @@ def update_retreat(
     )
     return redirect(
         f"/settings?retreat_id={retreat.id}",
-        message="회차 설정을 저장했습니다. (식대 상한은 앞으로 등록되는 지출에 적용됩니다)",
+        message=(
+            f"회차 설정을 저장했습니다. 개회일이 바뀌어 준비 업무 {moved}건의 날짜를 옮겼습니다."
+            if moved
+            else "회차 설정을 저장했습니다. (식대 상한은 앞으로 등록되는 지출에 적용됩니다)"
+        ),
     )
 
 

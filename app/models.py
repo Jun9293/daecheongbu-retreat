@@ -22,6 +22,13 @@ from app.db import Base
 
 TASK_STATUSES = ("대기", "진행중", "피드백요청", "완료", "지연")
 
+# 준비 단계 보드의 업무 분류 (CLAUDE.md 4-2)
+TASK_KINDS = ("main", "sub", "schedule")
+TASK_KIND_LABELS = {"main": "Main", "sub": "하위", "schedule": "일정"}
+
+# 보드에서 쓰는 상태 (TASK_STATUSES 중 '피드백요청'을 뺀 4개)
+RUN_STATUSES = ("대기", "진행중", "완료", "지연")
+
 
 def _now() -> dt.datetime:
     return dt.datetime.now(dt.UTC).replace(tzinfo=None)
@@ -71,11 +78,18 @@ class Department(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    # 회차가 바뀌어도 같은 부서임을 알아보기 위한 영속 식별자 (chongmuM, sketch ...).
+    # 라이브러리 업무는 부서를 이 키로 가리킨다.
+    key: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
     color_tag: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     retreat: Mapped[Retreat] = relationship(back_populates="departments")
+
+    @property
+    def color(self) -> str:
+        return self.color_tag or "#69726D"
 
 
 class User(Base):
@@ -546,3 +560,130 @@ class MeetingItem(Base):
     department: Mapped[Department | None] = relationship()
     assignee: Mapped[User | None] = relationship()
     converted_task: Mapped[Task | None] = relationship()
+
+
+# ==========================================================================
+# 준비 단계 보드 — 업무 라이브러리(영속) + 회차별 실행 기록
+# CLAUDE.md 6-1: TaskLibrary ──< TaskRun >── Retreat
+# ==========================================================================
+
+
+class TaskLibrary(Base):
+    """회차에 속하지 않고 계속 남는 업무 정의.
+
+    이번 회차에 하지 않아도 삭제하지 않는다. 실행 여부는 TaskRun.included 로만
+    기록한다 — 그 기록이 다음 회차의 자동 분류 입력값이 된다.
+    """
+
+    __tablename__ = "task_library"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="main")  # main|sub|schedule
+    parent_library_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_library.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # 담당 부서는 회차마다 새로 만들어지므로 영속 키로 가리킨다
+    default_department_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # 관련팀 (보드에서 점선 고스트 바로 나타날 부서들)
+    related_department_keys: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+    # 업무 간 연결 (양방향으로 저장한다)
+    related_library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+
+    # ── 날짜의 상대 위치 (CLAUDE.md 6-4) ───────────────────────────────
+    # anchor='week' → D-주차 일요일 기준 / 'open' → 개회일 기준
+    date_anchor: Mapped[str] = mapped_column(String(10), default="week")
+    default_d_week: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    default_offset_days: Mapped[int] = mapped_column(Integer, default=0)
+    default_span_days: Mapped[int] = mapped_column(Integer, default=0)
+
+    origin: Mapped[str] = mapped_column(String(20), default="history")  # history|claude_suggestion
+    suggestion_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 노션에서 옮기며 담당·분류를 바꾼 이유 (다음 담당자에게 남기는 기록)
+    reclassification_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    archived_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    parent: Mapped[TaskLibrary | None] = relationship(remote_side="TaskLibrary.id")
+    runs: Mapped[list[TaskRun]] = relationship(
+        back_populates="library", cascade="all, delete-orphan"
+    )
+
+    @property
+    def kind_label(self) -> str:
+        return TASK_KIND_LABELS.get(self.kind, self.kind)
+
+
+class TaskRun(Base):
+    """어떤 회차에서 그 업무를 실제로 어떻게 실행했는지."""
+
+    __tablename__ = "task_runs"
+    __table_args__ = (UniqueConstraint("library_id", "retreat_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    library_id: Mapped[int] = mapped_column(
+        ForeignKey("task_library.id", ondelete="CASCADE"), index=True
+    )
+    retreat_id: Mapped[int] = mapped_column(
+        ForeignKey("retreats.id", ondelete="CASCADE"), index=True
+    )
+    # False 여도 행을 지우지 않는다. "이번엔 하지 않았다"는 것도 기록이다.
+    included: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
+    assignee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    d_week: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="대기")
+    blocked_by_run_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    library: Mapped[TaskLibrary] = relationship(back_populates="runs")
+    retreat: Mapped[Retreat] = relationship()
+    department: Mapped[Department | None] = relationship()
+    assignee: Mapped[User | None] = relationship()
+    discussions: Mapped[list[DiscussionEntry]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="DiscussionEntry.authored_at, DiscussionEntry.id",
+    )
+
+    @property
+    def title(self) -> str:
+        return self.library.title
+
+
+class DiscussionEntry(Base):
+    """업무 하나에 쌓이는 논의 기록.
+
+    기존 내용을 지우지 않고, 바뀐 내용을 새 기록으로 붙인다(supersedes).
+    화면에서는 대체된 기록에 취소선이 그어진다 — 노션에서 쓰던 관례.
+    """
+
+    __tablename__ = "discussion_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("task_runs.id", ondelete="CASCADE"), index=True
+    )
+    authored_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    author_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    author_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    supersedes_entry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discussion_entries.id", ondelete="SET NULL"), nullable=True
+    )
+    # 이전 회차에서 참고용으로 따라온 기록 (기본은 접힌 상태로 보여준다)
+    carried_from_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    run: Mapped[TaskRun] = relationship(back_populates="discussions")

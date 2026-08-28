@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F2F4F3">
+  <title>{% block title %}대청부 수련회{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=1">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<header class="mast-wrap">
+  <div class="mast">
+    <div class="title">
+      {{ retreat.name if retreat else '대청부 수련회' }}
+      <em>· {{ page_subtitle }}</em>
+    </div>
+    {% if retreats and retreats|length > 1 %}
+    <select class="pick" aria-label="회차 선택"
+            onchange="location.href='?retreat_id='+this.value">
+      {% for r in retreats %}
+      <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <span class="whoami"><b>{{ user.name }}</b>
+      {{ ROLE_LABELS.get(user.role, user.role) }}{% if user.department %} · {{ user.department.name }}{% endif %}
+      · <a href="/settings">설정</a> · <a href="/logout">로그아웃</a></span>
+    {% if retreat and retreat.start_date %}
+    <div class="countdown">
+      <b class="mono">{{ retreat.start_date|dday }}</b>
+      <span>{{ retreat.start_date|kdate }} 개회</span>
+    </div>
+    {% endif %}
+  </div>
+  <nav class="tabs">
+    <a href="/meetings" {% if active_tab == 'meetings' %}aria-selected="true"{% endif %}>회의록</a>
+    <a href="/board" {% if active_tab == 'board' %}aria-selected="true"{% endif %}>준비 단계</a>
+    <a href="/schedule" {% if active_tab == 'live' %}aria-selected="true"{% endif %}>수련회 진행</a>
+    <a href="/budget" {% if active_tab == 'budget' %}aria-selected="true"{% endif %}>재정</a>
+    <span class="sp"></span>
+    {% if is_admin(user) %}<a class="new" href="/setup">새 회차 만들기</a>{% endif %}
+  </nav>
+</header>
+
+{% block body %}{% endblock %}
+
+{% if flash %}<div class="flash" role="status">{{ flash }}</div>{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

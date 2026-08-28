@@ -22,7 +22,7 @@ router = APIRouter()
 @router.get("/login")
 def login_page(request: Request, user: User | None = Depends(get_optional_user)):
     if user is not None:
-        return redirect("/")
+        return redirect("/board")
     return render(request, "login.html", {"step": "phone"})
 
 
@@ -120,7 +120,7 @@ def verify(
             status_code=403,
         )
 
-    response = redirect("/", message=f"{user.name}님, 환영합니다.")
+    response = redirect("/board", message=f"{user.name}님, 환영합니다.")
     set_session(response, user.id)
     return response
 
