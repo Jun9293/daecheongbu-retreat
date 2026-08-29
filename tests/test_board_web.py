@@ -228,8 +228,9 @@ def test_미리보기가_D주차와_명절_충돌을_계산한다(admin_client, 
 
     titles = {i["title"]: i for i in data["items"]}
     assert titles["포스터 제작"]["start"] == "2026-10-18"
-    # 이력이 한 회차뿐이므로 필수(최근 3회 전부)는 될 수 없다
-    assert titles["포스터 제작"]["classification"] == "추천"
+    # 이력이 한 회차뿐이면 "필수"라고 말하지 않는다 — 기록만큼만 표현한다
+    assert data["history_depth"] == 1
+    assert titles["포스터 제작"]["verdict"]["label"] == "지난 회차 실행"
 
 
 def test_회차를_만들면_보드가_채워지고_뺀_업무는_미실행으로_남는다(admin_client, board_data):
@@ -284,3 +285,116 @@ def test_폐회일이_개회일보다_빠르면_거부한다(admin_client, board
         },
     )
     assert response.status_code == 400
+
+
+# ---------------------------------------------------------------- 필수 지정
+
+
+def test_라이브러리_화면에서_필수를_지정할_수_있다(admin_client, board_data):
+    page = admin_client.get("/library")
+    assert page.status_code == 200
+    assert "포스터 제작" in page.text
+    assert "자동 분류의 근거는" in page.text or "실행 이력이" in page.text
+
+    with app_session() as db:
+        tshirt = models.TaskLibrary(
+            title="수련회 티셔츠 제작",
+            kind="main",
+            default_department_key="chongmuM",
+            related_department_keys=[],
+            related_library_ids=[],
+            date_anchor="week",
+            default_d_week=9,
+            default_offset_days=0,
+            default_span_days=0,
+        )
+        db.add(tshirt)
+        db.commit()
+        tshirt_id = tshirt.id
+
+    response = admin_client.post(
+        "/library/required/bulk", data={"library_ids": [tshirt_id]}, follow_redirects=False
+    )
+    assert response.status_code == 303
+    with app_session() as db:
+        assert db.get(models.TaskLibrary, tshirt_id).always_required is True
+
+
+def test_이력이_없어도_필수_지정이_경고를_만든다(admin_client, board_data):
+    """이 업무는 지난 회차에 실행되지 않아 자동으로는 경고 대상이 아니다."""
+    with app_session() as db:
+        never = models.TaskLibrary(
+            title="결산 보고서 본부 제출",
+            kind="main",
+            default_department_key="chongmuM",
+            related_department_keys=[],
+            related_library_ids=[],
+            date_anchor="week",
+            default_d_week=1,
+            default_offset_days=0,
+            default_span_days=0,
+            always_required=True,
+        )
+        db.add(never)
+        db.commit()
+
+    data = admin_client.post(
+        "/setup/preview", json={"open_date": "2027-01-15", "department_keys": ["chongmuM"]}
+    ).json()
+    row = next(i for i in data["items"] if i["title"] == "결산 보고서 본부 제출")
+    # 자동 판정은 "하지 않았다" 쪽인데도
+    assert row["verdict"]["label"] == "지난 회차 미실행"
+    assert row["verdict"]["required"] is False
+    # 수동 지정 때문에 경고 대상이 된다
+    assert row["always_required"] is True
+    assert row["required"] is True
+
+
+def test_부서_리더는_라이브러리를_고칠_수_없다(lead_client, board_data):
+    assert lead_client.get("/library").status_code == 403
+    assert lead_client.post("/library/required/bulk", data={}).status_code == 403
+
+
+# ---------------------------------------------------------------- 격자 좌표
+
+
+def test_바의_격자_좌표가_실제_날짜와_맞는다(admin_client, board_data):
+    """서브그리드는 열 인덱스가 한 칸 밀리기 쉽다 (CLAUDE.md 9장)."""
+    from app.domain import board as board_view
+
+    with app_session() as db:
+        retreat = db.get(models.Retreat, board_data["retreat_id"])
+        view = board_view.build(db, retreat)
+        axis = view["axis"]
+
+    # 세 지점: 주 단위 첫 칸 · 일 단위 전환 · 수련회 칸
+    assert axis.column_of(dt.date(2026, 5, 24)) == 1       # D-13주 일요일
+    assert axis.column_of(dt.date(2026, 5, 30)) == 1       # 같은 주는 같은 칸
+    assert axis.column_of(dt.date(2026, 8, 2)) == 11       # D-3주 = 마지막 주 단위 칸
+    assert axis.column_of(dt.date(2026, 8, 9)) == 12       # D-2주 일요일 = 일 단위 첫 칸
+    assert axis.column_of(dt.date(2026, 8, 10)) == 13      # 하루 = 한 칸
+    assert axis.column_of(dt.date(2026, 8, 20)) == 23      # 개회 전날
+    assert axis.column_of(dt.date(2026, 8, 21)) == 24      # 수련회 칸
+    assert axis.column_of(dt.date(2026, 8, 23)) == 24      # 폐회일도 같은 칸
+    assert axis.total == 24
+    assert axis.shift_index == 12                          # 굵은 세로선 위치
+
+
+# ---------------------------------------------------------------- 모바일
+
+
+def test_모바일_목록은_D주차_다음_부서로_묶인다(admin_client, board_data):
+    """폰에서는 "이번 주에 뭐가 있나"가 먼저 보여야 한다."""
+    from app.domain import board as board_view
+
+    with app_session() as db:
+        retreat = db.get(models.Retreat, board_data["retreat_id"])
+        groups = board_view.build(db, retreat)["mobile_groups"]
+
+    labels = [g["label"] for g in groups]
+    # 바깥 묶음은 D-주차, 이른 주차가 먼저
+    assert labels == ["D-13주 · 5/24 주", "D-11주 · 6/7 주", "D-2주 · 8/9 주"]
+    assert [r["title"] for r in groups[0]["rows"]] == ["포스터 제작"]
+    assert [r["title"] for r in groups[-1]["rows"]] == ["차량 신청"]
+    # 모든 실행 업무가 어느 묶음엔가 들어간다
+    assert sum(len(g["rows"]) for g in groups) == 3

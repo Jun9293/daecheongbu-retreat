@@ -71,11 +71,38 @@ def run(db, retreat, library, *, included=True, status="완료"):
     ],
 )
 def test_classification_comes_from_the_last_three_rounds(bits, expected):
-    assert lib.classify(bits, ever_run=True) == expected
+    assert lib.classify(bits).label == expected
 
 
-def test_a_task_never_run_is_a_suggestion():
-    assert lib.classify([False, False, False], ever_run=False) == lib.SUGGESTED
+def test_a_single_round_does_not_pretend_to_be_three():
+    """한 회차 기록으로 "최근 3회 모두 실행"이라고 말할 수는 없다."""
+    done = lib.classify([True])
+    skipped = lib.classify([False])
+    assert done.label == "지난 회차 실행"
+    assert skipped.label == "지난 회차 미실행"
+    assert done.required is True and done.default_on is True
+    assert skipped.required is False and skipped.default_on is False
+
+
+def test_two_rounds_say_two():
+    assert lib.classify([True, True]).label == "2회 모두 실행"
+    assert lib.classify([True, False]).label == "2회 중 1회"
+    assert lib.classify([False, False]).label == "2회 모두 미실행"
+    assert lib.classify([True, True]).required is True
+    assert lib.classify([True, False]).required is False
+
+
+def test_no_history_at_all():
+    verdict = lib.classify([])
+    assert verdict.label == lib.NO_HISTORY
+    assert verdict.required is False       # 이력만으로는 경고할 수 없다
+    assert verdict.default_on is True
+
+
+def test_every_verdict_explains_its_basis():
+    """근거 없는 분류는 신뢰를 잃는다."""
+    for bits in ([], [True], [False], [True, True], [True, False, True]):
+        assert lib.classify(bits).basis
 
 
 def test_catalog_classifies_from_real_run_records(db):
@@ -92,10 +119,52 @@ def test_catalog_classifies_from_real_run_records(db):
     db.commit()
 
     rows = {r["title"]: r for r in lib.catalog(db, open_date=dt.date(2027, 1, 15))}
-    assert rows["차량 신청"]["classification"] == lib.MUST
-    assert rows["네컷 프레임"]["classification"] == lib.RECOMMENDED
-    # 한 번도 실행된 적이 없으면 '후순위'가 아니라 이력 없음으로 본다
-    assert rows["야외 체육대회"]["classification"] == lib.SUGGESTED
+    assert rows["차량 신청"]["verdict"]["label"] == lib.MUST
+    assert rows["네컷 프레임"]["verdict"]["label"] == lib.RECOMMENDED
+    assert rows["야외 체육대회"]["verdict"]["label"] == lib.LOW
+    # 빠지면 경고할 대상은 '전 회차에서 빠짐없이 한 것'뿐이다
+    assert rows["차량 신청"]["required"] is True
+    assert rows["네컷 프레임"]["required"] is False
+
+
+def test_history_depth_counts_the_rounds_behind_the_classification(db):
+    assert lib.history_depth(db) == 0
+    make_retreat(db, "1회차", dt.date(2026, 8, 21))
+    db.commit()
+    assert lib.history_depth(db) == 1
+    for i in range(3):
+        make_retreat(db, f"추가{i}", dt.date(2027 + i, 8, 21))
+    db.commit()
+    assert lib.history_depth(db) == 3      # 최근 3회차까지만 본다
+
+
+def test_manual_required_flag_works_without_any_history(db):
+    """이력이 없어도 구멍 방지 경고가 작동해야 한다."""
+    marked = make_library(db, "결산 보고서 본부 제출")
+    marked.always_required = True
+    make_library(db, "야외 체육대회")
+    db.commit()
+
+    rows = {r["title"]: r for r in lib.catalog(db, open_date=dt.date(2027, 1, 15))}
+    assert rows["결산 보고서 본부 제출"]["verdict"]["label"] == lib.NO_HISTORY
+    assert rows["결산 보고서 본부 제출"]["always_required"] is True
+    assert rows["결산 보고서 본부 제출"]["required"] is True     # 수동 지정만으로 경고 대상
+    assert rows["야외 체육대회"]["required"] is False
+
+
+def test_manual_and_automatic_required_are_combined(db):
+    retreat = make_retreat(db, "직전", dt.date(2026, 8, 21))
+    auto = make_library(db, "차량 신청")
+    manual = make_library(db, "수련회 티셔츠 제작")
+    manual.always_required = True
+    run(db, retreat, auto, included=True)
+    run(db, retreat, manual, included=False)   # 지난 회차엔 하지 않았다
+    db.commit()
+
+    rows = {r["title"]: r for r in lib.catalog(db, open_date=dt.date(2027, 1, 15))}
+    assert rows["차량 신청"]["required"] is True          # 이력 근거
+    assert rows["수련회 티셔츠 제작"]["required"] is True  # 수동 지정 근거
+    assert rows["수련회 티셔츠 제작"]["verdict"]["label"] == "지난 회차 미실행"
 
 
 def test_catalog_only_lists_top_level_tasks(db):
@@ -282,3 +351,18 @@ def test_completed_tasks_are_grey_and_late_ones_shout():
     assert done_bg == "#DFE3E0"
     assert late_border == "#C8442E"
     assert late_bg != done_bg
+
+
+def test_mobile_groups_sort_departments_inside_each_week(db):
+    """같은 주 안에서는 부서 정렬 순서를 따른다 (D-주차 → 부서)."""
+    retreat = make_retreat(db, "회차", dt.date(2026, 8, 21))   # chongmuM=0, sketch=1
+    late = make_library(db, "포스터 제작", dept="sketch", d_week=13, span=0)
+    early = make_library(db, "봉사팀 개별 미팅", dept="chongmuM", d_week=13, span=0)
+    for library in (late, early):                              # 일부러 역순으로 넣는다
+        row = run(db, retreat, library)
+        row.start_date = row.end_date = dt.date(2026, 5, 24)
+    db.commit()
+
+    groups = board_view.build(db, retreat)["mobile_groups"]
+    assert len(groups) == 1
+    assert [r["department_name"] for r in groups[0]["rows"]] == ["chongmuM", "sketch"]

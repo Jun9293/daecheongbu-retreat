@@ -5,7 +5,7 @@
 
 :root{
   --paper:#F2F4F3; --paper-2:#FAFBFA;
-  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
+  --ink:#141917; --ink-2:#39423E; --ink-3:#4E5551;
   --rule:#DDE2DE; --rule-2:#C7CEC9;
   --now:#C8442E; --link:#1668E3; --go:#3F6B5D; --warn:#9A6B12; --ai:#4C4193;
   --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
@@ -43,6 +43,10 @@ nav.tabs a{font-size:14.5px;padding:8px 17px;border:1px solid transparent;border
   color:var(--ink-3);border-radius:3px 3px 0 0;position:relative;top:1px;white-space:nowrap}
 nav.tabs a[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
 nav.tabs a:hover{color:var(--ink)}
+nav.tabs .wip{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:9.5px;
+  letter-spacing:.03em;color:var(--ink-3);border:1px solid var(--rule-2);border-radius:2px;
+  padding:1px 4px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+nav.tabs a[aria-selected=true] .wip{border-color:var(--rule-2)}
 nav.tabs .sp{margin-left:auto}
 nav.tabs .new{border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);
   border-radius:3px;padding:6px 13px;font-size:13px;top:-4px;font-weight:500}
@@ -106,9 +110,9 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
 .row.team .lc .caret{font-size:10px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
 .row.team.collapsed .lc .caret{transform:rotate(-90deg)}
 .row.team .lc .sw{width:3px;height:17px;border-radius:2px;flex:none}
-.row.team .lc .ct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
+.row.team .lc .ct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-2);font-weight:400}
 .row.team .cell{height:var(--h-team);background:var(--teamt,#E9EDEA);border-bottom:1px solid var(--rule-2)}
-.row.team.dim{opacity:.6}
+.row.team.dim{opacity:.78}
 
 .row.main .lc{height:var(--h-main);padding-left:28px;font-weight:500}
 .row.sub  .lc{height:var(--h-sub);padding-left:46px;font-size:12.5px;color:var(--ink-2)}
@@ -133,6 +137,12 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
 .bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
 /* 라벨은 바 안에서 시작해, 바보다 길면 그대로 밖으로 흘러나감 */
 .bar .txt{overflow:visible;white-space:nowrap;flex:none;position:relative;z-index:2}
+/* 바 밖으로 넘친 부분. 같은 글자를 같은 자리에 한 겹 더 깔고 바 경계에서
+   잘라 이어붙인다 — 바 위와 바 밖은 배경이 다르기 때문이다. */
+.bar .txt.spill{position:absolute;z-index:1;pointer-events:none;color:var(--ink-2);
+  text-shadow:0 0 3px var(--paper),0 0 3px var(--paper),0 0 2px var(--paper),0 0 1px var(--paper)}
+.bar.late .txt.spill{color:#8E2A19}
+.bar.ghost .txt.spill{color:var(--ink-3)}
 .bar.late{color:#8E2A19;font-weight:600}
 .bar.late .flag{position:relative;z-index:2;font-family:'IBM Plex Mono',monospace;font-size:10px;
   background:var(--now);color:#fff;padding:2px 4px;border-radius:2px;flex:none}
@@ -153,6 +163,33 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
 .bar.lit{box-shadow:0 0 0 2px var(--ink);z-index:8!important;opacity:1!important}
 .row.anchorrow>.lc{box-shadow:inset 4px 0 0 var(--link);background:#EAF1FC;font-weight:700}
 .row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink);background:#EBEEEC}
+
+/* ── 모바일 목록: D-주차 → 부서 (CLAUDE.md Phase 1 완료 기준) ────────
+   24칸 간트는 폰에서 쓸 수 없다. "이번 주에 뭐가 있나"가 먼저 보이도록
+   주차를 바깥 묶음으로 두고 그 안에서 부서 순으로 정렬한다. */
+.mlist{display:none}
+.mgroup{border-bottom:1px solid var(--rule)}
+.mgroup > h3{position:sticky;top:0;z-index:5;margin:0;background:var(--paper-2);
+  border-bottom:1px solid var(--rule-2);padding:9px 14px;font-size:12.5px;font-weight:600;
+  font-family:'IBM Plex Mono',monospace;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.mgroup > h3 .n{margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:400}
+.mrow{display:flex;align-items:center;gap:9px;width:100%;min-height:46px;padding:9px 14px;
+  border-bottom:1px solid var(--rule);background:none;border-left:none;border-right:none;
+  border-top:none;font:inherit;text-align:left;color:var(--ink);cursor:pointer}
+.mrow:last-child{border-bottom:none}
+.mrow .st{width:4px;align-self:stretch;border-radius:2px;flex:none;background:var(--rule-2)}
+.mrow .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.mrow .nm{font-size:14px;line-height:1.4}
+.mrow.sub .nm{font-size:13px;color:var(--ink-2)}
+.mrow .meta{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-3);
+  font-family:'IBM Plex Mono',monospace}
+.mrow .meta i{width:7px;height:7px;border-radius:50%;flex:none;display:block}
+.mrow .meta .dept{font-family:'IBM Plex Sans KR',sans-serif}
+.mrow .flag{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--now);
+  color:#fff;padding:2px 5px;border-radius:2px;flex:none}
+.mrow.done .nm{color:var(--ink-2)}
+.mrow.dim{opacity:.78}
+.mempty{padding:26px 14px;text-align:center;font-size:13px;color:var(--ink-3)}
 
 /* ── 상세 패널 ──────────────────────────────────────────────────────── */
 .drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);min-width:320px;max-width:min(900px,95vw);
@@ -348,6 +385,14 @@ main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
 .dtlbl{font-family:'IBM Plex Mono',monospace;font-size:12.5px;flex:none;width:58px;text-align:right}
 .trow.clash .dtlbl{color:#7A5410;font-weight:600}
 
+/* 라이브러리 관리 — 필수 지정 */
+.trow.libedit{cursor:pointer}
+.trow .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:4px;
+  font-family:'IBM Plex Mono',monospace}
+.trow.libedit .box{border-radius:3px}
+.trow.libedit.on .box{background:var(--now);border-color:var(--now)}
+.wiz .lead b{font-weight:600}
+
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:11px;margin-bottom:18px}
 .sum div{border:1px solid var(--rule-2);border-radius:6px;padding:13px 15px;background:var(--paper-2)}
 .sum b{display:block;font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-.02em}
@@ -379,19 +424,8 @@ button.btn:disabled{opacity:.4;cursor:default}
   nav.tabs{overflow-x:auto;margin-top:10px}
   .toolbar{padding:9px 14px;gap:12px}
   .legend{display:none}
-  .board{overflow:visible}
-  .sheet{min-width:0}
-  .row.head{display:none}
-  .row{display:block}
-  .lane,.gridlines,#wires{display:none}
-  .lc{position:static;height:auto!important;min-height:44px;padding:9px 14px!important;
-    border-right:none;width:100%;flex-wrap:wrap}
-  .owner{margin-left:0}
-  .row.sub .lc{padding-left:30px!important}
-  .row.team .lc{position:sticky;top:0;z-index:5}
-  .mdate{display:flex;align-items:center;gap:6px;margin-left:auto;padding-left:10px;flex:none;
-    font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3)}
-  .mdate i{width:8px;height:8px;border-radius:2px;display:block;flex:none}
+  .board{display:none}
+  .mlist{display:block;flex:1;overflow:auto}
   .drawer{width:100%;max-width:100%;min-width:0;border-left:none}
   .grip{display:none}
   main.wiz{padding:18px 14px 30px}

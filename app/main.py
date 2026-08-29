@@ -22,6 +22,7 @@ from app.routers import (
     expenses,
     export,
     files,
+    library,
     meetings,
     notifications,
     reviews,
@@ -85,6 +86,7 @@ app.include_router(auth.router)
 # 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
 app.include_router(board.router)
 app.include_router(setup.router)
+app.include_router(library.router)
 app.include_router(dashboard.router)
 app.include_router(schedule.router)
 app.include_router(tasks.router)

@@ -1,0 +1,63 @@
+{% extends "retreat_base.html" %}
+{% block title %}업무 라이브러리 · 대청부 수련회{% endblock %}
+
+{% block body %}
+<main class="wiz">
+  <h2>업무 라이브러리</h2>
+  <p class="lead">
+    회차를 넘어 계속 남는 업무 목록입니다. 여기서 <b>필수</b>로 지정한 업무는
+    새 회차를 만들 때 빠지면 경고가 뜹니다.
+    {% if history_depth < 3 %}
+    실행 이력이 {{ history_depth }}회차뿐이라 자동 분류의 근거가 아직 얇습니다.
+    그동안은 이 지정이 구멍 방지를 맡습니다.
+    {% else %}
+    자동 분류가 최근 {{ history_depth }}회차 이력으로 계산되며, 이 지정은 그와 별개로 항상 유효합니다.
+    {% endif %}
+  </p>
+
+  {% if history_depth < 3 %}
+  <div class="alert warn">
+    <span class="ic">근거</span>
+    <span>자동 분류의 근거는 <b>{{ history_depth }}회차</b>입니다
+      {%- if round_labels %} ({{ round_labels|join(', ') }}){% endif %}.
+      3회차가 쌓이기 전에는 “필수·추천·후순위” 대신 실제 기록만큼만 표현합니다 —
+      한 회차 기록으로 “최근 3회 모두 실행”이라고 말할 수는 없기 때문입니다.</span>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/library/required/bulk">
+    <div class="tools">
+      <span class="cnt">필수 지정 <b>{{ required_count }}</b> / {{ items|length }}건</span>
+      <button type="submit" class="btn pri" style="margin-left:auto">필수 지정 저장</button>
+    </div>
+
+    <div class="lib">
+      {% for item in items %}
+      <label class="trow libedit{{ ' on' if item.always_required }}">
+        <input type="checkbox" name="library_ids" value="{{ item.library_id }}"
+               {% if item.always_required %}checked{% endif %} hidden>
+        <span class="box"></span>
+        <span class="main">
+          <span class="nm">{{ item.title }}
+            <span class="tag {{ item.verdict.tone }}">{{ item.verdict.label }}</span>
+            {%- if item.sub_count %}<span class="tag low">하위 {{ item.sub_count }}</span>{% endif %}
+          </span>
+          <span class="basis">{{ item.verdict.basis }}</span>
+        </span>
+        <span class="tm"><i style="background:{{ item.department_color }}"></i>{{ item.department_name }}</span>
+        <span class="dwlbl">D-{{ item.d_week }}주</span>
+      </label>
+      {% endfor %}
+    </div>
+  </form>
+
+  <div class="card" style="margin-top:18px">
+    <h3>필수 지정과 자동 분류는 함께 쓰입니다</h3>
+    <div style="font-size:13.5px;line-height:1.85;color:var(--ink-2)">
+      새 회차 마법사의 구멍 방지 경고는 <b>둘 중 하나라도 해당하면</b> 뜹니다 —
+      여기서 손으로 지정한 필수, 또는 이력으로 계산된 필수.<br>
+      <span style="color:var(--ink-3)">이력이 하나도 없는 첫 회차에도 경고가 작동하도록 하기 위한 구조입니다.</span>
+    </div>
+  </div>
+</main>
+{% endblock %}

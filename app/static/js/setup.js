@@ -7,7 +7,7 @@
 const DEPTS = JSON.parse(document.getElementById('setup-departments').textContent);
 const COLOR = Object.fromEntries(DEPTS.map(d => [d.key, d.color]));
 const NAME = Object.fromEntries(DEPTS.map(d => [d.key, d.name]));
-const TAG = {'필수': 'must', '추천': 'rec', '후순위': 'low', 'Claude 제안': 'new'};
+
 
 const off = new Set();          // 제외한 부서
 const sel = new Set();          // 선택한 업무 (id 문자열)
@@ -33,7 +33,7 @@ async function reload() {
   if (!res.ok) { alert('계산에 실패했습니다. 개회일을 확인해주세요.'); return; }
   data = await res.json();
   if (!touched) {              // 첫 계산에서만 기본 선택을 잡는다
-    data.items.forEach(item => { if (item.classification !== '후순위') sel.add(item.id); });
+    data.items.forEach(item => { if (item.verdict.default_on) sel.add(item.id); });
     touched = true;
   }
   renderWeeks();
@@ -76,17 +76,23 @@ function renderTeams() {
 
 /* ── 3단계 ── */
 function renderLib() {
-  const counts = {all: data.items.length, '필수': 0, '추천': 0, '후순위': 0, 'Claude 제안': 0};
-  data.items.forEach(i => counts[i.classification]++);
+  // 라벨은 쌓인 회차 수에 따라 달라진다. 필터는 실제로 나온 라벨에서 만든다.
+  const counts = {}, order = [];
+  data.items.forEach(i => {
+    const k = i.verdict.label;
+    if (!(k in counts)) { counts[k] = 0; order.push(k); }
+    counts[k]++;
+  });
   $('tools').innerHTML =
-    ['all', '필수', '추천', '후순위', 'Claude 제안'].map(k =>
-      `<button data-f="${k}" aria-pressed="${filt === k}">${k === 'all' ? '전체' : k}
-        <span class="n">${counts[k]}</span></button>`).join('')
+    [['all', '전체', data.items.length]].concat(order.map(k => [k, k, counts[k]])).map(([k, label, n]) =>
+      `<button data-f="${esc(k)}" aria-pressed="${filt === k}">${esc(label)}
+        <span class="n">${n}</span></button>`).join('')
     + `<span class="cnt">이번 회차 선택 <b>${sel.size}</b> / ${data.items.length}건</span>`;
   $('histhead').innerHTML = data.round_labels.map(r => `<span>${esc(r)}</span>`).join('');
+  renderBasisNotice();
 
   $('lib').innerHTML = data.items
-    .filter(i => filt === 'all' || i.classification === filt)
+    .filter(i => filt === 'all' || i.verdict.label === filt)
     .map(item => {
       const hist = item.history.length
         ? item.history.map(h => `<i class="${h.executed ? '' : 'no'}"><b></b></i>`).join('')
@@ -96,7 +102,8 @@ function renderLib() {
                    data-i="${esc(item.id)}">
         <span class="box"></span>
         <span class="main"><span class="nm">${esc(item.title)}
-          <span class="tag ${TAG[item.classification]}">${item.classification}</span>
+          <span class="tag ${item.verdict.tone}">${esc(item.verdict.label)}</span>
+          ${item.always_required ? '<span class="tag must">필수 지정</span>' : ''}
           ${item.sub_count ? `<span class="tag low">하위 ${item.sub_count}</span>` : ''}</span>
           ${item.rationale ? `<span class="why">${esc(item.rationale)}</span>` : ''}</span>
         <span class="tm">${dept ? `<i style="background:${COLOR[dept] || '#69726D'}"></i>${esc(NAME[dept] || dept)}` : '담당 없음'}</span>
@@ -112,23 +119,47 @@ function renderLib() {
   });
 }
 
+/* 분류 근거가 몇 회차인지 밝힌다. 3회차가 쌓이면 안내가 저절로 사라진다. */
+function renderBasisNotice() {
+  let box = $('basisNotice');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'basisNotice';
+    $('tools').before(box);
+  }
+  const depth = data.history_depth;
+  if (depth >= 3) { box.innerHTML = ''; return; }
+  const rounds = data.round_labels.length ? ` (${data.round_labels.map(esc).join(', ')})` : '';
+  box.innerHTML = `<div class="alert warn"><span class="ic">근거</span><span>
+    자동 분류의 근거는 <b>${depth}회차</b>${rounds}입니다.
+    ${depth === 0
+      ? '실행 이력이 아직 없어 분류할 수 없습니다. 업무 라이브러리에서 지정한 <b>필수</b>가 구멍 방지를 맡습니다.'
+      : '3회차가 쌓이기 전에는 “필수·추천·후순위” 대신 기록만큼만 표현합니다 — ' +
+        '한 회차 기록으로 “최근 3회 모두 실행”이라고 말할 수는 없기 때문입니다.'}
+    <a href="/library" style="color:inherit;text-decoration:underline">업무 라이브러리에서 필수 지정하기</a></span></div>`;
+}
+
 /* ── 4단계: 구멍 방지 경고 ── */
 function renderSummary() {
   const chosen = data.items.filter(i => sel.has(i.id));
-  const count = k => chosen.filter(i => i.classification === k).length;
+  const tone = t => chosen.filter(i => i.verdict.tone === t).length;
   const skipped = data.items.length - chosen.length;
   $('sum').innerHTML = `
     <div><b>${chosen.length}</b><span>이번 회차 실행</span></div>
-    <div><b>${count('필수')}</b><span>필수</span></div>
-    <div><b>${count('추천')}</b><span>추천</span></div>
-    <div><b>${count('Claude 제안')}</b><span>신규 제안 채택</span></div>
+    <div><b>${chosen.filter(i => i.required).length}</b><span>빠뜨리면 안 될 업무</span></div>
+    <div><b>${tone('new')}</b><span>신규 제안 채택</span></div>
     <div><b>${skipped}</b><span>미실행으로 기록</span></div>`;
 
   let html = '';
-  const missing = data.items.filter(i => !sel.has(i.id) && i.classification === '필수');
-  if (missing.length) html += `<div class="alert stop"><span class="ic">경고</span><span>
-    <b>필수 업무 ${missing.length}건이 빠졌습니다.</b> 최근 3회차 모두 실행된 업무입니다 —
-    ${missing.map(i => esc(i.title)).join(', ')}. 정말 이번에 하지 않는지 확인하세요.</span></div>`;
+  // 수동 지정과 자동 판정을 함께 본다 — 이력이 없어도 경고가 작동해야 한다
+  const missing = data.items.filter(i => !sel.has(i.id) && i.required);
+  if (missing.length) {
+    const line = i => `${esc(i.title)} <span style="opacity:.7">(${
+      i.always_required ? '총무팀 필수 지정' : esc(i.verdict.basis)})</span>`;
+    html += `<div class="alert stop"><span class="ic">경고</span><span>
+      <b>빠뜨리면 안 될 업무 ${missing.length}건이 빠졌습니다.</b>
+      ${missing.map(line).join(', ')}. 정말 이번에 하지 않는지 확인하세요.</span></div>`;
+  }
 
   const orphan = chosen.filter(i => i.department_key && off.has(i.department_key));
   if (orphan.length) html += `<div class="alert stop"><span class="ic">경고</span><span>

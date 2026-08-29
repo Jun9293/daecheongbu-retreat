@@ -26,6 +26,46 @@ const headers = () => [...sheet.querySelectorAll('.row.head .hc')];
 const labelW = () => sheet.querySelector('.hlbl').offsetWidth;
 const md = iso => iso ? iso.slice(5).replace('-', '/') : '';
 
+/* ── D-1. 바 라벨: 바보다 길면 밖으로 흘러나간다 (CLAUDE.md 9장) ──
+   바 위와 바 밖은 배경이 다르므로 같은 글자를 같은 자리에 한 겹 더 깔고
+   바 경계에서 잘라 이어붙인다. 폭은 캔버스 measureText 로 잰다 —
+   요소의 scrollWidth 는 '지연' 배지 유무에 따라 달라져 항목마다 결과가 갈린다. */
+const gauge = document.createElement('canvas').getContext('2d');
+
+function layoutLabels() {
+  sheet.querySelectorAll('.bar').forEach(bar => {
+    const txt = bar.querySelector('.txt');
+    if (!txt) return;
+    if (!bar.offsetParent) return;              // 접혀 있으면 폭을 잴 수 없다
+    const cs = getComputedStyle(bar);
+    gauge.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const label = txt.textContent;
+    const need = gauge.measureText(label).width;
+    const flag = bar.querySelector('.flag');
+    const gap = parseFloat(cs.columnGap || cs.gap) || 0;
+    const room = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
+      - (flag ? flag.offsetWidth + gap : 0);
+
+    let spill = bar.querySelector('.txt.spill');
+    if (need <= room + 0.5) {                   // 다 들어가면 겹칠 이유가 없다
+      if (spill) spill.remove();
+      txt.style.clipPath = '';
+      return;
+    }
+    txt.style.clipPath = `inset(-4px ${Math.max(0, need - room)}px -4px -2px)`;
+    if (!spill) {
+      spill = document.createElement('span');
+      spill.className = 'txt spill';
+      spill.setAttribute('aria-hidden', 'true');
+      txt.after(spill);
+    }
+    spill.textContent = label;
+    spill.style.left = txt.offsetLeft + 'px';
+    spill.style.top = txt.offsetTop + 'px';
+    spill.style.clipPath = `inset(-4px -8px -4px ${room}px)`;
+  });
+}
+
 /* ── 세로 격자선: 열마다 div 를 넣지 않고 한 번만 겹쳐 그린다 ── */
 function drawGrid() {
   let box = sheet.querySelector('.gridlines');
@@ -73,7 +113,36 @@ function applyFilters() {
       row.style.display = (open && row.dataset.ok) ? '' : 'none';
     });
   });
+  applyMobileFilters(mine, onlyOpen);
+  layoutLabels();
   drawWires();
+}
+
+/* 모바일 목록은 D-주차로 묶여 있어 부서 접기가 없다.
+   소속 외 업무는 숨기지 않고 흐리게 — 보드와 같은 원칙. */
+function applyMobileFilters(mine, onlyOpen) {
+  const list = document.getElementById('mlist');
+  if (!list) return;
+  let shown = 0;
+  list.querySelectorAll('.mgroup').forEach(group => {
+    let visible = 0;
+    group.querySelectorAll('.mrow').forEach(row => {
+      let ok = true;
+      if (dateSel) {
+        const a = row.dataset.s, b = row.dataset.e || row.dataset.s;
+        if (b < dateSel[0] || a > dateSel[1]) ok = false;
+      }
+      if (onlyOpen && row.dataset.status === '완료') ok = false;
+      row.style.display = ok ? '' : 'none';
+      row.classList.toggle('dim', ok && mine !== 'all' && row.dataset.of !== mine);
+      if (ok) visible++;
+    });
+    group.style.display = visible ? '' : 'none';
+    group.querySelector('.n').textContent = `${visible}건`;
+    shown += visible;
+  });
+  const empty = document.getElementById('mempty');
+  if (empty) empty.hidden = shown > 0;
 }
 
 sheet.querySelectorAll('.row.team').forEach(team => {
@@ -84,6 +153,7 @@ sheet.querySelectorAll('.row.team').forEach(team => {
     sheet.querySelectorAll(`.row[data-of="${team.dataset.team}"]`).forEach(row => {
       row.style.display = (!hidden && row.dataset.ok) ? '' : 'none';
     });
+    layoutLabels();
     drawWires();
   };
 });
@@ -154,7 +224,10 @@ function alignLeft(runId) {
   board.scrollTo({left, top, behavior: 'smooth'});   // 가로·세로를 한 번에
 }
 
+const isMobile = () => !board.offsetParent;   // 모바일에서는 보드가 숨겨진다
+
 function goTo(runId) {
+  if (isMobile()) { openDrawer(runId); return; }
   const wasOpen = dw.classList.contains('open');
   reveal(runId); link(runId); openDrawer(runId);
   if (wasOpen) alignLeft(runId);
@@ -202,7 +275,7 @@ function drawWires() {
   wires.setAttribute('width', sheet.scrollWidth);
   wires.setAttribute('height', sheet.scrollHeight);
 }
-addEventListener('resize', () => { drawGrid(); drawWires(); });
+addEventListener('resize', () => { drawGrid(); layoutLabels(); drawWires(); });
 
 /* ── 상세 패널 ── */
 async function openDrawer(runId) {
@@ -365,8 +438,14 @@ async function setStatus(runId, status) {
     if (flag) flag.remove();
     if (status === '지연') el.insertAdjacentHTML('afterbegin', '<span class="flag">지연</span>');
   });
-  const mdate = sheet.querySelector(`.row[data-run="${runId}"] .mdate i`);
-  if (mdate) mdate.style.background = view.border;
+  document.querySelectorAll(`.mrow[data-run="${runId}"]`).forEach(row => {
+    row.dataset.status = status;
+    row.classList.toggle('done', status === '완료');
+    row.querySelector('.st').style.background = view.border;
+    const f = row.querySelector('.flag');
+    if (f) f.remove();
+    if (status === '지연') row.insertAdjacentHTML('beforeend', '<span class="flag">지연</span>');
+  });
   if (detail) { detail.status = status; renderDrawer(); }
   applyFilters();
 }
@@ -468,6 +547,12 @@ sheet.addEventListener('keydown', e => {
   if (bar) { e.preventDefault(); link(bar.dataset.run); openDrawer(bar.dataset.run); }
 });
 
+const mlist = document.getElementById('mlist');
+if (mlist) mlist.addEventListener('click', e => {
+  const row = e.target.closest('.mrow');
+  if (row) openDrawer(row.dataset.run);
+});
+
 addEventListener('click', e => {
   if (Date.now() - dragEnd < 400) return;
   if (!e.target.closest('.relitem') && !e.target.closest('#statmenu') && !e.target.closest('#statchip')) closeMenus();
@@ -480,5 +565,8 @@ addEventListener('click', e => {
 
 drawGrid();
 applyFilters();
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { drawGrid(); drawWires(); });
+// 글꼴이 로드되기 전에 재면 폭이 틀리므로 다시 계산한다
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { drawGrid(); layoutLabels(); drawWires(); });
+}
 })();

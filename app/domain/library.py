@@ -28,27 +28,89 @@ MUST = "필수"
 RECOMMENDED = "추천"
 LOW = "후순위"
 SUGGESTED = "Claude 제안"
+NO_HISTORY = "이력 없음"
 
-CLASS_ORDER = (MUST, RECOMMENDED, LOW, SUGGESTED)
-DEFAULT_ON = (MUST, RECOMMENDED, SUGGESTED)  # 후순위만 기본 꺼짐
+HISTORY_WINDOW = 3  # 최근 3회차까지 본다
 
-HISTORY_WINDOW = 3  # 최근 3회차를 본다
+# 색·정렬에 쓰는 톤. 라벨은 쌓인 회차 수에 따라 달라지지만 톤은 넷뿐이다.
+TONE_MUST = "must"
+TONE_REC = "rec"
+TONE_LOW = "low"
+TONE_NEW = "new"
 
 
-def classify(recent_bits: list[bool], *, ever_run: bool) -> str:
-    """최근 3회차 실행 이력에서 분류를 계산한다.
+class Verdict:
+    """자동 분류 결과.
 
-    사람이 지정하지 않는다. 살아 있는 관행인지 사라진 관행인지는
-    이력에 이미 드러나 있다.
+    라벨은 근거의 두께를 그대로 드러낸다. 회차가 하나뿐인데 "필수"라고
+    말하면 없는 확신을 지어내는 것이므로, 그때는 "지난 회차 실행"이라고만 한다.
     """
-    if not ever_run:
-        return SUGGESTED
-    executed = sum(1 for bit in recent_bits if bit)
-    if executed >= HISTORY_WINDOW:
-        return MUST
-    if executed == 0:
-        return LOW
-    return RECOMMENDED
+
+    __slots__ = ("label", "tone", "default_on", "required", "basis")
+
+    def __init__(self, label, tone, *, default_on, required, basis):
+        self.label = label
+        self.tone = tone
+        self.default_on = default_on
+        self.required = required
+        self.basis = basis          # 판단의 근거를 한 줄로
+
+    def as_dict(self) -> dict:
+        return {
+            "label": self.label,
+            "tone": self.tone,
+            "default_on": self.default_on,
+            "required": self.required,
+            "basis": self.basis,
+        }
+
+
+def classify(recent_bits: list[bool]) -> Verdict:
+    """쌓인 회차 수에 맞춰 분류한다.
+
+    이력이 3회차 이상 쌓이기 전에는 필수·추천·후순위라는 말을 쓰지 않는다.
+    한 회차 기록으로 "최근 3회 모두 실행"이라고 말할 수는 없기 때문이다.
+
+        0회차 — 이력 없음
+        1회차 — 지난 회차 실행 / 미실행
+        2회차 — 2회 모두 실행 / 2회 중 1회 / 2회 모두 미실행
+        3회차+ — 필수 / 추천 / 후순위
+    """
+    depth = len(recent_bits)
+    done = sum(1 for bit in recent_bits if bit)
+
+    if depth == 0:
+        return Verdict(NO_HISTORY, TONE_NEW, default_on=True, required=False,
+                       basis="실행 이력이 없습니다.")
+    if depth == 1:
+        if done:
+            return Verdict("지난 회차 실행", TONE_MUST, default_on=True, required=True,
+                           basis="기록된 한 회차에서 실행했습니다.")
+        return Verdict("지난 회차 미실행", TONE_LOW, default_on=False, required=False,
+                       basis="기록된 한 회차에서 실행하지 않았습니다.")
+    if depth == 2:
+        if done == 2:
+            return Verdict("2회 모두 실행", TONE_MUST, default_on=True, required=True,
+                           basis="기록된 2회차 모두 실행했습니다.")
+        if done == 0:
+            return Verdict("2회 모두 미실행", TONE_LOW, default_on=False, required=False,
+                           basis="기록된 2회차 모두 실행하지 않았습니다.")
+        return Verdict("2회 중 1회", TONE_REC, default_on=True, required=False,
+                       basis="기록된 2회차 중 1회 실행했습니다.")
+
+    if done >= depth:
+        return Verdict(MUST, TONE_MUST, default_on=True, required=True,
+                       basis=f"최근 {depth}회차 모두 실행했습니다.")
+    if done == 0:
+        return Verdict(LOW, TONE_LOW, default_on=False, required=False,
+                       basis=f"최근 {depth}회차 모두 실행하지 않았습니다.")
+    return Verdict(RECOMMENDED, TONE_REC, default_on=True, required=False,
+                   basis=f"최근 {depth}회차 중 {done}회 실행했습니다.")
+
+
+def history_depth(db: Session, *, exclude_retreat_id: int | None = None) -> int:
+    """분류 근거가 되는 회차 수 (최대 3)."""
+    return len(past_retreats(db, exclude_id=exclude_retreat_id)[-HISTORY_WINDOW:])
 
 
 def past_retreats(db: Session, *, exclude_id: int | None = None) -> list[Retreat]:
@@ -105,9 +167,7 @@ def catalog(
             bool(runs[(lib.id, r.id)].included) if (lib.id, r.id) in runs else False
             for r in recent
         ]
-        ever = any(
-            (lib.id, rid) in runs and runs[(lib.id, rid)].included for rid in all_ids
-        )
+        verdict = classify(bits)
         start, end = dweek.resolve_dates(
             open_date,
             anchor=lib.date_anchor,
@@ -124,7 +184,10 @@ def catalog(
                 "d_week": lib.default_d_week,
                 "start_date": start,
                 "end_date": end,
-                "classification": classify(bits, ever_run=ever),
+                "verdict": verdict.as_dict(),
+                "always_required": bool(lib.always_required),
+                # 빠지면 경고할 대상인지 — 수동 지정과 자동 판정을 함께 본다
+                "required": bool(lib.always_required) or verdict.required,
                 "history": [
                     {
                         "retreat_id": r.id,

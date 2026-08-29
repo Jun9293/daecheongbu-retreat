@@ -22,16 +22,6 @@ DEPARTMENTS = [
     ("saechingu", "9 새친구팀", "#A98A1E"),
 ]
 
-# ── 회차 이력 ────────────────────────────────────────────────────────
-# 자동 분류(필수·추천·후순위)는 최근 3회차 실행 이력에서 계산된다.
-# 앞의 4개는 이력만 있는 요약 회차, 마지막이 실제 데이터가 있는 회차.
-PAST_RETREATS = [
-    ("24여", "2024 여름수련회", "2024-08-23", "2024-08-25"),
-    ("25겨", "2025 겨울수련회", "2025-01-17", "2025-01-19"),
-    ("25여", "2025 여름수련회", "2025-08-22", "2025-08-24"),
-    ("26겨", "2026 겨울수련회", "2026-01-16", "2026-01-18"),
-]
-
 CURRENT_RETREAT = ("2026 여름수련회 Belong", "2026-08-21", "2026-08-23", 8_000)
 
 # ── 라이브러리 업무 ──────────────────────────────────────────────────
@@ -136,6 +126,7 @@ LIBRARY = [
 
 # 라이브러리에는 있지만 2026 여름수련회에서는 실행하지 않은 업무
 # (제목, 담당부서, D주차)
+# (2026 여름수련회에서는 미실행으로 기록된다)
 LIBRARY_ONLY = [
     ("수련회 티셔츠 제작", "chongmu", 9),
     ("수련회 책자 인쇄", "chongmu", 6),
@@ -251,52 +242,6 @@ RUN_STATUS = {
     "새친구 초청 준비": "완료",
     "초청카드 이미지 제작·공유": "완료",
     "새친구 명단 확정": "완료",
-}
-
-# ── 과거 회차 실행 이력 (24여, 25겨, 25여, 26겨) ────────────────────
-HISTORY = {
-    "시설 협조요청 (사전·직전)": [True, True, True, True],
-    "수련회장 계약내용 최종 조정·확인": [True, True, True, True],
-    "차량 신청": [True, True, True, True],
-    "집회 운영 준비": [True, True, True, True],
-    "선발대 운영": [False, True, True, True],
-    "봉사자 시간표 제작": [True, True, True, True],
-    "교개협 주보광고": [True, True, True, True],
-    "실무진 답사": [True, False, True, True],
-    "사전 GBS": [False, False, True, False],
-    "홍보물 출력·게시": [True, True, True, True],
-    "GBS 교재 출력·제작": [True, True, True, True],
-    "비품·물품 준비": [True, True, True, True],
-    "대청 최종안내 (교통편·준비물)": [True, True, True, True],
-    "수련회 티셔츠 제작": [True, True, False, False],
-    "수련회 책자 인쇄": [True, True, False, False],
-    "침례·성령기도 인원 확인": [True, True, True, True],
-    "성찬 준비": [True, True, True, True],
-    "프로그램 자료 준비": [True, True, True, True],
-    "GBS 리딩자 모집": [True, True, True, False],
-    "포스터 제작": [True, True, True, True],
-    "GBS 교재 편집디자인": [True, True, True, True],
-    "명찰 디자인": [True, True, True, True],
-    "PPT 제작": [True, True, True, True],
-    "장소 배치도": [False, True, True, True],
-    "홍보물 세트 (현수막·배너·썸네일)": [True, True, False, True],
-    "시간표 이미지": [False, True, False, True],
-    "네컷 프레임": [False, True, False, True],
-    "방명록": [True, False, True, False],
-    "포토존": [False, True, True, False],
-    "홍보영상": [True, True, True, True],
-    "영상·음향 장비 준비": [True, True, True, True],
-    "플리 영상": [True, False, False, True],
-    "수련회 결과보고 영상": [False, False, True, False],
-    "코람데오 연습": [True, True, True, True],
-    "객원 모집": [False, False, True, False],
-    "장기자랑 예선": [True, True, False, False],
-    "수련회비 수납 관리": [True, True, True, True],
-    "결산 보고서 본부 제출": [True, True, True, True],
-    "CBA커넥트 수련회 기능": [False, False, False, True],
-    "새친구 초청 준비": [True, True, True, True],
-    "야외 체육대회": [True, False, False, False],
-    "셔틀버스 2차 운행": [True, True, False, False],
 }
 
 # ── 논의 내역 ────────────────────────────────────────────────────────

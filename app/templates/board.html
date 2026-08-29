@@ -47,7 +47,6 @@
     {%- if row.ghost %}
     <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>
     {%- endif %}
-    <span class="mdate"><i style="background:{{ row.border }}"></i>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
   </div>
   <div class="lane">
     {{ bar(row) }}
@@ -84,6 +83,31 @@
     {% for row in dept.ghost_rows %}{{ task_row(row, dept) }}{% endfor %}
     {% endfor %}
   </div>
+</div>
+
+<div class="mlist" id="mlist">
+  {% for group in board.mobile_groups %}
+  <section class="mgroup" data-week="{{ group.key }}">
+    <h3>{{ group.label }}<span class="n">{{ group.rows|length }}건</span></h3>
+    {% for row in group.rows %}
+    <button type="button" class="mrow{{ ' sub' if row.kind == 'sub' }}{{ ' done' if row.status == '완료' }}"
+            data-run="{{ row.run_id }}" data-go="{{ row.run_id }}" data-of="{{ row.department_key }}"
+            data-s="{{ row.start }}" data-e="{{ row.end }}" data-status="{{ row.status }}">
+      <span class="st" style="background:{{ row.border }}"></span>
+      <span class="mid">
+        <span class="nm">{{ row.title }}</span>
+        <span class="meta">
+          <i style="background:{{ row.department_color }}"></i>
+          <span class="dept">{{ row.department_name }}</span>
+          <span>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
+        </span>
+      </span>
+      {%- if row.status == '지연' %}<span class="flag">지연</span>{% endif %}
+    </button>
+    {% endfor %}
+  </section>
+  {% endfor %}
+  <div class="mempty" id="mempty" hidden>조건에 맞는 업무가 없습니다.</div>
 </div>
 
 <div id="statmenu"></div>
@@ -127,5 +151,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=1" defer></script>
+<script src="/static/js/board.js?v=2" defer></script>
 {% endblock %}

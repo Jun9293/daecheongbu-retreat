@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/retreat.css?v=1">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=2">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 
@@ -39,12 +39,15 @@
     {% endif %}
   </div>
   <nav class="tabs">
-    <a href="/meetings" {% if active_tab == 'meetings' %}aria-selected="true"{% endif %}>회의록</a>
+    <a href="/meetings" {% if active_tab == 'meetings' %}aria-selected="true"{% endif %}>회의록<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
     <a href="/board" {% if active_tab == 'board' %}aria-selected="true"{% endif %}>준비 단계</a>
-    <a href="/schedule" {% if active_tab == 'live' %}aria-selected="true"{% endif %}>수련회 진행</a>
-    <a href="/budget" {% if active_tab == 'budget' %}aria-selected="true"{% endif %}>재정</a>
+    <a href="/schedule" {% if active_tab == 'live' %}aria-selected="true"{% endif %}>수련회 진행<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
+    <a href="/budget" {% if active_tab == 'budget' %}aria-selected="true"{% endif %}>재정<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
     <span class="sp"></span>
-    {% if is_admin(user) %}<a class="new" href="/setup">새 회차 만들기</a>{% endif %}
+    {% if is_admin(user) %}
+    <a href="/library" {% if active_tab == 'library' %}aria-selected="true"{% endif %}>업무 라이브러리</a>
+    <a class="new" href="/setup">새 회차 만들기</a>
+    {% endif %}
   </nav>
 </header>
 

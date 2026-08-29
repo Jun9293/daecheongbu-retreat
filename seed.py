@@ -420,7 +420,7 @@ def seed() -> None:
 
     print(f"'{D.RETREAT_NAME}' 데이터를 만들었습니다.")
     print(f"  부서 {len(L.DEPARTMENTS)}개 · 사용자 {len(D.USERS) + len(seed_library.EXTRA_USERS)}명")
-    print(f"  업무 라이브러리 {len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 · 지난 회차 {len(L.PAST_RETREATS)}개")
+    print(f"  업무 라이브러리 {len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 (실행 이력 1회차)")
     print(f"  일정 {len(D.SCHEDULE_DAYS)}일차 / 총 {sum(len(d['items']) for d in D.SCHEDULE_DAYS)}건")
     print(f"  할 일 {len(D.TASKS)}건 · 체크리스트 {len(D.CHECKLISTS)}개 · 회의록 {len(D.MEETINGS)}건")
     print(f"  지출 {len(D.MEAL_EXPENSES) + len(D.GENERAL_EXPENSES)}건")

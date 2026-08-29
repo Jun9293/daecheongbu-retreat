@@ -598,6 +598,10 @@ class TaskLibrary(Base):
     default_offset_days: Mapped[int] = mapped_column(Integer, default=0)
     default_span_days: Mapped[int] = mapped_column(Integer, default=0)
 
+    # 총무팀이 손으로 "이건 매 회차 반드시"라고 지정한 업무.
+    # 실행 이력이 얕거나 아예 없어도 구멍 방지 경고가 작동하게 하는 장치다.
+    always_required: Mapped[bool] = mapped_column(Boolean, default=False)
+
     origin: Mapped[str] = mapped_column(String(20), default="history")  # history|claude_suggestion
     suggestion_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 노션에서 옮기며 담당·분류를 바꾼 이유 (다음 담당자에게 남기는 기록)

@@ -1,8 +1,8 @@
 """업무 라이브러리 · 회차 이력 시드 (CLAUDE.md 6-8).
 
 복제할 직전 회차가 없으므로 2026 여름수련회(Belong)를 라이브러리 초기값으로
-올린다. 앞선 4개 회차는 실행 이력만 있는 요약 회차다 — 자동 분류(필수·추천·
-후순위)가 실제로 계산되려면 최근 3회차의 기록이 필요하기 때문이다.
+올린다. 실제 실행 이력은 이 한 회차뿐이며, 자동 분류는 쌓인 회차 수에 맞춰
+표현을 바꾼다 (1회차면 "지난 회차 실행/미실행", 3회차 이상이면 필수/추천/후순위).
 """
 
 from __future__ import annotations
@@ -183,38 +183,6 @@ def _add_runs(
     return runs
 
 
-def seed_history(db: Session, libraries: dict[str, TaskLibrary]) -> None:
-    """이력만 있는 지난 회차 4개."""
-    for index, (_code, name, open_iso, close_iso) in enumerate(L.PAST_RETREATS):
-        retreat = Retreat(
-            name=name,
-            start_date=_d(open_iso),
-            end_date=_d(close_iso),
-            meal_subsidy_per_person=8_000,
-            is_archived=True,
-        )
-        db.add(retreat)
-        db.flush()
-        depts = _make_departments(db, retreat)
-
-        included: set[str] = set()
-        for title, bits in L.HISTORY.items():
-            if bits[index] and title in libraries:
-                included.add(title)
-        # 하위 업무는 상위를 따라간다
-        for title, lib in libraries.items():
-            parent_id = lib.parent_library_id
-            if parent_id is None:
-                continue
-            parent_title = next(
-                (t for t, x in libraries.items() if x.id == parent_id), None
-            )
-            if parent_title in included:
-                included.add(title)
-
-        _add_runs(db, retreat, libraries, depts, included_titles=included)
-
-
 def seed_current(
     db: Session, retreat: Retreat, libraries: dict[str, TaskLibrary]
 ) -> dict[str, TaskRun]:
@@ -271,9 +239,13 @@ def seed_extra_users(db: Session, depts: dict[str, Department]) -> None:
 
 
 def seed_all(db: Session, current: Retreat) -> None:
-    """라이브러리 → 지난 회차 이력 → 이번 회차 실행 기록 순서."""
+    """라이브러리 → 이번 회차 실행 기록.
+
+    실제 이력은 2026 여름수련회(Belong) 한 회차뿐이다. 지어낸 과거 회차를
+    넣으면 자동 분류가 없는 근거 위에서 계산되므로 만들지 않는다.
+    이력이 얕은 동안에는 라이브러리의 '필수 지정'이 구멍 방지를 맡는다.
+    """
     libraries = build_library(db)
-    seed_history(db, libraries)
     seed_current(db, current, libraries)
     seed_extra_users(db, {d.key: d for d in current.departments if d.key})
     db.commit()

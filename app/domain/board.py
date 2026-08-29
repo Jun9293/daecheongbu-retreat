@@ -269,6 +269,41 @@ def build(db: Session, retreat: Retreat) -> dict:
             }
         )
 
+    # ── 모바일: 24칸 간트는 폰에서 쓸 수 없다. D-주차 → 부서 순 목록으로 바꾼다.
+    #    "이번 주에 뭐가 있나"가 먼저 보여야 하므로 주차가 바깥 묶음이다.
+    order = {d.id: d.sort_order for d in departments}
+    mobile_groups = []
+    for label, key, group in _by_week(runs, open_date, axis):
+        group.sort(key=lambda r: (order.get(r.department_id, 99), r.library.title))
+        mobile_groups.append(
+            {
+                "key": key,
+                "label": label,
+                "rows": [
+                    {
+                        "run_id": r.id,
+                        "title": r.library.title,
+                        "kind": r.library.kind,
+                        "status": r.status,
+                        "department_key": r.department.key if r.department else "__none__",
+                        "department_name": short_name(r.department.name)
+                        if r.department
+                        else "담당 없음",
+                        "department_color": r.department.color if r.department else "#69726D",
+                        "start": (r.start_date or open_date).isoformat(),
+                        "end": (r.end_date or r.start_date or open_date).isoformat(),
+                        "border": bar_style(
+                            r.status,
+                            r.department.color if r.department else "#69726D",
+                            kind=r.library.kind,
+                            ghost=False,
+                        )[1],
+                    }
+                    for r in group
+                ],
+            }
+        )
+
     done = sum(1 for r in runs if r.status == "완료")
     grid = (
         "var(--label-w) "
@@ -278,6 +313,7 @@ def build(db: Session, retreat: Retreat) -> dict:
     return {
         "axis": axis,
         "grid": grid,
+        "mobile_groups": mobile_groups,
         "headers": axis.headers(),
         "columns": axis.total,
         "shift_index": axis.shift_index,
@@ -289,6 +325,24 @@ def build(db: Session, retreat: Retreat) -> dict:
         "open_date": open_date,
         "close_date": close_date,
     }
+
+
+def _by_week(runs: list[TaskRun], open_date: dt.date, axis: Axis):
+    """실행 업무를 D-주차로 묶는다. 개회일 이후 업무는 수련회 기간으로 모은다."""
+    buckets: dict[int, list[TaskRun]] = {}
+    for run in runs:
+        start = run.start_date or open_date
+        week = 0 if start >= open_date else max(1, dweek.week_of(open_date, start))
+        buckets.setdefault(min(week, axis.first_week), []).append(run)
+
+    out = []
+    for week in sorted(buckets, key=lambda w: (w == 0, -w)):
+        if week == 0:
+            out.append(("수련회 기간", "retreat", buckets[week]))
+            continue
+        sunday = dweek.week_date(open_date, week)
+        out.append((f"D-{week}주 · {sunday.month}/{sunday.day} 주", f"w{week}", buckets[week]))
+    return out
 
 
 def carried_and_current(run: TaskRun) -> tuple[list, list]:
