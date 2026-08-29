@@ -313,6 +313,8 @@ body.dragging-bar .bar{transition:none}
 .note b{display:block;font-size:11px;color:var(--ink-3);margin-bottom:4px;letter-spacing:.03em}
 
 .addlog{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+/* display 를 준 요소는 [hidden] 이 이기지 못한다 — 명시해 둔다 */
+[hidden]{display:none!important}
 .addlog textarea{font:inherit;font-size:13.5px;padding:9px 11px;border:1px solid var(--rule-2);
   border-radius:3px;background:var(--paper-2);color:var(--ink);resize:vertical;min-height:74px;width:100%}
 .addlog .opt{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px}

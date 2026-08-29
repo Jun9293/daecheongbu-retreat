@@ -426,8 +426,7 @@ function renderDrawer() {
   if (d.suggestion_rationale) note += `<div class="note"><b>CLAUDE 제안 근거</b>${esc(d.suggestion_rationale)}</div>`;
   if (d.reclassification_note) note += `<div class="note"><b>분류·담당 변경 기록</b>${esc(d.reclassification_note)}</div>`;
   document.getElementById('dnote').innerHTML = note;
-  document.getElementById('daddlog').hidden = true;   // 하단 '논의 추가'로 연다
-  document.getElementById('dfocus').disabled = !d.can_edit;
+  document.getElementById('daddlog').hidden = !d.can_edit;
 
   document.getElementById('relN').textContent = d.related.length || '';
   document.getElementById('drel').innerHTML = d.related.length
@@ -541,18 +540,9 @@ function closeDrawer() {
   unlink();
 }
 document.getElementById('dclose').onclick = closeDrawer;
-document.getElementById('dfocus').onclick = () => {
-  document.querySelector('#dtabs [data-p="log"]').click();
-  const panel = document.getElementById('daddlog');
-  panel.hidden = false;
-  const box = document.getElementById('dbody');
-  box.scrollIntoView({block: 'nearest'});
-  box.focus();
-};
 document.getElementById('dcancelnew').onclick = () => {
   document.getElementById('dbody').value = '';
   document.getElementById('dsuper').checked = false;
-  document.getElementById('daddlog').hidden = true;
 };
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); closeDrawer(); } });
 
@@ -661,7 +651,6 @@ document.getElementById('dsave').onclick = async () => {
   detail.discussions = data.discussions;
   box.value = '';
   document.getElementById('dsuper').checked = false;
-  document.getElementById('daddlog').hidden = true;
   renderLog();
 };
 
@@ -918,13 +907,31 @@ if (mlist) mlist.addEventListener('click', e => {
   if (row) openDrawer(row.dataset.run);
 });
 
+/* 클릭이 어디서 일어났는지는 '누른 순간'에 정해 둔다.
+   중간 핸들러가 innerHTML 을 갈아끼우면 눌린 요소가 DOM 에서 떨어져 나가고,
+   그 뒤에 closest() 로 물으면 전부 null 이라 '바깥 클릭'으로 오판한다. */
+let clickOrigin = null;
 addEventListener('click', e => {
+  const at = sel => !!(e.target instanceof Element) && !!e.target.closest(sel);
+  clickOrigin = {
+    drawer: at('#drawer'),
+    statmenu: at('#statmenu'),
+    statchip: at('#statchip'),
+    relitem: at('.relitem'),
+    task: at('.bar[data-run],[data-go]'),
+    chrome: at('header') || at('.toolbar'),
+  };
+}, true);
+
+addEventListener('click', () => {
+  const from = clickOrigin || {};
+  clickOrigin = null;
   if (Date.now() - dragEnd < 400) return;
-  if (!e.target.closest('.relitem') && !e.target.closest('#statmenu') && !e.target.closest('#statchip')) closeMenus();
+  if (!from.relitem && !from.statmenu && !from.statchip) closeMenus();
   if (!dw.classList.contains('open')) return;
-  if (e.target.closest('#drawer') || e.target.closest('#statmenu')) return;
-  if (e.target.closest('.bar[data-run],[data-go]')) return;   // 바·업무명만 예외
-  if (e.target.closest('header') || e.target.closest('.toolbar')) return;
+  if (from.drawer || from.statmenu) return;
+  if (from.task) return;                  // 바·업무명은 다른 업무를 여는 동작
+  if (from.chrome) return;                // 소속 선택·필터를 만질 때 닫히면 불편하다
   closeDrawer();
 });
 
