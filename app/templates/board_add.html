@@ -1,0 +1,79 @@
+{% extends "retreat_base.html" %}
+{% block title %}업무 추가 · {{ retreat.name }}{% endblock %}
+
+{% block body %}
+<main class="wiz">
+  <h2>업무 추가</h2>
+  <p class="lead">회차를 연 뒤에도 업무는 늘어납니다.
+    라이브러리에 이미 있는 것을 이번 회차에 넣거나, 아예 새로 만들 수 있습니다.
+    <b>새로 만든 것도 라이브러리에 남아</b> 다음 회차의 후보가 됩니다.
+    {% if not viewer_is_admin %}내 부서의 업무만 추가할 수 있습니다.{% endif %}
+    <a href="/board" style="color:var(--link)">← 보드로</a></p>
+
+  <section>
+    <h3 style="font-size:15px;font-weight:600;margin:0 0 8px">라이브러리에서 넣기</h3>
+    <p class="lead" style="margin-bottom:12px">이번 회차에 아직 없는 업무입니다. 하위 업무는 함께 딸려 옵니다.</p>
+    {% if library_rows %}
+    <div class="tools">
+      <span class="cnt">선택 <b id="pickCount">0</b> / {{ library_rows|length }}건</span>
+      <button type="button" class="btn pri" id="addExisting" style="margin-left:auto" disabled>선택한 업무 추가</button>
+    </div>
+    <div class="lib" id="addLib">
+      {% for row in library_rows %}
+      <div class="trow off" data-i="{{ row.library_id }}" data-dept="{{ row.department_key or '' }}">
+        <span class="box"></span>
+        <span class="main"><span class="nm">{{ row.title }}
+          <span class="tag low">{{ row.kind_label }}</span></span></span>
+        <span class="tm">
+          {%- for d in departments %}{% if d.key == row.department_key %}
+          <i style="background:{{ d.color }}"></i>{{ d.name }}{% endif %}{% endfor %}
+          {%- if not row.department_key %}담당 없음{% endif %}</span>
+        <span class="dwlbl">D-{{ row.d_week }}주</span>
+        <span class="dtlbl">{{ row.start_label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card"><div style="font-size:13.5px;color:var(--ink-3)">
+      라이브러리의 업무가 이미 모두 이번 회차에 들어가 있습니다.</div></div>
+    {% endif %}
+  </section>
+
+  <section style="margin-top:34px">
+    <h3 style="font-size:15px;font-weight:600;margin:0 0 8px">새 업무 만들기</h3>
+    <p class="lead" style="margin-bottom:12px">라이브러리에 없던 일입니다. 만들면 이번 회차에 바로 들어갑니다.</p>
+    <div class="card">
+      <div class="field"><label for="ntitle">업무 이름</label>
+        <input id="ntitle" type="text" placeholder="예: 방한 물품 추가 구매"></div>
+      <div class="row2">
+        <div class="field"><label for="ndept">담당 부서</label>
+          <select id="ndept">
+            {% for d in departments %}
+            <option value="{{ d.key }}" {% if d.key == my_department_key %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select></div>
+        <div class="field"><label for="nkind">분류</label>
+          <select id="nkind">
+            <option value="main">Main — 산출물이 남는 단위</option>
+            <option value="schedule">일정 — 날짜만 지키면 되는 것</option>
+          </select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="nweek">D-주차</label>
+          <select id="nweek">
+            {% for n in range(first_week, 0, -1) %}
+            <option value="{{ n }}" {% if n == 4 %}selected{% endif %}>D-{{ n }}주</option>
+            {% endfor %}
+          </select></div>
+        <div class="field"><label for="nspan">기간 (일)</label>
+          <input id="nspan" type="number" min="0" max="120" value="0"></div>
+      </div>
+      <button type="button" class="btn pri" id="addNew">새 업무 만들기</button>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/board_add.js?v=10" defer></script>
+{% endblock %}

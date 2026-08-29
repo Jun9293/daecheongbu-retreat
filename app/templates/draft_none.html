@@ -1,0 +1,11 @@
+{% extends "retreat_base.html" %}
+{% block title %}회차 준비 · 대청부 수련회{% endblock %}
+{% block body %}
+<main class="wiz">
+  <div class="empty-state" style="min-height:50vh">
+    <h2>진행 중인 회차 준비가 없습니다</h2>
+    <p>총무팀이 새 회차 준비를 시작하면 여기에서 우리 팀이 맡을 업무를 고르게 됩니다.
+      {% if is_admin(user) %}지금 시작하려면 <a href="/setup" style="color:var(--link)">새 회차 만들기</a>로 가세요.{% endif %}</p>
+  </div>
+</main>
+{% endblock %}

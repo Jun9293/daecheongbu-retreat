@@ -1,0 +1,97 @@
+{% extends "retreat_base.html" %}
+{% block title %}회차 준비 · {{ department_name }}{% endblock %}
+
+{% block body %}
+<main class="wiz">
+  <h2>{{ draft.name }} — 우리 팀이 맡을 업무</h2>
+  <p class="lead">
+    <b>{{ draft.open_date|kdate }}</b> 개회 기준으로 날짜가 계산되어 있습니다.
+    고른 뒤 <b>임시저장</b>은 몇 번이든 다시 할 수 있고, <b>제출</b>은 “우리 팀은 다 골랐다”는 표시입니다.
+    총무팀이 회차를 열기 전까지는 제출한 뒤에도 고칠 수 있습니다.
+  </p>
+
+  {% if viewer_is_admin %}
+  <div class="teams" style="margin-bottom:16px">
+    {% for row in progress.rows %}
+    <a class="tchip{{ ' off' if row.state == '대기' }}" href="/draft?department={{ row.department_key }}"
+       style="{% if row.department_key == department_key %}border-color:var(--ink);font-weight:600{% endif %}">
+      <i style="background:{{ dept_colors.get(row.department_key, '#69726D') }}"></i>
+      {{ dept_names.get(row.department_key, row.department_key) }}
+      <span class="x" style="font-size:11px">{{ row.state }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="alert {{ 'info' if progress.all_in else 'warn' }}">
+    <span class="ic">현황</span>
+    <span><b>{{ progress.submitted }}/{{ progress.total }}개 부서 제출</b>
+      {% if progress.waiting %}— 아직 {{ progress.waiting|length }}개 팀이 남았습니다:
+        {% for k in progress.waiting %}{{ dept_names.get(k, k) }}{{ ', ' if not loop.last }}{% endfor %}
+      {% else %}모든 팀이 제출했습니다. 총무팀이 회차를 열 수 있습니다.{% endif %}
+    </span>
+  </div>
+
+  {% if not can_edit %}
+  <div class="alert stop"><span class="ic">읽기</span>
+    <span>다른 부서의 칸입니다. 보기만 할 수 있습니다.</span></div>
+  {% endif %}
+
+  <div class="tools">
+    <span class="cnt" id="pickCount">선택 <b>0</b> / {{ items|length }}건</span>
+    <span style="margin-left:auto;font-size:12.5px;color:var(--ink-3)">
+      <i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ department_color }}"></i>
+      {{ department_name }}</span>
+  </div>
+
+  <div class="lib" id="draftLib">
+    {% for item in items %}
+    <div class="tgroup">
+      <div class="trow{{ ' on' if item.selected else ' off' }}" data-i="{{ item.id }}">
+        <span class="box"></span>
+        <span class="main"><span class="nm">{{ item.title }}
+          <span class="tag {{ item.verdict.tone }}">{{ item.verdict.label }}</span>
+          {%- if item.always_required %}<span class="tag must">필수 지정</span>{% endif %}
+          {%- if item.sub_count %}<span class="tag sub">하위 {{ item.sub_count }}</span>{% endif %}</span>
+          {% if item.rationale %}<span class="why">{{ item.rationale }}</span>{% endif %}
+          <span class="basis">{{ item.verdict.basis }}</span></span>
+        <span class="dwlbl">D-{{ item.d_week }}주</span>
+        <span class="dtlbl">{{ item.start_date.month }}/{{ item.start_date.day }}</span>
+      </div>
+      {% for sub in item.children %}
+      <div class="subrow{{ '' if item.selected else ' off' }}">
+        <span class="branch">↳</span><span class="nm">{{ sub.title }}</span>
+        <span class="dwlbl">D-{{ sub.d_week }}주</span>
+        <span class="dtlbl">{{ sub.start_date.month }}/{{ sub.start_date.day }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% if not items %}<div class="libempty">이 부서에 배정된 라이브러리 업무가 없습니다.</div>{% endif %}
+  </div>
+
+  <div class="field" style="max-width:none;margin-top:18px">
+    <label for="note">총무팀에 전할 말 (선택)</label>
+    <input id="note" type="text" value="{{ submission.note or '' }}"
+           placeholder="예: 객원 모집은 이번에 코람데오와 함께 진행합니다">
+  </div>
+</main>
+
+<footer class="wizfoot">
+  <span class="hint" id="hint">
+    {% if submission.submitted_at %}제출 완료 — {{ submission.submitted_by_name }}
+    {% elif submission.saved_at %}임시저장됨. 아직 제출하지 않았습니다.
+    {% else %}아직 저장하지 않았습니다.{% endif %}
+  </span>
+  <span class="sp"></span>
+  {% if can_edit %}
+  <button class="btn" id="saveDraft">임시저장</button>
+  <button class="btn pri" id="submitDraft">제출</button>
+  {% endif %}
+</footer>
+{% endblock %}
+
+{% block scripts %}
+<script id="draft-meta" type="application/json">{{ {'department': department_key, 'canEdit': can_edit}|tojson }}</script>
+<script src="/static/js/draft.js?v=10" defer></script>
+{% endblock %}

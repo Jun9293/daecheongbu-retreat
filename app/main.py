@@ -19,6 +19,7 @@ from app.routers import (
     budget,
     checklists,
     dashboard,
+    drafts,
     expenses,
     export,
     files,
@@ -87,6 +88,7 @@ app.include_router(auth.router)
 app.include_router(board.router)
 app.include_router(setup.router)
 app.include_router(library.router)
+app.include_router(drafts.router)
 app.include_router(dashboard.router)
 app.include_router(schedule.router)
 app.include_router(tasks.router)

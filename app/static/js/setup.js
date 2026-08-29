@@ -32,8 +32,14 @@ async function reload() {
   busy = false;
   if (!res.ok) { alert('계산에 실패했습니다. 개회일을 확인해주세요.'); return; }
   data = await res.json();
-  if (!touched) {              // 첫 계산에서만 기본 선택을 잡는다
-    data.items.forEach(item => { if (item.verdict.default_on) sel.add(item.id); });
+  if (!touched) {
+    // 팀들이 고른 것이 있으면 그것이 답이다. 없으면 자동 분류의 기본값.
+    if (data.draft && data.draft.submitted) {
+      data.draft.selected.forEach(id => sel.add(String(id)));
+      data.draft.adopted.forEach(t => sel.add('new:' + t));
+    } else {
+      data.items.forEach(item => { if (item.verdict.default_on) sel.add(item.id); });
+    }
     touched = true;
   }
   renderWeeks();
@@ -90,6 +96,7 @@ function renderLib() {
     + `<span class="cnt">이번 회차 선택 <b>${sel.size}</b> / ${data.items.length}건</span>`;
   $('histhead').innerHTML = data.round_labels.map(r => `<span>${esc(r)}</span>`).join('');
   renderBasisNotice();
+  renderDraftPanel();
 
   const shown = data.items.filter(i => filt === 'all' || i.verdict.label === filt);
   // 성격이 다른 셋으로 나눈다 — 섞어 놓으면 무엇을 고르는지가 흐려진다
@@ -180,6 +187,27 @@ function renderBasisNotice() {
     <a href="/library" style="color:inherit;text-decoration:underline">업무 라이브러리에서 필수 지정하기</a></span></div>`;
 }
 
+/* 팀별 수집이 진행 중이면 현황을 보여주고, 제출된 선택을 그대로 쓴다. */
+function renderDraftPanel() {
+  const box = $('draftPanel');
+  const d = data.draft;
+  if (!d) { box.innerHTML = ''; return; }
+  const rows = d.rows.map(r => `<div class="draftrow ${r.state === '제출' ? 'in' : ''}">
+      <b>${esc(r.name)}</b>
+      <span class="st">${r.state}</span>
+      <span class="n">${r.count}건</span>
+      ${r.by ? `<span class="by">${esc(r.by)}</span>` : ''}
+      ${r.note ? `<span class="note">${esc(r.note)}</span>` : ''}</div>`).join('');
+  box.innerHTML = `<div class="alert ${d.all_in ? 'info' : 'warn'}">
+      <span class="ic">수집</span><span>
+      <b>${esc(d.name)}</b> — ${d.submitted}/${d.total}개 부서 제출.
+      ${d.all_in
+        ? '모든 팀이 제출했습니다. 아래 목록은 각 팀이 고른 그대로입니다.'
+        : '아직 제출하지 않은 팀이 있습니다. 지금 만들면 그 팀의 업무는 빠집니다.'}
+      </span></div>
+    <div class="drafttable">${rows}</div>`;
+}
+
 /* ── 4단계: 구멍 방지 경고 ── */
 function renderSummary() {
   const chosen = data.items.filter(i => sel.has(i.id));
@@ -232,6 +260,7 @@ function go(n) {
     d.classList.toggle('past', i + 1 < n);
   });
   $('prev').disabled = n === 1;
+  $('askTeams').hidden = !(n === 2 && !(data && data.draft));
   $('next').textContent = n === 4 ? '회차 만들기' : '다음';
   $('hint').textContent = HINTS[n];
   if (n === 3) renderLib();
@@ -260,6 +289,23 @@ $('next').onclick = async () => {
   if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '회차를 만들지 못했습니다.'); return; }
   const out = await res.json();
   location.href = out.redirect;
+};
+
+$('askTeams').onclick = async () => {
+  if (!confirm('각 팀에 업무 선택을 요청합니다. 팀이 제출한 내용이 3단계에 반영됩니다.')) return;
+  const res = await fetch('/setup/draft', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name: $('nm').value,
+      open_date: $('op').value,
+      close_date: $('cl').value,
+      meal_subsidy: Number($('subsidy').value) || 0,
+      department_keys: DEPTS.map(d => d.key).filter(k => !off.has(k)),
+    }),
+  });
+  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '요청하지 못했습니다.'); return; }
+  location.href = (await res.json()).redirect;
 };
 
 ['op', 'cl'].forEach(id => $(id).onchange = reload);

@@ -23,11 +23,21 @@ from app.templating import render
 router = APIRouter()
 
 
-def _can_edit(user: User, run: TaskRun) -> bool:
-    return perm.can_edit_department_content(
+def _dept_key_of(db: Session, user: User) -> str | None:
+    """로그인한 사람의 부서 키. 회차가 바뀌어도 이것만은 그대로다."""
+    from app.models import Department
+
+    if user.department_id is None:
+        return None
+    dept = db.get(Department, user.department_id)
+    return dept.key if dept else None
+
+
+def _can_edit(db: Session, user: User, run: TaskRun) -> bool:
+    return perm.can_edit_department_by_key(
         role=user.role,
-        user_department_id=user.department_id,
-        target_department_id=run.department_id,
+        user_department_key=_dept_key_of(db, user),
+        target_department_key=run.department.key if run.department else None,
     )
 
 
@@ -46,12 +56,10 @@ def board_page(
     if retreat.start_date is None:
         raise HTTPException(status_code=400, detail="회차의 개회일이 지정되지 않았습니다.")
 
-    view = board_view.build(db, retreat, can_edit=lambda run: _can_edit(user, run))
-    my_key = None
-    if user.department_id is not None:
-        dept = next((d for d in retreat.departments if d.id == user.department_id), None)
-        my_key = dept.key if dept else None
-
+    my_key = _dept_key_of(db, user)
+    view = board_view.build(db, retreat, can_edit=lambda run: perm.can_edit_department_by_key(
+            role=user.role, user_department_key=my_key,
+            target_department_key=run.department.key if run.department else None))
     return render(
         request,
         "board.html",
@@ -153,7 +161,7 @@ def task_detail(
         "suggestion_rationale": lib.suggestion_rationale
         if lib.origin == "claude_suggestion"
         else None,
-        "can_edit": _can_edit(user, run),
+        "can_edit": _can_edit(db, user, run),
     }
 
 
@@ -175,7 +183,7 @@ def set_status(
         raise HTTPException(status_code=400, detail="알 수 없는 상태입니다.")
 
     run = _load_run(db, retreat, run_id)
-    if not _can_edit(user, run):
+    if not _can_edit(db, user, run):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
 
     before = run.status
@@ -226,7 +234,7 @@ def move_dates(
     한 회차에서 일정을 당겼다고 다음 회차의 기준까지 따라 움직이면 안 된다.
     """
     run = _load_run(db, retreat, run_id)
-    if not _can_edit(user, run):
+    if not _can_edit(db, user, run):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 옮길 수 있습니다.")
 
     try:
@@ -278,7 +286,7 @@ def add_discussion(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     run = _load_run(db, retreat, run_id)
-    if not _can_edit(user, run):
+    if not _can_edit(db, user, run):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
 
     body = payload.body.strip()
@@ -313,3 +321,240 @@ def add_discussion(
         summary=f"{run.library.title}: {body[:40]}",
     )
     return {"discussions": _serialize_discussions(run)}
+
+
+# ---------------------------------------------------------------- 업무 추가
+
+
+@router.get("/board/add")
+def add_task_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """회차를 연 뒤에도 업무는 늘어난다.
+
+    라이브러리에 이미 있는 것을 이번 회차에 넣거나, 아예 새 업무를 만든다.
+    새로 만든 것도 라이브러리에 남아 다음 회차의 후보가 된다.
+    """
+    from app.domain import dweek as dweek_mod
+    from app.models import TaskLibrary
+
+    if perm.is_readonly(user.role):
+        raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
+
+    existing = {
+        run.library_id
+        for run in db.scalars(select(TaskRun).where(TaskRun.retreat_id == retreat.id, TaskRun.included))
+    }
+    rows = []
+    for lib in db.scalars(
+        select(TaskLibrary)
+        .where(TaskLibrary.archived_at.is_(None), TaskLibrary.parent_library_id.is_(None))
+        .order_by(TaskLibrary.title)
+    ):
+        if lib.id in existing:
+            continue
+        start, _ = dweek_mod.resolve_dates(
+            retreat.start_date,
+            anchor=lib.date_anchor,
+            d_week=lib.default_d_week,
+            offset_days=lib.default_offset_days,
+            span_days=lib.default_span_days,
+        )
+        rows.append(
+            {
+                "library_id": lib.id,
+                "title": lib.title,
+                "kind": lib.kind,
+                "kind_label": lib.kind_label,
+                "department_key": lib.default_department_key,
+                "d_week": lib.default_d_week,
+                "start_label": f"{start.month}/{start.day}",
+            }
+        )
+
+    departments = sorted(retreat.departments, key=lambda d: d.sort_order)
+    return render(
+        request,
+        "board_add.html",
+        {
+            "user": user,
+            "retreat": retreat,
+            "retreats": all_retreats(db),
+            "library_rows": rows,
+            "departments": departments,
+            "my_department_key": next(
+                (d.key for d in departments if d.id == user.department_id), None
+            ),
+            "viewer_is_admin": perm.can_manage_retreat(user.role),
+            "first_week": dweek_mod.FIRST_D_WEEK,
+            "active_tab": "board",
+            "page_subtitle": "업무 추가",
+        },
+    )
+
+
+class AddExistingIn(BaseModel):
+    library_ids: list[int] = []
+
+
+@router.post("/board/add/existing")
+def add_existing(
+    payload: AddExistingIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """라이브러리에 있는 업무를 이번 회차에 넣는다."""
+    from app.domain import dweek as dweek_mod
+    from app.models import TaskLibrary
+
+    if perm.is_readonly(user.role):
+        raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
+
+    dept_by_key = {d.key: d for d in retreat.departments}
+    added = 0
+    for library_id in payload.library_ids:
+        lib = db.get(TaskLibrary, library_id)
+        if lib is None:
+            continue
+        dept = dept_by_key.get(lib.default_department_key or "")
+        if not perm.can_edit_department_by_key(
+            role=user.role,
+            user_department_key=_dept_key_of(db, user),
+            target_department_key=lib.default_department_key,
+        ):
+            raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
+        for target in [lib] + list(
+            db.scalars(select(TaskLibrary).where(TaskLibrary.parent_library_id == lib.id))
+        ):
+            start, end = dweek_mod.resolve_dates(
+                retreat.start_date,
+                anchor=target.date_anchor,
+                d_week=target.default_d_week,
+                offset_days=target.default_offset_days,
+                span_days=target.default_span_days,
+            )
+            run = db.scalars(
+                select(TaskRun).where(
+                    TaskRun.retreat_id == retreat.id, TaskRun.library_id == target.id
+                )
+            ).first()
+            target_dept = dept_by_key.get(target.default_department_key or "")
+            if run is None:
+                db.add(
+                    TaskRun(
+                        library_id=target.id,
+                        retreat_id=retreat.id,
+                        included=True,
+                        department_id=target_dept.id if target_dept else None,
+                        d_week=target.default_d_week,
+                        start_date=start,
+                        end_date=end,
+                        status="대기",
+                    )
+                )
+            else:                       # 미실행으로 남아 있던 기록을 되살린다
+                run.included = True
+                run.start_date, run.end_date = start, end
+                run.d_week = target.default_d_week
+                run.department_id = target_dept.id if target_dept else None
+        added += 1
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="업무_추가",
+        target_type="task_run",
+        target_id=None,
+        summary=f"라이브러리에서 {added}건 추가",
+    )
+    return {"added": added, "redirect": "/board"}
+
+
+class NewTaskIn(BaseModel):
+    title: str
+    department_key: str | None = None
+    kind: str = "main"
+    d_week: int
+    span_days: int = 0
+    parent_library_id: int | None = None
+
+
+@router.post("/board/add/new")
+def add_new(
+    payload: NewTaskIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """라이브러리에 없던 업무를 새로 만든다. 다음 회차의 후보로도 남는다."""
+    from app.domain import dweek as dweek_mod
+    from app.models import TASK_KINDS, TaskLibrary
+
+    if perm.is_readonly(user.role):
+        raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="업무 이름을 입력해주세요.")
+    if payload.kind not in TASK_KINDS:
+        raise HTTPException(status_code=400, detail="알 수 없는 분류입니다.")
+
+    dept_by_key = {d.key: d for d in retreat.departments}
+    dept = dept_by_key.get(payload.department_key or "")
+    if not perm.can_edit_department_by_key(
+        role=user.role,
+        user_department_key=_dept_key_of(db, user),
+        target_department_key=payload.department_key,
+    ):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
+
+    lib = TaskLibrary(
+        title=title,
+        kind=payload.kind,
+        parent_library_id=payload.parent_library_id,
+        default_department_key=payload.department_key,
+        related_department_keys=[],
+        related_library_ids=[],
+        date_anchor="week",
+        default_d_week=max(1, payload.d_week),
+        default_offset_days=0,
+        default_span_days=max(0, payload.span_days),
+        origin="history",
+    )
+    db.add(lib)
+    db.flush()
+
+    start, end = dweek_mod.resolve_dates(
+        retreat.start_date,
+        anchor=lib.date_anchor,
+        d_week=lib.default_d_week,
+        offset_days=0,
+        span_days=lib.default_span_days,
+    )
+    db.add(
+        TaskRun(
+            library_id=lib.id,
+            retreat_id=retreat.id,
+            included=True,
+            department_id=dept.id if dept else None,
+            d_week=lib.default_d_week,
+            start_date=start,
+            end_date=end,
+            status="대기",
+        )
+    )
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="업무_신규생성",
+        target_type="task_library",
+        target_id=lib.id,
+        summary=f"{title} (D-{lib.default_d_week}주)",
+    )
+    return {"library_id": lib.id, "redirect": "/board"}

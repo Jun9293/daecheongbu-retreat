@@ -45,3 +45,21 @@ def can_edit_department_content(
     if user_department_id is None or target_department_id is None:
         return False
     return user_department_id == target_department_id
+
+
+def can_edit_department_by_key(
+    *, role: str, user_department_key: str | None, target_department_key: str | None
+) -> bool:
+    """부서 소속은 **키**로 비교한다.
+
+    Department 행은 회차마다 새로 만들어지므로 id 로 비교하면 새 회차가 열리는
+    순간 모든 부서 리더가 자기 부서 업무조차 손대지 못하게 된다.
+    회차를 넘어 같은 부서임을 알아보는 것은 key 뿐이다.
+    """
+    if role == ADMIN:
+        return True
+    if role not in _EDITOR_ROLES:
+        return False
+    if not user_department_key or not target_department_key:
+        return False
+    return user_department_key == target_department_key

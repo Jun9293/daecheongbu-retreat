@@ -86,6 +86,21 @@ templates.env.globals["is_readonly"] = perm.is_readonly
 templates.env.globals["is_admin"] = lambda user: user is not None and perm.can_manage_retreat(user.role)
 
 
+def _active_draft(context: dict) -> dict | None:
+    """진행 중인 회차 준비가 있으면 상단에 표시한다."""
+    if context.get("user") is None:
+        return None
+    from app.db import SessionLocal
+    from app.domain import drafts as draft_domain
+
+    with SessionLocal() as db:
+        draft = draft_domain.active_draft(db)
+        if draft is None:
+            return None
+        data = draft_domain.progress(draft)
+        return {"name": draft.name, "submitted": data["submitted"], "total": data["total"]}
+
+
 def _badge_counts(context: dict) -> dict:
     """모든 화면 상단에 표시할 미확인 알림 / 대기 중인 확인 요청 수."""
     user = context.get("user")
@@ -113,6 +128,7 @@ def render(
         "request": request,
         "flash": urllib.parse.unquote(flash) if flash else None,
         **_badge_counts(context),
+        "active_draft": _active_draft(context),
         **context,
     }
     response = templates.TemplateResponse(

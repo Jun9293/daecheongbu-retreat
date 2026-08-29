@@ -691,3 +691,81 @@ class DiscussionEntry(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     run: Mapped[TaskRun] = relationship(back_populates="discussions")
+
+
+# ==========================================================================
+# 회차 준비 초안 — 각 팀이 자기 업무를 고르고, 총무팀이 모아 회차를 연다
+# ==========================================================================
+
+DRAFT_STATUSES = ("수집중", "생성완료", "취소")
+
+
+class RetreatDraft(Base):
+    """아직 회차가 되지 않은 준비 상태.
+
+    총무팀이 혼자 다 고르면 각 팀의 사정이 반영되지 않는다. 회차 정보와 부서만
+    먼저 정해 두고, 업무 선택은 각 팀에게 맡긴 뒤 모아서 연다.
+    """
+
+    __tablename__ = "retreat_drafts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    open_date: Mapped[dt.date] = mapped_column(Date)
+    close_date: Mapped[dt.date] = mapped_column(Date)
+    meal_subsidy_per_person: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_MEAL_SUBSIDY_PER_PERSON
+    )
+    department_keys: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(20), default="수집중")
+    created_retreat_id: Mapped[int | None] = mapped_column(
+        ForeignKey("retreats.id", ondelete="SET NULL"), nullable=True
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    submissions: Mapped[list[DraftSubmission]] = relationship(
+        back_populates="draft",
+        cascade="all, delete-orphan",
+        order_by="DraftSubmission.id",
+    )
+
+    @property
+    def is_open(self) -> bool:
+        return self.status == "수집중"
+
+
+class DraftSubmission(Base):
+    """한 부서가 이번 회차에 하겠다고 고른 업무."""
+
+    __tablename__ = "draft_submissions"
+    __table_args__ = (UniqueConstraint("draft_id", "department_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("retreat_drafts.id", ondelete="CASCADE"), index=True
+    )
+    department_key: Mapped[str] = mapped_column(String(40))
+    library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+    adopted_titles: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 임시저장은 saved_at 만, 제출까지 하면 submitted_at 이 찍힌다
+    saved_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    submitted_by_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    draft: Mapped[RetreatDraft] = relationship(back_populates="submissions")
+
+    @property
+    def state(self) -> str:
+        if self.submitted_at:
+            return "제출"
+        if self.saved_at:
+            return "작성중"
+        return "대기"

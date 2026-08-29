@@ -90,3 +90,24 @@ def test_알_수_없는_역할은_거부한다():
     assert can_edit_department_content(
         role="superuser", user_department_id=1, target_department_id=1
     ) is False
+
+
+def test_부서_소속은_키로_비교해야_한다():
+    """Department 행은 회차마다 새로 만들어진다.
+
+    id 로 비교하면 새 회차가 열리는 순간 모든 부서 리더가 자기 부서 업무조차
+    손대지 못한다. 회차를 넘어 같은 부서임을 알아보는 것은 key 뿐이다.
+    """
+    from app.domain import permissions as perm
+
+    assert perm.can_edit_department_by_key(
+        role="dept_lead", user_department_key="sketch", target_department_key="sketch") is True
+    assert perm.can_edit_department_by_key(
+        role="dept_lead", user_department_key="sketch", target_department_key="chongmuM") is False
+    assert perm.can_edit_department_by_key(
+        role="admin", user_department_key=None, target_department_key="sketch") is True
+    assert perm.can_edit_department_by_key(
+        role="viewer", user_department_key="sketch", target_department_key="sketch") is False
+    # 담당 없는 업무는 총무팀 소관
+    assert perm.can_edit_department_by_key(
+        role="dept_lead", user_department_key="sketch", target_department_key=None) is False

@@ -16,10 +16,11 @@ from sqlalchemy.orm import Session
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
 from app.db import get_db
 from app.deps import all_retreats, log_activity
+from app.domain import drafts as draft_domain
 from app.domain import dweek
 from app.domain import library as lib_domain
 from app.domain import suggestions as suggest_domain
-from app.domain.departments import DEPARTMENT_MASTER
+from app.domain.departments import DEPARTMENT_MASTER, DEPARTMENT_NAMES
 from app.models import User
 from app.security import require_admin
 from app.templating import redirect, render
@@ -70,6 +71,7 @@ def setup_page(
             "default_subsidy": DEFAULT_MEAL_SUBSIDY_PER_PERSON,
             "base_retreat_name": base.name if base else None,
             "round_labels": lib_domain.round_labels(db),
+            "draft": draft_domain.active_draft(db),
             "active_tab": "setup",
             "page_subtitle": "새 회차 만들기",
         },
@@ -182,7 +184,84 @@ def preview(
         "history_depth": lib_domain.history_depth(db),
         "base_retreat": base.name if base else None,
         "suggestions": proposals,
+        "draft": _draft_state(db),
     }
+
+
+def _draft_state(db: Session) -> dict | None:
+    """팀별 수집이 진행 중이면 그 현황과 제출된 선택을 함께 준다."""
+    draft = draft_domain.active_draft(db)
+    if draft is None:
+        return None
+    library_ids, adopted = draft_domain.merged_selection(draft)
+    data = draft_domain.progress(draft)
+    return {
+        "id": draft.id,
+        "name": draft.name,
+        "open_date": draft.open_date.isoformat(),
+        "close_date": draft.close_date.isoformat(),
+        "meal_subsidy": draft.meal_subsidy_per_person,
+        "department_keys": draft.department_keys or [],
+        "submitted": data["submitted"],
+        "total": data["total"],
+        "all_in": data["all_in"],
+        "rows": [
+            {
+                "department_key": r["department_key"],
+                "name": DEPARTMENT_NAMES.get(r["department_key"], r["department_key"]),
+                "state": r["state"],
+                "count": r["count"],
+                "by": r["by"],
+                "note": r["note"],
+            }
+            for r in data["rows"]
+        ],
+        "selected": sorted(library_ids),
+        "adopted": sorted(adopted),
+    }
+
+
+class DraftIn(BaseModel):
+    name: str
+    open_date: str
+    close_date: str
+    meal_subsidy: int = DEFAULT_MEAL_SUBSIDY_PER_PERSON
+    department_keys: list[str]
+
+
+@router.post("/setup/draft")
+def open_draft(
+    payload: DraftIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """업무 선택을 각 팀에 맡긴다. 부서마다 빈 칸이 하나씩 생긴다."""
+    open_date = _parse(payload.open_date)
+    close_date = _parse(payload.close_date)
+    if close_date < open_date:
+        raise HTTPException(status_code=400, detail="폐회일이 개회일보다 빠릅니다.")
+    if not payload.department_keys:
+        raise HTTPException(status_code=400, detail="부서를 하나 이상 남겨주세요.")
+
+    draft = draft_domain.open_draft(
+        db,
+        name=payload.name.strip() or "새 회차",
+        open_date=open_date,
+        close_date=close_date,
+        meal_subsidy=payload.meal_subsidy,
+        department_keys=payload.department_keys,
+        actor=user,
+    )
+    log_activity(
+        db,
+        retreat_id=None,
+        actor=user,
+        action="회차준비_시작",
+        target_type="retreat_draft",
+        target_id=draft.id,
+        summary=f"{draft.name} — {len(payload.department_keys)}개 부서에 업무 선택 요청",
+    )
+    return {"draft_id": draft.id, "redirect": "/draft"}
 
 
 class CreateIn(BaseModel):
@@ -236,6 +315,10 @@ def create(
         adopted_suggestions=adopted,
         actor=user,
     )
+    draft = draft_domain.active_draft(db)
+    if draft is not None:
+        draft_domain.close_draft(db, draft, retreat_id=retreat.id)
+
     log_activity(
         db,
         retreat_id=retreat.id,
