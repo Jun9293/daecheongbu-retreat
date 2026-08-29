@@ -614,12 +614,18 @@ function startForCell(hc, weekday) {
   return new Date(from.getTime() + Math.min(weekday, span) * DAY_MS);
 }
 
-function cellAtX(x) {
+/* 끌어 놓을 칸은 '가장 가까운' 칸이다.
+   바의 왼쪽 끝이 들어간 칸으로 정하면, 시작할 때 이미 경계에 붙어 있어서
+   왼쪽으로 1px 만 움직여도 앞 칸으로 넘어간다. 오른쪽은 한 칸 폭을 다 가야 하고.
+   칸 왼쪽 모서리와의 거리로 고르면 양쪽 모두 반 칸을 움직여야 넘어간다. */
+function nearestCell(left) {
   const cells = headers();
-  const sr = sheet.getBoundingClientRect();
-  const local = x - sr.left;
-  return cells.find(hc => local >= hc.offsetLeft && local < hc.offsetLeft + hc.offsetWidth)
-    || (local < cells[0].offsetLeft ? cells[0] : cells[cells.length - 1]);
+  let best = cells[0], bestGap = Infinity;
+  for (const hc of cells) {
+    const gap = Math.abs(hc.offsetLeft - left);
+    if (gap < bestGap) { bestGap = gap; best = hc; }
+  }
+  return best;
 }
 
 function canDrag(bar) {
@@ -638,8 +644,6 @@ sheet.addEventListener('mousedown', e => {
   const spanDays = Math.round((dateOf(meta.end || meta.start) - origStart) / DAY_MS);
   const weekday = origStart.getDay();
   const grabX = e.clientX;
-  const barLeft = bar.getBoundingClientRect().left;
-  const grabOffset = grabX - barLeft;          // 잡은 지점을 유지한 채 끌린다
   const startCol = Number(bar.style.gridColumn.split('/')[0]);
   const width = Number(bar.style.gridColumn.split('/')[1]) - startCol;
 
@@ -651,7 +655,10 @@ sheet.addEventListener('mousedown', e => {
   const move = ev => {
     if (!moved && Math.abs(ev.clientX - grabX) < 3) return;
     moved = true;
-    const hc = cellAtX(ev.clientX - grabOffset + 2);
+    // 원래 칸의 왼쪽 모서리에서 끈 거리만큼 옮긴 자리 — 매번 원점에서 다시 잰다
+    const cells = headers();
+    const origin = cells[Math.min(startCol, cells.length) - 1];
+    const hc = nearestCell(origin.offsetLeft + (ev.clientX - grabX));
     if (!hc) return;
     const next = startForCell(hc, weekday);
     if (target && isoOf(target) === isoOf(next)) return;
