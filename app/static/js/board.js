@@ -345,18 +345,24 @@ function renderDrawer() {
   }
   document.getElementById('dtitle').textContent = d.title;
   const people = (d.candidates || []).map(p =>
-    `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)} · ${esc(p.role)}</option>`).join('');
+    `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   document.getElementById('dmeta').innerHTML =
     `<dt>기간</dt><dd>${d.can_edit
-        ? `<span class="dates"><input type="date" id="dstart" value="${d.start || ''}">
-             <em>→</em><input type="date" id="dend" value="${d.end || d.start || ''}"></span>`
-        : `<span class="mono">${d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>`}</dd>
-     <dt>담당팀</dt><dd>${d.department}</dd>
+        ? `<span class="pill dates">
+             <input type="date" id="dstart" value="${d.start || ''}" aria-label="시작일">
+             <i class="sep"></i>
+             <input type="date" id="dend" value="${d.end || d.start || ''}" aria-label="마감일">
+             <b class="span" id="dspan">${spanLabel(d.start, d.end)}</b></span>`
+        : `<span class="pill flat"><span class="mono">${
+             d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>
+             <b class="span">${spanLabel(d.start, d.end)}</b></span>`}</dd>
+     <dt>담당팀</dt><dd><span class="teamtag"><i style="background:${d.department_color}"></i>${esc(d.department)}</span></dd>
      <dt>담당자</dt><dd>${d.can_edit
-        ? `<select id="dassignee"><option value="">지정 안 함</option>${people}</select>`
-        : (d.assignee || '지정 안 함')}</dd>
-     <dt>상위</dt><dd>${d.parent_title || '—'}</dd>
-     <dt>관련팀</dt><dd>${d.related_departments.join(', ') || '—'}</dd>`;
+        ? `<span class="pill person" id="dperson"><span class="avatar">${initial(d.assignee)}</span>
+             <select id="dassignee"><option value="">지정 안 함</option>${people}</select></span>`
+        : `<span class="pill flat person"><span class="avatar">${initial(d.assignee)}</span>${esc(d.assignee || '지정 안 함')}</span>`}</dd>
+     <dt>상위</dt><dd>${d.parent_title ? esc(d.parent_title) : '—'}</dd>
+     <dt>관련팀</dt><dd>${d.related_departments.map(esc).join(', ') || '—'}</dd>`;
 
   if (d.can_edit) {
     const start = document.getElementById('dstart'), end = document.getElementById('dend');
@@ -368,7 +374,10 @@ function renderDrawer() {
         body: JSON.stringify({start: start.value, end: end.value || start.value}),
       });
       if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '기간을 바꾸지 못했습니다.'); return; }
-      applySavedDates(d.run_id, await res.json());
+      const saved = await res.json();
+      const span = document.getElementById('dspan');
+      if (span) span.textContent = spanLabel(saved.start, saved.end);
+      applySavedDates(d.run_id, saved);
     };
     start.onchange = saveDates;
     end.onchange = saveDates;
@@ -383,6 +392,8 @@ function renderDrawer() {
       const saved = await res.json();
       detail.assignee_id = saved.assignee_id;
       detail.assignee = saved.assignee;
+      const avatar = document.querySelector('#dperson .avatar');
+      if (avatar) avatar.textContent = saved.assignee ? saved.assignee.trim().slice(0, 1) : '·';
       applyAssignee(d.run_id, saved.assignee);
     };
   }
@@ -408,6 +419,17 @@ function renderDrawer() {
     : '<div style="font-size:12px;color:var(--ink-3)">연결된 업무 없음</div>';
 
   calendar(d);
+}
+
+/* 며칠짜리인지 한눈에 — 날짜만 보고 세지 않게 */
+function spanLabel(start, end) {
+  if (!start) return '';
+  const a = new Date(start), b = new Date(end || start);
+  const days = Math.round((b - a) / 864e5) + 1;
+  return days > 1 ? days + '일' : '하루';
+}
+function initial(name) {
+  return name ? esc(name.trim().slice(0, 1)) : '·';
 }
 
 function esc(s) {
@@ -780,13 +802,19 @@ function applySavedDates(runId, saved) {
     row.dataset.s = saved.start;
     row.dataset.e = saved.end;
   });
-  // 고스트 바까지 같은 자리로 옮긴다
+  // 축보다 앞으로 나간 업무는 그릴 칸이 없다. 보드를 다시 그려 축을 늘린다.
   const cells = headers();
+  if (saved.start < cells[0].dataset.cs) { location.reload(); return; }
+
+  // 고스트 바까지 같은 자리로 옮긴다.
+  // 범위 밖은 가까운 쪽 끝에 붙인다 — 앞은 첫 칸, 뒤는 마지막 칸.
+  // (못 찾았다고 무조건 마지막 칸으로 보내면 앞으로 당길수록 뒤로 밀린다)
   const colOf = iso => {
     const i = cells.findIndex(hc => hc.dataset.cs <= iso && iso <= hc.dataset.ce);
-    return (i < 0 ? cells.length - 1 : i) + 1;
+    if (i >= 0) return i + 1;
+    return iso < cells[0].dataset.cs ? 1 : cells.length;
   };
-  const a = colOf(saved.start), b = colOf(saved.end);
+  const a = colOf(saved.start), b = Math.max(a, colOf(saved.end));
   sheet.querySelectorAll(`.bar[data-run="${runId}"]`).forEach(el => {
     el.style.gridColumn = `${a}/${b + 1}`;
   });
