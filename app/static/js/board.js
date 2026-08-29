@@ -320,6 +320,7 @@ function renderDrawer() {
   if (d.reclassification_note) note += `<div class="note"><b>분류·담당 변경 기록</b>${esc(d.reclassification_note)}</div>`;
   document.getElementById('dnote').innerHTML = note;
   document.getElementById('daddlog').hidden = !d.can_edit;
+  document.getElementById('dfocus').disabled = !d.can_edit;
 
   document.getElementById('relN').textContent = d.related.length || '';
   document.getElementById('drel').innerHTML = d.related.length
@@ -341,12 +342,35 @@ function esc(s) {
 
 function renderLog() {
   const entries = detail.discussions;
-  const current = entries.filter(e => !e.carried);
-  const carried = entries.filter(e => e.carried);
-  const line = e => `<div class="entry">
-      <span class="d mono">${e.date}</span>
-      <span class="${e.superseded ? 'gone' : ''}">${esc(e.body)}</span>
-      ${e.author ? `<span class="who">${esc(e.author)}</span>` : ''}</div>`;
+  // 대체된 기록과 후속 내용을 한 덩어리로 잇는다 — 기존 내용에 취소선,
+  // 그 아래에 수정 내용을 붙이는 노션 관례 (CLAUDE.md 4-8)
+  const replacement = new Map();
+  entries.forEach(e => { if (e.replaces) replacement.set(e.replaces, e); });
+
+  const chainOf = start => {
+    const out = [start];
+    let next = replacement.get(start.id);
+    while (next) { out.push(next); next = replacement.get(next.id); }
+    return out;
+  };
+  const line = start => {
+    const chain = chainOf(start);
+    const last = chain[chain.length - 1];
+    const body = chain.map((node, i) => {
+      const struck = i < chain.length - 1;
+      const text = struck ? `<s>${esc(node.body)}</s>` : esc(node.body);
+      if (i === 0) return `<span>${text}</span>`;
+      const when = node.date && node.date !== start.date
+        ? ` <span class="d mono">${node.date}</span>` : '';
+      return `<span class="fix">${text}${when}</span>`;
+    }).join('');
+    return `<div class="entry"><span class="d mono">${start.date}</span>${body}` +
+      `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>`;
+  };
+
+  const roots = entries.filter(e => !e.replaces);
+  const current = roots.filter(e => !e.carried);
+  const carried = roots.filter(e => e.carried);
   let html = current.length ? current.map(line).join('')
     : '<div class="empty">아직 기록된 논의가 없습니다.</div>';
   if (carried.length) {
@@ -364,6 +388,12 @@ function closeDrawer() {
   unlink();
 }
 document.getElementById('dclose').onclick = closeDrawer;
+document.getElementById('dfocus').onclick = () => {
+  document.querySelector('#dtabs [data-p="log"]').click();
+  const box = document.getElementById('dbody');
+  box.scrollIntoView({block: 'nearest'});
+  box.focus();
+};
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); closeDrawer(); } });
 
 document.getElementById('dtabs').onclick = e => {
