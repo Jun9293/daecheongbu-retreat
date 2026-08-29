@@ -82,7 +82,7 @@ def _load_run(db: Session, retreat: Retreat, run_id: int) -> TaskRun:
     return run
 
 
-def _serialize_discussions(run: TaskRun) -> list[dict]:
+def _serialize_discussions(run: TaskRun, user: User | None = None) -> list[dict]:
     replaced = {e.supersedes_entry_id for e in run.discussions if e.supersedes_entry_id}
     return [
         {
@@ -93,9 +93,22 @@ def _serialize_discussions(run: TaskRun) -> list[dict]:
             "superseded": entry.id in replaced,
             "replaces": entry.supersedes_entry_id,
             "carried": entry.carried_from_run_id is not None,
+            "can_edit": _can_edit_entry(user, entry),
         }
         for entry in run.discussions
     ]
+
+
+def _can_edit_entry(user: User | None, entry: DiscussionEntry) -> bool:
+    """자기가 쓴 기록만 고친다. 총무팀은 전부 고칠 수 있다.
+
+    지난 회차에서 따라온 기록은 그 회차의 사실이므로 여기서 손대지 않는다.
+    말을 바꾸는 것과 잘못 쓴 것을 고치는 것은 다르다 — 결정이 뒤집힌 것은
+    취소선 + 후속 기록으로 남기고, 이 기능은 오타·오기를 위한 것이다.
+    """
+    if user is None or entry.carried_from_run_id is not None:
+        return False
+    return perm.can_manage_retreat(user.role) or entry.author_id == user.id
 
 
 @router.get("/board/task/{run_id}")
@@ -164,7 +177,7 @@ def task_detail(
             if k in dept_by_key
         ],
         "related": related,
-        "discussions": _serialize_discussions(run),
+        "discussions": _serialize_discussions(run, user),
         "reclassification_note": lib.reclassification_note,
         "suggestion_rationale": lib.suggestion_rationale
         if lib.origin == "claude_suggestion"
@@ -443,7 +456,7 @@ def add_discussion(
         target_id=run.id,
         summary=f"{run.library.title}: {body[:40]}",
     )
-    return {"discussions": _serialize_discussions(run)}
+    return {"discussions": _serialize_discussions(run, user)}
 
 
 # ---------------------------------------------------------------- 업무 추가
@@ -698,3 +711,49 @@ def add_new(
         summary=f"{title} ({start.isoformat()} ~ {end.isoformat()})",
     )
     return {"library_id": lib.id, "redirect": "/board"}
+
+
+class DiscussionEditIn(BaseModel):
+    body: str
+
+
+@router.post("/board/task/{run_id}/discussion/{entry_id}")
+def edit_discussion(
+    run_id: int,
+    entry_id: int,
+    payload: DiscussionEditIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """써 놓은 논의를 고친다 — 오타나 잘못 적은 것을 바로잡는 용도다."""
+    run = _load_run(db, retreat, run_id)
+    entry = db.get(DiscussionEntry, entry_id)
+    if entry is None or entry.run_id != run.id:
+        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+    if not _can_edit_entry(user, entry):
+        raise HTTPException(status_code=403, detail="내가 쓴 기록만 고칠 수 있습니다.")
+
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="내용을 입력해주세요.")
+
+    before = entry.body
+    if before == body:
+        return {"discussions": _serialize_discussions(run, user)}
+
+    entry.body = body
+    db.commit()
+    db.refresh(run)
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="논의_수정",
+        target_type="discussion_entry",
+        target_id=entry.id,
+        summary=f"{run.library.title}: {before[:30]} → {body[:30]}",
+        before_value={"body": before},
+        after_value={"body": body},
+    )
+    return {"discussions": _serialize_discussions(run, user)}

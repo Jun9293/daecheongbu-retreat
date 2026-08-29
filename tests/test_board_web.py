@@ -506,3 +506,79 @@ def test_부서_리더는_남의_부서_업무의_담당팀을_못_바꾼다(lea
     assert lead_client.post(
         f"/board/task/{other}/department", json={"key": "sketch"}
     ).status_code == 403
+
+
+# ---------------------------------------------------------------- 논의 수정
+
+
+def test_써_놓은_논의를_고칠_수_있다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    entry = admin_client.post(
+        f"/board/task/{run_id}/discussion", json={"body": "B안으로 확정"}
+    ).json()["discussions"][0]
+
+    response = admin_client.post(
+        f"/board/task/{run_id}/discussion/{entry['id']}", json={"body": "B안으로 최종 확정"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["discussions"][0]["body"] == "B안으로 최종 확정"
+    with app_session() as db:
+        assert db.get(models.DiscussionEntry, entry["id"]).body == "B안으로 최종 확정"
+
+
+def test_빈_내용으로는_고칠_수_없다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    entry = admin_client.post(
+        f"/board/task/{run_id}/discussion", json={"body": "원본"}
+    ).json()["discussions"][0]
+
+    assert admin_client.post(
+        f"/board/task/{run_id}/discussion/{entry['id']}", json={"body": "   "}
+    ).status_code == 400
+
+
+def test_남이_쓴_논의는_고칠_수_없다(admin_client, lead_client, board_data):
+    """말을 바꾸는 것은 취소선 + 후속 기록으로 남긴다. 이 기능은 오타용이다."""
+    run_id = board_data["runs"]["포스터 제작"]      # 스케치 — 리더가 편집 가능한 업무
+    mine = lead_client.post(
+        f"/board/task/{run_id}/discussion", json={"body": "리더가 쓴 기록"}
+    ).json()["discussions"][0]
+    theirs = admin_client.post(
+        f"/board/task/{run_id}/discussion", json={"body": "총무팀이 쓴 기록"}
+    ).json()["discussions"][-1]
+
+    # 자기 것은 고친다
+    assert lead_client.post(
+        f"/board/task/{run_id}/discussion/{mine['id']}", json={"body": "리더가 고친 기록"}
+    ).status_code == 200
+    # 남의 것은 못 고친다
+    assert lead_client.post(
+        f"/board/task/{run_id}/discussion/{theirs['id']}", json={"body": "가로채기"}
+    ).status_code == 403
+    # 총무팀은 전부 고칠 수 있다
+    assert admin_client.post(
+        f"/board/task/{run_id}/discussion/{mine['id']}", json={"body": "총무팀이 정리"}
+    ).status_code == 200
+
+
+def test_지난_회차에서_따라온_기록은_고칠_수_없다(admin_client, board_data):
+    """그 회차의 사실이므로 여기서 손대지 않는다."""
+    run_id = board_data["runs"]["포스터 제작"]
+    with app_session() as db:
+        carried = models.DiscussionEntry(
+            run_id=run_id, authored_at=dt.date(2026, 7, 26),
+            body="스트랩 재고 때문에 100×140mm 로 확정",
+            author_name="총무팀", carried_from_run_id=999,
+        )
+        db.add(carried)
+        db.commit()
+        carried_id = carried.id
+
+    detail = admin_client.get(f"/board/task/{run_id}").json()
+    row = next(d for d in detail["discussions"] if d["id"] == carried_id)
+    assert row["carried"] is True
+    assert row["can_edit"] is False
+    assert admin_client.post(
+        f"/board/task/{run_id}/discussion/{carried_id}", json={"body": "고쳐보기"}
+    ).status_code == 403

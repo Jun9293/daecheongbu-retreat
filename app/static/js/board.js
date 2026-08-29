@@ -426,7 +426,7 @@ function renderDrawer() {
   if (d.suggestion_rationale) note += `<div class="note"><b>CLAUDE 제안 근거</b>${esc(d.suggestion_rationale)}</div>`;
   if (d.reclassification_note) note += `<div class="note"><b>분류·담당 변경 기록</b>${esc(d.reclassification_note)}</div>`;
   document.getElementById('dnote').innerHTML = note;
-  document.getElementById('daddlog').hidden = !d.can_edit;
+  document.getElementById('daddlog').hidden = true;   // 하단 '논의 추가'로 연다
   document.getElementById('dfocus').disabled = !d.can_edit;
 
   document.getElementById('relN').textContent = d.related.length || '';
@@ -473,10 +473,11 @@ function renderLog() {
     const body = chain.map((node, i) => {
       const struck = i < chain.length - 1;
       const text = struck ? `<s>${esc(node.body)}</s>` : esc(node.body);
-      if (i === 0) return `<span>${text}</span>`;
-      const when = node.date && node.date !== start.date
+      const pen = node.can_edit
+        ? `<button class="editline" data-edit="${node.id}" title="이 기록 고치기">수정</button>` : '';
+      const when = i > 0 && node.date && node.date !== start.date
         ? ` <span class="d mono">${node.date}</span>` : '';
-      return `<span class="fix">${text}${when}</span>`;
+      return `<span class="${i === 0 ? 'body' : 'fix'}" data-entry="${node.id}">${text}${when}${pen}</span>`;
     }).join('');
     return `<div class="entry"><span class="d mono">${start.date}</span>${body}` +
       `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>`;
@@ -494,6 +495,44 @@ function renderLog() {
   document.getElementById('dlog').innerHTML = html;
 }
 
+/* 써 놓은 논의를 그 자리에서 고친다. 말을 바꾸는 것(취소선 + 후속 기록)과
+   잘못 쓴 것을 바로잡는 것은 다르므로, 이건 오타·오기를 위한 자리다. */
+document.getElementById('dlog').addEventListener('click', async e => {
+  const open = e.target.closest('[data-edit]');
+  if (open) { startEntryEdit(open.dataset.edit); return; }
+
+  const cancel = e.target.closest('[data-cancel-edit]');
+  if (cancel) { renderLog(); return; }
+
+  const save = e.target.closest('[data-save-edit]');
+  if (!save) return;
+  const id = save.dataset.saveEdit;
+  const box = document.querySelector(`#dlog [data-entry="${id}"] textarea`);
+  const body = box.value.trim();
+  if (!body) { box.focus(); return; }
+  const res = await fetch(`/board/task/${cur}/discussion/${id}`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({body}),
+  });
+  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '고치지 못했습니다.'); return; }
+  detail.discussions = (await res.json()).discussions;
+  renderLog();
+});
+
+function startEntryEdit(id) {
+  const entry = detail.discussions.find(x => String(x.id) === String(id));
+  const span = document.querySelector(`#dlog [data-entry="${id}"]`);
+  if (!entry || !span) return;
+  span.innerHTML = `<textarea class="editbox">${esc(entry.body)}</textarea>
+    <span class="editrow">
+      <button class="pri" data-save-edit="${id}">저장</button>
+      <button data-cancel-edit="1">취소</button></span>`;
+  const box = span.querySelector('textarea');
+  box.style.height = Math.max(56, box.scrollHeight) + 'px';
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
+}
+
 function closeDrawer() {
   dw.classList.remove('open');
   dw.setAttribute('aria-hidden', 'true');
@@ -504,9 +543,16 @@ function closeDrawer() {
 document.getElementById('dclose').onclick = closeDrawer;
 document.getElementById('dfocus').onclick = () => {
   document.querySelector('#dtabs [data-p="log"]').click();
+  const panel = document.getElementById('daddlog');
+  panel.hidden = false;
   const box = document.getElementById('dbody');
   box.scrollIntoView({block: 'nearest'});
   box.focus();
+};
+document.getElementById('dcancelnew').onclick = () => {
+  document.getElementById('dbody').value = '';
+  document.getElementById('dsuper').checked = false;
+  document.getElementById('daddlog').hidden = true;
 };
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); closeDrawer(); } });
 
@@ -615,6 +661,7 @@ document.getElementById('dsave').onclick = async () => {
   detail.discussions = data.discussions;
   box.value = '';
   document.getElementById('dsuper').checked = false;
+  document.getElementById('daddlog').hidden = true;
   renderLog();
 };
 
