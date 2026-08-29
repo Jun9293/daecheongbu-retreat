@@ -288,9 +288,12 @@ body.dragging-bar .bar{transition:none}
 .log .entry:last-child{border:none}
 .log .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);margin-right:7px}
 .log .who{font-size:11.5px;color:var(--ink-3);margin-left:6px}
+/* 날짜·작성자는 한 줄로 걷어 올리고 본문은 그 아래 왼쪽 끝에서 시작한다.
+   본문이 날짜 옆에서 시작하면 목록의 첫 줄만 들여쓰기가 달라진다. */
+.log .ehead{display:flex;align-items:baseline;margin-bottom:3px}
 .log s{color:var(--ink-3)}
 .log .fix{display:block;margin-top:5px;padding-left:12px;border-left:2px solid var(--rule-2)}
-.log .entry .body,.log .entry .fix{position:relative;white-space:pre-wrap}
+.log .entry .body,.log .entry .fix{display:block;position:relative;white-space:pre-wrap}
 .log .entry .body s,.log .entry .fix s{white-space:pre-wrap}
 /* 고칠 수 있다는 것만 조용히 — 그 줄에 마우스를 올렸을 때 나온다 */
 .log .editline{font:inherit;font-size:10.5px;padding:1px 6px;margin-left:6px;border-radius:3px;

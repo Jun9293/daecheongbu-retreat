@@ -516,8 +516,10 @@ function renderLog() {
         ? ` <span class="d mono">${node.date}</span>` : '';
       return `<span class="${i === 0 ? 'body' : 'fix'}" data-entry="${node.id}">${text}${when}${pen}</span>`;
     }).join('');
-    return `<div class="entry"><span class="d mono">${start.date}</span>${body}` +
-      `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>`;
+    // 날짜는 본문 위에 따로 둔다 — 옆에 붙이면 번호 매긴 목록의 첫 줄만 밀려
+    // 둘째 줄부터와 왼쪽 끝이 어긋난다.
+    return `<div class="entry"><div class="ehead"><span class="d mono">${start.date}</span>` +
+      `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>${body}</div>`;
   };
 
   const roots = entries.filter(e => !e.replaces);
