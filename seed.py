@@ -18,7 +18,7 @@ from sqlalchemy import select
 import seed_data as D
 import seed_library
 import seed_library_data as L
-from app.config import ASSET_DIR
+from app.config import ASSET_DIR, DATA_DIR, DATABASE_URL
 from app.db import Base, SessionLocal, engine, init_db
 from app.domain.meal import calculate_meal_settlement
 from app.models import (
@@ -434,7 +434,22 @@ def seed() -> None:
 
 if __name__ == "__main__":
     if "--reset" in sys.argv:
-        Base.metadata.drop_all(engine)
+        # 서버가 켜진 채로는 drop_all 이 파일을 완전히 비우지 못한다.
+        # SQLite 는 파일째 지우는 것이 확실하다.
+        engine.dispose()
+        removed = False
+        if DATABASE_URL.startswith("sqlite:///"):
+            for path in (DATA_DIR / "app.db", DATA_DIR / "app.db-journal",
+                         DATA_DIR / "app.db-wal", DATA_DIR / "app.db-shm"):
+                if path.exists():
+                    try:
+                        path.unlink()
+                        removed = True
+                    except PermissionError:
+                        print(f"  ! {path.name} 를 지울 수 없습니다 — 실행 중인 서버를 먼저 닫아주세요.")
+                        raise SystemExit(1)
+        if not removed:
+            Base.metadata.drop_all(engine)
         for leftover in ASSET_DIR.glob("demo-*"):
             leftover.unlink()
         print("기존 데이터를 삭제했습니다.")

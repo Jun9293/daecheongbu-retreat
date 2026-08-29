@@ -468,3 +468,41 @@ def test_보드가_바마다_편집_권한을_실어_보낸다(lead_client, boar
     """끌 수 있는 바인지 화면이 알아야 커서와 동작이 갈린다."""
     page = lead_client.get("/board").text
     assert '"can_edit"' in page
+
+
+def test_담당팀을_옮기면_담당자도_함께_정리된다(admin_client, board_data):
+    """넘긴 팀 사람이 담당자로 남아 있으면 뜻이 맞지 않는다."""
+    run_id = board_data["runs"]["포스터 제작"]        # 스케치
+    with app_session() as db:
+        lead = db.scalars(select(models.User).where(models.User.phone_number == "01055556666")).one()
+        db.get(models.TaskRun, run_id).assignee_id = lead.id
+        db.commit()
+
+    response = admin_client.post(f"/board/task/{run_id}/department", json={"key": "chongmuM"})
+
+    assert response.status_code == 200
+    with app_session() as db:
+        run = db.get(models.TaskRun, run_id)
+        assert run.department.key == "chongmuM"
+        assert run.assignee_id is None        # 스케치 사람은 더 이상 담당이 아니다
+
+
+def test_담당팀을_담당_없음으로도_옮길_수_있다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    assert admin_client.post(f"/board/task/{run_id}/department", json={"key": None}).status_code == 200
+    with app_session() as db:
+        assert db.get(models.TaskRun, run_id).department_id is None
+
+
+def test_이번_회차에_없는_부서로는_옮길_수_없다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    assert admin_client.post(
+        f"/board/task/{run_id}/department", json={"key": "koram"}
+    ).status_code == 400
+
+
+def test_부서_리더는_남의_부서_업무의_담당팀을_못_바꾼다(lead_client, board_data):
+    other = board_data["runs"]["차량 신청"]           # 총무M
+    assert lead_client.post(
+        f"/board/task/{other}/department", json={"key": "sketch"}
+    ).status_code == 403

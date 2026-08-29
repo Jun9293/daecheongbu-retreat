@@ -234,7 +234,7 @@ body.dragging-bar .bar{transition:none}
 .chip.stat[disabled]{cursor:default;opacity:.7}
 .chip.stat .cv{width:8px;height:8px;border-radius:50%}
 .dtitle{font-size:18.5px;font-weight:600;line-height:1.35}
-.dmeta{margin-top:12px;display:grid;grid-template-columns:60px 1fr;gap:7px 10px;font-size:13px;align-items:center}
+.dmeta{margin-top:12px;display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px 8px;font-size:13px;align-items:center}
 .dmeta dt{color:var(--ink-3);padding-top:5px} .dmeta dd{color:var(--ink-2);min-width:0}
 
 /* 기간·담당자는 '고칠 수 있다'는 것만 조용히 알리고, 평소엔 글자처럼 보인다 */
@@ -246,23 +246,22 @@ body.dragging-bar .bar{transition:none}
 
 .pill input[type=date]{font:inherit;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
   font-variant-numeric:tabular-nums;color:var(--ink);background:none;border:none;
-  border-radius:3px;padding:3px 4px;cursor:pointer;width:112px}
+  border-radius:3px;padding:3px 5px;cursor:pointer;width:auto;min-width:92px}
 .pill input[type=date]:hover{background:#EAEEEB}
 .pill input[type=date]:focus{outline:none;background:var(--paper-2);
   box-shadow:inset 0 0 0 1px var(--link)}
-.pill input[type=date]::-webkit-calendar-picker-indicator{opacity:.3;cursor:pointer}
-.pill input[type=date]:hover::-webkit-calendar-picker-indicator{opacity:.7}
+/* 아이콘 없이 — 날짜를 누르면 달력이 열린다 */
+.pill input[type=date]::-webkit-calendar-picker-indicator{display:none}
+.pill input[type=date]::-webkit-inner-spin-button{display:none}
 .pill .sep{width:9px;height:1px;background:var(--rule-2);flex:none;display:block}
 .pill .span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;
   color:var(--ink-3);background:#EAEEEB;border-radius:2px;padding:2px 6px;
   margin-left:4px;flex:none}
 
-.pill.person{gap:7px;padding:1px 6px 1px 2px}
-.pill.person .avatar{width:21px;height:21px;border-radius:50%;flex:none;display:flex;
-  align-items:center;justify-content:center;font-size:11px;font-weight:600;
-  background:#EAEEEB;color:var(--ink-2)}
+.pill.person{gap:6px;padding:1px 4px}
+.pill.person .dot{width:8px;height:8px;border-radius:50%;flex:none;display:block;margin-left:4px}
 .pill.person select{font:inherit;font-size:13px;color:var(--ink);background:none;border:none;
-  padding:3px 2px;cursor:pointer;max-width:150px}
+  padding:3px 2px;cursor:pointer;max-width:100%}
 .pill.person select:focus{outline:none}
 .pill.flat.person{padding-left:2px}
 

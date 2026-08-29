@@ -151,6 +151,11 @@ def task_detail(
         "assignee_id": run.assignee_id,
         "assignee": run.assignee.name if run.assignee else None,
         "candidates": _assignee_candidates(db, run),
+        "department_key": run.department.key if run.department else None,
+        "departments": [
+            {"key": d.key, "name": d.name, "color": d.color}
+            for d in sorted(retreat.departments, key=lambda d: d.sort_order)
+        ],
         "parent_run_id": parent.id if parent else None,
         "parent_title": parent.library.title if parent else None,
         "related_departments": [
@@ -243,6 +248,55 @@ def _assignee_candidates(db: Session, run: TaskRun) -> list[dict]:
         seen.add(user.id)
         out.append({"id": user.id, "name": user.name, "role": perm.ROLE_LABELS.get(user.role, user.role)})
     return sorted(out, key=lambda p: p["name"])
+
+
+class DepartmentIn(BaseModel):
+    key: str | None = None
+
+
+@router.post("/board/task/{run_id}/department")
+def set_department(
+    run_id: int,
+    payload: DepartmentIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """담당팀을 옮긴다.
+
+    업무가 다른 부서의 줄로 통째로 옮겨가는 일이라 보드를 다시 그려야 한다.
+    넘기고 나면 넘긴 쪽은 더 이상 그 업무를 고칠 수 없다 — 그게 넘긴다는 뜻이다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 옮길 수 있습니다.")
+
+    dept_by_key = {d.key: d for d in retreat.departments}
+    if payload.key and payload.key not in dept_by_key:
+        raise HTTPException(status_code=400, detail="이번 회차에 없는 부서입니다.")
+
+    before = run.department.name if run.department else "담당 없음"
+    target = dept_by_key.get(payload.key) if payload.key else None
+    run.department_id = target.id if target else None
+
+    # 넘긴 팀 사람이 담당자로 남아 있으면 뜻이 맞지 않는다
+    if run.assignee is not None and not perm.can_manage_retreat(run.assignee.role):
+        from app.models import Department
+
+        holder = db.get(Department, run.assignee.department_id) if run.assignee.department_id else None
+        if holder is None or holder.key != payload.key:
+            run.assignee_id = None
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="담당팀_변경",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{run.library.title}: {before} → {target.name if target else '담당 없음'}",
+    )
+    return {"department_key": payload.key, "reload": True}
 
 
 class AssigneeIn(BaseModel):

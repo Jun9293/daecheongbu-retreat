@@ -344,6 +344,8 @@ function renderDrawer() {
     document.getElementById('statchip').onclick = e => { e.stopPropagation(); statMenu(e.currentTarget); };
   }
   document.getElementById('dtitle').textContent = d.title;
+  const teams = (d.departments || []).map(t =>
+    `<option value="${t.key}" data-color="${t.color}" ${t.key === d.department_key ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
   const people = (d.candidates || []).map(p =>
     `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   document.getElementById('dmeta').innerHTML =
@@ -356,11 +358,13 @@ function renderDrawer() {
         : `<span class="pill flat"><span class="mono">${
              d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>
              <b class="span">${spanLabel(d.start, d.end)}</b></span>`}</dd>
-     <dt>담당팀</dt><dd><span class="teamtag"><i style="background:${d.department_color}"></i>${esc(d.department)}</span></dd>
+     <dt>담당팀</dt><dd>${d.can_edit
+        ? `<span class="pill person"><i class="dot" id="ddeptdot" style="background:${d.department_color}"></i>
+             <select id="ddept"><option value="">담당 없음</option>${teams}</select></span>`
+        : `<span class="pill flat person"><i class="dot" style="background:${d.department_color}"></i>${esc(d.department)}</span>`}</dd>
      <dt>담당자</dt><dd>${d.can_edit
-        ? `<span class="pill person" id="dperson"><span class="avatar">${initial(d.assignee)}</span>
-             <select id="dassignee"><option value="">지정 안 함</option>${people}</select></span>`
-        : `<span class="pill flat person"><span class="avatar">${initial(d.assignee)}</span>${esc(d.assignee || '지정 안 함')}</span>`}</dd>
+        ? `<span class="pill person"><select id="dassignee"><option value="">지정 안 함</option>${people}</select></span>`
+        : `<span class="pill flat person">${esc(d.assignee || '지정 안 함')}</span>`}</dd>
      <dt>상위</dt><dd>${d.parent_title ? esc(d.parent_title) : '—'}</dd>
      <dt>관련팀</dt><dd>${d.related_departments.map(esc).join(', ') || '—'}</dd>`;
 
@@ -382,6 +386,26 @@ function renderDrawer() {
     start.onchange = saveDates;
     end.onchange = saveDates;
 
+    // 날짜 칸을 누르면 달력이 열린다 (아이콘 없이)
+    [start, end].forEach(input => {
+      input.onclick = () => { try { input.showPicker(); } catch (err) { /* 지원 안 하면 기본 동작 */ } };
+    });
+
+    document.getElementById('ddept').onchange = async e => {
+      const key = e.target.value;
+      const res = await fetch(`/board/task/${d.run_id}/department`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: key || null}),
+      });
+      if (!res.ok) {
+        alert((await res.json().catch(() => ({}))).detail || '담당팀을 바꾸지 못했습니다.');
+        e.target.value = d.department_key || '';
+        return;
+      }
+      // 업무가 다른 부서의 줄로 옮겨간다 — 보드를 다시 그려야 한다
+      location.reload();
+    };
+
     document.getElementById('dassignee').onchange = async e => {
       const value = e.target.value;
       const res = await fetch(`/board/task/${d.run_id}/assignee`, {
@@ -392,8 +416,6 @@ function renderDrawer() {
       const saved = await res.json();
       detail.assignee_id = saved.assignee_id;
       detail.assignee = saved.assignee;
-      const avatar = document.querySelector('#dperson .avatar');
-      if (avatar) avatar.textContent = saved.assignee ? saved.assignee.trim().slice(0, 1) : '·';
       applyAssignee(d.run_id, saved.assignee);
     };
   }
@@ -428,10 +450,6 @@ function spanLabel(start, end) {
   const days = Math.round((b - a) / 864e5) + 1;
   return days > 1 ? days + '일' : '하루';
 }
-function initial(name) {
-  return name ? esc(name.trim().slice(0, 1)) : '·';
-}
-
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 }
