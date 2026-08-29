@@ -139,26 +139,36 @@ def catalog(
 ) -> list[dict]:
     """세팅 마법사 3단계에 뿌릴 라이브러리 목록.
 
-    상위 업무(Main·일정)만 고른다. 하위 업무는 상위를 따라간다.
+    고르는 단위는 상위 업무(Main·일정)다. 하위 업무는 상위를 따라가지만,
+    무엇이 딸려 오는지 보이지 않으면 고를 수가 없으므로 함께 실어 보낸다.
+    진행 순서로 읽히도록 시작일 순으로 정렬한다.
     """
     history_retreats = past_retreats(db, exclude_id=exclude_retreat_id)
     recent = history_retreats[-HISTORY_WINDOW:]
     all_ids = [r.id for r in history_retreats]
     runs = _runs_by_library(db, all_ids)
 
-    libraries = list(
+    every = list(
         db.scalars(
             select(TaskLibrary)
-            .where(TaskLibrary.parent_library_id.is_(None))
             .where(TaskLibrary.archived_at.is_(None))
             .order_by(TaskLibrary.id)
         )
     )
-    children: dict[int, int] = {}
-    for row in db.scalars(
-        select(TaskLibrary).where(TaskLibrary.parent_library_id.is_not(None))
-    ):
-        children[row.parent_library_id] = children.get(row.parent_library_id, 0) + 1
+    libraries = [lib for lib in every if lib.parent_library_id is None]
+    children: dict[int, list[TaskLibrary]] = {}
+    for row in every:
+        if row.parent_library_id is not None:
+            children.setdefault(row.parent_library_id, []).append(row)
+
+    def dates_of(lib: TaskLibrary) -> tuple[dt.date, dt.date]:
+        return dweek.resolve_dates(
+            open_date,
+            anchor=lib.date_anchor,
+            d_week=lib.default_d_week,
+            offset_days=lib.default_offset_days,
+            span_days=lib.default_span_days,
+        )
 
     result = []
     for lib in libraries:
@@ -168,13 +178,8 @@ def catalog(
             for r in recent
         ]
         verdict = classify(bits)
-        start, end = dweek.resolve_dates(
-            open_date,
-            anchor=lib.date_anchor,
-            d_week=lib.default_d_week,
-            offset_days=lib.default_offset_days,
-            span_days=lib.default_span_days,
-        )
+        start, end = dates_of(lib)
+        subs = sorted(children.get(lib.id, []), key=lambda c: (dates_of(c)[0], c.id))
         result.append(
             {
                 "library_id": lib.id,
@@ -200,9 +205,23 @@ def catalog(
                 ],
                 "origin": lib.origin,
                 "rationale": lib.suggestion_rationale,
-                "sub_count": children.get(lib.id, 0),
+                "sub_count": len(subs),
+                "children": [
+                    {
+                        "library_id": sub.id,
+                        "title": sub.title,
+                        "kind": sub.kind,
+                        "d_week": sub.default_d_week,
+                        "start_date": dates_of(sub)[0],
+                        "end_date": dates_of(sub)[1],
+                        "department_key": sub.default_department_key,
+                    }
+                    for sub in subs
+                ],
             }
         )
+    # 진행 순서 — 이른 업무부터. 같은 날이면 Main 을 일정보다 먼저.
+    result.sort(key=lambda r: (r["start_date"], r["kind"] != "main", r["title"]))
     return result
 
 

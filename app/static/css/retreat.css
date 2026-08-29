@@ -365,6 +365,30 @@ main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
 .histhead span{width:22px;text-align:center}
 
 .lib{border:1px solid var(--rule-2);border-radius:6px;background:var(--paper-2);overflow:hidden}
+/* 성격이 다른 셋을 갈라 놓는다 — Main 업무 / 일정 / Claude 제안 */
+.libsec + .libsec{border-top:1px solid var(--rule-2)}
+.libsec > h3{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+  margin:0;padding:10px 14px;background:#EAEEEB;border-bottom:1px solid var(--rule);
+  font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.libsec > h3 .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
+.libsec > h3 em{font-style:normal;font-size:11.5px;font-weight:400;color:var(--ink-3);margin-left:auto}
+/* 진행 순서 눈금 — 시작 주차가 바뀌는 곳 */
+.weekmark{display:flex;align-items:baseline;gap:8px;padding:7px 14px 5px;
+  border-bottom:1px solid var(--rule);background:var(--paper)}
+.weekmark b{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.weekmark span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3)}
+/* 하위 업무 — 고르는 단위가 아니라 딸려 오는 것 */
+.tgroup{border-bottom:1px solid var(--rule)}
+.tgroup:last-child{border-bottom:none}
+.tgroup .trow{border-bottom:none}
+.subrow{display:flex;align-items:center;gap:9px;padding:5px 14px 5px 47px;font-size:12.5px;
+  color:var(--ink-2);background:var(--paper)}
+.subrow:last-child{padding-bottom:9px}
+.subrow.off{opacity:.45}
+.subrow .branch{color:var(--ink-3);flex:none}
+.subrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag.sub{background:#E3E8EF;color:#3B5570}
+.libempty{padding:28px 14px;text-align:center;font-size:13px;color:var(--ink-3)}
 .trow{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
 .trow:last-child{border-bottom:none}
 .trow:hover{background:var(--paper)}

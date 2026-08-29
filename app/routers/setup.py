@@ -106,11 +106,21 @@ def preview(
             {
                 "id": str(row["library_id"]),
                 "kind": "library",
+                "task_kind": row["kind"],          # main | schedule
                 "title": row["title"],
                 "department_key": row["department_key"],
                 "d_week": row["d_week"],
                 "start": row["start_date"].isoformat(),
                 "start_label": f"{row['start_date'].month}/{row['start_date'].day}",
+                "children": [
+                    {
+                        "title": sub["title"],
+                        "d_week": sub["d_week"],
+                        "start_label": f"{sub['start_date'].month}/{sub['start_date'].day}",
+                        "department_key": sub["department_key"],
+                    }
+                    for sub in row["children"]
+                ],
                 "verdict": row["verdict"],
                 "always_required": row["always_required"],
                 "required": row["required"],
@@ -126,6 +136,8 @@ def preview(
             {
                 "id": f"new:{proposal['title']}",
                 "kind": "suggestion",
+                "task_kind": "main",
+                "children": [],
                 "title": proposal["title"],
                 "department_key": proposal["department_key"],
                 "d_week": proposal["d_week"],

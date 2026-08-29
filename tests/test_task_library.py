@@ -366,3 +366,49 @@ def test_mobile_groups_sort_departments_inside_each_week(db):
     groups = board_view.build(db, retreat)["mobile_groups"]
     assert len(groups) == 1
     assert [r["department_name"] for r in groups[0]["rows"]] == ["chongmuM", "sketch"]
+
+
+def test_catalog_carries_sub_tasks_so_you_can_see_what_comes_along(db):
+    """고르는 단위는 상위지만, 무엇이 딸려 오는지 보이지 않으면 고를 수가 없다."""
+    retreat = make_retreat(db, "직전", dt.date(2026, 8, 21))
+    main = make_library(db, "객원 모집", dept="chongmuM", d_week=13, span=21)
+    make_library(db, "객원 모집 마감", dept="chongmuM", d_week=10, span=0, parent=main)
+    make_library(db, "객원 모집 시작", dept="chongmuM", d_week=13, span=0, parent=main)
+    run(db, retreat, main)
+    db.commit()
+
+    row = lib.catalog(db, open_date=dt.date(2027, 1, 15))[0]
+    assert row["sub_count"] == 2
+    # 하위도 진행 순서대로 — 시작이 이른 것이 먼저
+    assert [c["title"] for c in row["children"]] == ["객원 모집 시작", "객원 모집 마감"]
+    assert row["children"][0]["start_date"] == dt.date(2026, 10, 18)   # D-13주
+    assert row["children"][1]["start_date"] == dt.date(2026, 11, 8)    # D-10주
+
+
+def test_catalog_is_ordered_by_progress_not_insertion(db):
+    """진행 순서로 읽히려면 등록 순서가 아니라 시작일 순이어야 한다."""
+    make_retreat(db, "직전", dt.date(2026, 8, 21))
+    make_library(db, "늦게 시작", d_week=2, span=0)
+    make_library(db, "일찍 시작", d_week=13, span=0)
+    make_library(db, "중간", d_week=7, span=0)
+    db.commit()
+
+    rows = lib.catalog(db, open_date=dt.date(2027, 1, 15))
+    assert [r["title"] for r in rows] == ["일찍 시작", "중간", "늦게 시작"]
+
+
+def test_schedules_stay_separable_from_main_tasks(db):
+    """일정은 논의 없이 날짜만 지키면 되는 별도 업무다 — 섞이면 안 된다."""
+    make_retreat(db, "직전", dt.date(2026, 8, 21))
+    main = make_library(db, "집회 운영 준비", d_week=6, span=27)
+    make_library(db, "큐시트 제작", d_week=6, span=12, parent=main)
+    schedule = make_library(db, "수련회 기도회", d_week=1, span=0)
+    schedule.kind = "schedule"
+    db.commit()
+
+    rows = {r["title"]: r for r in lib.catalog(db, open_date=dt.date(2027, 1, 15))}
+    assert rows["집회 운영 준비"]["kind"] == "main"
+    assert rows["집회 운영 준비"]["sub_count"] == 1
+    assert rows["수련회 기도회"]["kind"] == "schedule"
+    assert rows["수련회 기도회"]["children"] == []
+    assert "큐시트 제작" not in rows          # 하위는 상위 안에만 들어간다

@@ -91,25 +91,66 @@ function renderLib() {
   $('histhead').innerHTML = data.round_labels.map(r => `<span>${esc(r)}</span>`).join('');
   renderBasisNotice();
 
-  $('lib').innerHTML = data.items
-    .filter(i => filt === 'all' || i.verdict.label === filt)
-    .map(item => {
-      const hist = item.history.length
-        ? item.history.map(h => `<i class="${h.executed ? '' : 'no'}"><b></b></i>`).join('')
-        : data.round_labels.map(() => '<i></i>').join('');
-      const dept = item.department_key;
-      return `<div class="trow${sel.has(item.id) ? ' on' : ' off'}${item.clash ? ' clash' : ''}"
-                   data-i="${esc(item.id)}">
+  const shown = data.items.filter(i => filt === 'all' || i.verdict.label === filt);
+  // 성격이 다른 셋으로 나눈다 — 섞어 놓으면 무엇을 고르는지가 흐려진다
+  const sections = [
+    {key: 'main', title: 'Main 업무',
+     hint: '산출물이 남는 단위. 아래 하위 업무가 함께 딸려 옵니다',
+     rows: shown.filter(i => i.kind === 'library' && i.task_kind === 'main')},
+    {key: 'schedule', title: '일정',
+     hint: '논의 없이 날짜만 지키면 되는 별도 업무',
+     rows: shown.filter(i => i.kind === 'library' && i.task_kind === 'schedule')},
+    {key: 'suggestion', title: 'Claude 제안',
+     hint: '이력에 없는 업무. 근거를 함께 확인하세요',
+     rows: shown.filter(i => i.kind === 'suggestion')},
+  ].filter(sec => sec.rows.length);
+
+  const dept = key => key
+    ? `<i style="background:${COLOR[key] || '#69726D'}"></i>${esc(NAME[key] || key)}`
+    : '담당 없음';
+
+  const rowHtml = item => {
+    const hist = item.history.length
+      ? item.history.map(h => `<i class="${h.executed ? '' : 'no'}"><b></b></i>`).join('')
+      : data.round_labels.map(() => '<i></i>').join('');
+    const on = sel.has(item.id);
+    const subs = (item.children || []).map(sub => `
+      <div class="subrow${on ? '' : ' off'}">
+        <span class="branch">↳</span>
+        <span class="nm">${esc(sub.title)}</span>
+        <span class="dwlbl">D-${sub.d_week}주</span>
+        <span class="dtlbl">${esc(sub.start_label)}</span>
+      </div>`).join('');
+    return `<div class="tgroup">
+      <div class="trow${on ? ' on' : ' off'}${item.clash ? ' clash' : ''}" data-i="${esc(item.id)}">
         <span class="box"></span>
         <span class="main"><span class="nm">${esc(item.title)}
           <span class="tag ${item.verdict.tone}">${esc(item.verdict.label)}</span>
           ${item.always_required ? '<span class="tag must">필수 지정</span>' : ''}
-          ${item.sub_count ? `<span class="tag low">하위 ${item.sub_count}</span>` : ''}</span>
+          ${item.sub_count ? `<span class="tag sub">하위 ${item.sub_count}</span>` : ''}</span>
           ${item.rationale ? `<span class="why">${esc(item.rationale)}</span>` : ''}</span>
-        <span class="tm">${dept ? `<i style="background:${COLOR[dept] || '#69726D'}"></i>${esc(NAME[dept] || dept)}` : '담당 없음'}</span>
+        <span class="tm">${dept(item.department_key)}</span>
         <span class="hist">${hist}</span>
-        <span class="dwlbl">D-${item.d_week}주</span><span class="dtlbl">${esc(item.start_label)}</span></div>`;
+        <span class="dwlbl">D-${item.d_week}주</span>
+        <span class="dtlbl">${esc(item.start_label)}</span>
+      </div>${subs}</div>`;
+  };
+
+  $('lib').innerHTML = sections.map(sec => {
+    let week = null;
+    const body = sec.rows.map(item => {
+      let divider = '';
+      // 진행 순서가 읽히도록 시작 주차가 바뀌는 곳에 눈금을 둔다
+      if (sec.key !== 'suggestion' && item.d_week !== week) {
+        week = item.d_week;
+        divider = `<div class="weekmark"><b>D-${week}주</b><span>${esc(item.start_label)}</span></div>`;
+      }
+      return divider + rowHtml(item);
     }).join('');
+    return `<section class="libsec">
+      <h3>${sec.title}<span class="n">${sec.rows.length}</span>
+        <em>${sec.hint}</em></h3>${body}</section>`;
+  }).join('') || '<div class="libempty">이 분류에 해당하는 업무가 없습니다.</div>';
 
   $('tools').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filt = b.dataset.f; renderLib(); });
   $('lib').querySelectorAll('[data-i]').forEach(row => row.onclick = () => {

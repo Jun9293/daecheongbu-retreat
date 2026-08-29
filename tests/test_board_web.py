@@ -398,3 +398,21 @@ def test_모바일_목록은_D주차_다음_부서로_묶인다(admin_client, bo
     assert [r["title"] for r in groups[-1]["rows"]] == ["차량 신청"]
     # 모든 실행 업무가 어느 묶음엔가 들어간다
     assert sum(len(g["rows"]) for g in groups) == 3
+
+
+def test_마법사가_계층과_순서를_함께_내려준다(admin_client, board_data):
+    data = admin_client.post(
+        "/setup/preview", json={"open_date": "2027-01-15", "department_keys": ["chongmuM", "sketch"]}
+    ).json()
+
+    poster = next(i for i in data["items"] if i["title"] == "포스터 제작")
+    assert poster["task_kind"] == "main"
+    assert [c["title"] for c in poster["children"]] == ["포스터 확정"]
+    assert poster["children"][0]["start_label"]        # 하위도 날짜가 계산돼 온다
+
+    # 진행 순서 — 라이브러리 등록 순이 아니라 시작일 순
+    starts = [i["start"] for i in data["items"] if i["kind"] == "library"]
+    assert starts == sorted(starts)
+
+    # 제안은 하위가 없다
+    assert all(i["children"] == [] for i in data["items"] if i["kind"] == "suggestion")
