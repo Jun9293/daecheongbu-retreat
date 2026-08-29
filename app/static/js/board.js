@@ -155,10 +155,43 @@ sheet.querySelectorAll('.row.team').forEach(team => {
     });
     layoutLabels();
     drawWires();
+    if (me.value !== 'all') scrollTeamToTop(me.value, false);
   };
 });
 
-me.onchange = () => { clearDate(); applyFilters(); };
+/* 소속을 고르면 그 부서 제목이 스크롤 맨 위로 오게 한다.
+   날짜 헤더가 sticky 로 위를 덮으므로 그 높이만큼 뺀다 — 안 빼면 제목이 가려진다. */
+/* 마지막 부서를 골라도 제목이 맨 위로 올라오려면 그 아래에 스크롤할 것이 있어야 한다.
+   시트 바깥(보드 안)에 딱 모자란 만큼만 여백을 만든다 — 격자선은 시트 안이라 번지지 않는다. */
+let roomBelow = null;
+function setRoomBelow(px) {
+  if (!roomBelow) {
+    roomBelow = document.createElement('div');
+    roomBelow.className = 'room-below';
+    roomBelow.setAttribute('aria-hidden', 'true');
+    board.appendChild(roomBelow);
+  }
+  roomBelow.style.height = Math.max(0, Math.round(px)) + 'px';
+}
+
+function scrollTeamToTop(key, smooth = true) {
+  if (isMobile()) return;                 // 모바일은 D-주차 목록이라 부서 묶음이 없다
+  const behavior = smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 'smooth' : 'auto';
+  if (key === 'all') { setRoomBelow(0); board.scrollTo({top: 0, behavior}); return; }
+  const team = sheet.querySelector(`.row.team[data-team="${key}"]`);
+  if (!team || !team.offsetParent) return;
+  const head = sheet.querySelector('.row.head');
+  const headH = head ? head.offsetHeight : 0;
+
+  const below = sheet.getBoundingClientRect().bottom - team.getBoundingClientRect().top;
+  setRoomBelow(board.clientHeight - headH - below);
+
+  const br = board.getBoundingClientRect(), tr = team.getBoundingClientRect();
+  board.scrollTo({top: Math.max(0, board.scrollTop + (tr.top - br.top) - headH), behavior});
+}
+
+me.onchange = () => { clearDate(); applyFilters(); scrollTeamToTop(me.value); };
 opT.onchange = applyFilters;
 
 function clearDate() {
@@ -597,6 +630,7 @@ addEventListener('click', e => {
 
 drawGrid();
 applyFilters();
+scrollTeamToTop(me.value, false);
 // 글꼴이 로드되기 전에 재면 폭이 틀리므로 다시 계산한다
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => { drawGrid(); layoutLabels(); drawWires(); });
