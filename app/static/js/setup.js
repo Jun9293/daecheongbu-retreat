@@ -10,6 +10,7 @@ const NAME = Object.fromEntries(DEPTS.map(d => [d.key, d.name]));
 
 
 const off = new Set();          // 제외한 부서
+const extraDepts = [];          // 이번 회차에 새로 만든 부서
 const sel = new Set();          // 선택한 업무 (id 문자열)
 let data = null, filt = 'all', step = 1, touched = false, busy = false;
 
@@ -26,7 +27,7 @@ async function reload() {
     body: JSON.stringify({
       open_date: $('op').value,
       close_date: $('cl').value,
-      department_keys: DEPTS.map(d => d.key).filter(k => !off.has(k)),
+      department_keys: activeKeys(),
     }),
   });
   busy = false;
@@ -68,8 +69,10 @@ function fmt(iso) {
 }
 
 /* ── 2단계 ── */
+const allDepts = () => DEPTS.concat(extraDepts);
+
 function renderTeams() {
-  $('teams').innerHTML = DEPTS.map(d =>
+  $('teams').innerHTML = allDepts().map(d =>
     `<div class="tchip${off.has(d.key) ? ' off' : ''}" data-t="${d.key}">
       <i style="background:${d.color}"></i>${esc(d.name)}
       <span class="x">${off.has(d.key) ? '+' : '×'}</span></div>`).join('');
@@ -79,6 +82,24 @@ function renderTeams() {
     renderTeams();
   });
 }
+
+$('addDept').onclick = async () => {
+  const name = $('newDeptName').value.trim();
+  if (!name) { $('newDeptName').focus(); return; }
+  const res = await fetch('/setup/department', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, color: $('newDeptColor').value}),
+  });
+  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '부서를 추가하지 못했습니다.'); return; }
+  const dept = await res.json();
+  extraDepts.push(dept);
+  COLOR[dept.key] = dept.color;
+  NAME[dept.key] = dept.name;
+  $('newDeptName').value = '';
+  renderTeams();
+};
+
+const activeKeys = () => allDepts().map(d => d.key).filter(k => !off.has(k));
 
 /* ── 3단계 ── */
 function renderLib() {
@@ -140,6 +161,8 @@ function renderLib() {
         <span class="hist">${hist}</span>
         <span class="dwlbl">D-${item.d_week}주</span>
         <span class="dtlbl">${esc(item.start_label)}</span>
+        ${item.kind === 'library' ? `<button type="button" class="editbtn" data-edit="${esc(item.id)}"
+            title="이 업무 편집">편집</button>` : ''}
       </div>${subs}</div>`;
   };
 
@@ -160,11 +183,18 @@ function renderLib() {
   }).join('') || '<div class="libempty">이 분류에 해당하는 업무가 없습니다.</div>';
 
   $('tools').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filt = b.dataset.f; renderLib(); });
-  $('lib').querySelectorAll('[data-i]').forEach(row => row.onclick = () => {
+  $('lib').querySelectorAll('[data-i]').forEach(row => row.onclick = e => {
+    if (e.target.closest('[data-edit]')) return;      // 편집 버튼은 선택을 건드리지 않는다
     const id = row.dataset.i;
     sel.has(id) ? sel.delete(id) : sel.add(id);
     renderLib();
   });
+  $('lib').querySelectorAll('[data-edit]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const item = data.items.find(i => i.id === b.dataset.edit);
+    if (item) startEdit(item);
+  });
+  fillEditor();
 }
 
 /* 분류 근거가 몇 회차인지 밝힌다. 3회차가 쌓이면 안내가 저절로 사라진다. */
@@ -245,6 +275,75 @@ function renderSummary() {
   $('warns').innerHTML = html;
 }
 
+/* ── 3단계: 라이브러리 업무 추가·편집 ── */
+let editing = null;
+
+function fillEditor() {
+  $('tDept').innerHTML = allDepts()
+    .map(d => `<option value="${d.key}">${esc(d.name)}</option>`).join('');
+  $('tWeek').innerHTML = (data ? data.weeks : []).map(w =>
+    `<option value="${w.d_week}">D-${w.d_week}주 · ${esc(w.label)}</option>`).join('');
+  $('tParent').innerHTML = (data ? data.items : [])
+    .filter(i => i.kind === 'library' && i.task_kind === 'main')
+    .map(i => `<option value="${i.id}">${esc(i.title)}</option>`).join('');
+}
+
+function startEdit(item) {
+  editing = item;
+  $('editorTitle').innerHTML = `업무 편집 <span class="n">${esc(item.title)}</span>`;
+  $('tTitle').value = item.title;
+  $('tDept').value = item.department_key || allDepts()[0].key;
+  $('tKind').value = item.task_kind || 'main';
+  $('tWeek').value = item.d_week;
+  $('tSpan').value = 0;
+  $('tParentField').hidden = $('tKind').value !== 'sub';
+  $('tSave').textContent = '수정 저장';
+  $('tCancel').hidden = false;
+  $('taskEditor').scrollIntoView({block: 'nearest'});
+  $('tTitle').focus();
+}
+
+function resetEditor() {
+  editing = null;
+  $('editorTitle').innerHTML = '업무 추가 <span class="n">라이브러리에 새로 만듭니다</span>';
+  $('tTitle').value = '';
+  $('tSpan').value = 0;
+  $('tSave').textContent = '업무 추가';
+  $('tCancel').hidden = true;
+  $('tParentField').hidden = true;
+}
+
+$('tKind').onchange = () => { $('tParentField').hidden = $('tKind').value !== 'sub'; };
+$('tCancel').onclick = resetEditor;
+
+$('tSave').onclick = async () => {
+  const title = $('tTitle').value.trim();
+  if (!title) { $('tTitle').focus(); return; }
+  const kind = $('tKind').value;
+  if (kind === 'sub' && !$('tParent').value) { alert('상위 업무를 골라주세요.'); return; }
+  const body = {
+    title,
+    department_key: $('tDept').value,
+    kind,
+    d_week: Number($('tWeek').value),
+    span_days: Number($('tSpan').value) || 0,
+    parent_library_id: kind === 'sub' ? Number($('tParent').value) : null,
+  };
+  const url = editing ? `/library/${editing.id}/edit` : '/library/new';
+  const res = await fetch(url, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+  });
+  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '저장하지 못했습니다.'); return; }
+  const saved = await res.json();
+  resetEditor();
+  const keep = new Set(sel);
+  await reload();
+  sel.clear();
+  keep.forEach(id => sel.add(id));
+  if (!editing) sel.add(String(saved.library_id));   // 새로 만든 것은 켜 둔다
+  renderLib();
+};
+
 /* ── 단계 이동 ── */
 const HINTS = {
   1: '개회일을 바꾸면 모든 업무 날짜가 함께 이동합니다.',
@@ -281,7 +380,8 @@ $('next').onclick = async () => {
       open_date: $('op').value,
       close_date: $('cl').value,
       meal_subsidy: Number($('subsidy').value) || 0,
-      department_keys: DEPTS.map(d => d.key).filter(k => !off.has(k)),
+      department_keys: activeKeys(),
+      new_departments: extraDepts,
       selected: chosen.filter(i => i.kind === 'library').map(i => Number(i.id)),
       adopted: chosen.filter(i => i.kind === 'suggestion').map(i => i.title),
     }),
@@ -301,7 +401,8 @@ $('askTeams').onclick = async () => {
       open_date: $('op').value,
       close_date: $('cl').value,
       meal_subsidy: Number($('subsidy').value) || 0,
-      department_keys: DEPTS.map(d => d.key).filter(k => !off.has(k)),
+      department_keys: activeKeys(),
+      new_departments: extraDepts,
     }),
   });
   if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '요청하지 못했습니다.'); return; }

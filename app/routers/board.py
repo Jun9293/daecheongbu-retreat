@@ -148,6 +148,9 @@ def task_detail(
         "d_week": run.d_week,
         "department": run.department.name if run.department else "담당 없음",
         "department_color": run.department.color if run.department else "#69726D",
+        "assignee_id": run.assignee_id,
+        "assignee": run.assignee.name if run.assignee else None,
+        "candidates": _assignee_candidates(db, run),
         "parent_run_id": parent.id if parent else None,
         "parent_title": parent.library.title if parent else None,
         "related_departments": [
@@ -213,6 +216,72 @@ def set_status(
     view_row["background"] = background
     view_row["border"] = border
     return JSONResponse(view_row)
+
+
+def _assignee_candidates(db: Session, run: TaskRun) -> list[dict]:
+    """담당자로 고를 수 있는 사람 — 그 부서 소속 + 총무팀.
+
+    부서가 정해지지 않은 업무는 총무팀 소관이므로 관리자만 보인다.
+    """
+    from app.models import Department
+
+    people = []
+    keys = {run.department.key} if run.department else set()
+    for user in db.scalars(select(User).where(User.is_active)):
+        if perm.can_manage_retreat(user.role):
+            people.append(user)
+            continue
+        if user.department_id is None:
+            continue
+        dept = db.get(Department, user.department_id)
+        if dept and dept.key in keys:
+            people.append(user)
+    seen, out = set(), []
+    for user in people:
+        if user.id in seen:
+            continue
+        seen.add(user.id)
+        out.append({"id": user.id, "name": user.name, "role": perm.ROLE_LABELS.get(user.role, user.role)})
+    return sorted(out, key=lambda p: p["name"])
+
+
+class AssigneeIn(BaseModel):
+    user_id: int | None = None
+
+
+@router.post("/board/task/{run_id}/assignee")
+def set_assignee(
+    run_id: int,
+    payload: AssigneeIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """담당자를 지정한다. 팀만 적혀 있으면 결국 아무도 안 한다."""
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 지정할 수 있습니다.")
+
+    before = run.assignee.name if run.assignee else None
+    if payload.user_id is None:
+        run.assignee_id = None
+    else:
+        target = db.get(User, payload.user_id)
+        if target is None or not target.is_active:
+            raise HTTPException(status_code=400, detail="그 사람을 찾을 수 없습니다.")
+        run.assignee_id = target.id
+    db.commit()
+    db.refresh(run)
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="담당자_지정",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{run.library.title}: {before or '없음'} → {run.assignee.name if run.assignee else '없음'}",
+    )
+    return {"assignee_id": run.assignee_id, "assignee": run.assignee.name if run.assignee else None}
 
 
 class DatesIn(BaseModel):
@@ -376,6 +445,26 @@ def add_task_page(
         )
 
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
+
+    # 기간은 보드 축 그대로 고른다 — 주 단위 구간은 주로, 일 단위 구간은 날짜로
+    view = board_view.build(db, retreat)
+    slots = []
+    for cell in view["headers"]:
+        if cell["kind"] == "week":
+            label = f"{cell['top']}주 · {cell['bottom']} 주"
+        elif cell["kind"] == "day":
+            label = f"{cell['bottom']} ({cell['top']})"
+        else:
+            label = f"수련회 기간 · {cell['bottom']}"
+        slots.append({"start": cell["start"], "end": cell["end"], "label": label, "kind": cell["kind"]})
+
+    parents = [
+        {"library_id": run.library_id, "title": run.library.title,
+         "department_key": run.department.key if run.department else None}
+        for run in sorted(board_view.load_runs(db, retreat), key=lambda r: r.library.title)
+        if run.library.kind == "main"
+    ]
+
     return render(
         request,
         "board_add.html",
@@ -389,7 +478,8 @@ def add_task_page(
                 (d.key for d in departments if d.id == user.department_id), None
             ),
             "viewer_is_admin": perm.can_manage_retreat(user.role),
-            "first_week": dweek_mod.FIRST_D_WEEK,
+            "slots": slots,
+            "parents": parents,
             "active_tab": "board",
             "page_subtitle": "업무 추가",
         },
@@ -479,8 +569,8 @@ class NewTaskIn(BaseModel):
     title: str
     department_key: str | None = None
     kind: str = "main"
-    d_week: int
-    span_days: int = 0
+    start: str
+    end: str | None = None
     parent_library_id: int | None = None
 
 
@@ -512,6 +602,18 @@ def add_new(
     ):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
 
+    try:
+        start = dt.date.fromisoformat(payload.start)
+        end = dt.date.fromisoformat(payload.end) if payload.end else start
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="기간을 다시 골라주세요.") from exc
+    if end < start:
+        raise HTTPException(status_code=400, detail="마감이 시작보다 빠릅니다.")
+    if payload.kind == "sub" and payload.parent_library_id is None:
+        raise HTTPException(status_code=400, detail="하위 업무는 상위 업무를 골라야 합니다.")
+
+    # 고른 날짜를 라이브러리의 상대 위치로 되돌려 둔다 (다음 회차에서 다시 계산된다)
+    rel = dweek_mod.relative_position(retreat.start_date, start, end)
     lib = TaskLibrary(
         title=title,
         kind=payload.kind,
@@ -519,22 +621,11 @@ def add_new(
         default_department_key=payload.department_key,
         related_department_keys=[],
         related_library_ids=[],
-        date_anchor="week",
-        default_d_week=max(1, payload.d_week),
-        default_offset_days=0,
-        default_span_days=max(0, payload.span_days),
         origin="history",
+        **rel,
     )
     db.add(lib)
     db.flush()
-
-    start, end = dweek_mod.resolve_dates(
-        retreat.start_date,
-        anchor=lib.date_anchor,
-        d_week=lib.default_d_week,
-        offset_days=0,
-        span_days=lib.default_span_days,
-    )
     db.add(
         TaskRun(
             library_id=lib.id,
@@ -555,6 +646,6 @@ def add_new(
         action="업무_신규생성",
         target_type="task_library",
         target_id=lib.id,
-        summary=f"{title} (D-{lib.default_d_week}주)",
+        summary=f"{title} ({start.isoformat()} ~ {end.isoformat()})",
     )
     return {"library_id": lib.id, "redirect": "/board"}

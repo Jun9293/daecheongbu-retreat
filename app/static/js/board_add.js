@@ -26,18 +26,31 @@ if (lib) {
   };
 }
 
+/* 하위를 고르면 상위 업무를 함께 정해야 한다 */
+$('nkind').onchange = () => {
+  $('parentField').hidden = $('nkind').value !== 'sub';
+};
+
+/* 마감이 시작보다 앞서지 않게 서로 끌어준다 */
+const start = $('nstart'), end = $('nend');
+start.onchange = () => { if (end.value < start.value) end.selectedIndex = start.selectedIndex; };
+end.onchange = () => { if (end.value < start.value) start.selectedIndex = end.selectedIndex; };
+
 $('addNew').onclick = async () => {
   const title = $('ntitle').value.trim();
   if (!title) { $('ntitle').focus(); return; }
+  const kind = $('nkind').value;
+  if (kind === 'sub' && !$('nparent').value) { alert('상위 업무를 골라주세요.'); return; }
   const res = await fetch('/board/add/new', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       title,
       department_key: $('ndept').value,
-      kind: $('nkind').value,
-      d_week: Number($('nweek').value),
-      span_days: Number($('nspan').value) || 0,
+      kind,
+      start: start.value,
+      end: end.value,
+      parent_library_id: kind === 'sub' ? Number($('nparent').value) : null,
     }),
   });
   if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '만들지 못했습니다.'); return; }

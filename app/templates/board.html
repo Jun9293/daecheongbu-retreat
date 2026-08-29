@@ -47,6 +47,7 @@
      style="--teamt:{{ dept.team_tint }};--rowt:{{ dept.row_tint }};--lct:{{ dept.label_tint }}">
   <div class="lc" data-go="{{ row.run_id }}">
     <span class="nm">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
+    <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
     {%- if row.ghost %}
     <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>
     {%- endif %}
@@ -102,6 +103,7 @@
         <span class="meta">
           <i style="background:{{ row.department_color }}"></i>
           <span class="dept">{{ row.department_name }}</span>
+          <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
           <span>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
         </span>
       </span>
@@ -159,5 +161,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=11" defer></script>
+<script src="/static/js/board.js?v=12" defer></script>
 {% endblock %}

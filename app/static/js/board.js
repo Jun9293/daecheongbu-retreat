@@ -21,6 +21,9 @@ const opT = document.getElementById('opT');
 const fchip = document.getElementById('fchip');
 
 let cur = null, curLink = null, dateSel = null, dragEnd = 0, detail = null;
+/* 사용자가 직접 펴거나 접은 부서. 소속 기준 자동 접기보다 이 뜻이 우선한다 —
+   상태를 바꿀 때마다 보고 있던 그룹이 닫히면 일을 할 수가 없다. */
+const openedByHand = new Map();
 
 const headers = () => [...sheet.querySelectorAll('.row.head .hc')];
 const labelW = () => sheet.querySelector('.hlbl').offsetWidth;
@@ -103,10 +106,10 @@ function applyFilters() {
     } else {
       team.style.display = '';
       const isMine = (mine === 'all' || key === mine);
-      team.classList.toggle('collapsed', !isMine);
+      open = openedByHand.has(key) ? openedByHand.get(key) : isMine;
+      team.classList.toggle('collapsed', !open);
       // 소속 외 부서는 숨기지 않고 흐리게 — 존재는 인지되어야 한다
       team.classList.toggle('dim', !isMine && mine !== 'all');
-      open = isMine;
     }
     team.querySelector('.ct').textContent = dateSel ? `${n}건` : team.dataset.ct;
     sheet.querySelectorAll(`.row[data-of="${key}"]`).forEach(row => {
@@ -150,6 +153,7 @@ sheet.querySelectorAll('.row.team').forEach(team => {
   team.querySelector('.lc').onclick = () => {
     team.classList.toggle('collapsed');
     const hidden = team.classList.contains('collapsed');
+    openedByHand.set(team.dataset.team, !hidden);
     sheet.querySelectorAll(`.row[data-of="${team.dataset.team}"]`).forEach(row => {
       row.style.display = (!hidden && row.dataset.ok) ? '' : 'none';
     });
@@ -190,7 +194,7 @@ function scrollTeamToTop(key, smooth = true) {
   board.scrollTo({top: Math.max(0, board.scrollTop + (tr.top - br.top) - headH), behavior});
 }
 
-me.onchange = () => { clearDate(); applyFilters(); scrollTeamToTop(me.value); };
+me.onchange = () => { openedByHand.clear(); clearDate(); applyFilters(); scrollTeamToTop(me.value); };
 opT.onchange = applyFilters;
 
 function clearDate() {
@@ -222,6 +226,7 @@ function reveal(runId) {
   if (team) {
     team.style.display = '';
     team.classList.remove('collapsed', 'dim');
+    openedByHand.set(key, true);
   }
   sheet.querySelectorAll(`.row[data-of="${key}"]`).forEach(row => {
     if (row.dataset.run === String(runId)) { row.dataset.ok = '1'; row.style.display = ''; }
@@ -339,11 +344,48 @@ function renderDrawer() {
     document.getElementById('statchip').onclick = e => { e.stopPropagation(); statMenu(e.currentTarget); };
   }
   document.getElementById('dtitle').textContent = d.title;
+  const people = (d.candidates || []).map(p =>
+    `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)} · ${esc(p.role)}</option>`).join('');
   document.getElementById('dmeta').innerHTML =
-    `<dt>기간</dt><dd class="mono">${d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</dd>
-     <dt>담당</dt><dd>${d.department}</dd>
+    `<dt>기간</dt><dd>${d.can_edit
+        ? `<span class="dates"><input type="date" id="dstart" value="${d.start || ''}">
+             <em>→</em><input type="date" id="dend" value="${d.end || d.start || ''}"></span>`
+        : `<span class="mono">${d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>`}</dd>
+     <dt>담당팀</dt><dd>${d.department}</dd>
+     <dt>담당자</dt><dd>${d.can_edit
+        ? `<select id="dassignee"><option value="">지정 안 함</option>${people}</select>`
+        : (d.assignee || '지정 안 함')}</dd>
      <dt>상위</dt><dd>${d.parent_title || '—'}</dd>
      <dt>관련팀</dt><dd>${d.related_departments.join(', ') || '—'}</dd>`;
+
+  if (d.can_edit) {
+    const start = document.getElementById('dstart'), end = document.getElementById('dend');
+    const saveDates = async () => {
+      if (!start.value) return;
+      if (end.value && end.value < start.value) { end.value = start.value; }
+      const res = await fetch(`/board/task/${d.run_id}/dates`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({start: start.value, end: end.value || start.value}),
+      });
+      if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '기간을 바꾸지 못했습니다.'); return; }
+      applySavedDates(d.run_id, await res.json());
+    };
+    start.onchange = saveDates;
+    end.onchange = saveDates;
+
+    document.getElementById('dassignee').onchange = async e => {
+      const value = e.target.value;
+      const res = await fetch(`/board/task/${d.run_id}/assignee`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: value ? Number(value) : null}),
+      });
+      if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '지정하지 못했습니다.'); return; }
+      const saved = await res.json();
+      detail.assignee_id = saved.assignee_id;
+      detail.assignee = saved.assignee;
+      applyAssignee(d.run_id, saved.assignee);
+    };
+  }
 
   renderLog();
 
@@ -715,6 +757,19 @@ function showGhostDate(bar, start, spanDays) {
   ghostDate.style.top = Math.round(r.top - 26) + 'px';
 }
 function hideGhostDate() { if (ghostDate) { ghostDate.remove(); ghostDate = null; } }
+
+/* 담당자를 보드와 모바일 목록에 반영한다 */
+function applyAssignee(runId, name) {
+  if (META[runId]) META[runId].assignee = name;
+  sheet.querySelectorAll(`.row[data-run="${runId}"] .who`).forEach(el => {
+    el.textContent = name || '';
+    el.hidden = !name;
+  });
+  document.querySelectorAll(`.mrow[data-run="${runId}"] .who`).forEach(el => {
+    el.textContent = name || '';
+    el.hidden = !name;
+  });
+}
 
 /* 저장된 날짜를 화면 곳곳에 반영한다 */
 function applySavedDates(runId, saved) {

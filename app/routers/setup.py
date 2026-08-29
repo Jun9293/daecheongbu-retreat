@@ -11,6 +11,7 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
@@ -221,12 +222,37 @@ def _draft_state(db: Session) -> dict | None:
     }
 
 
+@router.post("/setup/department")
+def new_department_key(
+    payload: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """새 부서에 회차를 넘어 쓸 키를 발급한다.
+
+    한글 이름으로는 안전한 키를 만들 수 없으므로 번호를 붙인다.
+    이 키가 다음 회차에서도 같은 부서임을 알아보는 유일한 근거다.
+    """
+    from app.models import Department
+
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="부서 이름을 입력해주세요.")
+    used = {d.key for d in db.scalars(select(Department)) if d.key}
+    used |= {k for k, _, _ in DEPARTMENT_MASTER}
+    n = 1
+    while f"team{n}" in used:
+        n += 1
+    return {"key": f"team{n}", "name": name, "color": payload.get("color") or "#69726D"}
+
+
 class DraftIn(BaseModel):
     name: str
     open_date: str
     close_date: str
     meal_subsidy: int = DEFAULT_MEAL_SUBSIDY_PER_PERSON
     department_keys: list[str]
+    new_departments: list[dict] = []
 
 
 @router.post("/setup/draft")
@@ -264,12 +290,19 @@ def open_draft(
     return {"draft_id": draft.id, "redirect": "/draft"}
 
 
+class NewDepartment(BaseModel):
+    key: str
+    name: str
+    color: str | None = None
+
+
 class CreateIn(BaseModel):
     name: str
     open_date: str
     close_date: str
     meal_subsidy: int = DEFAULT_MEAL_SUBSIDY_PER_PERSON
     department_keys: list[str]
+    new_departments: list[NewDepartment] = []
     selected: list[int] = []
     adopted: list[str] = []
 
@@ -313,6 +346,7 @@ def create(
         department_keys=payload.department_keys,
         selected_library_ids=set(payload.selected),
         adopted_suggestions=adopted,
+        new_departments=[d.model_dump() for d in payload.new_departments],
         actor=user,
     )
     draft = draft_domain.active_draft(db)

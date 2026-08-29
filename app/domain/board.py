@@ -137,7 +137,11 @@ def load_runs(db: Session, retreat: Retreat) -> list[TaskRun]:
     return list(
         db.scalars(
             select(TaskRun)
-            .options(joinedload(TaskRun.library), joinedload(TaskRun.department))
+            .options(
+                joinedload(TaskRun.library),
+                joinedload(TaskRun.department),
+                joinedload(TaskRun.assignee),
+            )
             .where(TaskRun.retreat_id == retreat.id, TaskRun.included)
             .order_by(TaskRun.id)
         )
@@ -183,6 +187,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
                 k for k in (lib.related_department_keys or []) if k in dept_by_key
             ],
             "d_week": run.d_week,
+            "assignee": run.assignee.name if run.assignee else None,
             "origin": lib.origin,
             # 끌어서 날짜를 옮길 수 있는지 — 내 부서의 업무만
             "can_edit": True if can_edit is None else bool(can_edit(run)),
@@ -205,6 +210,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
             "background": background,
             "border": border,
             "owner_name": short_name(run.department.name) if run.department else "담당 없음",
+            "assignee": run.assignee.name if run.assignee else None,
             "owner_color": owner_color,
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -292,6 +298,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
                         if r.department
                         else "담당 없음",
                         "department_color": r.department.color if r.department else "#69726D",
+                        "assignee": r.assignee.name if r.assignee else None,
                         "start": (r.start_date or open_date).isoformat(),
                         "end": (r.end_date or r.start_date or open_date).isoformat(),
                         "border": bar_style(

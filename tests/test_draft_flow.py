@@ -232,21 +232,36 @@ def test_새_업무를_만들면_라이브러리에도_남는다(admin_client, l
         "meal_subsidy": 8000, "department_keys": DEPTS, "selected": [], "adopted": [],
     })
 
+    # 기간은 보드 칸 그대로 고른다 — D-3주(12/27) 시작, D-2주(1/3) 마감
     response = admin_client.post("/board/add/new", json={
         "title": "방한 물품 추가 구매", "department_key": "chongmuM",
-        "kind": "main", "d_week": 3, "span_days": 7,
+        "kind": "main", "start": "2026-12-27", "end": "2027-01-03",
     })
 
     assert response.status_code == 200
     with app_session() as db:
         lib_row = db.get(models.TaskLibrary, response.json()["library_id"])
         assert lib_row.title == "방한 물품 추가 구매"
+        # 고른 날짜가 상대 위치로 되돌아간다 — 다음 회차에서 다시 계산된다
         assert lib_row.default_d_week == 3
+        assert lib_row.default_span_days == 7
         run = db.scalars(select(models.TaskRun).where(
             models.TaskRun.library_id == lib_row.id)).one()
         assert run.included is True
-        assert run.start_date == dt.date(2026, 12, 27)    # D-3주
+        assert run.start_date == dt.date(2026, 12, 27)
         assert run.end_date == dt.date(2027, 1, 3)
+
+
+def test_하위_업무는_상위를_골라야_한다(admin_client, library):
+    admin_client.post("/setup/create", json={
+        "name": "2027 겨울수련회", "open_date": OPEN, "close_date": CLOSE,
+        "meal_subsidy": 8000, "department_keys": DEPTS, "selected": [], "adopted": [],
+    })
+
+    assert admin_client.post("/board/add/new", json={
+        "title": "상위 없는 하위", "department_key": "chongmuM",
+        "kind": "sub", "start": "2026-12-27",
+    }).status_code == 400
 
 
 def test_부서_리더는_남의_부서_업무를_추가할_수_없다(admin_client, lead_client, library):
@@ -256,8 +271,10 @@ def test_부서_리더는_남의_부서_업무를_추가할_수_없다(admin_cli
     })
 
     assert lead_client.post("/board/add/new", json={
-        "title": "남의 부서 일", "department_key": "chongmuM", "kind": "main", "d_week": 3,
+        "title": "남의 부서 일", "department_key": "chongmuM", "kind": "main",
+        "start": "2026-12-27",
     }).status_code == 403
     assert lead_client.post("/board/add/new", json={
-        "title": "우리 부서 일", "department_key": "sketch", "kind": "main", "d_week": 3,
+        "title": "우리 부서 일", "department_key": "sketch", "kind": "main",
+        "start": "2026-12-27",
     }).status_code == 200

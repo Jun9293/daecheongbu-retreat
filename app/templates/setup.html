@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/retreat.css?v=11">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=12">
 </head>
 <body>
 
@@ -49,6 +49,18 @@
     <p class="lead">직전 회차의 부서 목록입니다. 이번 회차에 없는 부서는 눌러서 제외하세요.
       제외해도 그 부서가 맡던 업무는 사라지지 않고, 담당 없는 업무로 표시됩니다.</p>
     <div class="teams" id="teams"></div>
+    <div class="card" style="margin-top:16px;max-width:520px">
+      <h3>부서 추가</h3>
+      <div class="row2" style="max-width:none">
+        <div class="field" style="flex:2"><label for="newDeptName">부서 이름</label>
+          <input id="newDeptName" type="text" placeholder="예: 10 미디어팀"></div>
+        <div class="field" style="flex:none;width:96px"><label for="newDeptColor">색</label>
+          <input id="newDeptColor" type="color" value="#5B8C7E" style="padding:2px;height:38px"></div>
+      </div>
+      <button type="button" class="btn" id="addDept">부서 추가</button>
+      <p class="basis" style="margin-top:10px">새 부서에는 회차를 넘어 쓰는 키가 자동으로 붙습니다.
+        다음 회차에서도 같은 부서로 이어집니다.</p>
+    </div>
   </section>
 
   <section class="pane" id="p3">
@@ -60,6 +72,31 @@
     <div class="tools" id="tools"></div>
     <div class="histhead" id="histhead"></div>
     <div class="lib" id="lib"></div>
+    <div class="card" id="taskEditor" style="margin-top:16px">
+      <h3 id="editorTitle">업무 추가 <span class="n">라이브러리에 새로 만듭니다</span></h3>
+      <div class="field"><label for="tTitle">업무 이름</label>
+        <input id="tTitle" type="text" placeholder="예: 방한 물품 점검"></div>
+      <div class="row2" style="max-width:none">
+        <div class="field"><label for="tDept">담당 부서</label><select id="tDept"></select></div>
+        <div class="field"><label for="tKind">분류</label>
+          <select id="tKind">
+            <option value="main">Main — 산출물이 남는 단위</option>
+            <option value="sub">하위 — Main 을 완성하기 위한 단계</option>
+            <option value="schedule">일정 — 날짜만 지키면 되는 것</option>
+          </select></div>
+      </div>
+      <div class="field" id="tParentField" hidden><label for="tParent">상위 업무</label>
+        <select id="tParent"></select></div>
+      <div class="row2" style="max-width:none">
+        <div class="field"><label for="tWeek">시작 D-주차</label><select id="tWeek"></select></div>
+        <div class="field"><label for="tSpan">기간 (일)</label>
+          <input id="tSpan" type="number" min="0" max="120" value="0"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn pri" id="tSave">업무 추가</button>
+        <button type="button" class="btn" id="tCancel" hidden>편집 취소</button>
+      </div>
+    </div>
   </section>
 
   <section class="pane" id="p4">
@@ -90,6 +127,6 @@
 </footer>
 
 <script id="setup-departments" type="application/json">{{ departments|tojson }}</script>
-<script src="/static/js/setup.js?v=11" defer></script>
+<script src="/static/js/setup.js?v=12" defer></script>
 </body>
 </html>

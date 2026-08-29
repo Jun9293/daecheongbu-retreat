@@ -251,6 +251,7 @@ def create_retreat(
     department_keys: list[str],
     selected_library_ids: set[int],
     adopted_suggestions: list[dict] | None = None,
+    new_departments: list[dict] | None = None,
     actor: User | None = None,
 ) -> Retreat:
     """마법사가 고른 내용으로 새 회차를 만든다.
@@ -276,6 +277,11 @@ def create_retreat(
         if base and base.departments
         else [(k, n, c) for k, n, c in DEPARTMENT_MASTER]
     )
+    known = {key for key, _, _ in source}
+    for extra in new_departments or []:      # 이번 회차에 새로 생긴 부서
+        if extra["key"] not in known:
+            source.append((extra["key"], extra["name"], extra.get("color") or "#69726D"))
+            known.add(extra["key"])
     dept_by_key: dict[str, Department] = {}
     order = 0
     for key, dept_name, color in source:
