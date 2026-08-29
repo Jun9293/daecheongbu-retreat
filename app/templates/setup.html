@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/retreat.css?v=12">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=14">
 </head>
 <body>
 
@@ -85,13 +85,16 @@
             <option value="schedule">일정 — 날짜만 지키면 되는 것</option>
           </select></div>
       </div>
-      <div class="field" id="tParentField" hidden><label for="tParent">상위 업무</label>
-        <select id="tParent"></select></div>
+      <div class="field" id="tParentField" hidden><label for="tParentSearch">상위 업무</label>
+        <input id="tParentSearch" type="search" placeholder="업무 이름으로 찾기" autocomplete="off">
+        <select id="tParent" size="6" style="margin-top:6px"></select>
+        <span class="basis" id="tParentCount"></span></div>
       <div class="row2" style="max-width:none">
-        <div class="field"><label for="tWeek">시작 D-주차</label><select id="tWeek"></select></div>
-        <div class="field"><label for="tSpan">기간 (일)</label>
-          <input id="tSpan" type="number" min="0" max="120" value="0"></div>
+        <div class="field"><label for="tStart">시작</label><select id="tStart"></select></div>
+        <div class="field"><label for="tEnd">마감</label><select id="tEnd"></select></div>
       </div>
+      <p class="basis" style="margin:-6px 0 12px">보드와 같은 눈금입니다 —
+        D-3주까지는 주 단위, D-2주부터 개회일까지는 하루 단위입니다.</p>
       <div style="display:flex;gap:8px">
         <button type="button" class="btn pri" id="tSave">업무 추가</button>
         <button type="button" class="btn" id="tCancel" hidden>편집 취소</button>
@@ -127,6 +130,6 @@
 </footer>
 
 <script id="setup-departments" type="application/json">{{ departments|tojson }}</script>
-<script src="/static/js/setup.js?v=12" defer></script>
+<script src="/static/js/setup.js?v=14" defer></script>
 </body>
 </html>

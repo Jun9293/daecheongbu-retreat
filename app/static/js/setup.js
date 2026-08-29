@@ -278,14 +278,47 @@ function renderSummary() {
 /* ── 3단계: 라이브러리 업무 추가·편집 ── */
 let editing = null;
 
+function slotOptions() {
+  return (data ? data.slots : []).map(s =>
+    `<option value="${s.start}" data-end="${s.end}">${esc(s.label)}</option>`).join('');
+}
+
 function fillEditor() {
   $('tDept').innerHTML = allDepts()
     .map(d => `<option value="${d.key}">${esc(d.name)}</option>`).join('');
-  $('tWeek').innerHTML = (data ? data.weeks : []).map(w =>
-    `<option value="${w.d_week}">D-${w.d_week}주 · ${esc(w.label)}</option>`).join('');
-  $('tParent').innerHTML = (data ? data.items : [])
+  const opts = slotOptions();
+  const keepStart = $('tStart').value, keepEnd = $('tEnd').value;
+  $('tStart').innerHTML = opts;
+  $('tEnd').innerHTML = (data ? data.slots : []).map(s =>
+    `<option value="${s.end}" data-start="${s.start}">${esc(s.label)}</option>`).join('');
+  if (keepStart) {
+    $('tStart').value = keepStart;
+    $('tEnd').value = keepEnd || keepStart;
+  } else if (data && data.slots.length) {
+    // 처음 열 때는 D-13주에 맞춘다 — 보드가 기본으로 보여주는 시작점.
+    // (채운 뒤의 value 를 보면 첫 옵션이 이미 잡혀 있어 늘 참이 된다)
+    const i = Math.max(0, data.slots.findIndex(s => s.label.indexOf('D-13주') === 0));
+    $('tStart').selectedIndex = i;
+    $('tEnd').selectedIndex = i;
+  }
+  paintParentPicker();
+}
+
+/* 상위 업무는 가나다순, 이름으로 좁혀 찾는다 */
+function parentPool() {
+  return (data ? data.items : [])
     .filter(i => i.kind === 'library' && i.task_kind === 'main')
-    .map(i => `<option value="${i.id}">${esc(i.title)}</option>`).join('');
+    .slice().sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+}
+function paintParentPicker() {
+  const pool = parentPool();
+  const q = $('tParentSearch').value.trim().toLowerCase();
+  const keep = $('tParent').value;
+  const rows = pool.filter(i => !q || i.title.toLowerCase().includes(q));
+  $('tParent').innerHTML = rows.map(i => `<option value="${esc(i.id)}">${esc(i.title)}</option>`).join('');
+  if (rows.some(i => i.id === keep)) $('tParent').value = keep;
+  else if (rows.length) $('tParent').selectedIndex = 0;
+  $('tParentCount').textContent = q ? `${rows.length}건 / 전체 ${pool.length}건` : `전체 ${pool.length}건`;
 }
 
 function startEdit(item) {
@@ -294,8 +327,8 @@ function startEdit(item) {
   $('tTitle').value = item.title;
   $('tDept').value = item.department_key || allDepts()[0].key;
   $('tKind').value = item.task_kind || 'main';
-  $('tWeek').value = item.d_week;
-  $('tSpan').value = 0;
+  const startSlot = (data.slots || []).find(s => s.start <= item.start && item.start <= s.end);
+  if (startSlot) { $('tStart').value = startSlot.start; $('tEnd').value = startSlot.end; }
   $('tParentField').hidden = $('tKind').value !== 'sub';
   $('tSave').textContent = '수정 저장';
   $('tCancel').hidden = false;
@@ -307,13 +340,22 @@ function resetEditor() {
   editing = null;
   $('editorTitle').innerHTML = '업무 추가 <span class="n">라이브러리에 새로 만듭니다</span>';
   $('tTitle').value = '';
-  $('tSpan').value = 0;
   $('tSave').textContent = '업무 추가';
   $('tCancel').hidden = true;
   $('tParentField').hidden = true;
 }
 
-$('tKind').onchange = () => { $('tParentField').hidden = $('tKind').value !== 'sub'; };
+$('tKind').onchange = () => {
+  $('tParentField').hidden = $('tKind').value !== 'sub';
+  if (!$('tParentField').hidden) paintParentPicker();
+};
+$('tParentSearch').oninput = paintParentPicker;
+$('tStart').onchange = () => {
+  if ($('tEnd').value < $('tStart').value) $('tEnd').selectedIndex = $('tStart').selectedIndex;
+};
+$('tEnd').onchange = () => {
+  if ($('tEnd').value < $('tStart').value) $('tStart').selectedIndex = $('tEnd').selectedIndex;
+};
 $('tCancel').onclick = resetEditor;
 
 $('tSave').onclick = async () => {
@@ -321,12 +363,14 @@ $('tSave').onclick = async () => {
   if (!title) { $('tTitle').focus(); return; }
   const kind = $('tKind').value;
   if (kind === 'sub' && !$('tParent').value) { alert('상위 업무를 골라주세요.'); return; }
+  if ($('tEnd').value < $('tStart').value) { alert('마감이 시작보다 빠릅니다.'); return; }
   const body = {
     title,
     department_key: $('tDept').value,
     kind,
-    d_week: Number($('tWeek').value),
-    span_days: Number($('tSpan').value) || 0,
+    open_date: $('op').value,
+    start: $('tStart').value,
+    end: $('tEnd').value,
     parent_library_id: kind === 'sub' ? Number($('tParent').value) : null,
   };
   const url = editing ? `/library/${editing.id}/edit` : '/library/new';

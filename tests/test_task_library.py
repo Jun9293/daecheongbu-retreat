@@ -412,3 +412,30 @@ def test_schedules_stay_separable_from_main_tasks(db):
     assert rows["수련회 기도회"]["kind"] == "schedule"
     assert rows["수련회 기도회"]["children"] == []
     assert "큐시트 제작" not in rows          # 하위는 상위 안에만 들어간다
+
+
+def test_기획_업무는_D13주보다_앞에도_놓을_수_있다(db):
+    """장소 탐방·견적, 주제 논의는 개회 반년 전부터 돈다."""
+    retreat = make_retreat(db, "회차", dt.date(2026, 8, 21))
+    early = make_library(db, "수련회장 탐방 및 견적요청", d_week=20, span=20)
+    row = run(db, retreat, early, status="대기")
+    row.start_date, row.end_date = dt.date(2026, 4, 5), dt.date(2026, 4, 25)
+    db.commit()
+
+    view = board_view.build(db, retreat)
+    assert view["headers"][0]["top"] == "D-20"      # 보드가 그 주까지 늘어난다
+    assert view["axis"].column_of(dt.date(2026, 4, 5)) == 1
+
+
+def test_고를_수_있는_칸은_보드보다_넓다(db):
+    """보드는 업무가 있는 데까지만 그리지만, 놓을 때는 그 앞도 열어 둔다."""
+    slots = board_view.planning_slots(dt.date(2026, 8, 21), dt.date(2026, 8, 23))
+
+    assert slots[0]["label"].startswith("D-26주")
+    assert slots[-1]["label"].startswith("수련회 기간")
+    # D-3주 다음부터는 하루 단위
+    weekly = [s for s in slots if s["kind"] == "week"]
+    daily = [s for s in slots if s["kind"] == "day"]
+    assert weekly[-1]["label"].startswith("D-3주")
+    assert len(daily) == 12
+    assert daily[0]["start"] == daily[0]["end"] == "2026-08-09"

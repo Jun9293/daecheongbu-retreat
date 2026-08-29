@@ -133,9 +133,29 @@ class LibraryTaskIn(BaseModel):
     title: str
     department_key: str | None = None
     kind: str = "main"
-    d_week: int = 4
-    span_days: int = 0
+    open_date: str            # 이 날짜를 기준으로 상대 위치를 계산한다
+    start: str
+    end: str | None = None
     parent_library_id: int | None = None
+
+
+def _relative(payload: LibraryTaskIn) -> dict:
+    """고른 날짜를 라이브러리의 상대 위치로 되돌린다.
+
+    라이브러리는 절대 날짜를 갖지 않는다 (CLAUDE.md 6-4). 회차마다 개회일로
+    다시 계산되므로, 지금 고른 개회일을 기준으로 D-주차와 요일만 남긴다.
+    """
+    from app.domain import dweek
+
+    try:
+        anchor = dt.date.fromisoformat(payload.open_date)
+        start = dt.date.fromisoformat(payload.start)
+        end = dt.date.fromisoformat(payload.end) if payload.end else start
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="기간을 다시 골라주세요.") from exc
+    if end < start:
+        raise HTTPException(status_code=400, detail="마감이 시작보다 빠릅니다.")
+    return dweek.relative_position(anchor, start, end)
 
 
 @router.post("/library/new")
@@ -162,11 +182,8 @@ def create_library_task(
         default_department_key=payload.department_key,
         related_department_keys=[],
         related_library_ids=[],
-        date_anchor="week",
-        default_d_week=max(1, payload.d_week),
-        default_offset_days=0,
-        default_span_days=max(0, payload.span_days),
         origin="history",
+        **_relative(payload),
     )
     db.add(lib)
     db.commit()
@@ -210,8 +227,8 @@ def edit_library_task(
     lib.title = title
     lib.kind = payload.kind
     lib.default_department_key = payload.department_key
-    lib.default_d_week = max(1, payload.d_week)
-    lib.default_span_days = max(0, payload.span_days)
+    for field, value in _relative(payload).items():
+        setattr(lib, field, value)
     if payload.kind != "sub":
         lib.parent_library_id = None
     elif payload.parent_library_id is not None:

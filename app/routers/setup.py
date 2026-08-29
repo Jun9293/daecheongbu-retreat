@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
 from app.db import get_db
 from app.deps import all_retreats, log_activity
+from app.domain import board as board_view
 from app.domain import drafts as draft_domain
 from app.domain import dweek
 from app.domain import library as lib_domain
@@ -181,6 +182,7 @@ def preview(
              "label": f"{c['sunday'].month}/{c['sunday'].day}"}
             for c in clashes
         ],
+        "slots": board_view.planning_slots(open_date, _parse(payload.close_date) if payload.close_date else None),
         "round_labels": lib_domain.round_labels(db),
         "history_depth": lib_domain.history_depth(db),
         "base_retreat": base.name if base else None,

@@ -13,8 +13,12 @@ from __future__ import annotations
 import datetime as dt
 
 # 보드 가로축에서 주 단위로 그리는 구간의 기본 범위
-FIRST_D_WEEK = 13  # 가장 이른 주 (D-13주)
+FIRST_D_WEEK = 13  # 업무가 없을 때 보드가 잡는 기본 시작 (D-13주)
 LAST_WEEKLY_D_WEEK = 3  # 여기까지 주 단위, D-2주부터는 하루 단위
+
+# 업무를 놓을 수 있는 가장 이른 주. 기획은 개회 반년 전부터 돈다 —
+# 장소 탐방·견적, 주제 논의 같은 것들이 D-13주보다 훨씬 앞에 있다.
+PLANNING_FIRST_WEEK = 26
 
 # (월-일, 이름) — 이 날이 낀 주는 논의·검토가 막힌다
 HOLIDAYS: tuple[tuple[str, str], ...] = (

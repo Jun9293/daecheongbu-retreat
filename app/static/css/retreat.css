@@ -420,6 +420,12 @@ main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
 .editbtn:hover{background:var(--paper);color:var(--ink);border-color:var(--ink-3)}
 #taskEditor .field{margin-bottom:12px}
 #taskEditor .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:6px}
+.field input[type=search]{width:100%;font:inherit;font-size:13.5px;padding:7px 10px;
+  border:1px solid var(--rule-2);border-radius:4px;background:var(--paper-2);color:var(--ink)}
+.field select[size]{width:100%;font-size:13.5px;padding:4px;border:1px solid var(--rule-2);
+  border-radius:4px;background:var(--paper-2);color:var(--ink)}
+.field select[size] option{padding:4px 6px}
+.field .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:5px}
 .libempty{padding:28px 14px;text-align:center;font-size:13px;color:var(--ink-3)}
 .trow{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
 .trow:last-child{border-bottom:none}

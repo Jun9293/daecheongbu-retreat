@@ -25,7 +25,7 @@ STATUS_COLORS = {
     "지연": "#C8442E",
 }
 
-MAX_FIRST_WEEK = 30  # 이보다 이른 업무는 첫 칸에 몰아 넣는다
+MAX_FIRST_WEEK = 40  # 이보다 이른 업무는 첫 칸에 몰아 넣는다
 
 
 def tint(hex_color: str, ratio: float) -> str:
@@ -351,6 +351,27 @@ def _by_week(runs: list[TaskRun], open_date: dt.date, axis: Axis):
             continue
         sunday = dweek.week_date(open_date, week)
         out.append((f"D-{week}주 · {sunday.month}/{sunday.day} 주", f"w{week}", buckets[week]))
+    return out
+
+
+def planning_slots(open_date: dt.date, close_date: dt.date | None = None) -> list[dict]:
+    """업무를 놓을 수 있는 칸 목록 — 보드 축과 같은 눈금.
+
+    보드는 업무가 있는 데까지만 그리지만, 고를 때는 그보다 앞도 열어 둔다.
+    기획 단계 업무는 D-13주보다 훨씬 앞에 있기 때문이다.
+    """
+    axis = Axis(open_date, close_date or open_date, dweek.PLANNING_FIRST_WEEK)
+    out = []
+    for cell in axis.headers():
+        if cell["kind"] == "week":
+            label = f"{cell['top']}주 · {cell['bottom']} 주"
+        elif cell["kind"] == "day":
+            label = f"{cell['bottom']} ({cell['top']})"
+        else:
+            label = f"수련회 기간 · {cell['bottom']}"
+        out.append(
+            {"start": cell["start"], "end": cell["end"], "label": label, "kind": cell["kind"]}
+        )
     return out
 
 

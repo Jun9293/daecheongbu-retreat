@@ -61,12 +61,10 @@
             <option value="schedule">일정 — 날짜만 지키면 되는 것</option>
           </select></div>
       </div>
-      <div class="field" id="parentField" hidden><label for="nparent">상위 업무</label>
-        <select id="nparent">
-          {% for p in parents %}
-          <option value="{{ p.library_id }}" data-dept="{{ p.department_key or '' }}">{{ p.title }}</option>
-          {% endfor %}
-        </select>
+      <div class="field" id="parentField" hidden><label for="nparentSearch">상위 업무</label>
+        <input id="nparentSearch" type="search" placeholder="업무 이름으로 찾기" autocomplete="off">
+        <select id="nparent" size="6" style="margin-top:6px"></select>
+        <span class="basis" id="nparentCount"></span>
         {% if not parents %}<span class="basis">이번 회차에 Main 업무가 없어 하위를 만들 수 없습니다.</span>{% endif %}
       </div>
       <div class="row2">
@@ -74,19 +72,20 @@
           <select id="nstart">
             {% for slot in slots %}
             <option value="{{ slot.start }}" data-end="{{ slot.end }}"
-              {% if loop.index0 == 8 %}selected{% endif %}>{{ slot.label }}</option>
+              {% if slot.label.startswith('D-13주') %}selected{% endif %}>{{ slot.label }}</option>
             {% endfor %}
           </select></div>
         <div class="field"><label for="nend">마감</label>
           <select id="nend">
             {% for slot in slots %}
             <option value="{{ slot.end }}" data-start="{{ slot.start }}"
-              {% if loop.index0 == 8 %}selected{% endif %}>{{ slot.label }}</option>
+              {% if slot.label.startswith('D-13주') %}selected{% endif %}>{{ slot.label }}</option>
             {% endfor %}
           </select></div>
       </div>
-      <p class="basis" style="margin:-6px 0 14px">보드의 칸 그대로입니다 —
-        D-13주부터 D-3주까지는 주 단위, D-2주부터 개회일까지는 하루 단위입니다.</p>
+      <p class="basis" style="margin:-6px 0 14px">보드와 같은 눈금입니다 —
+        D-3주까지는 주 단위, D-2주부터 개회일까지는 하루 단위입니다.
+        기획 업무는 D-13주보다 앞에도 놓을 수 있습니다.</p>
       <button type="button" class="btn pri" id="addNew">새 업무 만들기</button>
     </div>
   </section>
@@ -100,5 +99,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/board_add.js?v=12" defer></script>
+<script id="parents-data" type="application/json">{{ parents|tojson }}</script>
+<script src="/static/js/board_add.js?v=14" defer></script>
 {% endblock %}

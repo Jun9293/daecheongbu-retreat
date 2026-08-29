@@ -31,6 +31,26 @@ $('nkind').onchange = () => {
   $('parentField').hidden = $('nkind').value !== 'sub';
 };
 
+/* 상위 업무는 가나다순으로 늘어놓고, 이름으로 좁혀 찾는다 */
+const PARENTS = JSON.parse(document.getElementById('parents-data').textContent)
+  .slice().sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function paintParents() {
+  const q = $('nparentSearch').value.trim().toLowerCase();
+  const keep = $('nparent').value;
+  const rows = PARENTS.filter(p => !q || p.title.toLowerCase().includes(q));
+  $('nparent').innerHTML = rows
+    .map(p => `<option value="${p.library_id}">${esc(p.title)}</option>`).join('');
+  if (rows.some(p => String(p.library_id) === keep)) $('nparent').value = keep;
+  else if (rows.length) $('nparent').selectedIndex = 0;
+  $('nparentCount').textContent = q
+    ? `${rows.length}건 / 전체 ${PARENTS.length}건`
+    : `전체 ${PARENTS.length}건`;
+}
+$('nparentSearch').oninput = paintParents;
+paintParents();
+
 /* 마감이 시작보다 앞서지 않게 서로 끌어준다 */
 const start = $('nstart'), end = $('nend');
 start.onchange = () => { if (end.value < start.value) end.selectedIndex = start.selectedIndex; };

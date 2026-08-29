@@ -446,24 +446,19 @@ def add_task_page(
 
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
 
-    # 기간은 보드 축 그대로 고른다 — 주 단위 구간은 주로, 일 단위 구간은 날짜로
-    view = board_view.build(db, retreat)
-    slots = []
-    for cell in view["headers"]:
-        if cell["kind"] == "week":
-            label = f"{cell['top']}주 · {cell['bottom']} 주"
-        elif cell["kind"] == "day":
-            label = f"{cell['bottom']} ({cell['top']})"
-        else:
-            label = f"수련회 기간 · {cell['bottom']}"
-        slots.append({"start": cell["start"], "end": cell["end"], "label": label, "kind": cell["kind"]})
+    # 기간은 보드와 같은 눈금으로 고른다 — 주 단위 구간은 주로, 일 단위 구간은 날짜로.
+    # 보드가 그리는 범위보다 앞쪽까지 열어 둔다 (기획 업무는 D-13주보다 앞에 있다).
+    slots = board_view.planning_slots(retreat.start_date, retreat.end_date)
 
-    parents = [
-        {"library_id": run.library_id, "title": run.library.title,
-         "department_key": run.department.key if run.department else None}
-        for run in sorted(board_view.load_runs(db, retreat), key=lambda r: r.library.title)
-        if run.library.kind == "main"
-    ]
+    parents = sorted(
+        (
+            {"library_id": run.library_id, "title": run.library.title,
+             "department_key": run.department.key if run.department else None}
+            for run in board_view.load_runs(db, retreat)
+            if run.library.kind == "main"
+        ),
+        key=lambda p: p["title"],       # 가나다순
+    )
 
     return render(
         request,
