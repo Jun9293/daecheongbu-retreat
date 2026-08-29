@@ -42,12 +42,23 @@
   bar.click(); await sleep(800);
   if (!dw.classList.contains('open')) return {치명: '드로어가 열리지 않음'};
 
+  results.push((document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules' ? '✓' : '✗')
+    + ' 처음 열면 업무 규칙 탭');
+
+  await check('탭 — 논의 내역', () => $('dtabs').querySelector('[data-p="log"]').click());
   results.push((shown($('daddlog')) ? '✓' : '✗') + ' 논의 입력칸이 화면에 보임');
   if (!shown($('daddlog'))) errors.push('논의 입력칸이 보이지 않음');
 
+  await check('탭 — 업무 규칙', () => $('dtabs').querySelector('[data-p="rules"]').click());
+  if ($('drulesopen')) {
+    await check('규칙 편집 열기', () => $('drulesopen').click());
+    results.push((shown($('drulesedit')) ? '✓' : '✗') + ' 규칙 편집창이 보임');
+    if (!shown($('drulesedit'))) errors.push('규칙 편집창이 보이지 않음');
+    await check('규칙 편집 취소', () => $('drulescancel').click());
+  }
   await check('탭 — 달력', () => $('dtabs').querySelector('[data-p="cal"]').click());
   await check('탭 — 연결된 업무', () => $('dtabs').querySelector('[data-p="rel"]').click());
-  await check('탭 — 논의 내역', () => $('dtabs').querySelector('[data-p="log"]').click());
+  await check('탭 — 논의 내역 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click());
   await check('상태 배지 열기', () => $('statchip').click());
   await check('상태 배지 다시 눌러 닫기', () => $('statchip').click());
   await check('담당자 드롭다운', () => $('dassignee').click());
@@ -77,16 +88,26 @@
     await check('연결 메뉴 다시 눌러 닫기', () => rb.click());
   }
 
-  // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다
+  // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
+  // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
   const bb = board.getBoundingClientRect();
-  const lane = [...sheet.querySelectorAll('.lane')]
-    .filter(l => { const r = l.getBoundingClientRect();
-      return r.top > bb.top + 60 && r.bottom < bb.bottom - 10; })
-    .slice(-1)[0];
-  if (lane) {
-    const lr = lane.getBoundingClientRect();
-    const x = Math.round(Math.min(lr.right - 20, bb.right - 40));
-    const y = Math.round(lr.top + lr.height / 2);
+  const empty = (() => {
+    for (const l of sheet.querySelectorAll('.lane')) {
+      const r = l.getBoundingClientRect();
+      if (r.top < bb.top + 60 || r.bottom > bb.bottom - 10) continue;
+      const y = Math.round(r.top + r.height / 2);
+      for (let x = Math.round(Math.min(r.right, bb.right) - 20); x > bb.left + 220; x -= 12) {
+        const el = document.elementFromPoint(x, y);
+        if (!el || el.closest('#drawer')) continue;
+        if (el.closest('.bar[data-run]') || el.closest('[data-go]')) continue;
+        if (!el.closest('.board')) continue;
+        return {x, y};
+      }
+    }
+    return null;
+  })();
+  if (empty) {
+    const {x, y} = empty;
     await check('보드 빈 영역 클릭', () => {
       const el = document.elementFromPoint(x, y);
       ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t =>
@@ -95,7 +116,19 @@
     const closed = !dw.classList.contains('open');
     results.push((closed ? '✓' : '✗') + ' 빈 영역 클릭으로는 닫힌다');
     if (!closed) errors.push('빈 영역 클릭으로 닫히지 않음');
-  }
+  } else results.push('· 화면 안에 빈 칸이 없어 건너뜀');
+
+  // 달력은 드로어를 넓혀도 커지지 않아야 한다 — 한 화면에 들어와야 하므로
+  $('dtabs').querySelector('[data-p="cal"]').click();
+  await sleep(250);
+  const cellW = () => { const c = document.querySelector('.cal .dcell:not(.pad)');
+    return c ? Math.round(c.getBoundingClientRect().width) : 0; };
+  const narrow = cellW();
+  document.documentElement.style.setProperty('--dw', '760px'); await sleep(250);
+  const wide = cellW();
+  document.documentElement.style.setProperty('--dw', '400px'); await sleep(200);
+  results.push((narrow === wide ? '✓' : '✗') + ` 달력 칸 크기 고정 (${narrow}px → ${wide}px)`);
+  if (narrow !== wide) errors.push('드로어를 넓히면 달력이 커진다');
 
   console.table(results);
   return {통과: errors.length === 0, 실패: errors, 항목: results};

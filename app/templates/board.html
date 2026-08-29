@@ -125,17 +125,33 @@
     <div class="dtitle" id="dtitle"></div>
     <dl class="dmeta" id="dmeta"></dl>
     <div class="dtabs" id="dtabs">
-      <button data-p="log" aria-selected="true">논의 내역</button>
+      <button data-p="rules" aria-selected="true">업무 규칙</button>
+      <button data-p="log" aria-selected="false">논의 내역</button>
       <button data-p="cal" aria-selected="false">달력</button>
       <button data-p="rel" aria-selected="false">연결된 업무<span class="n" id="relN"></span></button>
     </div>
   </div>
   <div class="dbody">
-    <div class="pane on" id="p-log">
-      <div class="log" id="dlog"></div>
+    <div class="pane on" id="p-rules">
+      <p class="panehint">이 업무를 <b>어떻게 진행하는지</b> 적어 둡니다.
+        논의는 이번 회차의 사정이고, 규칙은 매번 같은 방식으로 하기 위한 것입니다.
+        담당자가 바뀌어도 남습니다.</p>
+      <div class="rulesbox" id="drules"></div>
+      <div class="addlog" id="drulesedit" hidden>
+        <textarea id="drulesbody" data-listedit
+          placeholder="예:&#10;1. 스케치팀에 의뢰서를 먼저 보낸다&#10;2. 시안은 3종 이상 받는다&#10;- 인쇄 전에 총무M 확인 필요"></textarea>
+        <span class="addrow">
+          <button id="drulessave" class="pri">저장</button>
+          <button id="drulescancel" type="button">취소</button>
+        </span>
+      </div>
       <div id="dnote"></div>
+    </div>
+    <div class="pane" id="p-log">
+      <div class="log" id="dlog"></div>
       <div class="addlog" id="daddlog" hidden>
-        <textarea id="dbody" placeholder="논의 내용을 적으면 기록으로 남습니다. 이전 기록은 지워지지 않습니다."></textarea>
+        <textarea id="dbody" data-listedit
+          placeholder="논의 내용을 적으면 기록으로 남습니다. 이전 기록은 지워지지 않습니다."></textarea>
         <label class="opt"><input type="checkbox" id="dsuper"> 마지막 기록을 대체 (이전 내용에 취소선)</label>
         <span class="addrow">
           <button id="dsave" class="pri">저장</button>
@@ -163,5 +179,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=19" defer></script>
+<script src="/static/js/board.js?v=20" defer></script>
 {% endblock %}

@@ -582,3 +582,34 @@ def test_지난_회차에서_따라온_기록은_고칠_수_없다(admin_client,
     assert admin_client.post(
         f"/board/task/{run_id}/discussion/{carried_id}", json={"body": "고쳐보기"}
     ).status_code == 403
+
+
+def test_업무_규칙은_라이브러리에_남는다(admin_client, board_data):
+    """규칙은 회차의 사정이 아니라 '이 업무는 이렇게 한다'이므로 라이브러리에 붙는다."""
+    run_id = board_data["runs"]["포스터 제작"]
+    body = "1. 스케치팀에 의뢰서를 먼저 보낸다\n2. 시안은 3종 이상 받는다\n  • 인쇄 전 총무M 확인"
+
+    saved = admin_client.post(f"/board/task/{run_id}/rules", json={"body": body})
+    assert saved.status_code == 200
+    assert saved.json()["rules"] == body          # 줄바꿈이 그대로 남는다
+
+    detail = admin_client.get(f"/board/task/{run_id}").json()
+    assert detail["rules"] == body
+
+    with app_session() as db:
+        run = db.get(models.TaskRun, run_id)
+        assert run.library.rules == body          # 회차가 아니라 라이브러리에 있다
+
+
+def test_규칙을_비우면_지워진다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    admin_client.post(f"/board/task/{run_id}/rules", json={"body": "한 줄 규칙"})
+    cleared = admin_client.post(f"/board/task/{run_id}/rules", json={"body": "   "})
+    assert cleared.status_code == 200
+    assert cleared.json()["rules"] is None
+
+
+def test_남의_부서_업무의_규칙은_못_고친다(lead_client, board_data):
+    run_id = board_data["runs"]["차량 신청"]
+    res = lead_client.post(f"/board/task/{run_id}/rules", json={"body": "끼어들기"})
+    assert res.status_code == 403

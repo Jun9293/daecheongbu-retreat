@@ -606,6 +606,9 @@ class TaskLibrary(Base):
     suggestion_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 노션에서 옮기며 담당·분류를 바꾼 이유 (다음 담당자에게 남기는 기록)
     reclassification_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 이 업무를 어떻게 진행하는지 — 회차가 바뀌어도 그대로 가는 규칙.
+    # 논의는 그 회차의 사정이고, 규칙은 매번 같은 방식으로 하기 위한 것이다.
+    rules: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
     archived_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

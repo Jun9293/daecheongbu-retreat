@@ -43,6 +43,7 @@ def get_db() -> Iterator[Session]:
 _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("task_library", "rules", "TEXT"),
 )
 
 

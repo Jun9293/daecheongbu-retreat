@@ -421,6 +421,7 @@ function renderDrawer() {
   }
 
   renderLog();
+  renderRules();
 
   let note = '';
   if (d.suggestion_rationale) note += `<div class="note"><b>CLAUDE 제안 근거</b>${esc(d.suggestion_rationale)}</div>`;
@@ -449,6 +450,43 @@ function spanLabel(start, end) {
   const days = Math.round((b - a) / 864e5) + 1;
   return days > 1 ? days + '일' : '하루';
 }
+/* ── 업무 규칙 ── */
+function renderRules() {
+  const box = document.getElementById('drules');
+  const text = (detail.rules || '').trim();
+  box.innerHTML = text
+    ? `<div class="ruletext">${esc(text)}</div>`
+    : '<div class="empty">아직 적어 둔 규칙이 없습니다.</div>';
+  if (detail.can_edit) {
+    box.insertAdjacentHTML('beforeend',
+      `<button class="ruleedit" id="drulesopen">${text ? '규칙 고치기' : '규칙 적기'}</button>`);
+    document.getElementById('drulesopen').onclick = () => {
+      document.getElementById('drulesbody').value = detail.rules || '';
+      document.getElementById('drulesedit').hidden = false;
+      document.getElementById('drules').hidden = true;
+      document.getElementById('drulesbody').focus();
+    };
+  }
+  document.getElementById('drulesedit').hidden = true;
+  box.hidden = false;
+}
+
+document.getElementById('drulescancel').onclick = () => {
+  document.getElementById('drulesedit').hidden = true;
+  document.getElementById('drules').hidden = false;
+};
+
+document.getElementById('drulessave').onclick = async () => {
+  const body = document.getElementById('drulesbody').value;
+  const res = await fetch(`/board/task/${cur}/rules`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({body}),
+  });
+  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '저장하지 못했습니다.'); return; }
+  detail.rules = (await res.json()).rules;
+  renderRules();
+};
+
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 }
@@ -527,6 +565,7 @@ function startEntryEdit(id) {
       <button class="pri" data-save-edit="${id}">저장</button>
       <button data-cancel-edit="1">취소</button></span>`;
   const box = span.querySelector('textarea');
+  listEditor(box);
   box.style.height = Math.max(56, box.scrollHeight) + 'px';
   box.focus();
   box.setSelectionRange(box.value.length, box.value.length);
@@ -653,6 +692,84 @@ document.getElementById('dsave').onclick = async () => {
   document.getElementById('dsuper').checked = false;
   renderLog();
 };
+
+/* ── 노션처럼 쓰는 입력칸 ──────────────────────────────────────────
+   번호를 매기고 엔터를 치면 다음 번호가 자동으로 붙고, 하이픈에 스페이스를
+   치면 글머리표가 된다. 탭으로 한 단계 들어가고 시프트+탭으로 나온다.
+   빈 항목에서 엔터를 치면 목록을 빠져나온다. */
+const BULLETS = ['•', '◦', '▪'];
+const LIST_RE = /^(\s*)(?:([•◦▪-])|(\d+)\.)\s(.*)$/;
+
+function lineAt(box) {
+  const value = box.value, pos = box.selectionStart;
+  const from = value.lastIndexOf('\n', pos - 1) + 1;
+  let to = value.indexOf('\n', pos);
+  if (to < 0) to = value.length;
+  return {from, to, text: value.slice(from, to)};
+}
+
+function replaceLine(box, line, text, caret) {
+  const value = box.value;
+  box.value = value.slice(0, line.from) + text + value.slice(line.to);
+  const at = line.from + (caret === undefined ? text.length : caret);
+  box.setSelectionRange(at, at);
+}
+
+function markerFor(indent, numbered, seed) {
+  const depth = Math.floor(indent.length / 2);
+  return numbered ? `${seed || 1}.` : BULLETS[Math.min(depth, BULLETS.length - 1)];
+}
+
+function listEditor(box) {
+  box.addEventListener('keydown', e => {
+    const line = lineAt(box);
+    const m = line.text.match(LIST_RE);
+
+    if (e.key === 'Enter' && !e.shiftKey && m) {
+      const [, indent, bullet, num, body] = m;
+      e.preventDefault();
+      if (!body.trim()) {                       // 빈 항목 → 목록에서 빠져나온다
+        replaceLine(box, line, indent.slice(0, -2));
+        return;
+      }
+      const next = num ? `${indent}${Number(num) + 1}. ` : `${indent}${bullet} `;
+      const at = box.selectionStart;
+      box.value = box.value.slice(0, at) + '\n' + next + box.value.slice(at);
+      const caret = at + 1 + next.length;
+      box.setSelectionRange(caret, caret);
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (!m) {                                  // 목록이 아니면 두 칸 들여쓰기
+        const at = box.selectionStart;
+        if (e.shiftKey) return;
+        box.value = box.value.slice(0, at) + '  ' + box.value.slice(at);
+        box.setSelectionRange(at + 2, at + 2);
+        return;
+      }
+      const [, indent, bullet, num, body] = m;
+      const depth = Math.floor(indent.length / 2);
+      const next = e.shiftKey ? Math.max(0, depth - 1) : depth + 1;
+      const pad = '  '.repeat(next);
+      const marker = num ? '1.' : BULLETS[Math.min(next, BULLETS.length - 1)];
+      replaceLine(box, line, `${pad}${marker} ${body}`);
+      return;
+    }
+
+    if (e.key === ' ') {                         // "- " 나 "* " 를 글머리표로
+      const plain = line.text.match(/^(\s*)([-*])$/);
+      if (plain && box.selectionStart === line.to) {
+        e.preventDefault();
+        const depth = Math.floor(plain[1].length / 2);
+        replaceLine(box, line, `${plain[1]}${BULLETS[Math.min(depth, BULLETS.length - 1)]} `);
+      }
+    }
+  });
+}
+
+document.querySelectorAll('textarea[data-listedit]').forEach(listEditor);
 
 /* ── 달력 ── */
 function calendar(d) {

@@ -178,6 +178,7 @@ def task_detail(
         ],
         "related": related,
         "discussions": _serialize_discussions(run, user),
+        "rules": lib.rules,
         "reclassification_note": lib.reclassification_note,
         "suggestion_rationale": lib.suggestion_rationale
         if lib.origin == "claude_suggestion"
@@ -711,6 +712,45 @@ def add_new(
         summary=f"{title} ({start.isoformat()} ~ {end.isoformat()})",
     )
     return {"library_id": lib.id, "redirect": "/board"}
+
+
+class RulesIn(BaseModel):
+    body: str
+
+
+@router.post("/board/task/{run_id}/rules")
+def set_rules(
+    run_id: int,
+    payload: RulesIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """업무 규칙은 라이브러리에 붙는다 — 회차가 바뀌어도 그대로 간다.
+
+    논의는 그 회차의 사정이고, 규칙은 매번 같은 방식으로 하기 위한 것이다.
+    담당자가 바뀌어도 "이건 이렇게 한다"가 사람이 아니라 기록에 남아야 한다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 고칠 수 있습니다.")
+
+    body = payload.body.strip()
+    before = run.library.rules
+    run.library.rules = body or None
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="업무규칙_수정",
+        target_type="task_library",
+        target_id=run.library_id,
+        summary=f"{run.library.title} 규칙 {'삭제' if not body else '저장'}",
+        before_value={"rules": before},
+        after_value={"rules": run.library.rules},
+    )
+    return {"rules": run.library.rules}
 
 
 class DiscussionEditIn(BaseModel):
