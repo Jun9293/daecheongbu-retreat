@@ -155,7 +155,6 @@ sheet.querySelectorAll('.row.team').forEach(team => {
     });
     layoutLabels();
     drawWires();
-    if (me.value !== 'all') scrollTeamToTop(me.value, false);
   };
 });
 
@@ -630,7 +629,6 @@ addEventListener('click', e => {
 
 drawGrid();
 applyFilters();
-scrollTeamToTop(me.value, false);
 // 글꼴이 로드되기 전에 재면 폭이 틀리므로 다시 계산한다
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => { drawGrid(); layoutLabels(); drawWires(); });
