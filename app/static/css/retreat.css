@@ -149,6 +149,15 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
   background:var(--now);color:#fff;padding:2px 4px;border-radius:2px;flex:none}
 .bar.ghost{border-style:dashed!important;color:var(--ink-2)!important}
 .bar.ghost .txt{font-style:italic}
+/* 끌어서 날짜를 옮길 수 있는 바 */
+.bar[data-run]:not([data-ghost]){cursor:grab}
+.bar.dragging{cursor:grabbing;opacity:.9;box-shadow:0 0 0 2px var(--link),0 6px 14px -8px rgba(27,33,31,.5);
+  z-index:10!important;transition:none}
+body.dragging-bar{cursor:grabbing;user-select:none}
+body.dragging-bar .bar{transition:none}
+.dragdate{position:fixed;z-index:50;background:var(--ink);color:var(--paper-2);
+  font-size:11.5px;padding:3px 7px;border-radius:3px;pointer-events:none;white-space:nowrap}
+
 .bar.sch{height:21px;border-width:1px;border-style:solid;border-left-width:4px;font-size:12px;font-weight:500;z-index:4}
 
 /* 세로 격자선 — 열마다 div 를 넣는 대신 한 겹으로 겹쳐 그린다 */

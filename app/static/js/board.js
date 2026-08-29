@@ -375,7 +375,7 @@ function esc(s) {
 function renderLog() {
   const entries = detail.discussions;
   // 대체된 기록과 후속 내용을 한 덩어리로 잇는다 — 기존 내용에 취소선,
-  // 그 아래에 수정 내용을 붙이는 노션 관례 (CLAUDE.md 4-8)
+  // 그 아래에 수정 내용을 붙이는 노션 관례 (CLAUDE.md 4-9)
   const replacement = new Map();
   entries.forEach(e => { if (e.replaces) replacement.set(e.replaces, e); });
 
@@ -596,6 +596,152 @@ grip.addEventListener('mousedown', e => {
   addEventListener('mousemove', move);
   addEventListener('mouseup', up);
 });
+
+
+/* ── 바를 끌어 날짜 옮기기 ────────────────────────────────────────────
+   가로로만 움직인다. 위아래로 옮기면 담당 부서가 바뀌는 셈인데, 그건 날짜를
+   고치는 일과 전혀 다른 결정이므로 드래그로 일어나서는 안 된다.
+   칸에 물려 떨어진다 — 주 단위 구간에서는 그 주로, 일 단위 구간에서는 그 날로. */
+const DAY_MS = 864e5;
+const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dateOf = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+
+/* 커서가 놓인 칸 → 새 시작일. 주 단위 칸이면 원래 요일을 지켜 그 주 안에 놓는다. */
+function startForCell(hc, weekday) {
+  const from = dateOf(hc.dataset.cs);
+  if (hc.dataset.cs === hc.dataset.ce) return from;          // 하루짜리 칸
+  const span = Math.round((dateOf(hc.dataset.ce) - from) / DAY_MS);
+  return new Date(from.getTime() + Math.min(weekday, span) * DAY_MS);
+}
+
+function cellAtX(x) {
+  const cells = headers();
+  const sr = sheet.getBoundingClientRect();
+  const local = x - sr.left;
+  return cells.find(hc => local >= hc.offsetLeft && local < hc.offsetLeft + hc.offsetWidth)
+    || (local < cells[0].offsetLeft ? cells[0] : cells[cells.length - 1]);
+}
+
+function canDrag(bar) {
+  const m = META[bar.dataset.run];
+  return !!m && !bar.dataset.ghost && m.can_edit !== false;
+}
+
+sheet.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const bar = e.target.closest('.bar[data-run]');
+  if (!bar || !canDrag(bar)) return;
+
+  const runId = bar.dataset.run, meta = META[runId];
+  if (!meta || !meta.start) return;
+  const origStart = dateOf(meta.start);
+  const spanDays = Math.round((dateOf(meta.end || meta.start) - origStart) / DAY_MS);
+  const weekday = origStart.getDay();
+  const grabX = e.clientX;
+  const barLeft = bar.getBoundingClientRect().left;
+  const grabOffset = grabX - barLeft;          // 잡은 지점을 유지한 채 끌린다
+  const startCol = Number(bar.style.gridColumn.split('/')[0]);
+  const width = Number(bar.style.gridColumn.split('/')[1]) - startCol;
+
+  let moved = false, target = null;
+  e.preventDefault();
+  bar.classList.add('dragging');
+  document.body.classList.add('dragging-bar');
+
+  const move = ev => {
+    if (!moved && Math.abs(ev.clientX - grabX) < 3) return;
+    moved = true;
+    const hc = cellAtX(ev.clientX - grabOffset + 2);
+    if (!hc) return;
+    const next = startForCell(hc, weekday);
+    if (target && isoOf(target) === isoOf(next)) return;
+    target = next;
+    const col = headers().indexOf(hc) + 1;
+    bar.style.gridColumn = `${col}/${col + width}`;   // 미리 보여준다 (행은 그대로)
+    showGhostDate(bar, next, spanDays);
+  };
+
+  const up = async () => {
+    removeEventListener('mousemove', move);
+    removeEventListener('mouseup', up);
+    bar.classList.remove('dragging');
+    document.body.classList.remove('dragging-bar');
+    hideGhostDate();
+    if (!moved || !target) { bar.style.gridColumn = `${startCol}/${startCol + width}`; return; }
+    dragEnd = Date.now();                       // 드래그 끝의 클릭을 무시시킨다
+
+    const start = isoOf(target);
+    const end = isoOf(new Date(target.getTime() + spanDays * DAY_MS));
+    if (start === meta.start) { bar.style.gridColumn = `${startCol}/${startCol + width}`; return; }
+
+    const res = await fetch(`/board/task/${runId}/dates`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start, end}),
+    });
+    if (!res.ok) {
+      alert((await res.json().catch(() => ({}))).detail || '날짜를 바꾸지 못했습니다.');
+      bar.style.gridColumn = `${startCol}/${startCol + width}`;
+      return;
+    }
+    const saved = await res.json();
+    applySavedDates(runId, saved);
+  };
+
+  addEventListener('mousemove', move);
+  addEventListener('mouseup', up);
+});
+
+/* 끌고 있는 동안 바뀔 날짜를 붙여 보여준다 */
+let ghostDate = null;
+function showGhostDate(bar, start, spanDays) {
+  if (!ghostDate) {
+    ghostDate = document.createElement('div');
+    ghostDate.className = 'dragdate mono';
+    document.body.appendChild(ghostDate);
+  }
+  const end = new Date(start.getTime() + spanDays * DAY_MS);
+  const fmt = d => `${d.getMonth() + 1}/${d.getDate()}`;
+  ghostDate.textContent = spanDays ? `${fmt(start)} – ${fmt(end)}` : fmt(start);
+  const r = bar.getBoundingClientRect();
+  ghostDate.style.left = Math.round(r.left) + 'px';
+  ghostDate.style.top = Math.round(r.top - 26) + 'px';
+}
+function hideGhostDate() { if (ghostDate) { ghostDate.remove(); ghostDate = null; } }
+
+/* 저장된 날짜를 화면 곳곳에 반영한다 */
+function applySavedDates(runId, saved) {
+  META[runId].start = saved.start;
+  META[runId].end = saved.end;
+  META[runId].d_week = saved.d_week;
+  sheet.querySelectorAll(`.row[data-run="${runId}"]`).forEach(row => {
+    row.dataset.s = saved.start;
+    row.dataset.e = saved.end;
+  });
+  // 고스트 바까지 같은 자리로 옮긴다
+  const cells = headers();
+  const colOf = iso => {
+    const i = cells.findIndex(hc => hc.dataset.cs <= iso && iso <= hc.dataset.ce);
+    return (i < 0 ? cells.length - 1 : i) + 1;
+  };
+  const a = colOf(saved.start), b = colOf(saved.end);
+  sheet.querySelectorAll(`.bar[data-run="${runId}"]`).forEach(el => {
+    el.style.gridColumn = `${a}/${b + 1}`;
+  });
+  document.querySelectorAll(`.mrow[data-run="${runId}"]`).forEach(row => {
+    row.dataset.s = saved.start;
+    row.dataset.e = saved.end;
+    const meta = row.querySelector('.meta span:last-child');
+    if (meta) meta.textContent = saved.label;
+  });
+  if (detail && String(detail.run_id) === String(runId)) {
+    detail.start = saved.start;
+    detail.end = saved.end;
+    renderDrawer();
+  }
+  layoutLabels();
+  drawWires();
+}
 
 /* ── 보드 클릭 ── */
 sheet.addEventListener('click', e => {

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity, resolve_retreat
 from app.domain import board as board_view
+from app.domain import dweek
 from app.domain import permissions as perm
 from app.domain.departments import short_name
 from app.models import DiscussionEntry, Retreat, TaskRun, User
@@ -45,7 +46,7 @@ def board_page(
     if retreat.start_date is None:
         raise HTTPException(status_code=400, detail="회차의 개회일이 지정되지 않았습니다.")
 
-    view = board_view.build(db, retreat)
+    view = board_view.build(db, retreat, can_edit=lambda run: _can_edit(user, run))
     my_key = None
     if user.department_id is not None:
         dept = next((d for d in retreat.departments if d.id == user.department_id), None)
@@ -204,6 +205,63 @@ def set_status(
     view_row["background"] = background
     view_row["border"] = border
     return JSONResponse(view_row)
+
+
+class DatesIn(BaseModel):
+    start: str
+    end: str | None = None
+
+
+@router.post("/board/task/{run_id}/dates")
+def move_dates(
+    run_id: int,
+    payload: DatesIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """바를 끌어 옮겨 날짜를 바꾼다.
+
+    이번 회차의 실행 기록만 바뀐다. 라이브러리의 기본 D-주차는 그대로다 —
+    한 회차에서 일정을 당겼다고 다음 회차의 기준까지 따라 움직이면 안 된다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 옮길 수 있습니다.")
+
+    try:
+        start = dt.date.fromisoformat(payload.start)
+        end = dt.date.fromisoformat(payload.end) if payload.end else start
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다.") from exc
+    if end < start:
+        raise HTTPException(status_code=400, detail="마감일이 시작일보다 빠릅니다.")
+
+    before = {
+        "start": run.start_date.isoformat() if run.start_date else None,
+        "end": run.end_date.isoformat() if run.end_date else None,
+    }
+    run.start_date, run.end_date = start, end
+    run.d_week = dweek.week_of(retreat.start_date, start) if start < retreat.start_date else None
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="업무_날짜_변경",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{run.library.title}: {before['start']} → {start.isoformat()}",
+        before_value=before,
+        after_value={"start": start.isoformat(), "end": end.isoformat()},
+    )
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "d_week": run.d_week,
+        "label": f"{start.month}/{start.day}"
+        + (f"–{end.month}/{end.day}" if end != start else ""),
+    }
 
 
 class DiscussionIn(BaseModel):

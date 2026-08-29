@@ -416,3 +416,55 @@ def test_마법사가_계층과_순서를_함께_내려준다(admin_client, boar
 
     # 제안은 하위가 없다
     assert all(i["children"] == [] for i in data["items"] if i["kind"] == "suggestion")
+
+
+# ---------------------------------------------------------------- 날짜 옮기기
+
+
+def test_바를_끌어_날짜를_옮길_수_있다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]      # 2026-05-24 ~ 06-14 (21일)
+
+    response = admin_client.post(
+        f"/board/task/{run_id}/dates", json={"start": "2026-06-07", "end": "2026-06-28"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["start"] == "2026-06-07"
+    assert response.json()["d_week"] == 11          # D-주차가 다시 계산된다
+    with app_session() as db:
+        run = db.get(models.TaskRun, run_id)
+        assert run.start_date == dt.date(2026, 6, 7)
+        assert run.end_date == dt.date(2026, 6, 28)
+
+
+def test_날짜를_옮겨도_라이브러리_기준은_그대로다(admin_client, board_data):
+    """한 회차에서 일정을 당겼다고 다음 회차의 기준까지 움직이면 안 된다."""
+    run_id = board_data["runs"]["포스터 제작"]
+    with app_session() as db:
+        before = db.get(models.TaskRun, run_id).library.default_d_week
+
+    admin_client.post(f"/board/task/{run_id}/dates", json={"start": "2026-07-05"})
+
+    with app_session() as db:
+        assert db.get(models.TaskRun, run_id).library.default_d_week == before
+
+
+def test_마감이_시작보다_빠르면_거부한다(admin_client, board_data):
+    run_id = board_data["runs"]["포스터 제작"]
+    assert admin_client.post(
+        f"/board/task/{run_id}/dates", json={"start": "2026-06-07", "end": "2026-06-01"}
+    ).status_code == 400
+
+
+def test_부서_리더는_남의_부서_업무를_옮길_수_없다(lead_client, board_data):
+    mine = board_data["runs"]["포스터 제작"]        # 스케치
+    other = board_data["runs"]["차량 신청"]         # 총무M
+
+    assert lead_client.post(f"/board/task/{mine}/dates", json={"start": "2026-06-07"}).status_code == 200
+    assert lead_client.post(f"/board/task/{other}/dates", json={"start": "2026-08-16"}).status_code == 403
+
+
+def test_보드가_바마다_편집_권한을_실어_보낸다(lead_client, board_data):
+    """끌 수 있는 바인지 화면이 알아야 커서와 동작이 갈린다."""
+    page = lead_client.get("/board").text
+    assert '"can_edit"' in page

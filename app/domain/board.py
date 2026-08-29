@@ -144,7 +144,7 @@ def load_runs(db: Session, retreat: Retreat) -> list[TaskRun]:
     )
 
 
-def build(db: Session, retreat: Retreat) -> dict:
+def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
     """보드 한 장을 그리는 데 필요한 모든 것."""
     open_date = retreat.start_date
     close_date = retreat.end_date or open_date
@@ -184,6 +184,8 @@ def build(db: Session, retreat: Retreat) -> dict:
             ],
             "d_week": run.d_week,
             "origin": lib.origin,
+            # 끌어서 날짜를 옮길 수 있는지 — 내 부서의 업무만
+            "can_edit": True if can_edit is None else bool(can_edit(run)),
         }
 
     def make_row(run: TaskRun, *, depth: int, ghost: bool, owner_color: str) -> dict:
