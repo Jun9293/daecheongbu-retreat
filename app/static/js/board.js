@@ -404,6 +404,8 @@ document.getElementById('drel').onclick = e => {
 /* ── 상태 변경 ── */
 function statMenu(btn) {
   const menu = document.getElementById('statmenu'), r = btn.getBoundingClientRect();
+  // 같은 배지를 다시 누르면 상태를 바꾸지 않고 목록만 닫는다
+  if (menu.classList.contains('on')) { closeMenus(); return; }
   menu.innerHTML = Object.entries(STATUS).map(([key, v]) =>
     `<button data-s="${key}"><span class="cv" style="background:${v.color}"></span>${v.label}</button>`).join('');
   menu.style.left = r.left + 'px';
@@ -558,7 +560,7 @@ addEventListener('click', e => {
   if (!e.target.closest('.relitem') && !e.target.closest('#statmenu') && !e.target.closest('#statchip')) closeMenus();
   if (!dw.classList.contains('open')) return;
   if (e.target.closest('#drawer') || e.target.closest('#statmenu')) return;
-  if (e.target.closest('[data-run],[data-go]')) return;
+  if (e.target.closest('.bar[data-run],[data-go]')) return;   // 바·업무명만 예외
   if (e.target.closest('header') || e.target.closest('.toolbar')) return;
   closeDrawer();
 });
