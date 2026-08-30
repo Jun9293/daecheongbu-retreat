@@ -46,6 +46,7 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("task_library", "rules", "TEXT"),
     ("task_library", "prerequisite_library_ids", "TEXT"),
     ("task_runs", "started_at", "DATE"),
+    ("task_runs", "completed_at", "DATE"),
 )
 
 

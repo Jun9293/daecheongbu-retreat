@@ -658,6 +658,9 @@ class TaskRun(Base):
     # '일부 진행 가능' 을 가르는 근거이며, 상태로 보면 담당자가 상태를 바꾸는
     # 것만으로 판정이 움직인다.
     started_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    # 실제로 끝난 날. end_date 는 계획된 마감이라 3주 늦게 끝나도 그 날짜로 읽힌다.
+    # started_at 과 달리 '완료' 를 벗어나면 지운다 — 착수는 사실이지만 완료는 취소된다.
+    completed_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     blocked_by_run_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 

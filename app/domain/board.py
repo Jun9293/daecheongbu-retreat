@@ -152,11 +152,75 @@ def overdue_days_of(run: TaskRun, today: dt.date) -> int:
 
 
 def has_started(run: TaskRun) -> bool:
-    """착수했는가. started_at 이 없던 시절의 기존 행은 상태로 보정한다."""
+    """착수했는가. started_at 이 없던 시절의 기존 행만 상태로 보정한다.
+
+    '지연' 은 착수 여부를 알려주지 않는다 — 그게 started_at 을 만든 이유다.
+    `!= "대기"` 로 보면 기한을 넘겼고 선행도 안 끝났고 손도 안 댄 업무,
+    즉 가장 위험한 조합이 '일부 진행 가능' 으로 읽힌다. 모르는 것은
+    미착수 쪽에 둔다 — 문제를 감추는 방향이 아니라 드러내는 방향이 안전하다.
+    """
     if run.started_at is not None:
         return True
-    return run.status != "대기"
+    return run.status in ("진행중", "완료")
 
+
+
+def lost_prerequisites(run: TaskRun, runs: list[TaskRun]) -> list[str]:
+    """라이브러리에 적힌 선행 중 이번 회차에 대응하는 run 이 없는 것의 제목.
+
+    관문을 "끊긴 run id 가 있는가" 로 두면 안 된다. 링크가 **애초에 만들어지지
+    않은** 경우(회차를 연 뒤 추가한 업무 등)가 통과해 버려, 그 업무가 조용히
+    '진행 가능' 이 된다 — 빠진 경우와 같은 실패인데 입구만 다르다.
+    그래서 라이브러리 쪽을 기준으로 묻는다.
+
+    board 와 diagnosis 가 이 하나를 같이 쓴다. 두 곳에 두면 어긋난다.
+    """
+    present = {r.library_id for r in runs}
+    session = Session.object_session(run)
+    out: list[str] = []
+    for library_id in run.library.prerequisite_library_ids or []:
+        if library_id in present:
+            continue
+        target = session.get(TaskLibrary, library_id) if session else None
+        out.append(target.title if target else "(이름을 찾을 수 없는 선행 업무)")
+    return out
+
+
+def relink_prerequisites(db: Session, retreat: Retreat) -> list[dict]:
+    """라이브러리의 선행 관계를 이번 회차의 run 링크로 다시 맞춘다.
+
+    create_retreat 의 2패스와 같은 일을 회차를 연 뒤에도 한다. included 끼리만
+    잇는다 — 보드는 included 인 run 만 실으므로 미포함 run 을 가리키면
+    화면에서 끊긴 참조가 된다. 잇지 못한 건은 링크를 만들지 않고 돌려준다.
+    """
+    runs = list(
+        db.scalars(
+            select(TaskRun)
+            .options(joinedload(TaskRun.library))
+            .where(TaskRun.retreat_id == retreat.id, TaskRun.included)
+        )
+    )
+    by_library = {r.library_id: r for r in runs}
+    unmet: list[dict] = []
+    for run in runs:
+        links: list[int] = []
+        for library_id in run.library.prerequisite_library_ids or []:
+            target = by_library.get(library_id)
+            if target is None:
+                lib = db.get(TaskLibrary, library_id)
+                unmet.append(
+                    {
+                        "library_id": run.library_id,
+                        "title": run.library.title,
+                        "prerequisite_id": library_id,
+                        "prerequisite_title": lib.title if lib else "(라이브러리에 없음)",
+                    }
+                )
+                continue
+            links.append(target.id)
+        if list(run.blocked_by_run_ids or []) != links:
+            run.blocked_by_run_ids = links
+    return unmet
 
 def load_runs(db: Session, retreat: Retreat) -> list[TaskRun]:
     return list(
@@ -190,28 +254,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             if blocker_id in run_ids:
                 blocks.setdefault(blocker_id, []).append(run.id)
 
-    # 회차를 연 뒤에 선행 업무가 빠지면 링크가 가리킬 곳이 없어진다.
-    # 그냥 걸러 버리면 그 업무가 '진행 가능' 으로 바뀌는데, 막는 요인이
-    # 없어져서가 아니라 안 보이게 돼서다. 조용히 삼키지 않고 따로 모은다.
-    lost: dict[int, list[str]] = {}
-    excluded_titles = {
-        row.id: row.title
-        for row in db.scalars(select(TaskLibrary).where(TaskLibrary.archived_at.is_(None)))
-    }
-    for run in runs:
-        missing = [i for i in (run.blocked_by_run_ids or []) if i not in run_ids]
-        names: list[str] = []
-        if missing:
-            # 사라진 run 의 id 로는 제목을 알 수 없다. 라이브러리의 선행 목록과
-            # 대조해 이번 회차에 실려 있지 않은 업무의 제목을 찾는다.
-            present_libs = {r.library_id for r in runs}
-            for library_id in run.library.prerequisite_library_ids or []:
-                if library_id not in present_libs and library_id in excluded_titles:
-                    names.append(excluded_titles[library_id])
-        if missing and not names:
-            names = ["(이름을 찾을 수 없는 선행 업무)"] * len(missing)
-        if names:
-            lost[run.id] = names
+    # 선행이 이번 회차에 없으면 조용히 삼키지 않는다 (lost_prerequisites 참고)
+    lost = {run.id: names for run in runs if (names := lost_prerequisites(run, runs))}
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
     dept_by_key = {d.key: d for d in departments}
 

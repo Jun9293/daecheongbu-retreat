@@ -262,6 +262,12 @@ def set_status(
     # 착수했다는 사실은 사라지지 않고, 진단 패널이 이걸로 판정한다.
     if run.started_at is None and payload.status != "대기":
         run.started_at = dt.date.today()
+    # 완료는 취소될 수 있으므로 벗어나면 지운다 (착수와 반대다)
+    if payload.status == "완료":
+        if run.completed_at is None:
+            run.completed_at = dt.date.today()
+    else:
+        run.completed_at = None
     db.commit()
     log_activity(
         db,
@@ -667,6 +673,10 @@ def add_existing(
                 run.d_week = target.default_d_week
                 run.department_id = target_dept.id if target_dept else None
         added += 1
+    db.flush()
+    # 회차를 연 뒤에 넣은 업무도 라이브러리의 선행이 이어져야 한다.
+    # 여기가 없으면 링크가 비어 그 업무는 조용히 '진행 가능' 이 된다.
+    unmet = board_view.relink_prerequisites(db, retreat)
     db.commit()
     log_activity(
         db,
@@ -677,7 +687,7 @@ def add_existing(
         target_id=None,
         summary=f"라이브러리에서 {added}건 추가",
     )
-    return {"added": added, "redirect": "/board"}
+    return {"added": added, "unmet_prerequisites": unmet, "redirect": "/board"}
 
 
 class NewTaskIn(BaseModel):
@@ -753,6 +763,8 @@ def add_new(
             status="대기",
         )
     )
+    db.flush()
+    board_view.relink_prerequisites(db, retreat)   # 새로 만든 업무도 선행을 잇는다
     db.commit()
     log_activity(
         db,

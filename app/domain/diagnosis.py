@@ -20,8 +20,14 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from app.domain.board import has_started, load_runs, overdue_days_of, overdue_of
-from app.models import Retreat, TaskLibrary, TaskRun
+from app.domain.board import (
+    has_started,
+    load_runs,
+    lost_prerequisites,
+    overdue_days_of,
+    overdue_of,
+)
+from app.models import Retreat, TaskRun
 
 # 판정 (CLAUDE.md 4-10). tone 은 화면의 색 계열이다.
 BLOCKED = "진행 불가"
@@ -43,6 +49,11 @@ TONES = {
 CHAIN_DEPTH = 3       # 연쇄 후속을 몇 홉까지 따라갈지
 CROWD_MIN = 3         # 이만큼 몰려 있어야 '집중' 이라고 말한다
 
+# 논의 신호의 임계값 (CLAUDE.md 4-10).
+# 한두 번 고쳐 쓰는 것은 흔한 일이라 그것까지 신호로 내면 소음이 된다.
+FLIP_MIN = 2          # 논의가 이만큼 뒤집혔을 때만 말한다
+STALE_DAYS = 21       # 마지막 논의 후 이만큼 지나야 '멈춰 있다' 고 본다
+
 
 @dataclass
 class Diagnosis:
@@ -63,6 +74,42 @@ class Diagnosis:
 
 def _reason(kind: str, text: str) -> dict:
     return {"kind": kind, "text": text}
+
+
+def _settled(run: TaskRun, today: dt.date) -> bool:
+    """이 업무가 남을 막지 않는 상태인가.
+
+    '일정' 은 산출물 없이 날짜만 지키면 되는 것이라(4-2) 아무도 완료를 누르지
+    않는다. 날짜가 지났으면 끝난 것으로 본다 — 그러지 않으면 총 리허설을 선행
+    으로 둔 업무가 리허설이 지나간 뒤에도 영원히 '진행 불가' 다.
+    """
+    if run.status == "완료":
+        return True
+    if run.library.kind == "schedule":
+        end = run.end_date or run.start_date
+        return bool(end and end < today)
+    return False
+
+
+def blocking_of(run: TaskRun, by_id: dict[int, TaskRun], today: dt.date) -> list[TaskRun]:
+    """이 업무를 막고 있는 선행들."""
+    return [
+        by_id[i]
+        for i in (run.blocked_by_run_ids or [])
+        if i in by_id and not _settled(by_id[i], today)
+    ]
+
+
+def verdict_of(run: TaskRun, by_id: dict[int, TaskRun], today: dt.date) -> str:
+    """판정만. 하위 업무의 근거도 이 함수를 써야 본 판정과 어긋나지 않는다."""
+    if run.status == "완료":
+        return DONE
+    if run.library.kind == "schedule":
+        return SCHEDULE
+    blocking = blocking_of(run, by_id, today)
+    if not blocking:
+        return GO
+    return PARTIAL if has_started(run) else BLOCKED
 
 
 def _label(run: TaskRun) -> str:
@@ -153,12 +200,12 @@ def diagnose(
         )
 
     if run.status == "완료":
-        end = run.end_date or run.start_date
-        when = f"{end.month}/{end.day}" if end else "기한 없이"
         return Diagnosis(
             verdict=DONE,
-            summary=f"{when} 기준 완료되었습니다. 후속 업무를 막고 있지 않습니다.",
-            reasons=_context(db, run, runs, by_id, blocks, today, judged=False),
+            summary=_done_summary(run),
+            # 완료된 업무에 "지연 시 N건이 연쇄로 밀립니다" 를 붙이면
+            # 같은 패널 안에서 요약과 근거가 서로 부정한다.
+            reasons=_context(db, run, runs, by_id, blocks, today, judged=False, chain=False),
         )
 
     if run.library.kind == "schedule":
@@ -180,11 +227,7 @@ def diagnose(
         )
 
     # ── 판정 ─────────────────────────────────────────────────────────
-    blocking = [
-        by_id[i]
-        for i in (run.blocked_by_run_ids or [])
-        if i in by_id and by_id[i].status != "완료"
-    ]
+    blocking = blocking_of(run, by_id, today)
     started = has_started(run)
 
     if not blocking:
@@ -220,6 +263,7 @@ def _context(
     *,
     blocking: list[TaskRun] | None = None,
     judged: bool = True,
+    chain: bool = True,
 ) -> list[dict]:
     """판정의 근거. 선행 미완료와 빠진 선행이 맨 위다 (CLAUDE.md 4-10)."""
     reasons: list[dict] = []
@@ -232,7 +276,7 @@ def _context(
         reasons.append(_reason("선행", f"{_label(other)} 미완료 · {other.status}{tail}"))
 
     # 2) 빠진 선행 — 막는 것으로 치지 않지만 조용히 사라지게 두지도 않는다
-    for title in _lost_titles(run, runs):
+    for title in lost_prerequisites(run, runs):
         reasons.append(
             _reason("선행", f"선행 '{title}' 이(가) 이번 회차에서 빠졌습니다 — 확인 필요")
         )
@@ -250,14 +294,8 @@ def _context(
     children = [r for r in runs if r.library.parent_library_id == run.library_id]
     if children:
         unfinished = [c for c in children if c.status != "완료"]
-        blocked_kids = [
-            c
-            for c in unfinished
-            if any(
-                i in by_id and by_id[i].status != "완료" for i in (c.blocked_by_run_ids or [])
-            )
-            and not has_started(c)
-        ]
+        # 판정 규칙을 여기서 다시 쓰지 않는다 — 본 판정과 어긋난다
+        blocked_kids = [c for c in unfinished if verdict_of(c, by_id, today) == BLOCKED]
         text = f"하위 {len(children)}건 중 {len(unfinished)}건 미완료"
         if blocked_kids:
             text += f" · {len(blocked_kids)}건 진행 불가"
@@ -278,11 +316,13 @@ def _context(
         reasons.append(_reason("표시", "담당자가 지연으로 표시함"))
 
     # 6) 연쇄되는 후속
-    chain = _chain(run, by_id, blocks)
-    if chain:
-        names = ", ".join(_label(c) for c in chain[:4])
-        more = f" 외 {len(chain) - 4}건" if len(chain) > 4 else ""
-        reasons.append(_reason("영향", f"지연 시 {len(chain)}건이 연쇄로 밀립니다 — {names}{more}"))
+    followers = _chain(run, by_id, blocks) if chain else []
+    if followers:
+        names = ", ".join(_label(c) for c in followers[:4])
+        more = f" 외 {len(followers) - 4}건" if len(followers) > 4 else ""
+        reasons.append(
+            _reason("영향", f"지연 시 {len(followers)}건이 연쇄로 밀립니다 — {names}{more}")
+        )
 
     # 7) 부서 업무 집중도
     crowd = _crowding(run, runs)
@@ -290,20 +330,57 @@ def _context(
         dept = run.department.name if run.department else "담당 없음"
         reasons.append(_reason("집중", f"같은 기간 {dept}에 미완료 업무 {crowd}건이 몰려 있습니다"))
 
+    # 8) 논의 기록에서 오는 신호 — 문장을 읽지 않고 세기만 한다
+    reasons.extend(discussion_signals(run, today))
+
     return reasons
 
 
-def _lost_titles(run: TaskRun, runs: list[TaskRun]) -> list[str]:
-    """이번 회차에서 빠져 링크가 끊긴 선행 업무의 제목."""
-    run_ids = {r.id for r in runs}
-    if not [i for i in (run.blocked_by_run_ids or []) if i not in run_ids]:
+def _done_summary(run: TaskRun) -> str:
+    """완료 요약. end_date 는 계획된 마감이지 실제로 끝난 날이 아니다."""
+    planned = run.end_date or run.start_date
+    actual = run.completed_at
+    if actual is None:
+        # completed_at 이 없던 시절의 기록. '기준' 이라고 단정하지 않는다.
+        when = f"{planned.month}/{planned.day} 마감" if planned else "날짜 없이"
+        return f"{when}으로 완료 처리되었습니다. 후속 업무를 막고 있지 않습니다."
+    late = (actual - planned).days if planned else 0
+    tail = f" (예정보다 {late}일 늦게 완료)" if late > 0 else ""
+    return f"{actual.month}/{actual.day}에 완료되었습니다{tail}. 후속 업무를 막고 있지 않습니다."
+
+
+def discussion_signals(run: TaskRun, today: dt.date) -> list[dict]:
+    """논의 기록에서 나오는 신호 — 문장을 읽지 않고 세기만 한다.
+
+    CLAUDE.md 4-10 이 '논의 맥락' 을 통째로 후속으로 미뤄 두었지만, 절반은
+    지금 데이터 모델만으로 계산된다. 그 절반이 여기다. 문장을 실제로 읽는
+    절반만 LLM 으로 남는다.
+
+    셋 다 **판정을 바꾸지 않는다.** 근거로만 나간다.
+    """
+    entries = list(run.discussions or [])
+    if not entries:
         return []
-    present = {r.library_id for r in runs}
-    session = Session.object_session(run)
-    out: list[str] = []
-    for library_id in run.library.prerequisite_library_ids or []:
-        if library_id in present:
-            continue
-        target = session.get(TaskLibrary, library_id) if session else None
-        out.append(target.title if target else "(이름을 찾을 수 없는 선행 업무)")
+
+    out: list[dict] = []
+    mine = [e for e in entries if e.carried_from_run_id is None]
+    carried = [e for e in entries if e.carried_from_run_id is not None]
+
+    # 번복 — 결정이 여러 번 뒤집혔다면 아직 정해지지 않은 것이다
+    flips = sum(1 for e in entries if e.supersedes_entry_id is not None)
+    if flips >= FLIP_MIN:
+        out.append(_reason("논의", f"논의가 {flips}번 뒤집혔습니다 — 아직 정해지지 않았을 수 있습니다"))
+
+    # 멈춘 기간 — '진행 가능' 인데 방치된 것과 '진행 불가' 는 대응이 다르다.
+    # 그 둘을 가르는 것이 이 신호다.
+    if mine and run.status != "완료":
+        last = max(e.authored_at for e in mine)
+        idle = (today - last).days
+        if idle >= STALE_DAYS:
+            out.append(_reason("논의", f"마지막 논의 후 {idle}일 지났습니다"))
+
+    # 이번 회차 기록이 아직 없다
+    if carried and not mine:
+        out.append(_reason("논의", "지난 회차 논의만 있고 이번 회차 기록은 아직 없습니다"))
+
     return out
