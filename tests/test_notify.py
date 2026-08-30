@@ -97,6 +97,11 @@ def world(admin_client):
                 "depts": {k: d.id for k, d in depts.items()}}
 
 
+def _build(today=TODAY):
+    with app_session() as db:
+        return notify.build_digests(db, today=today)
+
+
 def _digests(today=TODAY):
     with app_session() as db:
         return {d.user_name: d for d in notify.build_digests(db, today=today)}
@@ -334,7 +339,9 @@ def test_12b_앱은_그대로_뜬다(admin_client):
 
 
 def test_13_미리보기는_보내지_않고_보여준다(world, admin_client):
-    res = admin_client.get("/admin/notify/preview", params={"today": TODAY.isoformat()})
+    res = admin_client.get(
+        "/admin/notify/preview", params={"today": TODAY.isoformat(), "format": "json"}
+    )
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["date"] == TODAY.isoformat()
@@ -346,7 +353,7 @@ def test_13_미리보기는_보내지_않고_보여준다(world, admin_client):
     with app_session() as db:
         assert db.scalars(select(models.NotificationLog)).first() is None
     assert admin_client.get(
-        "/admin/notify/preview", params={"today": TODAY.isoformat()}
+        "/admin/notify/preview", params={"today": TODAY.isoformat(), "format": "json"}
     ).json()["recipients"] == data["recipients"]
 
 
@@ -378,3 +385,257 @@ def test_14_구독_기본값이_꺼짐이다(world, admin_client):
         digest = notify.Digest(user_id=world["people"]["스케치 담당"], user_name="스케치 담당",
                                items=[])
         assert push.send_digest(db, digest) is False
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 보완 — 아래 번호는 보완 작업의 수용 기준이다.
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def two_rounds(world):
+    """회차를 하나 더 연다.
+
+    Department 행은 회차마다 새로 만들어지므로, 부서 리더를 id 로 찾으면 여기서
+    무너진다. 회차가 하나뿐인 픽스처로는 이 버그가 재현되지 않는다.
+    """
+    with app_session() as db:
+        old = db.get(models.Retreat, world["retreat_id"])
+        new = models.Retreat(
+            name="2027 겨울수련회",
+            start_date=dt.date(2027, 1, 14),
+            end_date=dt.date(2027, 1, 17),
+        )
+        db.add(new)
+        db.flush()
+
+        depts = {}
+        for order, key in enumerate(["sketch", "hebron"]):
+            src = next(d for d in old.departments if d.key == key)
+            dept = models.Department(
+                retreat_id=new.id, key=key, name=src.name,
+                color_tag=src.color_tag, sort_order=order,
+            )
+            db.add(dept)
+            db.flush()
+            depts[key] = dept.id
+
+        lib = _lib(db, "새 회차 담당 없는 업무", key="hebron", d_week=9)
+        run = models.TaskRun(
+            library_id=lib.id, retreat_id=new.id, included=True,
+            department_id=depts["hebron"], assignee_id=None,
+            start_date=dt.date(2026, 12, 1), end_date=dt.date(2026, 12, 20),
+            status="대기", blocked_by_run_ids=[],
+        )
+        db.add(run)
+        db.flush()
+        run_id = run.id
+        db.commit()
+
+    # 옛 회차는 지나갔고 새 회차만 살아 있는 날짜
+    return {"retreat_id": new.id, "run_id": run_id, "today": dt.date(2026, 12, 28)}
+
+
+# ── 보완 1 · 2 ────────────────────────────────────────────────────────
+
+
+def test_보완01_회차를_두_번_열어도_부서_리더가_잡힌다(two_rounds):
+    """User.department_id 는 계정을 만들 때의 회차 행을 가리킨다.
+    id 로 비교하면 새 회차에서 리더를 못 찾고 조용히 총무팀으로 떨어진다."""
+    with app_session() as db:
+        run = db.get(models.TaskRun, two_rounds["run_id"])
+        who = notify.recipient_for(db, run)
+        assert who is not None
+        assert who.name == "헤브론 리더"
+        assert who.role == "dept_lead"
+
+
+def test_보완02_리더가_있으면_총무팀으로_떨어지지_않는다(two_rounds):
+    out = {d.user_name: d for d in _build(today=two_rounds["today"])}
+    assert "헤브론 리더" in out
+    assert "새 회차 담당 없는 업무" in [i.title for i in out["헤브론 리더"].items]
+    admin = out.get("총무 김간사")
+    assert admin is None or "새 회차 담당 없는 업무" not in [i.title for i in admin.items]
+
+
+def test_보완02b_공용_함수를_같이_쓴다():
+    """소속을 키로 보는 자리가 두 벌이 되면 한쪽만 고쳐진다."""
+    from app.domain.departments import department_key_of, users_in_department
+    from app.routers import board as board_router
+
+    assert board_router._dept_key_of.__module__ == "app.routers.board"
+    assert callable(department_key_of) and callable(users_in_department)
+    import inspect
+
+    assert "department_key_of" in inspect.getsource(board_router._dept_key_of)
+
+
+# ── 보완 3 · 4 ────────────────────────────────────────────────────────
+
+
+def test_보완03_전송에_실패하면_기록하지_않는다(world):
+    with app_session() as db:
+        result = notify.run_digests(db, today=TODAY, sender=lambda _db, _d: False)
+    assert result["recipients"] > 0
+    assert result["sent"] == 0
+    assert result["skipped"] == result["recipients"]
+
+    with app_session() as db:
+        assert db.scalars(select(models.NotificationLog)).first() is None
+        # 다음 날 다시 후보가 된다
+        assert notify.build_digests(db, today=TODAY + dt.timedelta(days=1))
+
+
+def test_보완04_구독자가_0명이면_7일_침묵이_생기지_않는다(world, admin_client):
+    """배포 전에는 구독자가 0명이다. 실수로 한 번 눌러도 그 주가 소진되면 안 된다."""
+    with app_session() as db:
+        assert db.scalars(select(models.PushSubscription)).first() is None
+
+    res = admin_client.post("/admin/notify/run", params={"today": TODAY.isoformat()})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["sent"] == 0
+    assert body["skipped"] == body["recipients"]
+
+    with app_session() as db:
+        assert db.scalars(select(models.NotificationLog)).first() is None
+        assert notify.build_digests(db, today=TODAY)     # 그대로 후보다
+
+
+# ── 보완 5 · 6 ────────────────────────────────────────────────────────
+
+
+def _fake_subscription(db, user_id, endpoint="https://example.test/a"):
+    row = models.PushSubscription(
+        user_id=user_id, endpoint=endpoint, p256dh="k", auth="a"
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def test_보완05_일시_실패는_발송함으로_세지_않는다(world, monkeypatch):
+    from app import push
+
+    with app_session() as db:
+        _fake_subscription(db, world["people"]["스케치 담당"])
+        db.commit()
+
+    monkeypatch.setattr(push, "push_enabled", lambda: True)
+    monkeypatch.setattr(push, "_send_one", lambda _s, _p: push.RETRY)
+
+    with app_session() as db:
+        digest = notify.Digest(
+            user_id=world["people"]["스케치 담당"], user_name="스케치 담당",
+            items=[notify.Item(notify.OVERDUE, 1, "제목", "줄", "진행 가능", "대기")],
+        )
+        assert push.send_digest(db, digest) is False        # 보낸 것이 아니다
+        assert db.scalars(select(models.PushSubscription)).first() is not None  # 구독은 남는다
+
+
+def test_보완06_만료만_구독을_지운다(world, monkeypatch):
+    from app import push
+
+    with app_session() as db:
+        _fake_subscription(db, world["people"]["스케치 담당"])
+        db.commit()
+
+    monkeypatch.setattr(push, "push_enabled", lambda: True)
+    monkeypatch.setattr(push, "_send_one", lambda _s, _p: push.GONE)
+
+    with app_session() as db:
+        digest = notify.Digest(
+            user_id=world["people"]["스케치 담당"], user_name="스케치 담당",
+            items=[notify.Item(notify.OVERDUE, 1, "제목", "줄", "진행 가능", "대기")],
+        )
+        assert push.send_digest(db, digest) is False
+        assert db.scalars(select(models.PushSubscription)).first() is None      # 지워졌다
+
+    # 성공이면 True 이고 구독도 남는다
+    with app_session() as db:
+        _fake_subscription(db, world["people"]["스케치 담당"], "https://example.test/b")
+        db.commit()
+    monkeypatch.setattr(push, "_send_one", lambda _s, _p: push.SENT)
+    with app_session() as db:
+        digest = notify.Digest(
+            user_id=world["people"]["스케치 담당"], user_name="스케치 담당",
+            items=[notify.Item(notify.OVERDUE, 1, "제목", "줄", "진행 가능", "대기")],
+        )
+        assert push.send_digest(db, digest) is True
+        assert db.scalars(select(models.PushSubscription)).first() is not None
+
+
+# ── 보완 7 · 8 ────────────────────────────────────────────────────────
+
+
+def test_보완07_선행_재촉에_기다리는_쪽의_기한이_함께_나온다(world):
+    """'진행 불가' 는 그 담당자에게 안 가므로, 이 문장이 없으면 아무도 급한 줄 모른다."""
+    with app_session() as db:
+        # 명찰 제작(막힌 쪽)의 마감을 과거로 옮긴다
+        db.get(models.TaskRun, world["runs"]["명찰 제작"]).end_date = dt.date(2026, 5, 27)
+        db.commit()
+
+    hebron = {d.user_name: d for d in _build()}["헤브론 담당"]
+    row = next(i for i in hebron.items if i.kind == notify.UNBLOCK)
+    assert "그쪽 마감이 5일 지났습니다" in row.line
+    assert "'명찰 제작'" in row.line
+
+
+def test_보완08_기다리는_쪽이_기한_초과일_때만_총무팀에도_간다(world):
+    # 기한 안쪽이면 총무팀에는 가지 않는다 (담당자 한 사람 원칙)
+    out = {d.user_name: d for d in _build()}
+    admin = out.get("총무 김간사")
+    admin_unblock = [i for i in admin.items if i.kind == notify.UNBLOCK] if admin else []
+    assert admin_unblock == []
+
+    with app_session() as db:
+        db.get(models.TaskRun, world["runs"]["명찰 제작"]).end_date = dt.date(2026, 5, 27)
+        db.commit()
+
+    out = {d.user_name: d for d in _build()}
+    admin = out["총무 김간사"]
+    rows = [i for i in admin.items if i.kind == notify.UNBLOCK]
+    assert len(rows) == 1
+    assert "그쪽 마감이" in rows[0].line
+    # 담당자에게도 그대로 간다 (총무팀은 '더해서' 받는 것이다)
+    assert any(i.kind == notify.UNBLOCK for i in out["헤브론 담당"].items)
+
+
+# ── 보완 9 · 10 · 11 ──────────────────────────────────────────────────
+
+
+def test_보완09_미리보기가_사람이_읽는_화면이다(world, admin_client):
+    page = admin_client.get("/admin/notify/preview", params={"today": TODAY.isoformat()})
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    assert "알림 미리보기" in page.text
+    assert "보내지 않습니다" in page.text
+    # 맨 위에 "오늘 N명에게 M건"
+    assert "명</b>에게" in page.text and "건</b>" in page.text
+    # 실제로 갈 문구가 그대로 보인다
+    assert "수련회 준비 — 오늘 볼 것" in page.text
+    assert "막는 요인이 없습니다" in page.text
+
+
+def test_보완10_구독자가_0명이면_경고가_뜬다(world, admin_client):
+    page = admin_client.get("/admin/notify/preview", params={"today": TODAY.isoformat()})
+    assert "지금 실행해도 아무에게도 가지 않습니다" in page.text
+
+    with app_session() as db:
+        _fake_subscription(db, world["people"]["스케치 담당"])
+        db.commit()
+
+    page = admin_client.get("/admin/notify/preview", params={"today": TODAY.isoformat()})
+    assert "지금 실행해도 아무에게도 가지 않습니다" not in page.text
+
+
+def test_보완11_format_json_이_기존_응답을_준다(world, admin_client):
+    res = admin_client.get(
+        "/admin/notify/preview", params={"today": TODAY.isoformat(), "format": "json"}
+    )
+    assert res.status_code == 200
+    assert "application/json" in res.headers["content-type"]
+    data = res.json()
+    for key in ("date", "push_enabled", "recipients", "items", "digests"):
+        assert key in data
+    assert data["digests"][0]["body"]

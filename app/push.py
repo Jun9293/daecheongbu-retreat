@@ -87,11 +87,12 @@ def send_digest(db: Session, digest) -> bool:
     }
     delivered, stale = False, []
     for subscription in subscriptions:
-        if _send_one(subscription, payload):
-            delivered = True
-        else:
+        result = _send_one(subscription, payload)
+        if result == SENT:
+            delivered = True            # 일시 실패는 '보냈다' 로 세지 않는다
+        elif result == GONE:
             stale.append(subscription.endpoint)
-    for endpoint in stale:
+    for endpoint in stale:              # 만료된 것만 지운다
         delete_subscription(db, endpoint=endpoint)
     return delivered
 
@@ -135,8 +136,15 @@ def delete_subscription(db: Session, *, endpoint: str) -> None:
         db.commit()
 
 
-def _send_one(subscription: PushSubscription, payload: dict) -> bool:
-    """실제 발송. 성공하면 True, 구독이 만료됐으면 False."""
+# 전송 결과. "보냈는가" 와 "구독을 지울까" 는 다른 질문이라 둘을 한 값에 담지 않는다 —
+# 섞으면 서버가 다 죽어 있어도 관리자 화면에 "실제 발송 12명" 이라고 나온다.
+SENT = "sent"          # 성공
+RETRY = "retry"        # 일시 실패. 구독은 그대로 둔다
+GONE = "gone"          # 만료·거부(410/404). 구독을 지운다
+
+
+def _send_one(subscription: PushSubscription, payload: dict) -> str:
+    """실제 발송. SENT / RETRY / GONE 중 하나."""
     from pywebpush import WebPushException, webpush
 
     try:
@@ -151,14 +159,17 @@ def _send_one(subscription: PushSubscription, payload: dict) -> bool:
             ttl=60 * 60 * 24,
             timeout=10,
         )
-        return True
+        return SENT
     except WebPushException as exc:
         status = getattr(exc.response, "status_code", None)
         if status in (404, 410):
-            # 구독이 만료됨 — 정리 대상
-            return False
+            return GONE
         logger.warning("푸시 발송 실패 (status=%s): %s", status, exc)
-        return True  # 일시적 실패는 구독을 지우지 않는다
+        return RETRY
+    except Exception as exc:            # noqa: BLE001
+        # 라이브러리·네트워크 문제로 터져도 알림 한 번 못 보낸 것으로 끝나야 한다
+        logger.warning("푸시 발송 중 오류: %s", exc)
+        return RETRY
 
 
 def push_notifications(db: Session, notifications: list[Notification]) -> int:
@@ -189,9 +200,10 @@ def push_notifications(db: Session, notifications: list[Notification]) -> int:
         }
         delivered = False
         for subscription in subscriptions:
-            if _send_one(subscription, payload):
+            result = _send_one(subscription, payload)
+            if result == SENT:
                 delivered = True
-            else:
+            elif result == GONE:
                 stale.append(subscription.endpoint)
         if delivered:
             notification.pushed = True

@@ -28,3 +28,41 @@ def short_name(name: str) -> str:
     """'4 스케치' → '스케치'. 좁은 자리에 담당팀을 표시할 때 쓴다."""
     head, _, rest = name.partition(" ")
     return rest or head
+
+
+# ── 소속은 키로 본다 (CLAUDE.md 2장) ─────────────────────────────────
+#
+# Department 행은 회차마다 새로 만들어진다. id 로 비교하면 새 회차가 열리는
+# 순간 어긋나는데, 그 실패가 **조용하다** — 아무 오류도 나지 않고 그냥 못 찾는다.
+# 회차를 넘어 같은 부서임을 알아보는 것은 key 뿐이다.
+
+
+def department_key_of(db, user) -> str | None:
+    """그 사람의 부서 키. 회차가 바뀌어도 이것만은 그대로다."""
+    from app.models import Department
+
+    if user is None or user.department_id is None:
+        return None
+    dept = db.get(Department, user.department_id)
+    return dept.key if dept else None
+
+
+def users_in_department(db, key: str | None, *, role: str | None = None) -> list:
+    """그 부서 키에 속한 사람들.
+
+    User.department_id 는 계정을 만들 때의 회차 행을 가리키므로, 같은 키를 가진
+    **모든 회차의** Department 행 id 를 모아서 찾아야 한다.
+    """
+    from sqlalchemy import select
+
+    from app.models import Department, User
+
+    if not key:
+        return []
+    dept_ids = list(db.scalars(select(Department.id).where(Department.key == key)))
+    if not dept_ids:
+        return []
+    query = select(User).where(User.department_id.in_(dept_ids))
+    if role is not None:
+        query = query.where(User.role == role)
+    return list(db.scalars(query.order_by(User.id)))

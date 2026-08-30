@@ -11,15 +11,17 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import log_activity
+from app.deps import all_retreats, log_activity, resolve_retreat
 from app.domain import notify
-from app.models import User
+from app.models import PushSubscription, User
 from app.push import push_enabled
 from app.security import require_admin
+from app.templating import redirect, render
 
 router = APIRouter()
 
@@ -35,24 +37,49 @@ def _today(value: str | None) -> dt.date:
 
 @router.get("/admin/notify/preview")
 def preview(
+    request: Request,
     today: str | None = None,
+    format: str | None = None,
     db: Session = Depends(get_db),
-    _user: User = Depends(require_admin),
+    user: User = Depends(require_admin),
 ):
-    """보내지 않고 보여준다."""
+    """보내지 않고 보여준다.
+
+    몇 주 동안 매일 볼 화면이라 사람이 읽을 수 있어야 한다.
+    기계가 읽을 것은 ?format=json 으로 남긴다.
+    """
     when = _today(today)
     digests = notify.build_digests(db, today=when)
-    return {
+    subscribers = db.scalar(
+        select(func.count(func.distinct(PushSubscription.user_id)))
+    ) or 0
+    payload = {
         "date": when.isoformat(),
         "push_enabled": push_enabled(),
+        "subscribers": subscribers,
         "recipients": len(digests),
         "items": sum(len(d.items) for d in digests),
         "digests": [d.as_dict() for d in digests],
     }
+    if (format or "").lower() == "json":
+        return payload
+    return render(
+        request,
+        "notify_preview.html",
+        {
+            "user": user,
+            "retreat": resolve_retreat(db, user, None),
+            "retreats": all_retreats(db),
+            "active_tab": None,
+            "page_subtitle": "알림 미리보기",
+            **payload,
+        },
+    )
 
 
 @router.post("/admin/notify/run")
 def run(
+    request: Request,
     today: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
@@ -67,6 +94,12 @@ def run(
         action="알림_발송",
         target_type="notification",
         target_id=None,
-        summary=f"{result['recipients']}명에게 {result['items']}건 (실제 발송 {result['sent']}명)",
+        summary=f"{result['recipients']}명에게 {result['items']}건 "
+                f"(실제 발송 {result['sent']}명 · 못 보냄 {result['skipped']}명)",
     )
+    if "text/html" in (request.headers.get("accept") or ""):
+        note = f"{result['sent']}명에게 보냈습니다."
+        if result["skipped"]:
+            note += f" {result['skipped']}명은 보낼 곳이 없어 기록하지 않았습니다 — 내일 다시 후보가 됩니다."
+        return redirect(f"/admin/notify/preview?today={result['date']}", message=note)
     return result

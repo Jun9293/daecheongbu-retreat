@@ -1,0 +1,70 @@
+{% extends "retreat_base.html" %}
+{% block title %}알림 미리보기 · 대청부 수련회{% endblock %}
+
+{% block body %}
+<main class="wiz">
+  <h2>알림 미리보기</h2>
+  <p class="lead">
+    <b>보내지 않습니다.</b> 오늘 실행하면 누구에게 무엇이 갈지만 보여줍니다.
+    문구와 기준을 며칠 지켜본 뒤 실제 발송을 켜기 위한 화면입니다.
+  </p>
+
+  <form method="get" action="/admin/notify/preview" class="tools">
+    <label style="font-size:13px;color:var(--ink-2)">기준일
+      <input type="date" name="today" value="{{ date }}" class="find"
+             style="margin-left:6px;min-width:150px">
+    </label>
+    <button type="submit" class="btn">이 날짜로 보기</button>
+    <a class="btn" href="/admin/notify/preview?format=json&today={{ date }}"
+       style="margin-left:auto">JSON 으로 보기</a>
+  </form>
+
+  <div class="figures">
+    <div><b>{{ recipients }}</b><span>받는 사람</span></div>
+    <div><b>{{ items }}</b><span>보낼 항목</span></div>
+    <div><b>{{ subscribers }}</b><span>구독한 사람</span></div>
+  </div>
+
+  {% if not push_enabled %}
+  <div class="alert stop"><span class="ic">경고</span>
+    <span><b>VAPID 키가 준비되지 않았습니다.</b> 지금 실행해도 아무에게도 가지 않습니다.
+      데이터 폴더의 <code>vapid_private.pem</code> 을 확인하세요.</span></div>
+  {% elif subscribers == 0 %}
+  <div class="alert stop"><span class="ic">경고</span>
+    <span><b>알림을 켠 사람이 아직 없습니다 — 지금 실행해도 아무에게도 가지 않습니다.</b>
+      웹 푸시는 브라우저 규격상 <b>HTTPS 또는 localhost</b> 에서만 켤 수 있어,
+      배포 전까지는 서버를 띄운 컴퓨터에서만 구독됩니다.</span></div>
+  {% endif %}
+
+  {% if digests %}
+  <p class="sechint" style="margin-top:20px">
+    오늘 <b>{{ recipients }}명</b>에게 <b>{{ items }}건</b>. 아래가 실제로 갈 문구 그대로입니다.
+  </p>
+  {% for d in digests %}
+  <div class="card" style="margin-bottom:12px">
+    <h3 style="display:flex;align-items:baseline;gap:8px">
+      {{ d['user_name'] }}
+      <span class="tag low">{{ d['items']|length + d['overflow'] }}건</span>
+    </h3>
+    <div class="pushnote">
+      <div class="pn-title">{{ d['title'] }}</div>
+      <div class="pn-body">{{ d['body'] }}</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="alert info" style="margin-top:20px"><span class="ic">없음</span>
+    <span>이 날짜에 보낼 것이 없습니다. <b>보낼 것이 없으면 보내지 않습니다</b> —
+      “오늘은 없습니다”를 보내지 않는 것이 규칙입니다 (4-11).</span></div>
+  {% endif %}
+
+  <form method="post" action="/admin/notify/run?today={{ date }}" style="margin-top:20px"
+        onsubmit="return confirm('실제로 발송합니다. 계속할까요?')">
+    <button type="submit" class="btn pri" {% if not push_enabled or subscribers == 0 %}disabled
+      title="구독한 사람이 없어 보낼 곳이 없습니다"{% endif %}>지금 실제로 보내기</button>
+    <span class="sechint" style="margin-left:10px">
+      평소에는 바깥 스케줄러가 하루 한 번 <code>POST /admin/notify/run</code> 을 부릅니다.
+    </span>
+  </form>
+</main>
+{% endblock %}

@@ -17,7 +17,7 @@ from app.domain import diagnosis
 from app.domain import dweek
 from app.domain import library as lib_domain
 from app.domain import permissions as perm
-from app.domain.departments import short_name
+from app.domain.departments import department_key_of, short_name
 from app.models import DiscussionEntry, Retreat, TaskRun, User
 from app.security import get_current_user
 from app.templating import render
@@ -26,13 +26,8 @@ router = APIRouter()
 
 
 def _dept_key_of(db: Session, user: User) -> str | None:
-    """로그인한 사람의 부서 키. 회차가 바뀌어도 이것만은 그대로다."""
-    from app.models import Department
-
-    if user.department_id is None:
-        return None
-    dept = db.get(Department, user.department_id)
-    return dept.key if dept else None
+    """로그인한 사람의 부서 키. 공용 함수로 옮겼다 — 알림 쪽과 같은 것을 써야 한다."""
+    return department_key_of(db, user)
 
 
 def _can_edit(db: Session, user: User, run: TaskRun) -> bool:
