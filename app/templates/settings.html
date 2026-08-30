@@ -6,6 +6,26 @@
 
 <div class="page-head"><h1>설정</h1></div>
 
+<!-- 푸시는 기본이 꺼짐이고 사용자가 켜야 받는다 (CLAUDE.md 4-11) -->
+<div class="card" id="push-card" data-vapid="{{ push_public_key }}">
+  <div class="card-head"><h2>알림 받기</h2></div>
+  <div class="card-body">
+    <p class="sub" id="push-status" style="margin:0 0 10px">확인 중…</p>
+    <p class="muted" style="font-size:13px;line-height:1.7;margin:0 0 12px">
+      아침에 하루 한 통으로 옵니다. 업무마다 따로 오지 않습니다.
+      <b>기다리는 중인 업무는 알리지 않습니다</b> — 대신 그 앞을 쥔 담당자에게 갑니다.
+      보낼 것이 없는 날은 오지 않습니다.
+    </p>
+    <div class="row" style="gap:8px">
+      <button class="btn btn-sm" type="button" id="push-enable" hidden>{{ icon('bell', 15) }}알림 켜기</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="push-disable" hidden>알림 끄기</button>
+      <form method="post" action="/push/test" id="push-test-form" hidden>
+        <button class="btn btn-ghost btn-sm" type="submit">테스트 알림</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-head"><h2>내 정보</h2></div>
   <div class="card-body">

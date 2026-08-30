@@ -354,6 +354,25 @@ class PushSubscription(Base):
     user: Mapped[User] = relationship()
 
 
+class NotificationLog(Base):
+    """푸시로 무엇을 보냈는지. 같은 말을 반복하지 않기 위한 기록 (CLAUDE.md 4-11).
+
+    payload 에 그때의 상태와 판정을 남긴다 — 사정이 바뀌면 다시 보내야 하는데,
+    무엇이 바뀌었는지 알려면 그때 무엇이었는지가 있어야 한다.
+    """
+
+    __tablename__ = "notification_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("task_runs.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    sent_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True, index=True)
+    payload: Mapped[dict | None] = mapped_column(JSON, default=dict)
+
+    user: Mapped[User] = relationship()
+
+
 class FileAsset(Base):
     """부서별 작업 파일 (포스터·큐시트·영상 등). 버전 이력을 갖는다."""
 

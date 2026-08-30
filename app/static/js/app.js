@@ -128,8 +128,20 @@
     return;
   }
 
+  // serviceWorker.ready 는 등록된 워커가 없으면 **영영 resolve 되지 않는다.**
+  // 그대로 두면 화면이 "확인 중…" 에서 멈춘 채로 남는다 — 실패했다는 것도
+  // 알려주지 못하는 상태가 가장 나쁘다.
+  function readyOrGiveUp() {
+    return Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(function (_resolve, reject) {
+        setTimeout(function () { reject(new Error("sw-timeout")); }, 4000);
+      }),
+    ]);
+  }
+
   function refresh() {
-    navigator.serviceWorker.ready
+    readyOrGiveUp()
       .then(function (reg) {
         return reg.pushManager.getSubscription();
       })
@@ -145,7 +157,7 @@
         }
       })
       .catch(function () {
-        show("푸시 상태를 확인하지 못했습니다.", { canEnable: true });
+        show("이 브라우저에서 알림을 준비하지 못했습니다. 새로고침하거나 다른 브라우저에서 켜보세요.");
       });
   }
 
@@ -154,7 +166,9 @@
     Notification.requestPermission()
       .then(function (permission) {
         if (permission !== "granted") throw new Error("permission");
-        return navigator.serviceWorker.ready;
+      })
+      .then(function () {
+        return readyOrGiveUp();
       })
       .then(function (reg) {
         return reg.pushManager.subscribe({

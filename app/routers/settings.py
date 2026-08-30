@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
 from app.db import get_db
+from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
 from app.domain.auth import normalize_phone
 from app.domain.clone import clone_retreat
@@ -54,6 +55,7 @@ def settings_page(
             "retreat": retreat,
             "retreats": retreats,
             "departments": departments,
+            "push_public_key": push_key(),
             "users": list(db.scalars(select(User).order_by(User.name))),
             "roles": ALL_ROLES,
             "logs": list(

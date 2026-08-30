@@ -890,6 +890,17 @@ function listEditor(box) {
 
 document.querySelectorAll('textarea[data-listedit]').forEach(listEditor);
 
+/* 알림을 누르고 들어오면 그 업무의 상세 패널을 열어 준다 (?task=123).
+   알림이 "무엇을" 말했는지 화면에서 바로 이어 보게 하기 위한 것이다. */
+(() => {
+  const wanted = new URLSearchParams(location.search).get('task');
+  if (!wanted) return;
+  const run = Number(wanted);
+  if (!META[run]) return;
+  goTo(run);
+  setTimeout(() => { openDrawer(run); link(run); }, 320);
+})();
+
 /* ── 달력 ── */
 function calendar(d) {
   const el = document.getElementById('dcal');

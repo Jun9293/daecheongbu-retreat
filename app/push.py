@@ -42,15 +42,58 @@ def _load_vapid():
 
 
 def application_server_key() -> str:
-    """브라우저 구독에 필요한 공개키 (base64url)."""
+    """브라우저 구독에 필요한 공개키 (base64url). 준비되지 않았으면 빈 문자열."""
     global _cached_public_key
     if _cached_public_key is None:
-        vapid = _load_vapid()
-        raw = vapid.public_key.public_bytes(
-            serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
-        )
-        _cached_public_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+        try:
+            vapid = _load_vapid()
+            raw = vapid.public_key.public_bytes(
+                serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+            )
+            _cached_public_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+        except Exception as exc:            # noqa: BLE001
+            # 키가 없거나 라이브러리가 안 깔렸다고 서버가 죽으면 안 된다.
+            # 푸시만 꺼진 채로 앱은 떠야 한다.
+            logger.warning("VAPID 키를 준비하지 못했습니다 — 푸시를 끕니다: %s", exc)
+            _cached_public_key = ""
     return _cached_public_key
+
+
+def push_enabled() -> bool:
+    """푸시를 보낼 수 있는 상태인가. 화면과 발송이 같은 것을 본다."""
+    return bool(application_server_key())
+
+
+def send_digest(db: Session, digest) -> bool:
+    """오늘 묶음 한 통을 그 사람의 기기들로 보낸다 (CLAUDE.md 4-11).
+
+    앱 알림함(Notification)을 거치지 않는다 — 묶음은 그 자리에서 계산한 것이라
+    저장할 이유가 없다.
+    """
+    if not push_enabled():
+        return False
+    subscriptions = list(
+        db.scalars(select(PushSubscription).where(PushSubscription.user_id == digest.user_id))
+    )
+    if not subscriptions:
+        return False
+
+    first = digest.items[0] if digest.items else None
+    payload = {
+        "title": digest.title(),
+        "body": digest.body(),
+        "link": f"/board?task={first.run_id}" if first else "/board",
+        "tag": f"digest:{digest.user_id}",
+    }
+    delivered, stale = False, []
+    for subscription in subscriptions:
+        if _send_one(subscription, payload):
+            delivered = True
+        else:
+            stale.append(subscription.endpoint)
+    for endpoint in stale:
+        delete_subscription(db, endpoint=endpoint)
+    return delivered
 
 
 def save_subscription(

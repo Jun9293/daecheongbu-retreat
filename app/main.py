@@ -31,6 +31,7 @@ from app.routers import (
     settings,
     setup,
     tasks,
+    notify_admin,
 )
 from app.security import get_optional_user
 from app.templating import render
@@ -98,6 +99,7 @@ app.include_router(settings.router)
 app.include_router(export.router)
 # Phase 2
 app.include_router(notifications.router)
+app.include_router(notify_admin.router)
 app.include_router(reviews.router)
 app.include_router(files.router)
 app.include_router(checklists.router)
