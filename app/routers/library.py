@@ -47,6 +47,30 @@ def library_page(
         )
         items.append({**row, "department_name": name, "department_color": color})
 
+    # 선후행은 하위 업무 사이에서 실제로 필요하므로 상위·하위를 한 줄씩 펼친다.
+    # 필수 지정(상위 단위)과 성격이 다르므로 같은 폼에 섞지 않는다.
+    flat = lib_domain.flat_catalog(db, open_date=open_date)
+    for row in flat:
+        key = row["department_key"]
+        name, color = departments.get(
+            key, (DEPARTMENT_NAMES.get(key, "담당 없음"), DEPARTMENT_COLORS.get(key, "#69726D"))
+        )
+        row["department_name"] = name
+        row["department_color"] = color
+
+    # 화면 스크립트가 쓸 최소한만 — 날짜 객체는 JSON 으로 나가지 않는다
+    flat_json = [
+        {
+            "library_id": row["library_id"],
+            "title": row["title"],
+            "depth": row["depth"],
+            "parent_title": row["parent_title"],
+            "d_week": row["d_week"],
+            "prerequisites": [pre["library_id"] for pre in row["prerequisites"]],
+        }
+        for row in flat
+    ]
+
     return render(
         request,
         "library.html",
@@ -55,6 +79,10 @@ def library_page(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "items": items,
+            "flat": flat,
+            "flat_json": flat_json,
+            "proposals": lib_domain.prerequisite_proposals(db),
+            "link_count": sum(len(r["prerequisites"]) for r in flat),
             "history_depth": lib_domain.history_depth(db),
             "round_labels": lib_domain.round_labels(db),
             "required_count": sum(1 for i in items if i["always_required"]),
@@ -62,6 +90,50 @@ def library_page(
             "page_subtitle": "업무 라이브러리",
         },
     )
+
+
+class PrerequisiteIn(BaseModel):
+    library_id: int
+    prerequisite_ids: list[int] = []
+
+
+@router.post("/library/prerequisites")
+def set_library_prerequisites(
+    payload: PrerequisiteIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """선행 업무를 지정·해제한다. 위반은 400 과 사유를 함께 돌려준다."""
+    lib = db.get(TaskLibrary, payload.library_id)
+    if lib is None:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+
+    before = lib_domain.prerequisites_of(lib)
+    try:
+        kept = lib_domain.set_prerequisites(db, lib, payload.prerequisite_ids)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=None,
+        actor=user,
+        action="선행업무_변경",
+        target_type="task_library",
+        target_id=lib.id,
+        summary=f"{lib.title} 선행 {len(before)}건 → {len(kept)}건",
+        before_value={"prerequisite_library_ids": before},
+        after_value={"prerequisite_library_ids": kept},
+    )
+    everything = {row.id: row.title for row in db.scalars(select(TaskLibrary))}
+    return {
+        "library_id": lib.id,
+        "prerequisites": [
+            {"library_id": i, "title": everything.get(i, "")} for i in kept
+        ],
+    }
 
 
 @router.post("/library/{library_id}/required")

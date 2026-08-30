@@ -169,6 +169,7 @@
       </div>
     </div>
     <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+    <div class="modal" id="prepick" hidden></div>
   </div>
   <div class="dfoot">
     <button disabled title="Phase 3 에서 만듭니다">파일 첨부</button>
@@ -179,5 +180,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=21" defer></script>
+<script src="/static/js/board.js?v=23" defer></script>
 {% endblock %}

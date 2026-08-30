@@ -588,8 +588,12 @@ class TaskLibrary(Base):
     default_department_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # 관련팀 (보드에서 점선 고스트 바로 나타날 부서들)
     related_department_keys: Mapped[list[str] | None] = mapped_column(JSON, default=list)
-    # 업무 간 연결 (양방향으로 저장한다)
+    # 관련업무 — 방향이 없다. 양쪽에 서로 적는다.
     related_library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+    # 선행업무 — 방향이 있다. "저쪽이 끝나야 이쪽을 시작할 수 있다".
+    # 가진 쪽에만 적는다. 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이 맞는지 알 수 없다.
+    # 후속("나를 기다리는 업무")은 저장하지 않고 조회할 때 계산한다.
+    prerequisite_library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
 
     # ── 날짜의 상대 위치 (CLAUDE.md 6-4) ───────────────────────────────
     # anchor='week' → D-주차 일요일 기준 / 'open' → 개회일 기준

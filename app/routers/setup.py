@@ -104,6 +104,20 @@ def preview(
     catalog = lib_domain.catalog(db, open_date=open_date)
     proposals = suggest_domain.generate(db, open_date=open_date, base_retreat=base)
 
+    # 선행 관계는 하위 업무에도 붙지만 마법사가 고르는 단위는 상위다.
+    # "이 선행이 이번 회차에 들어오는가"를 물으려면 최상위로 올려야 한다.
+    owner = lib_domain.top_owner(db)
+    prereq_by_top: dict[int, list[dict]] = {}
+    for row in lib_domain.flat_catalog(db, open_date=open_date):
+        for pre in row["prerequisites"]:
+            prereq_by_top.setdefault(owner.get(row["library_id"], row["library_id"]), []).append(
+                {
+                    "title": row["title"],
+                    "prerequisite_title": pre["title"],
+                    "owner_id": str(owner.get(pre["library_id"], pre["library_id"])),
+                }
+            )
+
     items = []
     for row in catalog:
         items.append(
@@ -132,6 +146,7 @@ def preview(
                 "rationale": row["rationale"],
                 "sub_count": row["sub_count"],
                 "clash": row["d_week"] in clash_weeks,
+                "prereqs": prereq_by_top.get(row["library_id"], []),
             }
         )
     for proposal in proposals:
@@ -161,6 +176,7 @@ def preview(
                 "source": proposal["source"],
                 "sub_count": 0,
                 "clash": proposal["d_week"] in clash_weeks,
+                "prereqs": [],
             }
         )
 

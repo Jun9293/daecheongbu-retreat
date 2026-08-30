@@ -580,3 +580,75 @@ button.btn:disabled{opacity:.4;cursor:default}
   footer.wizfoot{padding:12px 14px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+
+/* ── 선후행 (업무 라이브러리) ─────────────────────────────────────────
+   필수 지정과 성격이 다르므로 구획을 나눈다. 102건을 다루는 자리라
+   이름으로 좁혀 찾기가 있어야 한다. */
+.secttl{font-size:15px;font-weight:600;margin:26px 0 4px}
+.sechint{font-size:12.5px;color:var(--ink-3);line-height:1.7;margin:0 0 12px;max-width:74ch}
+.sechint b{color:var(--ink-2);font-weight:600}
+.find{font:inherit;font-size:12.5px;padding:6px 11px;border:1px solid var(--rule-2);
+  border-radius:20px;background:var(--paper-2);color:var(--ink);min-width:210px}
+.find:focus{outline:none;border-color:var(--link);box-shadow:0 0 0 2px rgba(22,104,227,.14)}
+.btn.sm{font-size:12px;padding:5px 11px}
+
+.lib.pre{max-height:440px;overflow-y:auto}
+.prow{display:flex;align-items:center;gap:11px;padding:10px 14px;
+  border-bottom:1px solid var(--rule)}
+.prow:last-child{border-bottom:none}
+.prow:hover{background:var(--paper)}
+.prow.sub{padding-left:30px;background:linear-gradient(90deg,var(--paper) 0 3px,transparent 3px)}
+.prow .main{flex:1;min-width:0}
+.prow .nm{font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.prow .ind{color:var(--ink-3);margin-right:3px}
+.prow .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:4px;line-height:1.55}
+.prow .basis .lk{color:var(--ink-2);font-weight:600}
+.prow .tm{font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px;
+  flex:none;width:78px}
+.prow .tm i{width:7px;height:7px;border-radius:50%;flex:none}
+.prow[hidden]{display:none}
+
+.proplist{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.prop{font:inherit;font-size:12px;text-align:left;padding:6px 11px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2)}
+.prop:hover{border-color:var(--go);background:#EDF3F0}
+.prop b{font-weight:600;color:var(--ink)}
+.prop .why{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+  color:var(--ink-3);margin-top:2px}
+
+/* 선행 고르기 */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(20,25,23,.34);
+  display:flex;align-items:center;justify-content:center;padding:22px}
+.modal .sheetbox{background:var(--paper-2);border:1px solid var(--rule-2);border-radius:8px;
+  box-shadow:0 12px 40px rgba(20,25,23,.2);width:min(560px,100%);max-height:82vh;
+  display:flex;flex-direction:column;gap:11px;padding:18px 20px}
+.modal .sh{display:flex;align-items:center;gap:9px}
+.modal .sh b{font-size:14.5px}
+.modal .sh .btn{margin-left:auto}
+.modal .sh.end .btn{margin-left:0}
+.modal .sh.end{justify-content:flex-end}
+.plist{flex:1;overflow-y:auto;border:1px solid var(--rule-2);border-radius:5px;
+  background:var(--paper)}
+.plist label{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:13px;
+  border-bottom:1px solid var(--rule);cursor:pointer}
+.plist label:last-child{border-bottom:none}
+.plist label:hover{background:var(--paper-2)}
+.plist label[hidden]{display:none}
+.plist .dw{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  color:var(--ink-3)}
+.plist .sub{color:var(--ink-3);font-size:11.5px}
+
+/* ── 상세 패널의 선행 / 후속 / 관련 ──────────────────────────────────
+   셋을 한 덩어리로 그리면 무엇이 나를 막는지 읽히지 않는다. */
+.relsec + .relsec{margin-top:16px}
+.relsec > h4{font-size:11.5px;font-weight:600;letter-spacing:.04em;color:var(--ink-3);
+  margin:0 0 7px;display:flex;align-items:center;gap:7px}
+.relsec > h4 .n{font-family:'IBM Plex Mono',monospace;font-size:10.5px}
+.relsec > h4 .edit{margin-left:auto;font:inherit;font-size:10.5px;padding:2px 8px;
+  border-radius:3px;cursor:pointer;border:1px solid var(--rule-2);
+  background:var(--paper-2);color:var(--ink-3)}
+.relsec > h4 .edit:hover{color:var(--ink);border-color:var(--ink-3)}
+.relnone{font-size:12px;color:var(--ink-3)}
+.relnote{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:10px;
+  padding-top:9px;border-top:1px dotted var(--rule)}

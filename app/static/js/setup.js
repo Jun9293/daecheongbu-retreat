@@ -260,6 +260,16 @@ function renderSummary() {
       ${missing.map(line).join(', ')}. 정말 이번에 하지 않는지 확인하세요.</span></div>`;
   }
 
+  // 선행이 이번 목록에 없으면 그 업무는 시작할 수 없다. 링크를 만들지 않고 알리기만 한다.
+  const unmet = [];
+  chosen.forEach(i => (i.prereqs || []).forEach(p => {
+    if (!sel.has(p.owner_id)) unmet.push(p);
+  }));
+  if (unmet.length) html += `<div class="alert stop"><span class="ic">경고</span><span>
+    <b>선행 업무 ${unmet.length}건이 이번 회차에서 빠졌습니다.</b>
+    ${unmet.map(p => `${esc(p.title)} 의 선행 업무 <b>${esc(p.prerequisite_title)}</b>`).join(', ')}
+    — 선행이 없으면 그 업무는 시작할 수 없습니다.</span></div>`;
+
   const orphan = chosen.filter(i => i.department_key && off.has(i.department_key));
   if (orphan.length) html += `<div class="alert stop"><span class="ic">경고</span><span>
     제외한 부서가 맡던 업무 <b>${orphan.length}건</b>에 담당이 없습니다 —

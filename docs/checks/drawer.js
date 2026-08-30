@@ -3,6 +3,9 @@
  * 쓰는 법: 보드(/board)를 연 뒤 브라우저 콘솔에 이 파일 내용을 붙여넣습니다.
  * 화면을 고쳤으면 "됐다"고 말하기 전에 이걸 돌립니다.
  *
+ * 탭이 화면에 보이는 상태에서 돌립니다. 배경 탭에서는 브라우저가 타이머를
+ * 1초 단위로 묶어 버려 중간에 끊깁니다 — 페이지가 멈춘 것이 아닙니다.
+ *
  * 무엇을 보는가 — 각 조작이 '되는가'만이 아니라, 그 뒤에도 주변이 그대로인가.
  *   · 드로어가 열려 있는가 (패널 안의 버튼은 패널을 닫지 않는다)
  *   · 부서 그룹이 펼쳐진 채인가 (보던 자리를 잃지 않는다)
@@ -86,6 +89,16 @@
   if (rb) {
     await check('연결된 업무 항목', () => rb.click());
     await check('연결 메뉴 다시 눌러 닫기', () => rb.click());
+  } else results.push('· 이 업무에는 연결된 업무가 없어 건너뜀');
+
+  // 선행 고르기 — fixed 요소라 offsetParent 가 null 이다. 그려진 크기로 판정한다.
+  if ($('preedit')) {
+    const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      return cs.display !== 'none' && r.width > 0 && r.height > 0; };
+    await check('선행 고르기 열기', () => $('preedit').click());
+    results.push((painted($('prepick')) ? '✓' : '✗') + ' 선행 고르기 판이 보임');
+    if (!painted($('prepick'))) errors.push('선행 고르기 판이 보이지 않음');
+    await check('선행 고르기 닫기', () => document.querySelector('#prepick [data-close]').click());
   }
 
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.

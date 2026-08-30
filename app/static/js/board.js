@@ -318,6 +318,7 @@ addEventListener('resize', () => { drawGrid(); layoutLabels(); drawWires(); });
 async function openDrawer(runId) {
   cur = runId;
   const m = META[runId] || {};
+  selectTab('rules');   // 열면 업무 규칙이 먼저 (CLAUDE.md 4-9)
   document.getElementById('dtitle').textContent = m.title || '';
   document.getElementById('dlog').innerHTML = '<div class="empty">불러오는 중…</div>';
   dw.classList.add('open');
@@ -429,18 +430,94 @@ function renderDrawer() {
   document.getElementById('dnote').innerHTML = note;
   document.getElementById('daddlog').hidden = !d.can_edit;
 
-  document.getElementById('relN').textContent = d.related.length || '';
-  document.getElementById('drel').innerHTML = d.related.length
-    ? d.related.map(r => `<div class="relitem">
-        <button class="rb" data-rel="${r.run_id}">
-          <span class="dot" style="background:${r.color}"></span>${esc(r.title)}
-          <span class="rl">${r.kind_label} · ${esc(r.department)}</span></button>
-        <div class="menu">
-          <button data-act="open">열기<span class="mi">상세</span></button>
-          <button data-act="move">이동<span class="mi">보드</span></button></div></div>`).join('')
-    : '<div style="font-size:12px;color:var(--ink-3)">연결된 업무 없음</div>';
+  renderRel(d);
 
   calendar(d);
+}
+
+
+/* ── 연결된 업무: 선행 / 후속 / 관련 ────────────────────────────────
+   셋을 한 덩어리로 그리면 무엇이 나를 막는지 읽히지 않는다.
+   선행은 방향이 있고 '기다리는 쪽'에만 저장한다. 후속은 그 역방향을
+   서버가 계산한 것이라 여기서 직접 고치지 않는다 — 고치려면 그쪽 업무를
+   열어야 한다. 관계는 회차가 아니라 라이브러리에 붙으므로 다음 회차에도 간다. */
+function relItem(r) {
+  return `<div class="relitem">
+    <button class="rb" data-rel="${r.run_id}">
+      <span class="dot" style="background:${r.color}"></span>${esc(r.title)}
+      <span class="rl">${r.kind_label} · ${esc(r.department)}</span></button>
+    <div class="menu">
+      <button data-act="open">열기<span class="mi">상세</span></button>
+      <button data-act="move">이동<span class="mi">보드</span></button></div></div>`;
+}
+
+function renderRel(d) {
+  const pre = d.prerequisites || [], dep = d.dependents || [], rel = d.related || [];
+  document.getElementById('relN').textContent = (pre.length + dep.length + rel.length) || '';
+
+  const section = (title, rows, hint, edit) => `<div class="relsec">
+    <h4>${title}<span class="n">${rows.length}</span>${
+      edit ? '<button class="edit" id="preedit">고치기</button>' : ''}</h4>
+    ${rows.length ? rows.map(relItem).join('')
+      : `<div class="relnone">${hint}</div>`}</div>`;
+
+  document.getElementById('drel').innerHTML =
+    section('선행 — 끝나야 시작할 수 있다', pre, '기다리는 업무 없음', d.can_edit) +
+    section('후속 — 나를 기다린다', dep, '나를 기다리는 업무 없음', false) +
+    section('관련 — 방향 없음', rel, '연결된 업무 없음', false) +
+    `<div class="relnote">선후행은 회차가 아니라 <b>업무 자체</b>에 붙습니다 —
+      업무 규칙과 같이 <b>다음 회차에도 그대로 적용됩니다.</b>
+      후속은 저장하지 않고 선행의 역방향으로 계산합니다.</div>`;
+
+  const edit = document.getElementById('preedit');
+  if (edit) edit.onclick = () => openPrereqPicker(d);
+}
+
+/* 선행 고르기 — 이 업무가 기다릴 업무를 고른다 */
+function openPrereqPicker(d) {
+  const chosen = new Set((d.prerequisites || []).map(r => r.run_id));
+  const box = document.getElementById('prepick');
+  box.innerHTML = `<div class="sheetbox">
+    <div class="sh"><b>${esc(d.title)} 이(가) 기다릴 업무</b>
+      <button type="button" class="btn sm" data-close="1">닫기</button></div>
+    <p class="sechint" id="prepickwarn" hidden></p>
+    <input type="search" class="find" id="prepickfind" placeholder="이름으로 좁혀 찾기" autocomplete="off">
+    <div class="plist" id="prepicklist">${(d.link_candidates || []).map(c =>
+      `<label data-name="${esc(c.title)}">
+        <input type="checkbox" value="${c.run_id}" ${chosen.has(c.run_id) ? 'checked' : ''}>
+        <span>${esc(c.title)}</span><span class="dw">D-${c.d_week}주</span></label>`).join('')}</div>
+    <div class="sh end">
+      <button type="button" class="btn pri" id="prepicksave">저장</button>
+      <button type="button" class="btn" data-close="1">취소</button></div></div>`;
+  box.hidden = false;
+
+  document.getElementById('prepickfind').oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    box.querySelectorAll('#prepicklist label').forEach(el => {
+      el.hidden = q ? !el.dataset.name.toLowerCase().includes(q) : false;
+    });
+  };
+  box.onclick = e => {
+    if (e.target === box || e.target.closest('[data-close]')) box.hidden = true;
+  };
+  document.getElementById('prepicksave').onclick = async () => {
+    const ids = [...box.querySelectorAll('#prepicklist input:checked')].map(i => Number(i.value));
+    const res = await fetch(`/board/task/${cur}/prerequisites`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({run_ids: ids}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const warn = document.getElementById('prepickwarn');
+      warn.textContent = data.detail || '저장하지 못했습니다.';
+      warn.hidden = false;
+      warn.style.color = 'var(--now-ink, #8E2A19)';
+      return;
+    }
+    box.hidden = true;
+    detail = data;
+    renderRel(detail);
+  };
 }
 
 /* 며칠짜리인지 한눈에 — 날짜만 보고 세지 않게 */
@@ -587,11 +664,17 @@ document.getElementById('dcancelnew').onclick = () => {
 };
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); closeDrawer(); } });
 
+function selectTab(name) {
+  document.querySelectorAll('#dtabs button').forEach(x =>
+    x.setAttribute('aria-selected', x.dataset.p === name));
+  document.querySelectorAll('#drawer .pane').forEach(p =>
+    p.classList.toggle('on', p.id === 'p-' + name));
+}
+
 document.getElementById('dtabs').onclick = e => {
   const b = e.target.closest('button');
   if (!b) return;
-  document.querySelectorAll('#dtabs button').forEach(x => x.setAttribute('aria-selected', x === b));
-  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.p));
+  selectTab(b.dataset.p);
 };
 
 /* ── 연결된 업무 목록: 열기 / 이동 ── */

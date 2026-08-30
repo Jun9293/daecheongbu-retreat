@@ -74,6 +74,18 @@ Claude Code가 이 프로젝트에서 작업할 때 **매번 먼저 읽어야 �
 
 **담당팀과 관련팀은 다릅니다.** 담당팀은 하나, 관련팀은 여럿입니다. 관련팀은 "이 업무의 결과물을 받아야 다음 일을 할 수 있는 팀"만 지정합니다.
 
+**업무 사이의 관계는 셋이고, 섞으면 안 됩니다.**
+
+| 관계 | 방향 | 저장 | 뜻 |
+|---|---|---|---|
+| 관련업무 | 없음 | 양방향 (`relatedLibraryIds`) | 서로 참고할 사이. 보드의 고스트 바와 연결 강조가 쓴다 |
+| 선행업무 | 있음 | **단방향** (`prerequisiteLibraryIds`) | 저쪽이 끝나야 이쪽을 시작할 수 있다. 진단 패널의 '진행 불가' 근거 |
+| 상위-하위 | 포함 | `parentLibraryId` | 나를 이루는 단계. **앞을 막지 않는다** (4-10) |
+
+선행은 **가진 쪽에만 적습니다.** A 가 B 를 선행으로 가질 때 B 에는 아무것도 쓰지 않고,
+"A 가 나를 기다린다"(후속)는 물어볼 때 계산합니다. 양쪽에 적으면 한쪽만 지워졌을 때
+어느 쪽이 맞는지 알 수 없습니다.
+
 ---
 
 ## 3. 화면 구성
@@ -117,7 +129,7 @@ Claude Code가 이 프로젝트에서 작업할 때 **매번 먼저 읽어야 �
 
 | 상태 | 표현 |
 |---|---|
-| 예정 | 흰 바탕 + 팀 색 테두리 |
+| 대기 | 흰 바탕 + 팀 색 테두리 |
 | 진행중 | 팀 색 20% 농도 채움 |
 | 완료 | 회색 채움 |
 | 지연 | 옅은 붉은색 + 빨간 테두리 + `지연` 배지 |
@@ -197,7 +209,12 @@ Claude Code가 이 프로젝트에서 작업할 때 **매번 먼저 읽어야 �
 - 달력 — 업무 기간이 걸친 달을 표시. 연결된 업무의 일정은 날짜 아래 점으로.
   **칸 크기는 고정입니다(34px).** 패널 폭에 따라 늘어나면 패널을 넓힐수록 달력이 커져
   한 화면에 안 들어옵니다 — 넓힌 이유가 더 보기 위해서인데 반대로 갑니다
-- 연결된 업무 — 클릭하면 **열기 / 이동** 선택 메뉴
+- 연결된 업무 — **선행 / 후속 / 관련** 세 구획입니다. 각 항목을 클릭하면 **열기 / 이동** 선택 메뉴.
+  선행과 후속은 여기서 바로 고칩니다. 관련은 방향이 없으므로 여기서는 보기만 합니다.
+  **날짜는 회차별(`TaskRun`)이지만 관계는 라이브러리에 붙습니다** — 업무 규칙과 같은 성격이라
+  다음 회차에도 그대로 따라갑니다. 그래서 "다음 회차에도 적용됩니다"를 한 줄로 밝힙니다.
+  고칠 수 있는 사람은 **선행을 가진 쪽** 업무의 담당 부서와 총무팀입니다. A(스케치)가
+  B(헤브론)를 기다린다고 적는 것은 A 쪽의 판단이므로 스케치가 적습니다
 - 하단 고정 — 진단 패널 (4-10)
 
 ### 4-10. 진단 패널
@@ -349,6 +366,8 @@ RetreatDraft (수집중)  ──<  DraftSubmission  >──  부서
 4단계에서 반드시 확인합니다.
 
 - 빠뜨리면 안 될 업무가 빠졌을 때 — 수동 필수 지정 또는 기록된 모든 회차에서 실행한 것. 경고에는 그 업무가 왜 대상인지(근거)를 함께 적습니다
+- 선행 업무가 이번 회차에서 빠졌을 때 — 넣은 업무가 기다려야 할 업무가 목록에 없으면
+  그 업무는 시작할 수 없습니다. 링크를 만들지 않고 경고로만 알립니다
 - 제외한 부서가 맡던 업무에 담당이 없을 때
 - 명절 주간에 업무가 배정될 때
 - 미실행으로 기록될 건수 안내
@@ -368,6 +387,7 @@ RetreatDraft (수집중)  ──<  DraftSubmission  >──  부서
 | 업무명, 계층, 연결 관계 | 담당자 개인 이름 |
 | 업무 규칙 (진행 방식) | 파일 첨부 |
 | 담당 부서, 관련팀 | 진행 상태 (전부 대기로) |
+| 선후행 관계 | 회차별 선행 링크 (`blockedByRunIds` 는 매번 다시 계산) |
 | 전/중/후 실행 항목 | 절대 날짜 (D-주차로 재계산) |
 | 지난 회차 논의 내역 (접힌 상태) | |
 
@@ -432,7 +452,9 @@ TaskLibrary {
   id, title, kind,                    // 'main' | 'sub' | 'schedule'
   parentLibraryId?,
   defaultDepartmentId, defaultDWeek,
-  relatedLibraryIds[],                // 업무 간 연결
+  relatedLibraryIds[],                // 관련업무 — 방향 없음. 양쪽에 서로 적는다
+  prerequisiteLibraryIds[],           // 선행업무 — 방향 있음. 가진 쪽에만 적는다.
+                                      // 후속("나를 기다리는 업무")은 저장하지 않고 조회할 때 계산한다
   relatedDepartmentIds[],             // 관련팀 (고스트 표시 대상)
   alwaysRequired: boolean,            // 총무팀이 손으로 지정한 '매 회차 반드시'
   rules?,                             // 업무 규칙 — 회차를 넘어가는 진행 방식 (4-9)
@@ -446,7 +468,7 @@ TaskRun {
   included: boolean,                  // false여도 삭제하지 않고 기록
   departmentId, assigneeId?,
   dWeek, startDate, endDate,
-  status,                             // '대기'|'진행중'|'피드백요청'|'완료'|'지연'
+  status,                             // '대기'|'진행중'|'완료'|'지연'  (models.RUN_STATUSES)
   blockedByRunIds[]
 }
 
@@ -627,7 +649,8 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 보드 화면 | `app/routers/board.py` · `templates/board.html` · `static/js/board.js` |
 | 세팅 마법사 | `app/routers/setup.py` · `templates/setup.html` · `static/js/setup.js` |
 | 목업의 디자인 시스템 | `app/static/css/retreat.css` |
-| 라이브러리 관리 (수동 필수 지정) | `app/routers/library.py` · `templates/library.html` |
+| 라이브러리 관리 (필수 지정 · 선후행) | `app/routers/library.py` · `templates/library.html` · `static/js/library.js` |
+| 선후행 검증 · 평평한 목록 · 후보 제안 | `app/domain/library.py` (`validate_prerequisite` · `flat_catalog` · `prerequisite_proposals`) |
 | 팀별 수집 (초안·제출) | `app/domain/drafts.py` · `routers/drafts.py` · `templates/draft.html` · `static/js/draft.js` |
 | 회차 개설 후 업무 추가 | `routers/board.py` 의 `/board/add` · `templates/board_add.html` |
 | 라이브러리 초기값 (2026 여름수련회) | `seed_library_data.py` · `seed_library.py` |
@@ -639,7 +662,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 
 **스키마 변경** — 마이그레이션 도구는 아직 없습니다. `app/db.py` 의 `_ADDED_COLUMNS` 에 (테이블, 컬럼, DDL)을 더하면 기존 SQLite 파일에 그 컬럼이 자동으로 추가됩니다. **추가만** 합니다 — 이름 변경·삭제는 여기서 하지 않습니다.
 
-**아직 없는 것** — 진단 패널(4-9)·수련회 진행 화면(5장)·웹 푸시는 Phase 2, 재정(7장)은 Phase 3입니다.
+**아직 없는 것** — 진단 패널(4-10)·수련회 진행 화면(5장)·웹 푸시는 Phase 2, 재정(7장)은 Phase 3입니다.
 상단 탭의 `회의록` `수련회 진행` `재정` 은 이전 설계에서 만든 화면으로 연결되어 있습니다.
 동작은 하지만 이 문서의 스펙과는 다른 화면이며, 각 Phase 에서 다시 만듭니다.
 

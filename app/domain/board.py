@@ -156,6 +156,12 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
     axis = Axis(open_date, close_date, _first_week(open_date, runs))
 
     by_library = {run.library_id: run for run in runs}
+    # 후속("나를 기다리는 업무")은 저장하지 않는다 — 선행의 역방향으로 계산한다
+    run_ids = {run.id for run in runs}
+    blocks: dict[int, list[int]] = {}
+    for run in runs:
+        for blocker_id in run.blocked_by_run_ids or []:
+            blocks.setdefault(blocker_id, []).append(run.id)
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
     dept_by_key = {d.key: d for d in departments}
 
@@ -183,6 +189,9 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
             if lib.parent_library_id in by_library
             else None,
             "related_run_ids": [by_library[i].id for i in related_ids],
+            # 선후행은 관련(방향 없음)과 별개 키로 둔다 — 섞으면 판정이 흐려진다
+            "blocked_by_run_ids": [i for i in (run.blocked_by_run_ids or []) if i in run_ids],
+            "blocks_run_ids": blocks.get(run.id, []),
             "related_department_keys": [
                 k for k in (lib.related_department_keys or []) if k in dept_by_key
             ],

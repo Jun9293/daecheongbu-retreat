@@ -14,6 +14,7 @@ from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity, resolve_retreat
 from app.domain import board as board_view
 from app.domain import dweek
+from app.domain import library as lib_domain
 from app.domain import permissions as perm
 from app.domain.departments import short_name
 from app.models import DiscussionEntry, Retreat, TaskRun, User
@@ -148,6 +149,34 @@ def task_detail(
             }
         )
 
+    def brief(other: TaskRun) -> dict:
+        return {
+            "run_id": other.id,
+            "library_id": other.library_id,
+            "title": other.library.title,
+            "kind_label": other.library.kind_label,
+            "department": short_name(other.department.name) if other.department else "담당 없음",
+            "color": other.department.color if other.department else "#69726D",
+            "status": other.status,
+            "start": other.start_date.isoformat() if other.start_date else None,
+            "end": (other.end_date or other.start_date).isoformat()
+            if other.start_date
+            else None,
+        }
+
+    # 선행은 라이브러리에 단방향으로 저장돼 있고, 후속은 그 역방향을 계산한 것이다.
+    # 관련(방향 없음)과 섞지 않는다 — 대응이 완전히 다르기 때문이다.
+    prerequisites = [
+        brief(by_library[i])
+        for i in lib_domain.prerequisites_of(lib)
+        if i in by_library
+    ]
+    dependents = [
+        brief(by_library[library_id])
+        for library_id in lib_domain.dependents_map(db).get(lib.id, [])
+        if library_id in by_library
+    ]
+
     parent = by_library.get(lib.parent_library_id) if lib.parent_library_id else None
 
     return {
@@ -177,6 +206,22 @@ def task_detail(
             if k in dept_by_key
         ],
         "related": related,
+        "prerequisites": prerequisites,
+        "dependents": dependents,
+        # 선후행을 고칠 수 있는 사람은 '선행을 가진 쪽' 업무의 담당 부서와 총무팀이다.
+        # A 가 B 를 기다린다고 적는 것은 A 쪽의 판단이므로 A 의 부서가 적는다.
+        "link_candidates": [
+            {
+                "run_id": other.id,
+                "library_id": other.library_id,
+                "title": other.library.title,
+                "d_week": other.d_week,
+            }
+            for other in sorted(
+                by_library.values(), key=lambda r: (r.library.title, r.id)
+            )
+            if other.id != run.id
+        ],
         "discussions": _serialize_discussions(run, user),
         "rules": lib.rules,
         "reclassification_note": lib.reclassification_note,
@@ -751,6 +796,71 @@ def set_rules(
         after_value={"rules": run.library.rules},
     )
     return {"rules": run.library.rules}
+
+
+class PrerequisitesIn(BaseModel):
+    run_ids: list[int] = []
+
+
+@router.post("/board/task/{run_id}/prerequisites")
+def set_prerequisites(
+    run_id: int,
+    payload: PrerequisitesIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """선행 업무를 고친다.
+
+    관계는 회차가 아니라 라이브러리에 붙는다 — 업무 규칙과 같은 성격이라 다음
+    회차에도 그대로 따라간다. 이번 회차의 blocked_by_run_ids 는 그 결과를 지금
+    보드에 비추는 사본이다.
+
+    고칠 수 있는 사람은 선행을 '가진 쪽' 업무의 담당 부서와 총무팀이다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 고칠 수 있습니다.")
+
+    by_run_id = {
+        r.id: r
+        for r in db.scalars(
+            select(TaskRun).where(TaskRun.retreat_id == retreat.id, TaskRun.included)
+        )
+    }
+    library_ids: list[int] = []
+    for other_run_id in payload.run_ids:
+        other = by_run_id.get(other_run_id)
+        if other is None:
+            raise HTTPException(status_code=400, detail="이번 회차에 없는 업무입니다.")
+        library_ids.append(other.library_id)
+
+    before = lib_domain.prerequisites_of(run.library)
+    try:
+        lib_domain.set_prerequisites(db, run.library, library_ids)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 이번 회차의 링크도 함께 맞춘다 (included 끼리만)
+    library_to_run = {r.library_id: r for r in by_run_id.values()}
+    run.blocked_by_run_ids = [
+        library_to_run[i].id for i in run.library.prerequisite_library_ids or []
+        if i in library_to_run
+    ]
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="선행업무_변경",
+        target_type="task_library",
+        target_id=run.library_id,
+        summary=f"{run.library.title} 선행 {len(before)}건 → {len(library_ids)}건",
+        before_value={"prerequisite_library_ids": before},
+        after_value={"prerequisite_library_ids": list(run.library.prerequisite_library_ids or [])},
+    )
+    return task_detail(run.id, db=db, user=user, retreat=retreat)
 
 
 class DiscussionEditIn(BaseModel):

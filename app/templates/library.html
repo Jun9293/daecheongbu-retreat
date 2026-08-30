@@ -25,6 +25,9 @@
   </div>
   {% endif %}
 
+  <h3 class="secttl">필수 지정</h3>
+  <p class="sechint">빠지면 안 될 업무를 손으로 표시합니다. 고르는 단위는 상위 업무입니다.</p>
+
   <form method="post" action="/library/required/bulk">
     <div class="tools">
       <span class="cnt">필수 지정 <b>{{ required_count }}</b> / {{ items|length }}건</span>
@@ -51,6 +54,62 @@
     </div>
   </form>
 
+  <!-- ── 선후행: 필수 지정과 성격이 다르므로 폼을 나눈다 ─────────────── -->
+  <h3 class="secttl">선후행 관계</h3>
+  <p class="sechint">
+    “저쪽이 끝나야 이쪽을 시작할 수 있다”를 적는 자리입니다. <b>방향이 있고, 기다리는 쪽에만 적습니다.</b>
+    관련업무(방향 없음)와 상위-하위(포함 관계)는 선행이 아닙니다 — 상위는 나를 이루는 단계지
+    앞을 막는 관계가 아닙니다. 여기 적은 관계는 <b>다음 회차에도 그대로 따라갑니다.</b>
+  </p>
+
+  {% if proposals %}
+  <div class="alert info" id="proposals">
+    <span class="ic">제안</span>
+    <span>
+      <b>선행으로 둘 만한 쌍 {{ proposals|length }}건</b>이 보입니다 —
+      이미 관련업무로 묶여 있고 한쪽이 명확히 앞선 것들입니다.
+      <b>누르기 전에는 저장되지 않습니다.</b>
+      <span class="proplist">
+        {% for p in proposals %}
+        <button type="button" class="prop" data-lib="{{ p.library_id }}" data-pre="{{ p.prerequisite_id }}">
+          <b>{{ p.title }}</b> ← {{ p.prerequisite_title }}
+          <span class="why">{{ p.rationale }}</span>
+        </button>
+        {% endfor %}
+      </span>
+    </span>
+  </div>
+  {% endif %}
+
+  <div class="tools">
+    <span class="cnt">지정된 선행 <b id="linkcount">{{ link_count }}</b>건 / {{ flat|length }}개 업무</span>
+    <input type="search" id="pfind" class="find" placeholder="업무 이름으로 좁혀 찾기"
+           style="margin-left:auto" autocomplete="off">
+  </div>
+
+  <div class="lib pre" id="prelist">
+    {% for row in flat %}
+    <div class="prow{{ ' sub' if row.depth }}" data-lib="{{ row.library_id }}"
+         data-name="{{ row.title }}{% if row.parent_title %} {{ row.parent_title }}{% endif %}">
+      <span class="main">
+        <span class="nm">{% if row.depth %}<span class="ind">↳</span>{% endif %}{{ row.title }}
+          <span class="tag low">D-{{ row.d_week }}주</span>
+        </span>
+        <span class="basis">
+          {%- if row.prerequisites -%}
+            선행: {% for pre in row.prerequisites %}<b class="lk">{{ pre.title }}</b>{% if not loop.last %}, {% endif %}{% endfor %}
+          {%- else -%}
+            선행 없음
+          {%- endif -%}
+          {%- if row.dependents %} · 후속: {% for dep in row.dependents %}{{ dep.title }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif -%}
+        </span>
+      </span>
+      <span class="tm"><i style="background:{{ row.department_color }}"></i>{{ row.department_name }}</span>
+      <button type="button" class="btn sm" data-edit="{{ row.library_id }}">선행 고르기</button>
+    </div>
+    {% endfor %}
+  </div>
+
   <div class="card" style="margin-top:18px">
     <h3>필수 지정과 자동 분류는 함께 쓰입니다</h3>
     <div style="font-size:13.5px;line-height:1.85;color:var(--ink-2)">
@@ -60,4 +119,24 @@
     </div>
   </div>
 </main>
+
+<!-- 선행 고르기 -->
+<div class="modal" id="premodal" hidden>
+  <div class="sheetbox">
+    <div class="sh"><b id="pretitle"></b>
+      <button type="button" id="preclose" class="btn sm">닫기</button></div>
+    <p class="sechint" id="prewarn" hidden></p>
+    <input type="search" id="pmfind" class="find" placeholder="이름으로 좁혀 찾기" autocomplete="off">
+    <div class="plist" id="pmlist"></div>
+    <div class="sh end">
+      <button type="button" id="presave" class="btn pri">저장</button>
+      <button type="button" id="precancel" class="btn">취소</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.__FLAT = {{ flat_json|tojson }};
+</script>
+<script src="/static/js/library.js?v=23" defer></script>
 {% endblock %}
