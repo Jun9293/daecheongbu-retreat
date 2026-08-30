@@ -101,6 +101,17 @@
     await check('선행 고르기 닫기', () => document.querySelector('#prepick [data-close]').click());
   }
 
+  // 진단 패널 — 하단 고정이므로 드로어를 밀어내거나 가리면 안 된다
+  {
+    const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      return cs.display !== 'none' && r.width > 0 && r.height > 0; };
+    results.push((painted($('diag')) ? '✓' : '✗') + ' 진단 패널이 하단에 그려짐');
+    if (!painted($('diag'))) errors.push('진단 패널이 보이지 않음');
+    await check('진단 다시 분석', () => $('dgR').click(), {wait: 900});
+    results.push(($('dgTtl').textContent.trim() ? '✓' : '✗')
+      + ` 다시 분석 뒤 판정 유지 (${$('dgTtl').textContent.trim()})`);
+  }
+
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
   // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
   const bb = board.getBoundingClientRect();

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity, resolve_retreat
 from app.domain import board as board_view
+from app.domain import diagnosis
 from app.domain import dweek
 from app.domain import library as lib_domain
 from app.domain import permissions as perm
@@ -229,6 +230,8 @@ def task_detail(
         if lib.origin == "claude_suggestion"
         else None,
         "can_edit": _can_edit(db, user, run),
+        # 진단은 저장하지 않고 요청할 때마다 계산한다 (CLAUDE.md 4-10)
+        "diagnosis": diagnosis.diagnose(db, retreat, run).as_dict(),
     }
 
 
@@ -255,6 +258,10 @@ def set_status(
 
     before = run.status
     run.status = payload.status
+    # 처음 '대기' 를 벗어나면 착수한 날을 찍는다. 되돌려도 지우지 않는다 —
+    # 착수했다는 사실은 사라지지 않고, 진단 패널이 이걸로 판정한다.
+    if run.started_at is None and payload.status != "대기":
+        run.started_at = dt.date.today()
     db.commit()
     log_activity(
         db,

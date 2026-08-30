@@ -171,6 +171,12 @@
     <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
     <div class="modal" id="prepick" hidden></div>
   </div>
+  <!-- 진단 패널 — 하단 고정. 패널 이름이 판정 결과다 (CLAUDE.md 4-10) -->
+  <div class="diag" id="diag">
+    <div class="dg-h"><span class="dot"></span><span class="ttl" id="dgTtl">판정 중…</span>
+      <button id="dgR" type="button">다시 분석</button></div>
+    <div class="dg-b" id="dgB"></div>
+  </div>
   <div class="dfoot">
     <button disabled title="Phase 3 에서 만듭니다">파일 첨부</button>
     <button disabled title="Phase 2 에서 만듭니다">하위 업무 추가</button>
@@ -180,5 +186,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=23" defer></script>
+<script src="/static/js/board.js?v=24" defer></script>
 {% endblock %}

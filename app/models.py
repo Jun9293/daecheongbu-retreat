@@ -653,6 +653,11 @@ class TaskRun(Base):
     start_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="대기")
+    # 착수한 날. 상태가 '대기' 에서 처음 벗어날 때 찍고 되돌려도 지우지 않는다 —
+    # 착수했다는 사실은 사라지지 않는다. 진단 패널이 '진행 불가' 와
+    # '일부 진행 가능' 을 가르는 근거이며, 상태로 보면 담당자가 상태를 바꾸는
+    # 것만으로 판정이 움직인다.
+    started_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     blocked_by_run_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 

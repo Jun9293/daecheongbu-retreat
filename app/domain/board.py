@@ -133,6 +133,31 @@ def _first_week(open_date: dt.date, runs: list[TaskRun]) -> int:
     return max(dweek.FIRST_D_WEEK, min(MAX_FIRST_WEEK, earliest))
 
 
+
+def overdue_of(run: TaskRun, today: dt.date) -> bool:
+    """기한이 지났는데 아직 끝나지 않았는가.
+
+    저장된 status='지연' 을 보지 않는다. 그건 담당자가 손으로 눌러야만 붙는
+    표시라, 놓친 사람이 직접 신고해야 시스템이 알아차리는 구조가 된다.
+    """
+    end = run.end_date or run.start_date
+    return bool(end and end < today and run.status != "완료")
+
+
+def overdue_days_of(run: TaskRun, today: dt.date) -> int:
+    end = run.end_date or run.start_date
+    if not end or run.status == "완료" or end >= today:
+        return 0
+    return (today - end).days
+
+
+def has_started(run: TaskRun) -> bool:
+    """착수했는가. started_at 이 없던 시절의 기존 행은 상태로 보정한다."""
+    if run.started_at is not None:
+        return True
+    return run.status != "대기"
+
+
 def load_runs(db: Session, retreat: Retreat) -> list[TaskRun]:
     return list(
         db.scalars(
@@ -148,8 +173,9 @@ def load_runs(db: Session, retreat: Retreat) -> list[TaskRun]:
     )
 
 
-def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
+def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None = None) -> dict:
     """보드 한 장을 그리는 데 필요한 모든 것."""
+    today = today or dt.date.today()
     open_date = retreat.start_date
     close_date = retreat.end_date or open_date
     runs = load_runs(db, retreat)
@@ -161,7 +187,31 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
     blocks: dict[int, list[int]] = {}
     for run in runs:
         for blocker_id in run.blocked_by_run_ids or []:
-            blocks.setdefault(blocker_id, []).append(run.id)
+            if blocker_id in run_ids:
+                blocks.setdefault(blocker_id, []).append(run.id)
+
+    # 회차를 연 뒤에 선행 업무가 빠지면 링크가 가리킬 곳이 없어진다.
+    # 그냥 걸러 버리면 그 업무가 '진행 가능' 으로 바뀌는데, 막는 요인이
+    # 없어져서가 아니라 안 보이게 돼서다. 조용히 삼키지 않고 따로 모은다.
+    lost: dict[int, list[str]] = {}
+    excluded_titles = {
+        row.id: row.title
+        for row in db.scalars(select(TaskLibrary).where(TaskLibrary.archived_at.is_(None)))
+    }
+    for run in runs:
+        missing = [i for i in (run.blocked_by_run_ids or []) if i not in run_ids]
+        names: list[str] = []
+        if missing:
+            # 사라진 run 의 id 로는 제목을 알 수 없다. 라이브러리의 선행 목록과
+            # 대조해 이번 회차에 실려 있지 않은 업무의 제목을 찾는다.
+            present_libs = {r.library_id for r in runs}
+            for library_id in run.library.prerequisite_library_ids or []:
+                if library_id not in present_libs and library_id in excluded_titles:
+                    names.append(excluded_titles[library_id])
+        if missing and not names:
+            names = ["(이름을 찾을 수 없는 선행 업무)"] * len(missing)
+        if names:
+            lost[run.id] = names
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
     dept_by_key = {d.key: d for d in departments}
 
@@ -192,6 +242,16 @@ def build(db: Session, retreat: Retreat, *, can_edit=None) -> dict:
             # 선후행은 관련(방향 없음)과 별개 키로 둔다 — 섞으면 판정이 흐려진다
             "blocked_by_run_ids": [i for i in (run.blocked_by_run_ids or []) if i in run_ids],
             "blocks_run_ids": blocks.get(run.id, []),
+            # 이번 회차에서 빠져 링크가 끊긴 선행 — 막는 것으로 치지는 않지만
+            # 근거에는 반드시 남긴다 (조용히 사라지면 안 된다)
+            "lost_prerequisites": lost.get(run.id, []),
+            # 기한 초과는 저장된 '지연' 이 아니라 날짜에서 계산한다.
+            # 사람이 눌러야만 알아차리는 구조를 없애기 위해서다.
+            "overdue": overdue_of(run, today),
+            "overdue_days": overdue_days_of(run, today),
+            # 사람이 손으로 남긴 '지연' 표시. 판정에는 넣지 않고 근거로만 쓴다.
+            "marked_late": run.status == "지연",
+            "started": has_started(run),
             "related_department_keys": [
                 k for k in (lib.related_department_keys or []) if k in dept_by_key
             ],

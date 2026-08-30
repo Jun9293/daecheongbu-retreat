@@ -431,6 +431,7 @@ function renderDrawer() {
   document.getElementById('daddlog').hidden = !d.can_edit;
 
   renderRel(d);
+  renderDiag(d);
 
   calendar(d);
 }
@@ -519,6 +520,39 @@ function openPrereqPicker(d) {
     renderRel(detail);
   };
 }
+
+
+/* ── 진단 패널 — 패널 이름이 판정 결과다 (CLAUDE.md 4-10) ──────────
+   판정은 서버가 계산한다. 화면은 그것을 그대로 보여줄 뿐 다시 판단하지 않는다.
+   기한이 지났어도 막는 요인이 없으면 '진행 가능' 이다 — 진행 불가는 남을
+   기다리는 상태, 진행 가능인데 안 된 건 우리가 안 한 상태다. */
+function renderDiag(d) {
+  const dg = document.getElementById('diag');
+  const g = d.diagnosis;
+  if (!g) { dg.className = 'diag'; return; }
+  dg.className = 'diag g-' + g.tone;
+  document.getElementById('dgTtl').textContent = g.verdict;
+  const rows = (g.reasons || []).map(r =>
+    `<li><span class="ic">${esc(r.kind)}</span><span>${esc(r.text)}</span></li>`).join('');
+  document.getElementById('dgB').innerHTML =
+    `<div class="dg-v ${g.tone}">${esc(g.summary)}</div>` +
+    (rows ? `<ul>${rows}</ul>` : '') +
+    `<div class="src">보드 전체의 일정 · 상태 · 선후행 관계를 함께 봤습니다.
+      상황이 바뀌면 다시 판단합니다.</div>`;
+}
+
+document.getElementById('dgR').onclick = async () => {
+  if (cur === null) return;
+  const dg = document.getElementById('diag');
+  dg.classList.add('busy');
+  const res = await fetch(`/board/task/${cur}`, {headers: {'Accept': 'application/json'}});
+  dg.classList.remove('busy');
+  if (!res.ok) return;
+  const fresh = await res.json();
+  if (String(cur) !== String(fresh.run_id)) return;
+  detail.diagnosis = fresh.diagnosis;
+  renderDiag(detail);
+};
 
 /* 며칠짜리인지 한눈에 — 날짜만 보고 세지 않게 */
 function spanLabel(start, end) {

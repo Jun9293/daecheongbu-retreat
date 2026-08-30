@@ -652,3 +652,36 @@ button.btn:disabled{opacity:.4;cursor:default}
 .relnone{font-size:12px;color:var(--ink-3)}
 .relnote{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:10px;
   padding-top:9px;border-top:1px dotted var(--rule)}
+
+
+/* ── 진단 패널 (CLAUDE.md 4-10) ───────────────────────────────────────
+   상세 패널 하단 고정. 제목 자리에 판정 결과가 그대로 들어간다 —
+   '진행 불가' / '일부 진행 가능' / '진행 가능' / '완료'. */
+.diag{border-top:1px solid var(--rule);background:var(--paper);flex:none;
+  max-height:38vh;display:flex;flex-direction:column}
+.dg-h{display:flex;align-items:center;gap:8px;padding:10px 22px 8px;flex:none}
+.dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.diag.g-block .dg-h .dot{background:var(--now);box-shadow:0 0 0 3px rgba(200,68,46,.2)}
+.diag.g-block .dg-h .ttl{color:#8E2A19}
+.diag.g-part .dg-h .dot{background:#C9902B;box-shadow:0 0 0 3px rgba(201,144,43,.22)}
+.diag.g-part .dg-h .ttl{color:#7A5410}
+.diag.g-go .dg-h .dot{background:#4A8A5C;box-shadow:0 0 0 3px rgba(74,138,92,.2)}
+.diag.g-go .dg-h .ttl{color:#3F6B5D}
+.diag.g-done .dg-h .ttl{color:var(--ink-2)}
+.dg-h .ttl{font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:3px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-3)}
+.dg-h button:hover{background:var(--paper);color:var(--ink)}
+.dg-b{overflow-y:auto;padding:0 22px 14px;font-size:12.5px;line-height:1.6}
+.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;
+  padding-left:10px;border-left:3px solid var(--rule-2);color:var(--ink-2)}
+.dg-v.block{border-left-color:var(--now);color:#8E2A19}
+.dg-v.part{border-left-color:#C9902B;color:#7A5410}
+.dg-v.go{border-left-color:#5B8C7E;color:#3F6B5D}
+.dg-b ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px}
+.dg-b li{display:flex;gap:7px;color:var(--ink-2);font-size:12px;line-height:1.5}
+.dg-b li b{font-weight:600;color:var(--ink)}
+.dg-b li .ic{flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-3);
+  width:26px;padding-top:2px}
+.dg-b .src{margin-top:9px;font-size:10.5px;color:var(--ink-3);line-height:1.5}
+.diag.busy .dg-b{opacity:.35}
