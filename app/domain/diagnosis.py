@@ -100,6 +100,23 @@ def blocking_of(run: TaskRun, by_id: dict[int, TaskRun], today: dt.date) -> list
     ]
 
 
+def date_settled_prerequisites(
+    run: TaskRun, by_id: dict[int, TaskRun], today: dt.date
+) -> list[TaskRun]:
+    """완료가 아니라 **날짜로** 끝난 것으로 본 선행들.
+
+    아무도 "끝났다" 고 누르지 않았고 시스템이 날짜만 보고 그렇게 친 것이다.
+    실제로 진행됐는지 취소됐는지는 확인된 적이 없다. 막지는 않되 그 판단이
+    있었다는 사실은 화면에 남긴다 — 조용히 사라지면 '진행 가능' 인데 화면에
+    이유가 없다. 사라진 선행·안 이어진 링크와 같은 종류의 문제다.
+    """
+    return [
+        by_id[i]
+        for i in (run.blocked_by_run_ids or [])
+        if i in by_id and by_id[i].status != "완료" and _settled(by_id[i], today)
+    ]
+
+
 def verdict_of(run: TaskRun, by_id: dict[int, TaskRun], today: dt.date) -> str:
     """판정만. 하위 업무의 근거도 이 함수를 써야 본 판정과 어긋나지 않는다."""
     if run.status == "완료":
@@ -275,13 +292,23 @@ def _context(
             tail = f" · 그쪽도 기한 {overdue_days_of(other, today)}일 초과"
         reasons.append(_reason("선행", f"{_label(other)} 미완료 · {other.status}{tail}"))
 
-    # 2) 빠진 선행 — 막는 것으로 치지 않지만 조용히 사라지게 두지도 않는다
+    # 2) 날짜로 끝난 것으로 본 선행 — 막지 않지만 판단이 있었다는 것은 남긴다
+    for other in date_settled_prerequisites(run, by_id, today):
+        reasons.append(
+            _reason(
+                "선행",
+                f"선행 '{other.library.title}' 은(는) 날짜가 지나 끝난 것으로 봤습니다 "
+                "— 실제로 진행됐는지는 확인되지 않았습니다",
+            )
+        )
+
+    # 3) 빠진 선행 — 막는 것으로 치지 않지만 조용히 사라지게 두지도 않는다
     for title in lost_prerequisites(run, runs):
         reasons.append(
             _reason("선행", f"선행 '{title}' 이(가) 이번 회차에서 빠졌습니다 — 확인 필요")
         )
 
-    # 3) 상위 업무 — 표시만. 나를 포함하는 관계지 앞을 막는 관계가 아니다
+    # 4) 상위 업무 — 표시만. 나를 포함하는 관계지 앞을 막는 관계가 아니다
     parent_library_id = run.library.parent_library_id
     if parent_library_id:
         parent = next((r for r in runs if r.library_id == parent_library_id), None)
@@ -290,7 +317,7 @@ def _context(
                 _reason("상위", f"상위 '{parent.library.title}' 이(가) 아직 {parent.status}")
             )
 
-    # 4) 하위 업무 — 표시만
+    # 5) 하위 업무 — 표시만
     children = [r for r in runs if r.library.parent_library_id == run.library_id]
     if children:
         unfinished = [c for c in children if c.status != "완료"]
@@ -301,7 +328,7 @@ def _context(
             text += f" · {len(blocked_kids)}건 진행 불가"
         reasons.append(_reason("하위", text))
 
-    # 5) 기한
+    # 6) 기한
     if judged or run.status != "완료":
         if overdue_of(run, today):
             reasons.append(
@@ -315,7 +342,7 @@ def _context(
         # 저장된 '지연' 은 판정에 넣지 않는다. 사람이 남긴 표시로만 보여준다.
         reasons.append(_reason("표시", "담당자가 지연으로 표시함"))
 
-    # 6) 연쇄되는 후속
+    # 7) 연쇄되는 후속
     followers = _chain(run, by_id, blocks) if chain else []
     if followers:
         names = ", ".join(_label(c) for c in followers[:4])
@@ -324,13 +351,13 @@ def _context(
             _reason("영향", f"지연 시 {len(followers)}건이 연쇄로 밀립니다 — {names}{more}")
         )
 
-    # 7) 부서 업무 집중도
+    # 8) 부서 업무 집중도
     crowd = _crowding(run, runs)
     if crowd >= CROWD_MIN:
         dept = run.department.name if run.department else "담당 없음"
         reasons.append(_reason("집중", f"같은 기간 {dept}에 미완료 업무 {crowd}건이 몰려 있습니다"))
 
-    # 8) 논의 기록에서 오는 신호 — 문장을 읽지 않고 세기만 한다
+    # 9) 논의 기록에서 오는 신호 — 문장을 읽지 않고 세기만 한다
     reasons.extend(discussion_signals(run, today))
 
     return reasons
@@ -373,9 +400,13 @@ def discussion_signals(run: TaskRun, today: dt.date) -> list[dict]:
 
     # 멈춘 기간 — '진행 가능' 인데 방치된 것과 '진행 불가' 는 대응이 다르다.
     # 그 둘을 가르는 것이 이 신호다.
-    if mine and run.status != "완료":
-        last = max(e.authored_at for e in mine)
-        idle = (today - last).days
+    #
+    # authored_at 은 nullable 이고, 지난 회차 논의를 옮길 때 None 도 그대로
+    # 따라온다. 날짜가 없는 것은 "언제인지 모른다" 는 뜻이므로 세지 않는다 —
+    # 섞어서 max 를 부르면 date 와 None 을 비교하다 패널 전체가 죽는다.
+    dated = [e.authored_at for e in mine if e.authored_at is not None]
+    if dated and run.status != "완료":
+        idle = (today - max(dated)).days
         if idle >= STALE_DAYS:
             out.append(_reason("논의", f"마지막 논의 후 {idle}일 지났습니다"))
 

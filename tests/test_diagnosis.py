@@ -741,3 +741,136 @@ def test_보완14_논의_신호는_판정을_바꾸지_않는다(board):
     assert "논의" in _kinds(after)
     assert "뒤집혔습니다" in _texts(after)
     assert "마지막 논의 후" in _texts(after)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 마무리 — authored_at 방어와 '날짜로 끝난 것으로 본 선행'. 아래 번호는 그 작업 기준이다.
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _clear_log(run_id):
+    with app_session() as db:
+        db.query(models.DiscussionEntry).filter_by(run_id=run_id).delete()
+        db.commit()
+
+
+# ── 마무리 1 ──────────────────────────────────────────────────────────
+
+
+def test_마무리01_authored_at_이_전부_None_이어도_패널이_열린다(board, admin_client):
+    """authored_at 은 nullable 이고, 지난 회차 논의를 옮길 때 None 도 따라온다.
+    max() 가 date 와 None 을 비교하면 그 업무의 패널이 500 이 된다."""
+    run_id = board["runs"]["포스터 제작"]
+    _clear_log(run_id)
+    with app_session() as db:
+        for body in ("날짜 없는 기록 1", "날짜 없는 기록 2"):
+            db.add(
+                models.DiscussionEntry(
+                    run_id=run_id, authored_at=None, body=body, author_name="총무팀"
+                )
+            )
+        db.commit()
+
+    result = _judge("포스터 제작", board)          # 터지지 않는다
+    assert result.verdict == diagnosis.GO
+    assert "마지막 논의 후" not in _texts(result)  # 셀 수 없으므로 내지 않는다
+
+    # 화면 경로도 살아 있다
+    assert admin_client.get(f"/board/task/{run_id}").status_code == 200
+
+
+# ── 마무리 2 ──────────────────────────────────────────────────────────
+
+
+def test_마무리02_일부만_None_이면_있는_것으로만_센다(board):
+    run_id = board["runs"]["포스터 제작"]
+    _clear_log(run_id)
+    with app_session() as db:
+        db.add(
+            models.DiscussionEntry(
+                run_id=run_id, authored_at=None, body="날짜 없음", author_name="총무팀"
+            )
+        )
+        _entry(db, run_id, body="40일 전 기록", days_ago=40)
+        _entry(db, run_id, body="30일 전 기록", days_ago=30)
+        db.commit()
+
+    result = _judge("포스터 제작", board)
+    assert "마지막 논의 후 30일 지났습니다" in _texts(result)   # 가장 늦은 '날짜 있는' 것
+
+
+# ── 마무리 3 ──────────────────────────────────────────────────────────
+
+
+def test_마무리03_authored_at_이_없어도_다른_신호는_나온다(board):
+    """멈춘 기간만 못 세는 것이지 번복·이번회차기록없음까지 죽으면 안 된다."""
+    run_id = board["runs"]["장비 전달"]
+    _clear_log(run_id)
+    with app_session() as db:
+        first = models.DiscussionEntry(
+            run_id=run_id, authored_at=None, body="A안", author_name="총무팀"
+        )
+        db.add(first)
+        db.flush()
+        second = models.DiscussionEntry(
+            run_id=run_id, authored_at=None, body="B안",
+            author_name="총무팀", supersedes_entry_id=first.id,
+        )
+        db.add(second)
+        db.flush()
+        db.add(
+            models.DiscussionEntry(
+                run_id=run_id, authored_at=None, body="C안",
+                author_name="총무팀", supersedes_entry_id=second.id,
+            )
+        )
+        db.commit()
+
+    result = _judge("장비 전달", board)
+    assert "논의가 2번 뒤집혔습니다" in _texts(result)
+    assert "마지막 논의 후" not in _texts(result)
+
+    # 이번 회차 기록 없음도 그대로
+    _clear_log(run_id)
+    with app_session() as db:
+        db.add(
+            models.DiscussionEntry(
+                run_id=run_id, authored_at=None, body="지난 회차",
+                author_name="총무팀", carried_from_run_id=999,
+            )
+        )
+        db.commit()
+    assert "지난 회차 논의만 있고" in _texts(_judge("장비 전달", board))
+
+
+# ── 마무리 4 · 5 ──────────────────────────────────────────────────────
+
+
+def test_마무리04_날짜로_끝난_선행은_막지_않되_근거에_뜬다(board):
+    """조용히 사라지면 '진행 가능' 인데 화면에 이유가 없다.
+    아무도 끝났다고 누르지 않았고 시스템이 날짜만 보고 친 것이다."""
+    with app_session() as db:
+        run = db.get(models.TaskRun, board["runs"]["장비 전달"])
+        run.blocked_by_run_ids = [board["runs"]["총 리허설"]]     # 6/11
+        db.commit()
+
+    # 리허설 전 — 막고, 그 줄은 뜨지 않는다
+    before = _judge("장비 전달", board, today=dt.date(2026, 6, 5))
+    assert before.verdict == diagnosis.BLOCKED
+    assert "끝난 것으로 봤습니다" not in _texts(before)
+
+    # 지나간 뒤 — 막지 않되 판단이 있었다는 것은 남는다
+    after = _judge("장비 전달", board, today=dt.date(2026, 6, 12))
+    assert after.verdict == diagnosis.GO
+    assert "선행 '총 리허설' 은(는) 날짜가 지나 끝난 것으로 봤습니다" in _texts(after)
+    assert "확인되지 않았습니다" in _texts(after)
+    assert _kinds(after)[0] == "선행"          # 선행 줄들 자리에 온다
+
+
+def test_마무리05_완료로_끝난_선행은_그_줄이_뜨지_않는다(board):
+    """날짜로 본 것과 사람이 완료를 누른 것은 구분된다."""
+    _set("장비 확인", board, status="완료", completed_at=dt.date(2026, 5, 17))
+    result = _judge("장비 전달", board)
+    assert result.verdict == diagnosis.GO
+    assert "끝난 것으로 봤습니다" not in _texts(result)
+    assert "장비 확인" not in _texts(result)
