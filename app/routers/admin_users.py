@@ -25,43 +25,57 @@ from app.templating import redirect, render
 router = APIRouter()
 
 
-def _department_choices(db: Session) -> list[dict]:
+def _department_choices(db: Session, retreat) -> list[dict]:
     """부서는 **키로** 고른다.
 
     Department 행은 회차마다 새로 만들어지므로 id 로 붙이면 새 회차에서 무너진다
     (CLAUDE.md 2장). 화면에서도 키를 값으로 쓴다.
 
-    **실제 행이 있는 키만 낸다.** 회차에 없는 부서를 고를 수 있게 두면, 고르고
-    저장했는데 부서가 안 붙고 성공 메시지만 뜬다 — 그 사람은 자기 부서 업무를
-    못 고치고 알림에서도 담당자 미지정으로 처리되는데 아무도 모른다.
+    **현재 회차에 있는 부서만 낸다.** 모든 회차를 훑으면 해체된 부서(2장의
+    '봉사팀 공통' 처럼)가 목록에 남는다. 행이 존재하니 저장은 되는데, 이번
+    회차에 없는 부서라 그 사람은 아무 업무도 고치지 못한다 — 조용히 미지정으로
+    떨어지는 것과 결과가 같고 검사도 통과한다.
     """
-    seen: dict[str, str] = {}
-    for dept in db.scalars(select(Department).order_by(Department.retreat_id.desc())):
-        seen.setdefault(dept.key, dept.name or DEPARTMENT_NAMES.get(dept.key, dept.key))
-    return [{"key": key, "name": name} for key, name in sorted(seen.items())]
+    if retreat is None:
+        return []
+    return [
+        {"key": dept.key, "name": dept.name or DEPARTMENT_NAMES.get(dept.key, dept.key)}
+        for dept in sorted(retreat.departments, key=lambda d: d.sort_order)
+        if dept.key
+    ]
 
 
-def _department_row(db: Session, key: str | None) -> Department | None:
-    """그 키의 Department 행 중 가장 최근 회차 것."""
-    if not key:
+def _department_row(db: Session, retreat, key: str | None) -> Department | None:
+    """현재 회차에서 그 키의 Department 행."""
+    if not key or retreat is None:
         return None
-    return db.scalars(
-        select(Department)
-        .where(Department.key == key)
-        .order_by(Department.retreat_id.desc())
-    ).first()
+    return next((d for d in retreat.departments if d.key == key), None)
 
 
-def _resolve_department(db: Session, key: str) -> tuple[Department | None, str | None]:
-    """(부서 행, 사유). 없는 키는 **조용히 None 으로 떨어뜨리지 않는다.**"""
+def _resolve_department(
+    db: Session, retreat, key: str, *, keep_for: User | None = None
+) -> tuple[Department | None, str | None]:
+    """(부서 행, 사유). 없는 키는 **조용히 None 으로 떨어뜨리지 않는다.**
+
+    `keep_for` 는 지금 그 사람이 붙어 있는 부서다. 값이 그대로면 **바꾸는 것이
+    아니라 유지하는 것**이므로 통과시킨다 — 권한만 고치려고 저장했을 때 지난
+    회차 소속이 조용히 지워지면 안 되기 때문이다. 새로 배정하는 것만 막는다.
+    """
     if not key:
         return None, None
-    dept = _department_row(db, key)
+    if keep_for is not None and key == department_key_of(db, keep_for):
+        return keep_for.department, None          # 그대로 둔다
+    dept = _department_row(db, retreat, key)
     if dept is None:
         name = DEPARTMENT_NAMES.get(key, key)
+        if retreat is None:
+            return None, (
+                f"아직 회차가 없어 '{name}' 을(를) 배정할 수 없습니다. "
+                "회차를 먼저 만들어주세요."
+            )
         return None, (
-            f"'{name}' 은(는) 아직 어느 회차에도 없는 부서라 배정할 수 없습니다. "
-            "새 회차를 만들면서 그 부서를 넣은 뒤에 다시 지정해주세요."
+            f"'{name}' 은(는) 이번 회차({retreat.name})에 없는 부서라 배정할 수 없습니다. "
+            "회차에 그 부서를 넣은 뒤에 다시 지정해주세요."
         )
     return dept, None
 
@@ -72,9 +86,14 @@ def users_page(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
+    retreat = resolve_retreat(db, user, None)
+    choices = _department_choices(db, retreat)
+    live_keys = {c["key"] for c in choices}
+
     rows = []
     for person in db.scalars(select(User).order_by(User.is_active.desc(), User.name)):
         token = invites.live_token(db, user=person)
+        key = department_key_of(db, person)
         rows.append(
             {
                 "id": person.id,
@@ -82,7 +101,11 @@ def users_page(
                 "phone": person.phone_number,
                 "role": person.role,
                 "role_label": ROLE_LABELS.get(person.role, person.role),
-                "department_key": department_key_of(db, person),
+                "department_key": key,
+                # 지난 회차 부서에 붙어 있는 계정은 **건드리지 않는다.**
+                # 조용히 바꾸거나 지우지 않고, 그렇다는 것만 보여준다.
+                "department_stale": bool(key) and key not in live_keys,
+                "department_name": DEPARTMENT_NAMES.get(key, key) if key else None,
                 "is_active": person.is_active,
                 "invite_live": token is not None,
                 "invite_expires": token.expires_at.date().isoformat() if token else None,
@@ -94,16 +117,16 @@ def users_page(
         "admin_users.html",
         {
             "user": user,
-            "retreat": resolve_retreat(db, user, None),
+            "retreat": retreat,
             "retreats": all_retreats(db),
             "rows": rows,
-            "departments": _department_choices(db),
+            "departments": choices,
             "roles": [{"value": r, "label": ROLE_LABELS.get(r, r)} for r in ALL_ROLES],
             "active_tab": None,
             "page_subtitle": "계정 관리",
             # 원문은 URL 을 타지 않는다. 한 번만 꺼내지는 자리에서 가져온다.
             "issued": invites.take(request.query_params.get("k")),
-            "no_departments": not _department_choices(db),
+            "no_departments": not choices,
         },
     )
 
@@ -128,7 +151,7 @@ def create_user(
     if db.scalars(select(User).where(User.phone_number == phone)).first():
         return redirect("/admin/users", message="이미 등록된 연락처입니다.")
 
-    dept, problem = _resolve_department(db, department_key)
+    dept, problem = _resolve_department(db, resolve_retreat(db, user, None), department_key)
     if problem:
         return redirect("/admin/users", message=problem)
 
@@ -169,7 +192,9 @@ def update_user(
     if role not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="알 수 없는 권한입니다.")
 
-    dept, problem = _resolve_department(db, department_key)
+    dept, problem = _resolve_department(
+        db, resolve_retreat(db, user, None), department_key, keep_for=person
+    )
     if problem:
         return redirect("/admin/users", message=problem)
 

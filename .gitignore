@@ -13,3 +13,5 @@ data/uploads/
 data/*.pem
 data/backups/
 data/secret_key.txt
+data/server.log
+data/server.log.1

@@ -421,7 +421,7 @@ def test_마무리04b_없는_부서로_저장하려_하면_막힌다(with_depart
               "role": "member", "department_key": "saechingu"},
     )
     assert response.status_code == 200
-    assert "아직 어느 회차에도 없는 부서" in response.text
+    assert "이번 회차" in response.text and "없는 부서라 배정할 수 없습니다" in response.text
     assert "새친구팀" in response.text
 
     with app_session() as db:
@@ -447,7 +447,7 @@ def test_마무리04c_변경할_때도_막힌다(with_departments, admin_client)
         data={"role": "member", "department_key": "koram"},
     )
     assert response.status_code == 200
-    assert "아직 어느 회차에도 없는 부서" in response.text
+    assert "이번 회차" in response.text and "없는 부서라 배정할 수 없습니다" in response.text
 
     with app_session() as db:
         from app.domain.departments import department_key_of
@@ -487,3 +487,221 @@ def test_마무리05b_부서_없음은_그대로_허용된다(with_departments, 
         ).first()
         assert person is not None
         assert person.department_id is None
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 배포 직전 — 부서 목록을 현재 회차로 좁힌 것. 아래 번호는 그 작업 기준이다.
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def two_rounds(admin_client):
+    """회차 두 개. 지난 회차에만 있는 부서('봉사팀 공통')를 넣는다.
+
+    회차가 하나뿐인 픽스처로는 이 버그가 재현되지 않는다 — 모든 회차를 훑어도
+    결과가 같기 때문이다.
+    """
+    with app_session() as db:
+        old = models.Retreat(
+            name="2026 여름수련회",
+            start_date=dt.date(2026, 8, 21),
+            end_date=dt.date(2026, 8, 23),
+        )
+        db.add(old)
+        db.flush()
+        for order, (key, name) in enumerate(
+            [("sketch", "4 스케치"), ("bongsa", "봉사팀 공통")]
+        ):
+            db.add(
+                models.Department(
+                    retreat_id=old.id, key=key, name=name,
+                    color_tag="#888", sort_order=order,
+                )
+            )
+        db.flush()
+
+        # 지난 회차의 '봉사팀 공통' 에 붙어 있는 계정 — 해체 전에 만든 사람이다
+        gone = next(d for d in old.departments if d.key == "bongsa")
+        legacy = models.User(
+            name="옛 봉사팀원", phone_number="01077770000",
+            role="member", department_id=gone.id,
+        )
+        db.add(legacy)
+
+        new = models.Retreat(
+            name="2027 겨울수련회",
+            start_date=dt.date(2027, 1, 14),
+            end_date=dt.date(2027, 1, 17),
+        )
+        db.add(new)
+        db.flush()
+        for order, (key, name) in enumerate(
+            [("sketch", "4 스케치"), ("hebron", "5 헤브론")]
+        ):
+            db.add(
+                models.Department(
+                    retreat_id=new.id, key=key, name=name,
+                    color_tag="#888", sort_order=order,
+                )
+            )
+        db.commit()
+        return {"old": old.id, "new": new.id, "legacy_id": legacy.id,
+                "legacy_dept_id": gone.id}
+
+
+# ── 배포 3 ────────────────────────────────────────────────────────────
+
+
+def test_배포03_현재_회차에_없는_부서는_목록에_없다(two_rounds, admin_client):
+    """해체된 부서가 남아 있으면 저장은 되는데 그 사람은 아무 업무도 못 고친다."""
+    page = admin_client.get("/admin/users")
+    assert page.status_code == 200
+
+    form = page.text.split('class="userform"')[1].split("</form>")[0]
+    assert 'value="sketch"' in form
+    assert 'value="hebron"' in form          # 이번 회차에 있는 것
+    assert 'value="bongsa"' not in form      # 지난 회차에만 있는 것
+
+
+# ── 배포 4 ────────────────────────────────────────────────────────────
+
+
+def test_배포04_그런_부서로_저장하려_하면_막힌다(two_rounds, admin_client):
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "bongsa"},
+    )
+    assert response.status_code == 200
+    assert "이번 회차" in response.text
+    assert "없는 부서라 배정할 수 없습니다" in response.text
+    assert "봉사팀 공통" in response.text or "bongsa" in response.text
+
+    with app_session() as db:
+        assert db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first() is None
+
+
+def test_배포04b_바꿀_때도_막힌다(two_rounds, admin_client):
+    """이미 그 부서인 사람은 '유지'라 통과한다(05b). 여기서 보는 것은
+    **새로 배정하는** 경우다."""
+    admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    with app_session() as db:
+        person_id = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first().id
+
+    response = admin_client.post(
+        f"/admin/users/{person_id}/update",
+        data={"role": "member", "department_key": "bongsa"},
+    )
+    assert response.status_code == 200
+    assert "없는 부서라 배정할 수 없습니다" in response.text
+
+
+# ── 배포 5 ────────────────────────────────────────────────────────────
+
+
+def test_배포05_지난_회차_부서에_붙은_계정은_건드리지_않는다(two_rounds, admin_client):
+    """조용히 바꾸거나 지우면 총무팀이 모르는 채로 소속이 사라진다."""
+    page = admin_client.get("/admin/users")
+
+    # 소속은 그대로 남아 있다
+    with app_session() as db:
+        person = db.get(models.User, two_rounds["legacy_id"])
+        assert person.department_id == two_rounds["legacy_dept_id"]
+
+    # 화면에는 "이번 회차에 없음" 으로 보인다
+    assert "이번 회차에 없음" in page.text
+    assert "이번 회차에 없는 부서에 붙어 있는 계정이 있습니다" in page.text
+    assert "옛 봉사팀원" in page.text
+
+
+def test_배포05b_권한만_바꿔도_지난_부서가_지워지지_않는다(two_rounds, admin_client):
+    """화면이 그 값을 그대로 되돌려 보낸다. 그때 '이번 회차에 없다'고 막아
+    버리거나 빈 값으로 처리하면, 권한만 고쳤는데 소속이 조용히 사라진다."""
+    before = two_rounds["legacy_dept_id"]
+
+    response = admin_client.post(
+        f"/admin/users/{two_rounds['legacy_id']}/update",
+        data={"role": "dept_lead", "department_key": "bongsa"},   # 화면이 되돌려 보내는 값
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    with app_session() as db:
+        person = db.get(models.User, two_rounds["legacy_id"])
+        assert person.role == "dept_lead"                 # 바꾸려던 것은 바뀌고
+        assert person.department_id == before             # 소속은 그대로다
+
+
+def test_배포05c_지난_부서를_남에게_새로_붙이는_것은_막힌다(two_rounds, admin_client):
+    """유지는 통과시키되 **새로 배정하는 것**은 막는다."""
+    admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    with app_session() as db:
+        other_id = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first().id
+
+    response = admin_client.post(
+        f"/admin/users/{other_id}/update",
+        data={"role": "member", "department_key": "bongsa"},
+    )
+    assert response.status_code == 200
+    assert "없는 부서라 배정할 수 없습니다" in response.text
+    with app_session() as db:
+        from app.domain.departments import department_key_of
+
+        assert department_key_of(db, db.get(models.User, other_id)) == "sketch"
+
+
+def test_배포05d_지난_부서를_실제로_뗄_수는_있다(two_rounds, admin_client):
+    """유지를 통과시킨다고 해서 못 떼는 것은 아니다 — 빈 값은 그대로 미지정이다."""
+    admin_client.post(
+        f"/admin/users/{two_rounds['legacy_id']}/update",
+        data={"role": "member", "department_key": ""},
+        follow_redirects=False,
+    )
+    with app_session() as db:
+        assert db.get(models.User, two_rounds["legacy_id"]).department_id is None
+
+
+# ── 배포 6 ────────────────────────────────────────────────────────────
+
+
+def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin_client):
+    with app_session() as db:
+        assert db.scalars(select(models.Retreat)).first() is None
+
+    page = admin_client.get("/admin/users")
+    assert page.status_code == 200
+    assert "아직 부서가 없습니다" in page.text
+
+    # 부서 없이 계정은 만들 수 있다
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "admin", "department_key": ""},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+    # 부서를 넣으려 하면 회차가 없다고 말한다
+    blocked = admin_client.post(
+        "/admin/users/new",
+        data={"name": "다른사람", "phone_number": "01088880000",
+              "role": "member", "department_key": "sketch"},
+    )
+    assert blocked.status_code == 200
+    assert "아직 회차가 없어" in blocked.text
