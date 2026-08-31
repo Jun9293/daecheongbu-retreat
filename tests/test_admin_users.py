@@ -50,7 +50,7 @@ def test_07_계정을_추가하고_부서는_키로_붙는다(rounds, admin_clie
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert "issued=" in response.headers["location"]      # 링크가 함께 발급된다
+    assert "k=" in response.headers["location"]           # 링크가 함께 발급된다
 
     with app_session() as db:
         person = db.scalars(

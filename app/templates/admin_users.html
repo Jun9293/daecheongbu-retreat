@@ -25,6 +25,16 @@
   </div>
   {% endif %}
 
+  {% if no_departments %}
+  <div class="alert warn">
+    <span class="ic">확인</span>
+    <span><b>아직 부서가 없습니다.</b> 회차를 하나 만들어야 부서가 생깁니다 —
+      그전까지는 계정을 만들 수 있지만 부서는 나중에 지정해야 합니다.
+      <b>없는 부서로는 저장되지 않습니다</b>(조용히 미지정으로 떨어지면 그 사람이
+      자기 부서 업무를 못 고치는데 아무도 모르기 때문입니다).</span>
+  </div>
+  {% endif %}
+
   <h3 class="secttl">사람 추가</h3>
   <form method="post" action="/admin/users/new" class="userform">
     <input type="text" name="name" placeholder="이름" required class="find">

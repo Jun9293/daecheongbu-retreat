@@ -127,3 +127,50 @@ def live_token(db: Session, *, user: User) -> InviteToken | None:
         if problem_with(token) is None:
             return token
     return None
+
+
+# ── 발급 직후 한 번만 꺼내지는 자리 ──────────────────────────────────
+#
+# 원문을 URL 에 실으면 총무팀 브라우저의 **주소창과 방문 기록**, Cloudflare 접속
+# 로그에 7일 내내 살아 있는 링크가 남는다. 총무팀은 그 링크를 자기가 쓰는 것이
+# 아니라 복사해서 보내므로 링크는 그동안 계속 쓸 수 있는 상태다 — 그 컴퓨터를
+# 잠깐 쓰는 사람이 방문 기록에서 꺼내 그 사람으로 로그인할 수 있다.
+# 해시로 저장한 이유가 거기서 무너진다.
+#
+# 그래서 원문은 서버 메모리에만 두고 URL 에는 **한 번 쓰면 사라지는 키**만 싣는다.
+# 새로고침하면 이미 없으므로 링크가 다시 나오지 않는다.
+_HANDOFF_TTL_SECONDS = 600      # 발급 화면을 띄우는 데 이보다 오래 걸릴 일은 없다
+_HANDOFF_MAX = 50               # 무한히 쌓이지 않게
+_handoff: dict[str, tuple[str, dt.datetime]] = {}
+
+
+def _sweep_handoff(now: dt.datetime) -> None:
+    for key in [k for k, (_, at) in _handoff.items()
+                if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS]:
+        _handoff.pop(key, None)
+    while len(_handoff) > _HANDOFF_MAX:
+        _handoff.pop(next(iter(_handoff)), None)
+
+
+def stash(raw: str) -> str:
+    """원문을 담아 두고 **꺼낼 키**를 돌려준다."""
+    now = _now()
+    _sweep_handoff(now)
+    key = secrets.token_urlsafe(9)
+    _handoff[key] = (raw, now)
+    return key
+
+
+def take(key: str | None) -> str | None:
+    """한 번만 꺼내진다. 두 번째부터는 None — 새로고침해도 다시 보이지 않는다."""
+    if not key:
+        return None
+    now = _now()
+    _sweep_handoff(now)
+    found = _handoff.pop(key, None)
+    if found is None:
+        return None
+    raw, at = found
+    if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS:
+        return None
+    return raw

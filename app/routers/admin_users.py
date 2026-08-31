@@ -30,12 +30,14 @@ def _department_choices(db: Session) -> list[dict]:
 
     Department 행은 회차마다 새로 만들어지므로 id 로 붙이면 새 회차에서 무너진다
     (CLAUDE.md 2장). 화면에서도 키를 값으로 쓴다.
+
+    **실제 행이 있는 키만 낸다.** 회차에 없는 부서를 고를 수 있게 두면, 고르고
+    저장했는데 부서가 안 붙고 성공 메시지만 뜬다 — 그 사람은 자기 부서 업무를
+    못 고치고 알림에서도 담당자 미지정으로 처리되는데 아무도 모른다.
     """
     seen: dict[str, str] = {}
     for dept in db.scalars(select(Department).order_by(Department.retreat_id.desc())):
-        seen.setdefault(dept.key, dept.name)
-    for key, name in DEPARTMENT_NAMES.items():
-        seen.setdefault(key, name)
+        seen.setdefault(dept.key, dept.name or DEPARTMENT_NAMES.get(dept.key, dept.key))
     return [{"key": key, "name": name} for key, name in sorted(seen.items())]
 
 
@@ -48,6 +50,20 @@ def _department_row(db: Session, key: str | None) -> Department | None:
         .where(Department.key == key)
         .order_by(Department.retreat_id.desc())
     ).first()
+
+
+def _resolve_department(db: Session, key: str) -> tuple[Department | None, str | None]:
+    """(부서 행, 사유). 없는 키는 **조용히 None 으로 떨어뜨리지 않는다.**"""
+    if not key:
+        return None, None
+    dept = _department_row(db, key)
+    if dept is None:
+        name = DEPARTMENT_NAMES.get(key, key)
+        return None, (
+            f"'{name}' 은(는) 아직 어느 회차에도 없는 부서라 배정할 수 없습니다. "
+            "새 회차를 만들면서 그 부서를 넣은 뒤에 다시 지정해주세요."
+        )
+    return dept, None
 
 
 @router.get("/admin/users")
@@ -85,8 +101,9 @@ def users_page(
             "roles": [{"value": r, "label": ROLE_LABELS.get(r, r)} for r in ALL_ROLES],
             "active_tab": None,
             "page_subtitle": "계정 관리",
-            "issued": request.query_params.get("issued"),
-            "issued_for": request.query_params.get("for"),
+            # 원문은 URL 을 타지 않는다. 한 번만 꺼내지는 자리에서 가져온다.
+            "issued": invites.take(request.query_params.get("k")),
+            "no_departments": not _department_choices(db),
         },
     )
 
@@ -111,7 +128,10 @@ def create_user(
     if db.scalars(select(User).where(User.phone_number == phone)).first():
         return redirect("/admin/users", message="이미 등록된 연락처입니다.")
 
-    dept = _department_row(db, department_key or None)
+    dept, problem = _resolve_department(db, department_key)
+    if problem:
+        return redirect("/admin/users", message=problem)
+
     person = User(
         name=name,
         phone_number=phone,
@@ -130,7 +150,9 @@ def create_user(
         summary=f"{name} ({ROLE_LABELS.get(role, role)})",
     )
     raw = invites.issue(db, user=person, actor=user)
-    return redirect(f"/admin/users?issued={raw}&for={person.id}")
+    # 원문 대신 **한 번 쓰면 사라지는 키**만 싣는다 — 주소창·방문 기록·접속 로그
+    # 어디에도 링크가 남지 않게 하기 위해서다.
+    return redirect(f"/admin/users?k={invites.stash(raw)}")
 
 
 @router.post("/admin/users/{user_id}/update")
@@ -147,9 +169,12 @@ def update_user(
     if role not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="알 수 없는 권한입니다.")
 
+    dept, problem = _resolve_department(db, department_key)
+    if problem:
+        return redirect("/admin/users", message=problem)
+
     before = {"role": person.role, "department_key": department_key_of(db, person)}
     person.role = role
-    dept = _department_row(db, department_key or None)
     person.department_id = dept.id if dept else None
     db.commit()
     log_activity(
@@ -186,7 +211,7 @@ def issue_invite(
         target_id=person.id,
         summary=f"{person.name} 님의 초대 링크를 발급했습니다.",
     )
-    return redirect(f"/admin/users?issued={raw}&for={person.id}")
+    return redirect(f"/admin/users?k={invites.stash(raw)}")
 
 
 @router.post("/admin/users/{user_id}/revoke")

@@ -104,7 +104,9 @@ def test_05_총무팀이_재발급하면_옛_링크가_죽는다(person, admin_c
         f"/admin/users/{person['user_id']}/invite", follow_redirects=False
     )
     assert response.status_code == 303
-    new = response.headers["location"].split("issued=")[1].split("&")[0]
+    # 원문은 URL 을 타지 않는다 — 화면에서 꺼낸다
+    page = admin_client.get(response.headers["location"])
+    new = page.text.split("/invite/")[1].split('"')[0]
     assert new != old
 
     # 옛 링크는 취소됐다 — 재발급했는데 옛 것이 살아 있으면 "한 번 쓰면 만료"가 뜻을 잃는다
@@ -254,3 +256,234 @@ def test_10b_demo_로_부르면_눌러볼_계정이_생긴다(client):
 def test_10c_로그인_방법을_안내한다():
     """첫 관리자는 스크립트로 만든다 — 화면에 들어가려면 이미 관리자여야 하므로."""
     assert (ROOT / "scripts" / "create_admin.py").exists()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 마무리 — 원문이 URL 을 타지 않는 것과 부서 배정. 아래 번호는 그 작업 기준이다.
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture
+def with_departments(admin_client):
+    """실제 Department 행이 있는 회차 하나."""
+    with app_session() as db:
+        retreat = models.Retreat(
+            name="2026 여름수련회",
+            start_date=dt.date(2026, 8, 21),
+            end_date=dt.date(2026, 8, 23),
+        )
+        db.add(retreat)
+        db.flush()
+        for order, (key, name) in enumerate(
+            [("sketch", "4 스케치"), ("hebron", "5 헤브론")]
+        ):
+            db.add(
+                models.Department(
+                    retreat_id=retreat.id, key=key, name=name,
+                    color_tag="#888", sort_order=order,
+                )
+            )
+        db.commit()
+        return retreat.id
+
+
+def _live_tokens(user_id: int) -> list[str]:
+    with app_session() as db:
+        return [
+            t.token_hash
+            for t in db.scalars(
+                select(models.InviteToken).where(
+                    models.InviteToken.user_id == user_id,
+                    models.InviteToken.used_at.is_(None),
+                    models.InviteToken.revoked_at.is_(None),
+                )
+            )
+        ]
+
+
+# ── 마무리 1 · 2 ──────────────────────────────────────────────────────
+
+
+def test_마무리01_계정을_만들어도_주소창에_원문이_없다(with_departments, admin_client):
+    """총무팀은 이 링크를 자기가 쓰는 게 아니라 복사해서 보낸다.
+    주소창에 실리면 7일 내내 살아 있는 링크가 방문 기록에 남는다."""
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    location = response.headers["location"]
+
+    with app_session() as db:
+        person = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first()
+    # 화면에서 원문을 꺼내 그것이 URL 어디에도 없는지 본다
+    page = admin_client.get(location)
+    raw = page.text.split("/invite/")[1].split('"')[0]
+    assert len(raw) > 20
+    assert invites.hash_token(raw) in _live_tokens(person.id)   # 진짜 그 링크다
+
+    assert raw not in location
+    assert "issued=" not in location
+    assert raw not in str(page.url)
+
+
+def test_마무리01b_재발급도_마찬가지다(with_departments, admin_client, person):
+    response = admin_client.post(
+        f"/admin/users/{person['user_id']}/invite", follow_redirects=False
+    )
+    location = response.headers["location"]
+    page = admin_client.get(location)
+    raw = page.text.split("/invite/")[1].split('"')[0]
+    assert raw not in location
+    assert raw not in str(page.url)
+
+
+def test_마무리02_서버가_보는_URL_에도_원문이_없다(with_departments, admin_client):
+    """접속 로그에 남는 것은 경로와 쿼리다. 거기에 원문이 있으면 안 된다."""
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    location = response.headers["location"]
+    page = admin_client.get(location)
+    raw = page.text.split("/invite/")[1].split('"')[0]
+
+    # 리다이렉트를 따라간 뒤의 최종 URL (= 서버 접속 로그에 남는 것)
+    with app_session() as db:
+        person_id = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first().id
+    followed = admin_client.post(
+        f"/admin/users/{person_id}/invite", follow_redirects=True
+    )
+    fresh = followed.text.split("/invite/")[1].split('"')[0]
+    for url in (location, str(page.url), str(followed.url)):
+        assert raw not in url
+        assert fresh not in url
+    # 쿼리에는 한 번 쓰면 사라지는 키만 있다
+    assert location.startswith("/admin/users?k=")
+    key = location.split("k=")[1]
+    assert key != raw and raw not in key
+
+
+# ── 마무리 3 ──────────────────────────────────────────────────────────
+
+
+def test_마무리03_새로고침하면_링크가_다시_나오지_않는다(with_departments, admin_client):
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    location = response.headers["location"]
+
+    first = admin_client.get(location)
+    assert "/invite/" in first.text
+    assert "한 번만 보입니다" in first.text
+
+    again = admin_client.get(location)                 # 새로고침
+    assert "/invite/" not in again.text
+    assert "한 번만 보입니다" not in again.text
+
+
+def test_마무리03b_꺼내는_자리는_한_번만_준다():
+    key = invites.stash("비밀-원문")
+    assert invites.take(key) == "비밀-원문"
+    assert invites.take(key) is None
+    assert invites.take("없는키") is None
+    assert invites.take(None) is None
+
+
+# ── 마무리 4 · 5 ──────────────────────────────────────────────────────
+
+
+def test_마무리04_없는_부서_키는_목록에_없다(with_departments, admin_client):
+    page = admin_client.get("/admin/users")
+    assert 'value="sketch"' in page.text
+    assert 'value="hebron"' in page.text
+    # 어느 회차에도 없는 부서는 고를 수 없다
+    assert 'value="saechingu"' not in page.text
+    assert 'value="koram"' not in page.text
+
+
+def test_마무리04b_없는_부서로_저장하려_하면_막힌다(with_departments, admin_client):
+    """목록에 없어도 손으로 보낼 수 있다. 조용히 None 으로 떨어뜨리지 않는다."""
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "saechingu"},
+    )
+    assert response.status_code == 200
+    assert "아직 어느 회차에도 없는 부서" in response.text
+    assert "새친구팀" in response.text
+
+    with app_session() as db:
+        assert db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first() is None                              # 계정도 만들어지지 않는다
+
+
+def test_마무리04c_변경할_때도_막힌다(with_departments, admin_client):
+    admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "sketch"},
+        follow_redirects=False,
+    )
+    with app_session() as db:
+        person_id = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first().id
+
+    response = admin_client.post(
+        f"/admin/users/{person_id}/update",
+        data={"role": "member", "department_key": "koram"},
+    )
+    assert response.status_code == 200
+    assert "아직 어느 회차에도 없는 부서" in response.text
+
+    with app_session() as db:
+        from app.domain.departments import department_key_of
+
+        # 원래 부서가 그대로다 — 조용히 떨어지지 않았다
+        assert department_key_of(db, db.get(models.User, person_id)) == "sketch"
+
+
+# ── 마무리 5 ──────────────────────────────────────────────────────────
+
+
+def test_마무리05_배정에_실패했는데_성공_메시지가_뜨지_않는다(with_departments, admin_client):
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": "saechingu"},
+    )
+    assert "배정할 수 없습니다" in response.text
+    assert "설정을 바꿨습니다" not in response.text
+    assert "/invite/" not in response.text            # 링크도 발급되지 않는다
+
+
+def test_마무리05b_부서_없음은_그대로_허용된다(with_departments, admin_client):
+    """빈 값은 '부서 미지정'이라는 뜻이라 막지 않는다."""
+    response = admin_client.post(
+        "/admin/users/new",
+        data={"name": "박서진", "phone_number": "01099991111",
+              "role": "member", "department_key": ""},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "k=" in response.headers["location"]
+
+    with app_session() as db:
+        person = db.scalars(
+            select(models.User).where(models.User.name == "박서진")
+        ).first()
+        assert person is not None
+        assert person.department_id is None
