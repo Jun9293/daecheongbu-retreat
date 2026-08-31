@@ -109,18 +109,27 @@ class User(Base):
     department: Mapped[Department | None] = relationship()
 
 
-class AuthCode(Base):
-    """전화번호 SMS 인증코드."""
+class InviteToken(Base):
+    """1회용 초대 링크 (CLAUDE.md 4-12).
 
-    __tablename__ = "auth_codes"
+    **원문을 저장하지 않는다.** 해시만 남기고 원문은 발급 화면에서 한 번만 보여준다 —
+    DB 가 새면 링크가 그대로 새는 구조로 만들지 않기 위해서다.
+    """
+
+    __tablename__ = "invite_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    phone_number: Mapped[str] = mapped_column(String(20), index=True)
-    code_hash: Mapped[str] = mapped_column(String(64))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime)
-    consumed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])
 
 
 class BudgetCategory(Base):

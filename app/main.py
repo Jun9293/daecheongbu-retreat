@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException
 from app.config import BASE_DIR, RISK_SCAN_INTERVAL_SECONDS
 from app.db import init_db
 from app.routers import (
-    auth,
+    invite,
     board,
     budget,
     checklists,
@@ -31,6 +31,7 @@ from app.routers import (
     settings,
     setup,
     tasks,
+    admin_users,
     notify_admin,
 )
 from app.security import get_optional_user
@@ -84,7 +85,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="대청부 수련회 관리 시스템", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-app.include_router(auth.router)
+app.include_router(invite.router)
 # 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
 app.include_router(board.router)
 app.include_router(setup.router)
@@ -100,6 +101,7 @@ app.include_router(export.router)
 # Phase 2
 app.include_router(notifications.router)
 app.include_router(notify_admin.router)
+app.include_router(admin_users.router)
 app.include_router(reviews.router)
 app.include_router(files.router)
 app.include_router(checklists.router)

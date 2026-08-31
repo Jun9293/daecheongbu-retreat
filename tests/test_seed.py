@@ -16,10 +16,14 @@ ADMIN_PHONE = seed_data.USERS[0][1]
 
 
 def _seed(client):
-    """빈 DB(client 픽스처) 위에 데모 데이터를 만든다."""
+    """빈 DB(client 픽스처) 위에 데모 데이터를 만든다.
+
+    기본 시드는 실제 이력만 만든다 (계정도 만들지 않는다). 이 파일이 보는 것은
+    이전 설계 화면을 눌러보기 위한 demo 데이터라 `demo=True` 로 부른다.
+    """
     import seed as seed_module
 
-    seed_module.seed()
+    seed_module.seed(demo=True)
 
 
 def test_데모_파일_버전은_실제로_디스크에_존재한다(client):

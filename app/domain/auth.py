@@ -1,96 +1,129 @@
-"""전화번호 SMS 인증코드 발급/검증."""
+"""초대 링크 (CLAUDE.md 4-12).
+
+SMS 인증을 접은 이유는 4-12 와 1장 확정사항에 적었다. 여기서는 그 결정을
+안전하게 구현하는 것만 다룬다.
+
+**토큰 원문을 저장하지 않는다.** 해시만 남기고 원문은 발급 화면에서 한 번만
+보여준다 — DB 파일이 새면 링크가 그대로 새는 구조를 만들지 않기 위해서다.
+비밀번호를 평문으로 두지 않는 것과 같은 이유다.
+"""
 
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import hmac
-import re
 import secrets
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import AUTH_CODE_MAX_ATTEMPTS, AUTH_CODE_TTL_SECONDS, SECRET_KEY
-from app.models import AuthCode
+from app.models import InviteToken, User
 
-_MOBILE_RE = re.compile(r"^01[016789]\d{7,8}$")
-
-
-class AuthError(Exception):
-    """인증 실패 (코드 불일치·만료·시도 초과)."""
+INVITE_TTL_DAYS = 7        # 링크의 유효기간
+TOKEN_BYTES = 32           # secrets.token_urlsafe 에 넘길 바이트 수
 
 
 def normalize_phone(raw: str) -> str:
-    """입력된 전화번호를 '01012345678' 형태로 정규화한다."""
-    if not raw:
-        raise ValueError("전화번호를 입력해주세요.")
+    """연락처를 숫자만 남겨 정규화한다.
 
-    digits = re.sub(r"[^\d+]", "", raw)
-    if digits.startswith("+82"):
-        digits = "0" + digits[3:]
-    elif digits.startswith("82") and not digits.startswith("820"):
-        digits = "0" + digits[2:]
-    digits = digits.lstrip("+")
-
-    if not _MOBILE_RE.match(digits):
-        raise ValueError("휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)")
+    로그인에는 더 이상 쓰지 않는다 (초대 링크로 바꿨다). 사람을 알아보고
+    총무팀이 연락할 때 쓰는 값이라 형식만 맞춘다.
+    """
+    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+    if not digits:
+        raise ValueError("연락처를 입력해주세요.")
+    if len(digits) < 9 or len(digits) > 11:
+        raise ValueError("연락처 형식이 올바르지 않습니다.")
     return digits
 
 
-def _hash_code(phone_number: str, code: str) -> str:
-    msg = f"{phone_number}:{code}".encode()
-    return hmac.new(SECRET_KEY.encode(), msg, hashlib.sha256).hexdigest()
-
-
 def _now() -> dt.datetime:
-    return dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    return dt.datetime.now()
 
 
-def issue_auth_code(db: Session, *, phone_number: str) -> str:
-    """새 인증코드를 발급하고, 같은 번호의 이전 코드는 무효화한다."""
-    now = _now()
-    for old in db.scalars(
-        select(AuthCode).where(
-            AuthCode.phone_number == phone_number, AuthCode.consumed_at.is_(None)
-        )
-    ):
-        old.consumed_at = now
+def hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    code = f"{secrets.randbelow(1_000_000):06d}"
+
+def issue(db: Session, *, user: User, actor: User | None = None) -> str:
+    """새 초대 링크를 발급하고 **원문을 돌려준다.**
+
+    같은 사람에게 남아 있던 링크는 함께 취소한다 — 재발급했는데 옛 링크가
+    계속 살아 있으면 "한 번 쓰면 만료" 가 뜻을 잃는다.
+    """
+    revoke_all(db, user=user)
+
+    raw = secrets.token_urlsafe(TOKEN_BYTES)
     db.add(
-        AuthCode(
-            phone_number=phone_number,
-            code_hash=_hash_code(phone_number, code),
-            expires_at=now + dt.timedelta(seconds=AUTH_CODE_TTL_SECONDS),
+        InviteToken(
+            user_id=user.id,
+            token_hash=hash_token(raw),
+            expires_at=_now() + dt.timedelta(days=INVITE_TTL_DAYS),
+            created_by_id=actor.id if actor else None,
         )
     )
     db.commit()
-    return code
+    return raw
 
 
-def verify_auth_code(
-    db: Session, *, phone_number: str, code: str, now: dt.datetime | None = None
-) -> bool:
-    now = now or _now()
-    record = db.scalars(
-        select(AuthCode)
-        .where(AuthCode.phone_number == phone_number, AuthCode.consumed_at.is_(None))
-        .order_by(AuthCode.id.desc())
+def revoke_all(db: Session, *, user: User) -> int:
+    """그 사람의 살아 있는 링크를 전부 취소한다."""
+    count = 0
+    for token in db.scalars(
+        select(InviteToken).where(
+            InviteToken.user_id == user.id,
+            InviteToken.used_at.is_(None),
+            InviteToken.revoked_at.is_(None),
+        )
+    ):
+        token.revoked_at = _now()
+        count += 1
+    if count:
+        db.commit()
+    return count
+
+
+def problem_with(token: InviteToken | None) -> str | None:
+    """쓸 수 없는 링크면 사유를, 괜찮으면 None."""
+    if token is None:
+        return "링크를 찾을 수 없습니다. 총무팀에 다시 요청해주세요."
+    if token.revoked_at is not None:
+        return "취소된 링크입니다. 총무팀에 다시 요청해주세요."
+    if token.used_at is not None:
+        return "이미 사용한 링크입니다. 링크는 한 번만 쓸 수 있습니다."
+    if token.expires_at < _now():
+        return f"만료된 링크입니다 (유효기간 {INVITE_TTL_DAYS}일). 총무팀에 다시 요청해주세요."
+    return None
+
+
+def redeem(db: Session, raw: str) -> tuple[User | None, str | None]:
+    """링크를 쓴다. (사용자, 사유) 중 하나만 채워 돌려준다."""
+    token = db.scalars(
+        select(InviteToken).where(InviteToken.token_hash == hash_token(raw))
     ).first()
 
-    if record is None:
-        raise AuthError("인증코드를 먼저 요청해주세요.")
-    if record.expires_at < now:
-        raise AuthError("인증코드가 만료되었습니다. 다시 요청해주세요.")
-    if record.attempts >= AUTH_CODE_MAX_ATTEMPTS:
-        raise AuthError("시도 횟수를 초과했습니다. 인증코드를 다시 요청해주세요.")
+    reason = problem_with(token)
+    if reason is not None:
+        return None, reason
 
-    if not hmac.compare_digest(record.code_hash, _hash_code(phone_number, code)):
-        record.attempts += 1
-        db.commit()
-        raise AuthError("인증코드가 올바르지 않습니다.")
+    user = db.get(User, token.user_id)
+    if user is None:
+        return None, "계정을 찾을 수 없습니다. 총무팀에 문의해주세요."
+    if not user.is_active:
+        return None, "비활성화된 계정입니다. 총무팀에 문의해주세요."
 
-    record.consumed_at = now
+    token.used_at = _now()
     db.commit()
-    return True
+    return user, None
+
+
+def live_token(db: Session, *, user: User) -> InviteToken | None:
+    """아직 쓸 수 있는 링크가 있는지 (원문은 알 수 없다 — 해시만 있으므로)."""
+    for token in db.scalars(
+        select(InviteToken)
+        .where(InviteToken.user_id == user.id)
+        .order_by(InviteToken.id.desc())
+    ):
+        if problem_with(token) is None:
+            return token
+    return None

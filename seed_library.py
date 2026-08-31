@@ -238,7 +238,7 @@ def seed_extra_users(db: Session, depts: dict[str, Department]) -> None:
     db.flush()
 
 
-def seed_all(db: Session, current: Retreat) -> None:
+def seed_all(db: Session, current: Retreat, *, demo: bool = False) -> None:
     """라이브러리 → 이번 회차 실행 기록.
 
     실제 이력은 2026 여름수련회(Belong) 한 회차뿐이다. 지어낸 과거 회차를
@@ -247,5 +247,8 @@ def seed_all(db: Session, current: Retreat) -> None:
     """
     libraries = build_library(db)
     seed_current(db, current, libraries)
-    seed_extra_users(db, {d.key: d for d in current.departments if d.key})
+    if demo:
+        # 부서 리더 계정은 화면을 눌러보기 위한 자리표시자다. 실제 계정은
+        # 총무팀이 /admin/users 에서 만든다 (CLAUDE.md 4-12).
+        seed_extra_users(db, {d.key: d for d in current.departments if d.key})
     db.commit()

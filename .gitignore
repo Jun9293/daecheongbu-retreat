@@ -11,3 +11,5 @@ data/uploads/
 *.xlsx
 !docs/*.xlsx
 data/*.pem
+data/backups/
+data/secret_key.txt

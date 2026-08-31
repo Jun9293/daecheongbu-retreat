@@ -1,73 +1,25 @@
 {% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
 {% block title %}로그인 · 대청부 수련회{% endblock %}
-
 {% block auth_content %}
-<div class="auth-wrap">
-  <div class="auth">
-    <div class="auth-brand">
-      <div class="mark">대</div>
-      <div class="t">대청부 수련회</div>
-      <div class="s">총무팀 통합 관리 시스템</div>
-    </div>
 
+<div class="card" style="max-width:460px;margin:60px auto">
+  <div class="card-head"><h2>대청부 수련회 준비 시스템</h2></div>
+  <div class="card-body">
     {% if error %}
-    <div class="banner banner-danger">{{ icon('alert', 17) }}<span>{{ error }}</span></div>
+    <div class="alert stop" style="margin-bottom:14px">
+      <span class="ic">확인</span><span>{{ error }}</span>
+    </div>
     {% endif %}
 
-    <div class="card">
-      <div class="card-body">
-        {% if step == "phone" %}
-        <form method="post" action="/login/code">
-          <div class="field">
-            <label for="phone">휴대폰 번호</label>
-            <input id="phone" name="phone_number" type="tel" inputmode="numeric"
-                   placeholder="010-1234-5678" autocomplete="tel" required autofocus>
-          </div>
-          <button class="btn btn-block" type="submit">{{ icon('send', 17) }}인증번호 받기</button>
-        </form>
-        <p class="muted" style="margin:12px 0 0">
-          등록된 번호로만 로그인할 수 있습니다. 처음이라면 총무팀에 계정 등록을 요청해주세요.
-        </p>
-
-        {% else %}
-        {% if dev_code %}
-        {# data-dev-code 는 테스트가 마크업 변경에 흔들리지 않게 하기 위한 고정 진입점 #}
-        <div class="devcode" data-dev-code="{{ dev_code }}">
-          {{ icon('lock', 20) }}
-          <div class="grow">
-            <div class="lbl">개발 모드 — 실제 SMS 대신 화면에 표시합니다</div>
-            <div class="code">{{ dev_code }}</div>
-          </div>
-        </div>
-        {% endif %}
-
-        <form method="post" action="/login/verify">
-          <input type="hidden" name="phone_number" value="{{ phone_number }}">
-          {% if is_first_user %}
-          <div class="banner banner-info">
-            {{ icon('user', 17) }}
-            <span>첫 사용자입니다. 이 번호가 <b>총무팀(관리자)</b> 계정으로 등록됩니다.</span>
-          </div>
-          <div class="field">
-            <label for="name">이름</label>
-            <input id="name" name="name" type="text" placeholder="예: 박민준" required>
-          </div>
-          {% endif %}
-          <div class="field">
-            <label for="code">인증번호 <span class="muted">· 3분 이내</span></label>
-            <input id="code" name="code" class="otp" type="text" inputmode="numeric" maxlength="6"
-                   placeholder="······" autocomplete="one-time-code" required autofocus>
-          </div>
-          <button class="btn btn-block" type="submit">로그인</button>
-        </form>
-        <p class="muted" style="margin:12px 0 0">
-          {{ phone_number }} 로 인증번호를 보냈습니다.
-          <a href="/login" style="color:var(--brand);font-weight:650">번호 다시 입력</a>
-        </p>
-        {% endif %}
-      </div>
-    </div>
+    <p style="font-size:14px;line-height:1.8;color:var(--ink-2);margin:0 0 12px">
+      이 시스템은 <b>총무팀이 보내드린 초대 링크</b>로 들어옵니다.
+      비밀번호도 인증번호도 없습니다.
+    </p>
+    <p class="muted" style="font-size:13px;line-height:1.8;margin:0">
+      링크를 못 받으셨거나 만료됐다면 총무팀에 다시 요청해주세요.<br>
+      링크는 <b>한 번만</b> 쓸 수 있고, 한 번 열면 그 기기에서 계속 로그인된 상태로 남습니다.<br>
+      기기를 바꾸셨다면 새 링크가 필요합니다.
+    </p>
   </div>
 </div>
 {% endblock %}

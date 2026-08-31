@@ -88,21 +88,23 @@ def test_최초_로그인_사용자는_총무팀_관리자가_된다(client):
     assert user.name == "총무 김간사"
 
 
-def test_등록되지_않은_번호는_인증코드를_받을_수_없다(admin_client):
-    response = admin_client.post("/login/code", data={"phone_number": "01099998888"})
+def test_로그인_화면은_초대_링크로_들어오라고만_말한다(client):
+    """비밀번호도 인증번호도 없다 (CLAUDE.md 4-12)."""
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert "초대 링크" in response.text
+    # 인증번호를 입력받는 자리가 없어야 한다 (문구에 그 낱말이 나오는 것과는 다르다)
+    assert "data-dev-code" not in response.text
+    assert 'name="code"' not in response.text
+    assert 'name="phone_number"' not in response.text
+
+
+def test_아무_링크나_넣으면_들어올_수_없다(client):
+    response = client.get("/invite/아무거나-지어낸-토큰", follow_redirects=False)
 
     assert response.status_code == 403
-    assert "등록되지 않은 번호" in response.text
-
-
-def test_틀린_인증코드로는_로그인할_수_없다(client):
-    client.post("/login/code", data={"phone_number": "01011112222"})
-    response = client.post(
-        "/login/verify",
-        data={"phone_number": "01011112222", "code": "000000", "name": "가짜"},
-    )
-
-    assert response.status_code == 400
+    assert "링크를 찾을 수 없습니다" in response.text
     with app_session() as db:
         assert db.scalars(select(models.User)).all() == []
 

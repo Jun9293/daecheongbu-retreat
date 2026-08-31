@@ -109,7 +109,16 @@ def make_demo_xlsx(path, *, title: str, header: list, rows: list) -> int:
 # ---------------------------------------------------------------- 시드
 
 
-def seed() -> None:
+def seed(demo: bool = False) -> None:
+    """기본값은 **실제 이력만** — 회차·부서·업무 라이브러리·지난 회차 실행 기록.
+
+    계정은 만들지 않는다. 자리표시자 전화번호로 계정을 심어 두면 배포한 뒤에도
+    그대로 남아, 아무도 안 쓰는 계정이 담당자 후보 목록에 섞인다.
+    실제 계정은 총무팀이 `/admin/users` 에서 만들고 초대 링크를 보낸다 (4-12).
+
+    `demo=True` 는 이전 설계 화면(할 일·회의록·지출·파일)을 눌러보기 위한 것이다.
+    그 화면들이 작성자·담당자를 요구하므로 자리표시자 계정이 함께 만들어진다.
+    """
     init_db()
 
     with SessionLocal() as db:
@@ -142,7 +151,18 @@ def seed() -> None:
             legacy: by_key[key] for legacy, key in LEGACY_DEPARTMENTS.items()
         }
 
-        # 사용자
+        if not demo:
+            # 실제 이력만 — 준비 단계 보드와 세팅 마법사가 쓰는 것이 전부 여기 있다.
+            seed_library.seed_all(db, retreat)
+            db.commit()
+            print(f"'{D.RETREAT_NAME}' 을(를) 만들었습니다. (실제 이력만)")
+            print(f"  부서 {len(L.DEPARTMENTS)}개 · 업무 라이브러리 "
+                  f"{len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 (실행 이력 1회차)")
+            print("  계정은 만들지 않았습니다 — 첫 관리자는 아래로 만드세요:")
+            print("    .venv\\Scripts\\python.exe scripts/create_admin.py \"이름\" 01012345678")
+            return
+
+        # 사용자 (demo 전용 — 자리표시자 번호다)
         users: dict[str, User] = {}
         for name, phone, role, dept_name in D.USERS:
             user = User(
@@ -416,7 +436,7 @@ def seed() -> None:
         db.commit()
 
         # 업무 라이브러리 + 지난 회차 실행 이력 (준비 단계 보드 · 세팅 마법사)
-        seed_library.seed_all(db, retreat)
+        seed_library.seed_all(db, retreat, demo=True)
 
     print(f"'{D.RETREAT_NAME}' 데이터를 만들었습니다.")
     print(f"  부서 {len(L.DEPARTMENTS)}개 · 사용자 {len(D.USERS) + len(seed_library.EXTRA_USERS)}명")
@@ -424,12 +444,8 @@ def seed() -> None:
     print(f"  일정 {len(D.SCHEDULE_DAYS)}일차 / 총 {sum(len(d['items']) for d in D.SCHEDULE_DAYS)}건")
     print(f"  할 일 {len(D.TASKS)}건 · 체크리스트 {len(D.CHECKLISTS)}개 · 회의록 {len(D.MEETINGS)}건")
     print(f"  지출 {len(D.MEAL_EXPENSES) + len(D.GENERAL_EXPENSES)}건")
-    print("\n로그인 (개발 모드에서는 인증번호가 화면에 표시됩니다):")
-    for name, phone, role, dept in D.USERS[:5]:
-        pretty = f"{phone[:3]}-{phone[3:7]}-{phone[7:]}"
-        print(f"  {pretty}  {name:5s} {role:10s} {dept or '-'}")
-    print("  ...")
-    print("\n※ 전화번호는 모두 자리표시자입니다. 설정 > 사용자 에서 실제 번호로 바꿔주세요.")
+    print("\n※ demo 계정입니다. 전화번호는 자리표시자이고 로그인은 초대 링크로 합니다.")
+    print("   초대 링크는 /admin/users 에서 발급합니다.")
 
 
 if __name__ == "__main__":
@@ -453,4 +469,4 @@ if __name__ == "__main__":
         for leftover in ASSET_DIR.glob("demo-*"):
             leftover.unlink()
         print("기존 데이터를 삭제했습니다.")
-    seed()
+    seed(demo="--demo" in sys.argv)

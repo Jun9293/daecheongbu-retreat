@@ -11,11 +11,9 @@ import tempfile
 _TMP = pathlib.Path(tempfile.mkdtemp(prefix="dcb-test-"))
 os.environ["DCB_DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
 os.environ["DCB_DATA_DIR"] = str(_TMP)
-os.environ["DCB_DEV_MODE"] = "1"
 os.environ["DCB_SECRET_KEY"] = "test-secret"
 
 import datetime as dt  # noqa: E402
-import re  # noqa: E402
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine, event  # noqa: E402
@@ -110,19 +108,31 @@ def client():
 
 
 def login_as(client, phone: str, name: str = "테스터"):
-    """전화번호 인증 로그인 (개발 모드에서 화면에 노출되는 코드를 사용)."""
-    response = client.post("/login/code", data={"phone_number": phone})
-    assert response.status_code == 200, response.text
-    # 화면 마크업이 바뀌어도 깨지지 않도록 전용 속성을 사용한다
-    match = re.search(r'data-dev-code="(\d{6})"', response.text)
-    assert match, "개발 모드 인증코드를 찾을 수 없습니다."
-    code = match.group(1)
+    """초대 링크로 들어온다 (CLAUDE.md 4-12).
 
-    response = client.post(
-        "/login/verify",
-        data={"phone_number": phone, "code": code, "name": name},
-        follow_redirects=False,
-    )
+    실제 흐름과 같은 길을 쓴다 — 계정을 만들고 링크를 발급해 그 링크를 연다.
+    `phone` 은 사람을 알아보는 값일 뿐 더 이상 인증 수단이 아니다.
+    첫 사용자는 총무팀(admin)이 된다.
+    """
+    from sqlalchemy import func, select
+
+    from app.domain import auth as invites
+    from app.models import User
+
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        person = db.scalars(select(User).where(User.phone_number == phone)).first()
+        if person is None:
+            first = db.scalar(select(func.count()).select_from(User)) == 0
+            person = User(
+                name=name, phone_number=phone, role="admin" if first else "member"
+            )
+            db.add(person)
+            db.commit()
+        raw = invites.issue(db, user=person)
+
+    response = client.get(f"/invite/{raw}", follow_redirects=False)
     assert response.status_code == 303, response.text
     return response
 

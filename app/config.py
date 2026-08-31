@@ -15,18 +15,30 @@ ASSET_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = os.environ.get("DCB_DATABASE_URL", f"sqlite:///{DATA_DIR / 'app.db'}")
 
-# 세션 쿠키 서명 키. 운영 배포 시 반드시 환경변수로 지정할 것.
-SECRET_KEY = os.environ.get("DCB_SECRET_KEY", "dev-only-insecure-secret-change-me")
+# 세션 쿠키 서명 키.
+#
+# **파일로 고정한다.** 매번 새로 만들면 서버를 재시작할 때마다 전원이 로그아웃되고,
+# 소스에 박아 두면 저장소를 보는 사람이 세션을 위조할 수 있다.
+# 환경변수(DCB_SECRET_KEY)가 있으면 그것을 쓰고, 없으면 데이터 폴더에 만들어 둔다.
+def _secret_key() -> str:
+    from_env = os.environ.get("DCB_SECRET_KEY")
+    if from_env:
+        return from_env
+    path = DATA_DIR / "secret_key.txt"
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+    import secrets
+
+    value = secrets.token_urlsafe(48)
+    path.write_text(value, encoding="utf-8")
+    return value
+
+
+SECRET_KEY = _secret_key()
 SESSION_COOKIE = "dcb_session"
-SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30일
+# 초대 링크를 한 번 열면 그 기기에서 계속 로그인된 상태로 둔다 (CLAUDE.md 4-12).
+SESSION_MAX_AGE = 60 * 60 * 24 * 90  # 90일
 
-# SMS 발송 방식: "console"(개발용, 서버 로그에 코드 출력) | "solapi" | "aligo" 등
-SMS_PROVIDER = os.environ.get("DCB_SMS_PROVIDER", "console")
-# 개발 모드에서는 인증코드를 화면에 직접 노출해 로그인 테스트를 가능하게 한다.
-DEV_MODE = os.environ.get("DCB_DEV_MODE", "1") == "1"
-
-AUTH_CODE_TTL_SECONDS = 180
-AUTH_CODE_MAX_ATTEMPTS = 5
 
 # 식대 1인당 지원 상한 기본값 (회차별로 재설정 가능 — 하드코딩 금지 원칙)
 DEFAULT_MEAL_SUBSIDY_PER_PERSON = 8_000

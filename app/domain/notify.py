@@ -229,13 +229,28 @@ def build_digests(db: Session, *, today: dt.date | None = None) -> list[Digest]:
                 # 기다리는 쪽이 기한을 넘겼을 때만 총무팀에도 올린다.
                 # **이때만 예외다** — 나머지는 담당자 한 사람 원칙을 그대로 지킨다.
                 if late:
+                    # 담당자용 문구를 그대로 보내면 총무팀이 자기 업무인 줄 읽는다.
+                    # 총무팀은 "누가 누구를 막고 있나" 를 보는 사람이므로 그것을 앞에 세운다.
+                    mine = run.department.name if run.department else "담당 없음"
+                    stuck = ", ".join(
+                        f"{w.department.name if w.department else '담당 없음'} "
+                        f"'{w.library.title}'"
+                        for w in late[:2]
+                    )
+                    worst = max(overdue_days_of(w, today) for w in late)
+                    boss_item = Item(
+                        UNBLOCK, run.id, run.library.title,
+                        f"[확인 필요] {mine} '{run.library.title}'이(가) {stuck}을(를) "
+                        f"막고 있고, 그쪽 마감이 {worst}일 지났습니다",
+                        verdict, run.status,
+                    )
                     owner = recipient_for(db, run)
                     for boss in db.scalars(
                         select(User).where(User.role == "admin").order_by(User.id)
                     ):
                         if owner is not None and boss.id == owner.id:
                             continue      # 담당자가 총무팀이면 두 번 받지 않는다
-                        add(boss, item)
+                        add(boss, boss_item)
 
     digests: list[Digest] = []
     for user_id, items in per_user.items():
