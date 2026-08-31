@@ -13,13 +13,10 @@ REM 그 폴더를 USB 에 복사할 때 함께 딸려온다.
 set "LOG=data\server.log"
 set "MAXBYTES=5242880"
 if exist "%LOG%" (
-  for %%F in ("%LOG%") do set "LOGSIZE=%%~zF"
-  setlocal enabledelayedexpansion
-  if !LOGSIZE! GTR %MAXBYTES% (
+  for %%F in ("%LOG%") do if %%~zF GTR %MAXBYTES% (
     if exist "%LOG%.1" del "%LOG%.1"
     move /y "%LOG%" "%LOG%.1" > nul
   )
-  endlocal
 )
 
 REM 127.0.0.1 에만 연다. 바깥은 Cloudflare 터널로만 들어온다.
