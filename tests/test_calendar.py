@@ -267,22 +267,91 @@ def test_07_오늘_칸이_표시된다(admin_client, cal_data):
 # ---------------------------------------------------------------- 8. 상세 패널
 
 
-def test_08_점을_누르면_보드의_상세_패널이_열린다(admin_client, cal_data):
-    """**여기서 새로 만들지 않는다.** `/board?task=` 가 이미 그 일을 한다
-    (알림을 누르고 들어올 때 쓰던 길, 4-11)."""
+def test_08_점을_누르면_그_자리에서_패널이_열린다(admin_client, cal_data):
+    """수용기준 6 · 9 — 보드로 넘어가지 않는다.
+
+    전에는 `/board?task=` 로 넘겨 보냈다. 그러면 **보던 달과 범위 칩을
+    잃고**, 돌아오려면 뒤로 가야 했다.
+    """
     page = admin_client.get("/calendar?scope=all").text
     run_id = cal_data["runs"]["오늘 업무"]
+
+    # 점이 자기가 어느 업무인지 들고 있다 — 눌러서 그 자리에서 연다
+    assert f'data-run="{run_id}"' in page
+    assert 'id="drawer"' in page, "달력에 상세 패널이 없다"
+    assert "calendar.js" in page and "drawer.js" in page
+
+    # 자바스크립트가 죽었을 때를 위한 길은 남겨 둔다 (가운데 버튼 · 새 탭)
     assert f'href="/board?task={run_id}"' in page
-
-    # 달력 화면에는 상세 패널을 두지 않는다 — 두 벌이 되면 갈린다
-    view = open("app/templates/calendar.html", encoding="utf-8").read()
-    assert 'id="drawer"' not in view
-    assert "daddlog" not in view
-
-    # 그 길이 실제로 살아 있다
     assert admin_client.get(f"/board?task={run_id}").status_code == 200
-    js = open("app/static/js/board.js", encoding="utf-8").read()
+
+    # `/calendar?task=123` 으로 열린 채 시작한다 (수용기준 9)
+    assert admin_client.get(f"/calendar?task={run_id}&scope=all").status_code == 200
+    js = admin_client.get("/static/js/drawer.js").text
     assert "get('task')" in js
+
+
+def test_08b_패널이_한_벌이다(admin_client, cal_data):
+    """수용기준 11 — 보드와 달력이 **같은 조각·같은 스크립트**를 쓴다.
+
+    두 벌이 되면 논의·상태·첨부·선후행이 두 곳에서 갈리고, **갈린 쪽을
+    아무도 눈치채지 못한다.** 그래서 "둘 다 되더라" 가 아니라 **경로가
+    하나인지**를 본다 — 되는 것은 베껴 놓아도 된다.
+    """
+    board_view = open("app/templates/board.html", encoding="utf-8").read()
+    cal_view = open("app/templates/calendar.html", encoding="utf-8").read()
+
+    include = 'include "partials/drawer.html"'
+    assert include in board_view, "보드가 패널 조각을 include 하지 않는다"
+    assert include in cal_view, "달력이 패널 조각을 include 하지 않는다"
+
+    # 어느 쪽도 패널을 자기 안에 다시 그려 두지 않았다
+    for name, view in (("board.html", board_view), ("calendar.html", cal_view)):
+        assert 'id="drawer"' not in view, f"{name} 이 패널을 따로 갖고 있다"
+        assert 'id="dtabs"' not in view, f"{name} 이 탭을 따로 갖고 있다"
+
+    # 움직이는 코드도 한 벌 — board.js 에 패널 코드가 남아 있으면 안 된다
+    board_js = open("app/static/js/board.js", encoding="utf-8").read()
+    for moved in ("function renderDrawer", "function renderLog",
+                  "function renderFiles", "function statMenu"):
+        assert moved not in board_js, f"board.js 에 {moved} 가 남아 있다"
+
+    drawer_js = open("app/static/js/drawer.js", encoding="utf-8").read()
+    for kept in ("function renderDrawer", "function renderLog",
+                 "function renderFiles", "function statMenu"):
+        assert kept in drawer_js
+
+    # 두 화면이 같은 파일을 싣는다
+    assert "drawer.js" in admin_client.get("/board").text
+    assert "drawer.js" in admin_client.get("/calendar?scope=all").text
+
+
+def test_08c_상태를_바꾸면_점이_따라_바뀐다(admin_client, cal_data):
+    """수용기준 8 — **다시 불러오지 않는다.** 보던 달을 잃으면 안 된다."""
+    run_id = cal_data["runs"]["오늘 업무"]
+    res = admin_client.post(f"/board/task/{run_id}/status", json={"status": "완료"})
+    assert res.status_code == 200
+    view = res.json()
+    # 점을 다시 칠할 재료를 그 응답이 들고 있다 — 보드의 바와 같은 값이다
+    assert "background" in view and "border" in view
+
+    js = open("app/static/js/calendar.js", encoding="utf-8").read()
+    assert "onStatus" in js
+    assert "cal-dot" in js
+    assert "location.reload" not in js, "달력을 다시 불러오면 보던 달을 잃는다"
+
+
+def test_08d_닫으면_보던_달과_칩이_그대로다(admin_client, cal_data):
+    """수용기준 7 — 패널은 겹쳐 뜰 뿐 화면을 갈아치우지 않는다."""
+    page = admin_client.get("/calendar?month=2026-08&scope=all&only_open=1").text
+    # 칩 상태를 구조가 실어 보낸다 — 화면 코드가 클래스를 뒤져 알아내지 않는다
+    assert 'data-only-open="1"' in page
+    assert 'data-scope="all"' in page
+    # 달 값은 화면이 내보내는 그대로다 (`2026-08-01`) — 4-13 의 그 함정
+    assert 'data-month="2026-08-01"' in page
+    # 패널을 여닫는 것은 주소를 바꾸지 않는다
+    js = open("app/static/js/calendar.js", encoding="utf-8").read()
+    assert "location.href" not in js and "location.search =" not in js
 
 
 # ---------------------------------------------------------------- 9~13. 칩

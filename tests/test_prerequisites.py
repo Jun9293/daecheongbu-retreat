@@ -446,7 +446,9 @@ def test_09_상세_패널에서_선행_후속_관련이_구분된다(libs, admin
     assert board.status_code == 200
     assert "blocked_by_run_ids" in board.text and "blocks_run_ids" in board.text
 
-    js = admin_client.get("/static/js/board.js").text
+    # 연결된 업무 목록은 **상세 패널** 안에 있다. 패널은 보드와 달력이
+    # 같이 쓰는 한 벌이라 board.js 가 아니라 drawer.js 에 있다 (4-13).
+    js = admin_client.get("/static/js/drawer.js").text
     assert "선행 — 끝나야 시작할 수 있다" in js
     assert "후속 — 나를 기다린다" in js
     assert "관련 — 방향 없음" in js

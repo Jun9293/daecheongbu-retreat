@@ -1,34 +1,56 @@
 /* 상세 패널 상호작용 점검 — CLAUDE.md 10장의 규칙을 실제로 돌리는 스크립트.
  *
- * 쓰는 법: 보드(/board)를 연 뒤 브라우저 콘솔에 이 파일 내용을 붙여넣습니다.
- * 화면을 고쳤으면 "됐다"고 말하기 전에 이걸 돌립니다.
+ * 쓰는 법: **보드(/board) 또는 달력(/calendar)** 을 연 뒤 브라우저 콘솔에
+ * 이 파일 내용을 붙여넣습니다. 화면을 고쳤으면 "됐다"고 말하기 전에 돌립니다.
+ *
+ * **두 화면에서 각각 돌립니다.** 패널은 한 벌이지만(templates/partials/drawer.html ·
+ * static/js/drawer.js), 그것을 여는 자리와 고쳐 그리는 코드는 화면마다 다릅니다.
+ * 한쪽만 통과하면 패널이 실제로는 한 벌이 아니라는 뜻입니다 (CLAUDE.md 4-13).
  *
  * 탭이 화면에 보이는 상태에서 돌립니다. 배경 탭에서는 브라우저가 타이머를
  * 1초 단위로 묶어 버려 중간에 끊깁니다 — 페이지가 멈춘 것이 아닙니다.
  *
- * 2026-08-31 UI 를 노션 방향으로 옮기면서 다시 돌렸습니다. **기존 26항목은 선택자를
- * 하나도 고치지 않고 그대로 통과했습니다** — 상단 탭 줄을 없애고 사이드바를 붙이고
- * 색·여백을 바꾼 것이 상세 패널의 조작에는 닿지 않았기 때문입니다. 규칙이 맞지
- * 않게 된 항목은 없어서 지우거나 바꾼 것도 없습니다.
- * 대신 새로 생긴 자리(첨부파일 탭 · 사이드바)를 같은 기준으로 덮도록 항목을 더했습니다.
- *
  * 무엇을 보는가 — 각 조작이 '되는가'만이 아니라, 그 뒤에도 주변이 그대로인가.
  *   · 드로어가 열려 있는가 (패널 안의 버튼은 패널을 닫지 않는다)
- *   · 부서 그룹이 펼쳐진 채인가 (보던 자리를 잃지 않는다)
+ *   · 보던 자리가 그대로인가 (보드는 부서 그룹, 달력은 보던 달과 칩)
  *   · 스크롤이 그대로인가 (이동은 명시적으로 요청했을 때만)
  * 보임/숨김은 속성이 아니라 offsetParent 로 판정한다 — el.hidden 은 거짓말을 한다.
  */
 (async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const $ = id => document.getElementById(id);
-  const sheet = $('sheet'), board = $('board'), dw = $('drawer');
+  const dw = $('drawer');
   const shown = el => !!(el && el.offsetParent);
+  const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+    return cs.display !== 'none' && r.width > 0 && r.height > 0; };
   const errors = [], results = [];
+
+  if (!dw) return {치명: '이 화면에는 상세 패널이 없습니다 (/board 나 /calendar 에서 돌리세요)'};
+
+  /* ── 어느 화면인가 ────────────────────────────────────────────────
+     패널은 같지만 "무엇을 눌러 여는가" 와 "보던 자리가 무엇인가" 는 다르다.
+     보드는 바와 부서 그룹, 달력은 점과 보던 달이다. */
+  const sheet = $('sheet'), board = $('board');
+  const calbar = document.querySelector('.calbar');
+  const isBoard = !!(sheet && board);
+  const where = isBoard ? '보드' : '달력';
+  const scroller = isBoard ? board
+    : (document.querySelector('.calwrap') || document.scrollingElement);
+
+  const openers = () => isBoard
+    ? [...sheet.querySelectorAll('.bar[data-run]')].filter(b => shown(b) && !b.dataset.ghost)
+    : [...document.querySelectorAll('.cal-dot[data-run]')].filter(shown);
 
   const snapshot = () => ({
     drawer: dw.classList.contains('open'),
-    teams: [...sheet.querySelectorAll('.row.team')].filter(t => !t.classList.contains('collapsed')).length,
-    scroll: Math.round(board.scrollTop),
+    // 보던 자리 — 보드는 펼쳐진 부서 수, 달력은 보이는 점의 수
+    kept: isBoard
+      ? [...sheet.querySelectorAll('.row.team')].filter(t => !t.classList.contains('collapsed')).length
+      : openers().length,
+    scroll: Math.round(scroller.scrollTop),
+    // 달력은 보던 달과 칩이 그대로여야 한다
+    month: calbar ? calbar.dataset.month : '',
+    chips: calbar ? calbar.dataset.scope + '/' + calbar.dataset.onlyOpen : '',
   });
 
   const check = async (label, act, opts = {}) => {
@@ -38,23 +60,39 @@
     const after = snapshot();
     const bad = [];
     if (!opts.mayClose && before.drawer && !after.drawer) bad.push('드로어가 닫힘');
-    if (!opts.mayCollapse && after.teams < before.teams) bad.push('부서 그룹이 접힘');
+    if (!opts.mayCollapse && after.kept < before.kept) bad.push(isBoard ? '부서 그룹이 접힘' : '점이 사라짐');
     if (!opts.mayScroll && Math.abs(after.scroll - before.scroll) > 4) bad.push('스크롤이 움직임');
+    if (after.month !== before.month) bad.push('보던 달이 바뀜');
+    if (after.chips !== before.chips) bad.push('범위 칩이 바뀜');
     if (bad.length) errors.push(label + ' → ' + bad.join(', '));
     results.push(`${bad.length ? '✗' : '✓'} ${label}`);
   };
 
-  $('me').value = 'all'; $('me').dispatchEvent(new Event('change'));
-  await sleep(500);
-  board.scrollTop = 220; await sleep(200);
-  const bar = [...sheet.querySelectorAll('.bar[data-run]')].find(b => shown(b) && !b.dataset.ghost);
-  bar.click(); await sleep(800);
-  if (!dw.classList.contains('open')) return {치명: '드로어가 열리지 않음'};
+  results.push(`· 돌린 화면: ${where} (${location.pathname})`);
+
+  // 보드는 소속 필터를 전체로 두고 시작한다. 달력에는 그 칸이 없다.
+  if (isBoard) { $('me').value = 'all'; $('me').dispatchEvent(new Event('change')); await sleep(500); }
+  scroller.scrollTop = isBoard ? 220 : 0;
+  await sleep(200);
+
+  const opener = openers()[0];
+  if (!opener) return {치명: `${where} 에 열어 볼 업무가 하나도 없습니다`};
+  opener.click();
+  await sleep(900);
+  if (!dw.classList.contains('open')) return {치명: `${where} 에서 드로어가 열리지 않음`};
+  results.push(`✓ ${isBoard ? '바' : '점'}을 눌러 그 자리에서 패널이 열림`);
+
+  // 달력이라면 **보드로 넘어가지 않았는지** 함께 본다 — 그것이 이 작업의 요점이다
+  if (!isBoard) {
+    const stayed = location.pathname.startsWith('/calendar');
+    results.push((stayed ? '✓' : '✗') + ` 보드로 넘어가지 않음 (${location.pathname})`);
+    if (!stayed) errors.push('점을 눌렀더니 보드로 넘어감');
+  }
 
   results.push((document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules' ? '✓' : '✗')
     + ' 처음 열면 업무 규칙 탭');
 
-  await check('탭 — 논의 내역', () => $('dtabs').querySelector('[data-p="log"]').click());
+  await check('탭 — 논의', () => $('dtabs').querySelector('[data-p="log"]').click());
   results.push((shown($('daddlog')) ? '✓' : '✗') + ' 논의 입력칸이 화면에 보임');
   if (!shown($('daddlog'))) errors.push('논의 입력칸이 보이지 않음');
 
@@ -66,7 +104,7 @@
     await check('규칙 편집 취소', () => $('drulescancel').click());
   }
   await check('탭 — 달력', () => $('dtabs').querySelector('[data-p="cal"]').click());
-  await check('탭 — 연결된 업무', () => $('dtabs').querySelector('[data-p="rel"]').click());
+  await check('탭 — 연결', () => $('dtabs').querySelector('[data-p="rel"]').click());
 
   // 첨부파일 — 회차별. 탭을 옮기는 것도 '패널 안의 조작'이라 같은 기준으로 본다.
   await check('탭 — 첨부파일', () => $('dtabs').querySelector('[data-p="files"]').click());
@@ -77,12 +115,28 @@
     const last = tabs[tabs.length - 1] === 'files';
     results.push((last ? '✓' : '✗') + ` 첨부파일이 탭 맨 끝 (${tabs.join(' · ')})`);
     if (!last) errors.push('첨부파일 탭이 맨 끝이 아님');
+
+    // 드로어 폭에서 탭 다섯이 넘치지 않는가 — **첨부파일이 잘리면 안 된다**
+    const bar = $('dtabs'), fit = bar.scrollWidth <= bar.clientWidth + 1;
+    const lastTab = [...bar.querySelectorAll('button')].pop();
+    const inside = lastTab.getBoundingClientRect().right <= bar.getBoundingClientRect().right + 1;
+    results.push((fit && inside ? '✓' : '✗')
+      + ` 탭 다섯이 드로어 폭에 들어감 (${bar.scrollWidth}px / ${bar.clientWidth}px)`);
+    if (!(fit && inside)) errors.push('탭이 넘쳐 첨부파일이 잘림');
+
     // 올리는 자리는 탭 안에 있다. 고칠 수 없는 업무라면 없는 것이 맞다.
     const canEdit = !document.querySelector('#statchip[disabled]');
     const drop = shown($('ddrop'));
     const ok = canEdit ? drop : !drop;
     results.push((ok ? '✓' : '✗') + ` 끌어다 놓는 자리 (편집 ${canEdit ? '가능' : '불가'})`);
     if (!ok) errors.push('올리는 자리가 권한과 어긋남');
+
+    // 링크 붙이기도 같은 권한이다. 용량은 차지하지 않지만 자료인 것은 같다.
+    const linkBtn = shown($('dlinkbtn'));
+    const linkOk = canEdit ? linkBtn : !linkBtn;
+    results.push((linkOk ? '✓' : '✗') + ` 링크 붙이기 자리 (편집 ${canEdit ? '가능' : '불가'})`);
+    if (!linkOk) errors.push('링크 붙이기가 권한과 어긋남');
+
     // 같은 기능이 두 군데 있으면 안 된다 — 하단의 '파일 첨부' 버튼은 없앴다
     const foot = [...document.querySelectorAll('.dfoot button')].map(b => b.textContent.trim());
     const clean = !foot.some(t => t.includes('파일 첨부'));
@@ -90,7 +144,29 @@
     if (!clean) errors.push("하단에 '파일 첨부' 버튼이 남아 있음");
   }
   await check('첨부파일 — 올리는 자리 클릭', () => { const d = $('ddrop'); if (d && shown(d)) d.click(); });
-  await check('탭 — 논의 내역 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click());
+
+  // 링크 붙이기 — 폼을 열고, 틀린 주소를 넣어 보고, 닫는다.
+  // **틀린 이유가 붙는 자리 바로 아래**에 나와야 한다.
+  if (shown($('dlinkbtn'))) {
+    await check('링크 붙이기 열기', () => $('dlinkbtn').click());
+    results.push((shown($('dlinkform')) ? '✓' : '✗') + ' 링크 붙이기 폼이 보임');
+    if (!shown($('dlinkform'))) errors.push('링크 붙이기 폼이 보이지 않음');
+    await check('링크 — 주소 칸 클릭', () => $('dlinkurl').click());
+    await check('링크 — 틀린 주소로 붙이기', () => {
+      $('dlinkurl').value = '교개협 폴더';
+      $('dlinkname').value = '';
+      $('dlinksave').click();
+    });
+    const urlErr = shown($('dlinkurlerr')), nameErr = shown($('dlinknameerr'));
+    results.push((urlErr ? '✓' : '✗') + ' 주소가 아니면 그 자리에서 말함');
+    if (!urlErr) errors.push('틀린 주소를 그냥 받음');
+    results.push((nameErr ? '✓' : '✗') + ' 설명을 비우면 그 자리에서 말함');
+    if (!nameErr) errors.push('설명 없이 붙음');
+    await check('링크 붙이기 취소', () => $('dlinkcancel').click());
+    results.push((!shown($('dlinkform')) ? '✓' : '✗') + ' 취소하면 폼이 닫힘');
+  } else results.push('· 고칠 수 없는 업무라 링크 붙이기는 건너뜀');
+
+  await check('탭 — 논의 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click());
   await check('상태 배지 열기', () => $('statchip').click());
   await check('상태 배지 다시 눌러 닫기', () => $('statchip').click());
   await check('담당자 드롭다운', () => $('dassignee').click());
@@ -117,13 +193,17 @@
   const rb = document.querySelector('#drel .rb');
   if (rb) {
     await check('연결된 업무 항목', () => rb.click());
+    // '이동' 은 보드에만 뜻이 있다 — 달력에는 스크롤해서 갈 자리가 없다
+    const acts = [...rb.nextElementSibling.querySelectorAll('[data-act]')].map(b => b.dataset.act);
+    const want = isBoard ? 'open,move' : 'open';
+    results.push((acts.join(',') === want ? '✓' : '✗')
+      + ` 연결 메뉴가 화면에 맞음 (${acts.join(',') || '없음'})`);
+    if (acts.join(',') !== want) errors.push(`연결 메뉴가 ${where} 에 맞지 않음`);
     await check('연결 메뉴 다시 눌러 닫기', () => rb.click());
   } else results.push('· 이 업무에는 연결된 업무가 없어 건너뜀');
 
   // 선행 고르기 — fixed 요소라 offsetParent 가 null 이다. 그려진 크기로 판정한다.
   if ($('preedit')) {
-    const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
-      return cs.display !== 'none' && r.width > 0 && r.height > 0; };
     await check('선행 고르기 열기', () => $('preedit').click());
     results.push((painted($('prepick')) ? '✓' : '✗') + ' 선행 고르기 판이 보임');
     if (!painted($('prepick'))) errors.push('선행 고르기 판이 보이지 않음');
@@ -132,8 +212,6 @@
 
   // 진단 패널 — 하단 고정이므로 드로어를 밀어내거나 가리면 안 된다
   {
-    const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
-      return cs.display !== 'none' && r.width > 0 && r.height > 0; };
     results.push((painted($('diag')) ? '✓' : '✗') + ' 진단 패널이 하단에 그려짐');
     if (!painted($('diag'))) errors.push('진단 패널이 보이지 않음');
     await check('진단 다시 분석', () => $('dgR').click(), {wait: 900});
@@ -143,25 +221,30 @@
 
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
   // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
-  const bb = board.getBoundingClientRect();
-  const empty = (() => {
-    for (const l of sheet.querySelectorAll('.lane')) {
+  const emptySpot = () => {
+    const host = isBoard ? board : scroller;
+    const hb = host.getBoundingClientRect();
+    const cells = isBoard
+      ? sheet.querySelectorAll('.lane')
+      : document.querySelectorAll('.cal-cell, .calday-l');
+    for (const l of cells) {
       const r = l.getBoundingClientRect();
-      if (r.top < bb.top + 60 || r.bottom > bb.bottom - 10) continue;
+      if (r.top < hb.top + 40 || r.bottom > hb.bottom - 10) continue;
       const y = Math.round(r.top + r.height / 2);
-      for (let x = Math.round(Math.min(r.right, bb.right) - 20); x > bb.left + 220; x -= 12) {
+      for (let x = Math.round(Math.min(r.right, hb.right) - 12); x > Math.max(hb.left, r.left) + 6; x -= 10) {
         const el = document.elementFromPoint(x, y);
         if (!el || el.closest('#drawer')) continue;
-        if (el.closest('.bar[data-run]') || el.closest('[data-go]')) continue;
-        if (!el.closest('.board')) continue;
+        if (el.closest('.bar[data-run]') || el.closest('[data-go]') || el.closest('.cal-dot')) continue;
+        if (isBoard && !el.closest('.board')) continue;
         return {x, y};
       }
     }
     return null;
-  })();
+  };
+  const empty = emptySpot();
   if (empty) {
     const {x, y} = empty;
-    await check('보드 빈 영역 클릭', () => {
+    await check('빈 영역 클릭', () => {
       const el = document.elementFromPoint(x, y);
       ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t =>
         el.dispatchEvent(new MouseEvent(t, {bubbles:true, cancelable:true, clientX:x, clientY:y, view:window})));
@@ -171,7 +254,16 @@
     if (!closed) errors.push('빈 영역 클릭으로 닫히지 않음');
   } else results.push('· 화면 안에 빈 칸이 없어 건너뜀');
 
-  // 달력은 드로어를 넓혀도 커지지 않아야 한다 — 한 화면에 들어와야 하므로
+  // 닫은 뒤에도 보던 자리가 그대로인가 — 달력은 특히 보던 달을 잃으면 안 된다
+  if (calbar) {
+    const kept = calbar.dataset.month && location.pathname.startsWith('/calendar');
+    results.push((kept ? '✓' : '✗') + ` 닫아도 보던 달이 그대로 (${calbar.dataset.month})`);
+    if (!kept) errors.push('닫았더니 보던 달을 잃음');
+  }
+
+  // 달력 탭은 드로어를 넓혀도 커지지 않아야 한다 — 한 화면에 들어와야 하므로
+  openers()[0].click();
+  await sleep(700);
   $('dtabs').querySelector('[data-p="cal"]').click();
   await sleep(250);
   const cellW = () => { const c = document.querySelector('.cal .dcell:not(.pad)');
@@ -228,9 +320,11 @@
     document.body.style.transition = bodyEase;
   }
 
-  // ── 가로 격자선을 넣지 않는다 (CLAUDE.md 4장 UI 방향).
-  //    세로선은 남기므로 '선이 하나도 없다'가 아니라 '가로선만 없다'를 본다.
-  {
+  // ── 화면마다 다른 두 가지 ─────────────────────────────────────────
+  //    패널은 한 벌이지만 그것을 담은 화면은 각자의 규칙이 있다.
+  if (isBoard) {
+    // 가로 격자선을 넣지 않는다 (CLAUDE.md 4-0).
+    // 세로선은 남기므로 '선이 하나도 없다'가 아니라 '가로선만 없다'를 본다.
     const rows = [...sheet.querySelectorAll('.row.main .lane, .row.sub .lane')].filter(shown);
     const lined = rows.filter(el => {
       const cs = getComputedStyle(el);
@@ -241,8 +335,17 @@
     const vert = [...sheet.querySelectorAll('.gridlines i')].length;
     results.push((vert > 0 ? '✓' : '✗') + ` 세로 격자선은 남아 있음 (${vert}개)`);
     if (!vert) errors.push('세로 격자선이 사라짐');
+  } else {
+    // 달력은 **마감일에 점 하나**다. 기간 띠가 아니다 (CLAUDE.md 4-13).
+    const dots = document.querySelectorAll('.cal-dot').length;
+    results.push((dots > 0 ? '✓' : '✗') + ` 마감일에 점이 그려짐 (${dots}개)`);
+    if (!dots) errors.push('달력에 점이 없음');
+    // 날짜 없는 업무를 조용히 빼지 않는다 — 있을 때만 본다
+    const undated = document.querySelector('.calundated');
+    results.push('✓ 날짜 없는 업무 자리 ' + (undated ? '있음(펼치면 목록)' : '이번 달엔 해당 없음'));
   }
 
   console.table(results);
-  return {통과: errors.length === 0, 실패: errors, 항목: results};
+  return {화면: where, 통과: errors.length === 0, 실패: errors,
+          항목수: results.length, 항목: results};
 })()

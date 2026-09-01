@@ -1,0 +1,124 @@
+{#
+  업무 상세 패널 — **보드와 달력이 같은 것을 씁니다** (CLAUDE.md 4-9 · 4-13).
+
+  달력의 점을 눌렀을 때 보드로 넘겨 보내던 것을 그만두면서, 패널을 한 벌 더
+  만들지 않으려고 여기로 뺐습니다. 두 벌이 되면 논의·상태·첨부·선후행이
+  두 곳에서 갈리고, **갈린 쪽을 아무도 눈치채지 못합니다** — 이 프로젝트에서
+  가장 자주 고쳐 온 문제입니다.
+
+  움직이는 코드도 한 벌입니다: `static/js/drawer.js`.
+  보드와 달력은 각자 자기 화면을 어떻게 고쳐 그릴지만 알려 줍니다
+  (`Drawer.init({...})`).
+
+  그러므로 **여기에 무언가 더할 때 어느 한 화면만 생각하면 안 됩니다.**
+  달력에는 바가 없고 보드에는 점이 없습니다.
+#}
+<div id="statmenu"></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="grip" id="grip" title="드래그해서 폭 조절"></div>
+  <button class="dclose" id="dclose" aria-label="닫기">×</button>
+  <div class="dhead">
+    <div class="dkick" id="dkick"></div>
+    <div class="dtitle" id="dtitle"></div>
+    <dl class="dmeta" id="dmeta"></dl>
+    {# 드로어 폭(440px)에서 탭 다섯이 넘쳐 `논의 내역`·`연결된 업무` 를 줄였습니다.
+       **첨부파일이 맨 끝이라 잘리면 안 됩니다** — 줄일 곳은 가운데입니다. #}
+    <div class="dtabs" id="dtabs">
+      <button data-p="rules" aria-selected="true">업무 규칙</button>
+      <button data-p="log" aria-selected="false">논의</button>
+      <button data-p="cal" aria-selected="false">달력</button>
+      <button data-p="rel" aria-selected="false">연결<span class="n" id="relN"></span></button>
+      <button data-p="files" aria-selected="false">첨부파일<span class="n" id="fileN"></span></button>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="pane on" id="p-rules">
+      <p class="panehint">이 업무를 <b>어떻게 진행하는지</b> 적어 둡니다.
+        논의는 이번 회차의 사정이고, 규칙은 매번 같은 방식으로 하기 위한 것입니다.
+        담당자가 바뀌어도 남습니다.</p>
+      <div class="rulesbox" id="drules"></div>
+      <div class="addlog" id="drulesedit" hidden>
+        <textarea id="drulesbody" data-listedit
+          placeholder="예:&#10;1. 스케치팀에 의뢰서를 먼저 보낸다&#10;2. 시안은 3종 이상 받는다&#10;- 인쇄 전에 총무M 확인 필요"></textarea>
+        <span class="addrow">
+          <button id="drulessave" class="pri">저장</button>
+          <button id="drulescancel" type="button">취소</button>
+        </span>
+      </div>
+      <div id="dnote"></div>
+    </div>
+    <div class="pane" id="p-log">
+      <div class="log" id="dlog"></div>
+      <div class="addlog" id="daddlog" hidden>
+        <textarea id="dbody" data-listedit
+          placeholder="논의 내용을 적으면 기록으로 남습니다. 이전 기록은 지워지지 않습니다."></textarea>
+        <label class="opt"><input type="checkbox" id="dsuper"> 마지막 기록을 대체 (이전 내용에 취소선)</label>
+        <span class="addrow">
+          <button id="dsave" class="pri">저장</button>
+          <button id="dcancelnew" type="button">취소</button>
+        </span>
+      </div>
+    </div>
+    <div class="pane" id="p-cal">
+      <div class="cal" id="dcal"></div>
+      <div class="callegend">
+        <div><i style="background:var(--link)"></i>시작일 · 마감일</div>
+        <div><i style="background:#E7EEF9;border:1px solid #B9CFEE"></i>진행 기간</div>
+        <div><i style="background:#FBE9E5;border:1px solid var(--now)"></i>지연</div>
+        <div><i style="background:none;border:1px solid var(--rule-2)"></i>· 점 = 연결된 업무 일정</div>
+      </div>
+    </div>
+    <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+    <!-- 첨부파일 — 회차별이다. 논의 내역과 같은 취급이고 업무 규칙과 다르다 (4-9) -->
+    <div class="pane" id="p-files">
+      {# 올리는 중 표시는 **목록 맨 위**입니다. 164MB 를 올리면 몇 분이 걸리는데
+         아무 반응이 없으면 사람이 창을 닫습니다. #}
+      <div class="upnow" id="dupnow" hidden></div>
+      {# 파일과 링크를 **한 목록에 섞습니다.** 나누면 "저건 어디 있더라" 를
+         두 번 찾게 됩니다 — 담당자에게는 둘 다 그냥 자료입니다. #}
+      <div class="files" id="dfiles"></div>
+      <div class="drop" id="ddrop" hidden>
+        <b>여기에 파일을 끌어다 놓으세요</b>
+        <span id="ddroplimit"></span>
+        <button type="button" class="pick" id="dpick">파일 고르기</button>
+        <input type="file" id="dfileinput" multiple hidden>
+      </div>
+      <div class="orlink" id="dorlink" hidden>
+        <span class="ln"></span><span class="tx">또는</span><span class="ln"></span>
+      </div>
+      <button type="button" class="linkbtn" id="dlinkbtn" hidden>링크 붙이기</button>
+      <div class="linkform" id="dlinkform" hidden>
+        <div class="lbl">주소</div>
+        <input type="url" id="dlinkurl" placeholder="https://" autocomplete="off">
+        <div class="err" id="dlinkurlerr" hidden></div>
+        <div class="gap"></div>
+        <div class="lbl">무엇인가요</div>
+        <input type="text" id="dlinkname" placeholder="예: 교개협 제출용 폴더" autocomplete="off">
+        <div class="err" id="dlinknameerr" hidden></div>
+        <div class="hint">이 목록만 보고도 알 수 있게 적어주세요.<br>
+          주소만 있으면 나중에 아무도 열지 않습니다.</div>
+        <div class="btns">
+          <button type="button" class="pri" id="dlinksave">붙이기</button>
+          <button type="button" id="dlinkcancel">취소</button>
+        </div>
+      </div>
+      <div class="dropwarn" id="ddropwarn" hidden></div>
+      {# 두 줄로 나눕니다 — 한 줄이면 드로어 폭에서 읽히지 않습니다 #}
+      <div class="filenote">이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.<br>
+        영상처럼 큰 것은 올리지 말고 링크로 붙이세요.</div>
+    </div>
+    <div class="modal" id="prepick" hidden></div>
+  </div>
+  <!-- 진단 패널 — 하단 고정. 패널 이름이 판정 결과다 (CLAUDE.md 4-10) -->
+  <div class="diag" id="diag">
+    <div class="dg-h"><span class="dot"></span><span class="ttl" id="dgTtl">판정 중…</span>
+      <button id="dgR" type="button">다시 분석</button></div>
+    <div class="dg-b" id="dgB"></div>
+  </div>
+  <!-- '파일 첨부' 버튼은 없앴다 — 첨부파일 탭 안에 올리는 자리가 생겼으므로
+       같은 기능이 두 군데 있게 된다 (논의 입력칸과 같은 이유, CLAUDE.md 4-9) -->
+  <div class="dfoot">
+    <button disabled title="Phase 2 에서 만듭니다">하위 업무 추가</button>
+  </div>
+</aside>
