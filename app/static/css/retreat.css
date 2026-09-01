@@ -164,11 +164,17 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
   font-size:13.5px;overflow:hidden}
 .lc .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;margin-right:auto}
 .row.main .lc,.row.sub .lc{cursor:pointer}
-.row.main .lc:hover,.row.sub .lc:hover{background:var(--hover)}
+/* 호버 색을 그대로 얹되 **바닥은 불투명하게** 남긴다.
+   `background:var(--hover)` 로 바꿔치기하면 반투명이라 뒤의 바가 비친다 —
+   왼쪽 목록은 sticky 로 떠 있어서 그 아래로 바가 지나간다.
+   색은 4-0 의 것을 그대로 쓴다. 새 색을 만들지 않는다. */
+.row.main .lc:hover,.row.sub .lc:hover{
+  background:linear-gradient(var(--hover),var(--hover)),var(--paper)}
 
 .row.team .lc{height:var(--h-team);background:var(--side);cursor:pointer;font-weight:600;
   font-size:13.5px}
-.row.team .lc:hover{background:var(--hover)}
+.row.team .lc:hover{
+  background:linear-gradient(var(--hover),var(--hover)),var(--side)}
 .row.team .lc .caret{font-size:9px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
 .row.team.collapsed .lc .caret{transform:rotate(-90deg)}
 /* 부서 색은 여기 — 점 하나 */
@@ -246,8 +252,15 @@ body.dragging-bar .bar{transition:none}
 #wires circle{fill:var(--link)}
 .bar.anchor{box-shadow:0 0 0 2px var(--link);z-index:9!important;opacity:1!important;font-weight:600}
 .bar.lit{box-shadow:0 0 0 1.5px var(--ink);z-index:8!important;opacity:1!important}
-.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);background:rgba(35,131,226,.06);font-weight:600}
-.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink-2);background:var(--hover)}
+/* 선택·연결된 줄도 마찬가지다 — 반투명을 그냥 깔면 그 아래 바가 비친다 */
+.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);
+  background:linear-gradient(rgba(35,131,226,.06),rgba(35,131,226,.06)),var(--paper);
+  font-weight:600}
+.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink-2);
+  background:linear-gradient(var(--hover),var(--hover)),var(--paper)}
+/* 부서 줄은 바닥이 `--side` 다 */
+.row.team.anchorrow>.lc,.row.team.hl>.lc{
+  background:linear-gradient(var(--hover),var(--hover)),var(--side)}
 
 /* ── 모바일 목록: D-주차 → 부서 (CLAUDE.md Phase 1 완료 기준) ────────
    24칸 간트는 폰에서 쓸 수 없다. "이번 주에 뭐가 있나"가 먼저 보이도록
@@ -1235,6 +1248,28 @@ button.btn:disabled{opacity:.4;cursor:default}
   padding:2px 5px 2px 3px;margin-bottom:2px;border-radius:3px;
   border:1px solid transparent;font-size:11.5px;line-height:1.35;color:var(--ink)}
 .cal-dot:hover{filter:brightness(.97)}
+/* ── 점에 마우스를 올리면 그 업무의 기간이 비친다 (4-13) ──────────────
+   **마감일에 점 하나** 는 그대로다. 기간을 늘 띠로 그리면 달력이 꽉 차서
+   무엇이 급한지 안 보이는데, 마감일만으로는 "언제부터 하는 일인지" 를 알
+   수 없다. 한 번에 하나만, 손을 떼면 사라지므로 그 판단에 걸리지 않는다.
+
+   **무채색이다** (4-0). 부서 색으로 면을 채우지 않는다 — 화면이 색으로
+   덮이면 정작 눈에 띄어야 할 선택 테두리와 지연 배지가 묻힌다.
+   호버 면과 같은 토큰을 쓰되, 칸이 넓어 옅게 보이므로 두 겹으로 얹는다. */
+.cal-cell.inspan{
+  background:linear-gradient(var(--hover),var(--hover)),
+             linear-gradient(var(--hover),var(--hover)),var(--paper)}
+.cal-cell.inspan.out{
+  background:linear-gradient(var(--hover),var(--hover)),var(--sunk)}
+/* 오늘 칸의 파란 테두리는 inset box-shadow 라 비침 위에 그대로 남는다.
+   지연 점도 자기 배경을 갖고 있어 덮이지 않는다. */
+
+/* 기간이 이 달을 넘어가면 그쪽 끝을 **각지게** 둔다 — 잘렸다는 표시다.
+   달 안에서 끝나면 둥글다. 정확한 날짜는 점의 툴팁에 적혀 있다. */
+.cal-cell.inspan{border-radius:0}
+.cal-cell.inspan.span-head{border-top-left-radius:5px;border-bottom-left-radius:5px}
+.cal-cell.inspan.span-tail{border-top-right-radius:5px;border-bottom-right-radius:5px}
+
 .cal-tm{width:3px;align-self:stretch;min-height:13px;border-radius:2px;flex:none}
 .cal-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 완료는 눈에 띄지 않는다 — 시선은 미완료로 가야 한다 (4-3) */
@@ -1269,6 +1304,9 @@ button.btn:disabled{opacity:.4;cursor:default}
 @media (max-width:820px){
   /* 7칸 격자는 글자가 안 들어간다. 억지로 우겨넣지 않고 목록으로 바꾼다 */
   .calwrap{display:none}
+  /* 비침은 넓은 화면의 격자에서만 뜻이 있다. 주 목록에는 날짜 칸이 없고
+     마우스도 없다 — 탭으로 흉내 내면 점을 누르려다 띠가 뜬다 (4-13) */
+  .cal-cell.inspan{background:none}
   .calweeks{display:block;flex:1;overflow:auto}
   .calbar{padding:8px 12px;gap:10px}
   .calcount{display:none}

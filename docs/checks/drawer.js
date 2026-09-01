@@ -335,6 +335,33 @@
     const vert = [...sheet.querySelectorAll('.gridlines i')].length;
     results.push((vert > 0 ? '✓' : '✗') + ` 세로 격자선은 남아 있음 (${vert}개)`);
     if (!vert) errors.push('세로 격자선이 사라짐');
+
+    // 왼쪽 목록은 sticky 로 떠 있어 그 아래로 바가 지나간다. 배경이 반투명하면
+    // **뒤의 바가 비친다.** CSS 에 규칙이 있다는 것만으로는 뒤엣것이 이기는지
+    // 알 수 없으므로 **계산된 스타일**로 본다 (10장).
+    const 불투명 = el => {
+      const bg = getComputedStyle(el).backgroundColor;
+      const m = bg.match(/^rgba?\(([^)]+)\)/);
+      if (!m) return false;
+      const parts = m[1].split(',').map(v => parseFloat(v));
+      return parts.length < 4 || parts[3] >= 1;   // 알파가 없거나 1 이면 불투명
+    };
+    const lc = [...sheet.querySelectorAll('.row.main .lc, .row.sub .lc')].filter(shown)[0];
+    if (lc) {
+      const 평소 = 불투명(lc);
+      lc.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+      // :hover 는 스크립트로 못 켜므로 같은 색을 쓰는 상태로 대신 본다
+      const row = lc.closest('.row');
+      row.classList.add('hl');
+      await sleep(60);
+      const 강조 = 불투명(lc);
+      row.classList.remove('hl');
+      await sleep(60);
+      const ok = 평소 && 강조;
+      results.push((ok ? '✓' : '✗')
+        + ` 왼쪽 라벨 열이 불투명 (평소 ${평소 ? 'O' : 'X'} · 강조 ${강조 ? 'O' : 'X'})`);
+      if (!ok) errors.push('왼쪽 라벨 열 배경이 반투명 — 뒤의 바가 비친다');
+    }
   } else {
     // 달력은 **마감일에 점 하나**다. 기간 띠가 아니다 (CLAUDE.md 4-13).
     const dots = document.querySelectorAll('.cal-dot').length;
@@ -343,6 +370,35 @@
     // 날짜 없는 업무를 조용히 빼지 않는다 — 있을 때만 본다
     const undated = document.querySelector('.calundated');
     results.push('✓ 날짜 없는 업무 자리 ' + (undated ? '있음(펼치면 목록)' : '이번 달엔 해당 없음'));
+
+    // 점에 마우스를 올리면 그 업무의 기간이 비친다 (4-13).
+    // **마감일에 점 하나** 는 그대로다 — 한 번에 하나만, 떼면 사라진다.
+    const withSpan = [...document.querySelectorAll('.cal-dot[data-start]')].filter(shown);
+    if (withSpan.length && matchMedia('(min-width: 821px)').matches) {
+      const dot = withSpan.find(d => d.dataset.start !== d.dataset.end) || withSpan[0];
+      dot.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+      await sleep(80);
+      const 칠해진 = [...document.querySelectorAll('.cal-cell.inspan')];
+      const 맞는가 = 칠해진.length > 0 && 칠해진.every(td =>
+        dot.dataset.start <= td.dataset.date && td.dataset.date <= dot.dataset.end);
+      results.push((맞는가 ? '✓' : '✗')
+        + ` 점에 올리면 기간이 비침 (${칠해진.length}칸)`);
+      if (!맞는가) errors.push('기간 비침이 동작하지 않음');
+
+      // 오늘 칸의 파란 테두리가 비침에 덮이지 않는다
+      const today = document.querySelector('.cal-cell.today');
+      if (today) {
+        const 남음 = getComputedStyle(today).boxShadow !== 'none';
+        results.push((남음 ? '✓' : '✗') + ' 오늘 칸 테두리가 비침 위에 남음');
+        if (!남음) errors.push('오늘 칸 테두리가 덮임');
+      }
+
+      dot.dispatchEvent(new MouseEvent('mouseout', {bubbles: true, relatedTarget: document.body}));
+      await sleep(80);
+      const 지워짐 = document.querySelectorAll('.cal-cell.inspan').length === 0;
+      results.push((지워짐 ? '✓' : '✗') + ' 손을 떼면 사라짐');
+      if (!지워짐) errors.push('비침이 남아 있음');
+    } else results.push('· 기간을 가진 점이 없거나 좁은 화면이라 건너뜀');
   }
 
   console.table(results);

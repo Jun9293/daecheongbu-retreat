@@ -217,6 +217,61 @@ Drawer.init({
   },
 });
 
+/* ── 점에 마우스를 올리면 그 업무의 기간이 비친다 (4-13) ──────────────
+   **마감일에 점 하나** 는 그대로다. 기간을 늘 띠로 그리면 15일짜리 몇 개만
+   있어도 달력이 꽉 차서 무엇이 급한지 안 보인다 — 그 판단은 유효하다.
+   다만 마감일만 보면 "언제부터 하는 일인지" 를 알 수 없다. 한 번에 하나만
+   뜨고 손을 떼면 사라지므로 위의 이유에 걸리지 않는다.
+
+   **기간은 점이 이미 들고 있다**(`data-start`/`data-end`). 화면이 계산하거나
+   서버에 다시 묻지 않는다.
+
+   **좁은 화면에서는 하지 않는다.** 주 목록에는 날짜 격자가 없고 마우스도
+   없다 — 탭으로 흉내 내면 점을 누르려다 띠가 뜬다. */
+const 넓은화면 = () => matchMedia('(min-width: 821px)').matches;
+
+function clearSpan() {
+  document.querySelectorAll('.cal-cell.inspan').forEach(td => {
+    td.classList.remove('inspan', 'span-head', 'span-tail');
+  });
+}
+
+function showSpan(dot) {
+  clearSpan();
+  const from = dot.dataset.start, to = dot.dataset.end;
+  if (!from || !to || !넓은화면()) return;
+
+  // 이 달의 격자에 실제로 있는 칸만 칠한다. 달을 걸친 기간은 안쪽만 —
+  // 없는 칸을 만들어 낼 수는 없다.
+  const cells = [...document.querySelectorAll('.cal-grid .cal-cell[data-date]')]
+    .filter(td => from <= td.dataset.date && td.dataset.date <= to);
+  if (!cells.length) return;
+
+  cells.forEach(td => td.classList.add('inspan'));
+  // 기간이 이 달 안에서 시작·끝나면 그쪽 끝을 둥글게, 넘어가면 각지게 —
+  // **잘렸다는 것이 모양으로 보인다.** 정확한 날짜는 점의 툴팁에 있다.
+  if (cells[0].dataset.date === from) cells[0].classList.add('span-head');
+  if (cells[cells.length - 1].dataset.date === to) {
+    cells[cells.length - 1].classList.add('span-tail');
+  }
+}
+
+/* `mouseover`/`mouseout` 을 문서에 하나만 건다 — 점이 `외 N건` 안에서
+   나중에 펼쳐지거나 날짜가 바뀌어 다시 놓여도 그대로 동작한다. */
+document.addEventListener('mouseover', e => {
+  const dot = e.target.closest && e.target.closest('.cal-dot[data-start]');
+  if (dot) showSpan(dot);
+});
+document.addEventListener('mouseout', e => {
+  const dot = e.target.closest && e.target.closest('.cal-dot[data-start]');
+  if (!dot) return;
+  // 점 안에서 자식 요소끼리 옮겨 다니는 것은 떠난 것이 아니다
+  if (e.relatedTarget && dot.contains(e.relatedTarget)) return;
+  clearSpan();
+});
+// 패널이 열리거나 화면이 바뀌면 남아 있던 비침을 지운다
+addEventListener('resize', clearSpan);
+
 /* 점을 누르면 패널이 열린다. `href` 는 그대로 두었다 —
    자바스크립트가 죽었거나 가운데 버튼으로 누르면 보드로 가는 길이 남는다. */
 document.addEventListener('click', e => {

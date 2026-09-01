@@ -649,3 +649,91 @@ def test_남의_부서_업무의_규칙은_못_고친다(lead_client, board_data
     run_id = board_data["runs"]["차량 신청"]
     res = lead_client.post(f"/board/task/{run_id}/rules", json={"body": "끼어들기"})
     assert res.status_code == 403
+
+
+# ════════════════════════════════════════════════════════════════════
+#  왼쪽 목록의 배경 (수용기준 11~13)
+# ════════════════════════════════════════════════════════════════════
+#
+# 왼쪽 업무 목록은 sticky 로 떠 있어서 그 아래로 바가 지나간다. `.lc` 는
+# `background:var(--paper)` 로 불투명한데, **호버가 그것을 반투명한
+# `--hover` 로 바꿔치기**해서 뒤의 바가 비쳤다.
+#
+# 브라우저의 계산된 스타일로 보는 것은 `docs/checks/drawer.js` 가 한다
+# (10장: 속성이 아니라 화면을 확인한다). 여기서는 **바꿔치기가 다시
+# 들어오지 않는지**를 지킨다 — 규칙이 있다는 것만으로는 뒤엣것이 이기는지
+# 알 수 없지만, 반투명으로 덮어쓰는 형태는 여기서 잡을 수 있다.
+
+import pathlib as _pathlib
+import re as _re
+
+ROOT = _pathlib.Path(__file__).resolve().parent.parent
+CSS = ROOT / "app" / "static" / "css" / "retreat.css"
+
+
+def _rule(css: str, selector: str) -> str:
+    """그 선택자의 선언 부분. 주석은 걷어낸다."""
+    body = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
+    at = body.index(selector + "{")
+    return body[at + len(selector) + 1 : body.index("}", at)]
+
+
+def test_왼쪽_목록에_마우스를_올려도_뒤의_바가_비치지_않는다():
+    """수용기준 11 — 반투명으로 **바꿔치기**하지 않는다.
+
+    `--hover` 는 `rgba(55,53,47,.06)` 이라 그것만 깔면 뒤가 그대로 보인다.
+    같은 토큰을 불투명한 바닥 **위에 얹어야** 한다 (4-0: 새 색을 만들지 않는다).
+    """
+    css = CSS.read_text(encoding="utf-8")
+
+    # 바닥은 여전히 불투명하다
+    assert "background:var(--paper)" in _rule(css, ".lc")
+
+    for selector, floor in (
+        (".row.main .lc:hover,.row.sub .lc:hover", "var(--paper)"),
+        (".row.team .lc:hover", "var(--side)"),
+        (".row.hl>.lc", "var(--paper)"),
+        (".row.anchorrow>.lc", "var(--paper)"),
+    ):
+        decl = _rule(css, selector)
+        assert "linear-gradient" in decl, f"{selector} 가 아직 반투명을 그냥 깐다"
+        assert floor in decl, f"{selector} 에 불투명한 바닥이 없다"
+        # 새 색을 만들지 않았는지 — 토큰이나 이미 쓰던 값만
+        assert "var(--hover)" in decl or "rgba(35,131,226,.06)" in decl
+
+
+def test_선택된_바가_라벨_열_위로_올라오지_않는다():
+    """수용기준 12 — 겹침 순서: 날짜 헤더 > 왼쪽 라벨 열 > 선택·연결된 바
+    > 일반 바 (9장). 선택된 바가 라벨 열보다 위에 오면 업무명을 가린다."""
+    css = CSS.read_text(encoding="utf-8")
+
+    def z(selector: str) -> int:
+        return int(_re.search(r"z-index:\s*(\d+)", _rule(css, selector)).group(1))
+
+    라벨 = z(".lc")
+    assert z(".bar.anchor") < 라벨, "선택된 바가 라벨 열 위에 있다"
+    assert z(".bar.lit") < 라벨, "연결된 바가 라벨 열 위에 있다"
+    assert 라벨 < z(".row.head"), "라벨 열이 날짜 헤더 위에 있다"
+    assert z(".row.head") < z(".hlbl"), "헤더의 첫 칸이 헤더보다 아래다"
+    # 끌고 있는 바도 라벨 열을 넘지 않는다
+    dragging = _re.search(r"z-index:\s*(\d+)!important", _rule(css, ".bar.dragging"))
+    if dragging:
+        assert int(dragging.group(1)) < 라벨, "끄는 바가 라벨 열 위로 올라온다"
+
+
+def test_가로_격자선이_생기지_않았다():
+    """수용기준 13 — 가로선은 넣지 않는다 (4-0). 행은 여백과 호버로 갈린다.
+    날짜 헤더 아래 한 줄만 남는데, 그것은 격자선이 아니라 sticky 경계다."""
+    css = _re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=_re.S)
+
+    lined = []
+    for m in _re.finditer(r"([^{}]+)\{([^}]*)\}", css):
+        selector, decl = m.group(1).strip(), m.group(2)
+        if "border-bottom" not in decl or "border-bottom:0" in decl:
+            continue
+        if not _re.search(r"\.row\.(main|sub|team)|\.lc\b|\.lane\b", selector):
+            continue
+        if ".hlbl" in selector or ".row.head" in selector:
+            continue        # sticky 경계는 격자선이 아니다
+        lined.append(selector)
+    assert lined == [], f"행에 가로선이 생겼다: {lined}"

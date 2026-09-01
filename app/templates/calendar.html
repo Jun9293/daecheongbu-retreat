@@ -12,8 +12,9 @@
 <a class="cal-dot{{ ' late' if dot.overdue }}{{ ' done' if dot.status == '완료' }}"
    href="/board?task={{ dot.run_id }}"
    data-run="{{ dot.run_id }}" data-overdue="{{ 1 if dot.overdue else 0 }}"
+   {% if dot.start %}data-start="{{ dot.start }}" data-end="{{ dot.end }}"{% endif %}
    style="background:{{ dot.background }};border-color:{{ dot.border }}"
-   title="{{ dot.department_name }} · {{ dot.status }}{% if dot.assignee %} · {{ dot.assignee }}{% endif %}{% if dot.overdue %} · 마감에서 {{ dot.overdue_days }}일 경과{% endif %}">
+   title="{{ dot.department_name }} · {{ dot.status }}{% if dot.assignee %} · {{ dot.assignee }}{% endif %}{% if dot.start %} · 기간 {{ dot.start }} → {{ dot.end }}{% endif %}{% if dot.overdue %} · 마감에서 {{ dot.overdue_days }}일 경과{% endif %}">
   <i class="cal-tm" style="background:{{ dot.color }}"></i>
   <span class="cal-t">{{ dot.title }}</span>
 </a>

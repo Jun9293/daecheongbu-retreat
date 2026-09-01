@@ -1190,3 +1190,179 @@ def test_s_08_문서가_터널_한계를_크기로_적는다():
     assert "60MB 언저리가" not in claude and "60MB 언저리**가" not in claude, \
         "낡은 근거가 아직 결론처럼 적혀 있다"
     assert "내려받기에는 이 제한이 없습니다" in claude
+
+
+def retreat_of_cal(db):
+    """이 파일의 시험이 쓰는 회차 하나."""
+    return db.scalars(select(models.Retreat)).first()
+
+
+# ════════════════════════════════════════════════════════════════════
+#  사이드바 묶음 · 기간 비추기 (수용기준 1~10)
+# ════════════════════════════════════════════════════════════════════
+
+
+# ── 1 · 2 · 3. 사이드바 ──────────────────────────────────────────────
+
+
+def test_t_01_준비_단계_묶음에_보드와_달력이_있다(admin_client, cal_data):
+    """보드와 달력은 **같은 데이터를 다른 축으로 보는 화면**이라 한 묶음이다
+    (4-13). 나란히 놓으면 별개 기능으로 읽힌다."""
+    page = admin_client.get("/calendar?scope=all").text
+
+    label = '<div class="navlabel">준비 단계</div>'
+    assert label in page, "묶음 제목이 없다"
+    after = page[page.index(label):]
+    # 제목 바로 아래에 둘이 붙어 있다 — 다음 묶음 제목이 나오기 전에
+    upto = after[: after.index('class="navlabel"', len(label))]
+    assert 'href="/board"' in upto and 'href="/calendar"' in upto
+    assert ">보드" in upto and ">달력" in upto
+
+
+def test_t_02_묶음_제목이_다른_것과_같은_모양이다(admin_client, cal_data):
+    """새 스타일을 만들지 않는다 — 같은 뜻이면 같게 생겨야 한다."""
+    page = admin_client.get("/calendar?scope=all").text
+    labels = page.count('<div class="navlabel">')
+    assert labels >= 3, "묶음 제목이 셋(준비 단계·실무·회차 준비) 이상이어야 한다"
+    for name in ("준비 단계", "실무", "회차 준비"):
+        assert f'<div class="navlabel">{name}</div>' in page, f"{name} 이 다른 모양이다"
+
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    assert css.count(".sidenav .navlabel{") == 1, "묶음 제목 스타일이 두 벌이다"
+
+
+def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data):
+    import re
+
+    def current(page):
+        return set(re.findall(r'href="([^"]+)"[^>]*aria-current="page"', page))
+
+    assert current(admin_client.get("/calendar?scope=all").text) == {"/calendar"}
+    assert current(admin_client.get("/board").text) == {"/board"}
+    # 묶음 제목 자체에는 붙지 않는다 — 링크가 아니다
+    page = admin_client.get("/calendar?scope=all").text
+    assert '<div class="navlabel">준비 단계</div>' in page
+    assert 'navlabel" aria-current' not in page
+
+
+# ── 4 · 8. 점이 기간을 들고 간다 ────────────────────────────────────
+
+
+def test_t_04_점이_자기_기간을_들고_간다(admin_client, cal_data):
+    """**구조가 실어 보낸다.** 화면이 계산하거나 서버에 다시 묻지 않는다."""
+    page = admin_client.get("/calendar?scope=all").text
+    assert "data-start=" in page and "data-end=" in page
+
+    with app_session() as db:
+        view = cal_domain.build(db, retreat_of_cal(db), today=dt.date(2026, 8, 10),
+                                scope="all")
+    seen = [d for week in view["weeks"] for cell in week
+            for d in (cell["dots"] + cell["more"])]
+    assert seen, "점이 하나도 없다 — 시험이 헛돈다"
+    for dot in seen:
+        assert dot["start"] and dot["end"], "점이 기간을 안 들고 있다"
+        assert dot["start"] <= dot["end"]
+
+    js = code_only(read_js("calendar.js"))
+    assert "dataset.start" in js and "dataset.end" in js
+    assert "fetch(" not in js.split("function showSpan(")[1].split("\n}")[0], \
+        "비출 때 서버에 다시 묻고 있다"
+
+
+def test_t_08_시작일이_없거나_하루짜리여도_죽지_않는다(admin_client, cal_data):
+    """마감일만 있는 업무는 그 날 하루로 본다."""
+    with app_session() as db:
+        run = db.scalars(select(models.TaskRun)).first()
+        run.start_date = None
+        run.end_date = dt.date(2026, 8, 12)
+        db.commit()
+        one = cal_domain.dot_of(run, today=dt.date(2026, 8, 10))
+        assert one["start"] == one["end"] == "2026-08-12"
+
+        run.start_date = run.end_date = dt.date(2026, 8, 12)
+        db.commit()
+        same = cal_domain.dot_of(run, today=dt.date(2026, 8, 10))
+        assert same["start"] == same["end"] == "2026-08-12"
+
+    assert admin_client.get("/calendar?scope=all").status_code == 200
+
+
+def test_t_04b_기간을_말로도_적어_둔다(admin_client, cal_data):
+    """달을 걸쳐 잘렸을 때 **정확한 날짜는 툴팁에 있다.**"""
+    page = admin_client.get("/calendar?scope=all").text
+    assert "· 기간 " in page and " → " in page
+
+
+# ── 5 · 6 · 7 · 9 · 10. 비추기 ──────────────────────────────────────
+
+
+def test_t_05_손을_떼면_사라진다():
+    js = code_only(read_js("calendar.js"))
+    assert "function clearSpan(" in js
+    assert "mouseout" in js
+    # 점 안에서 자식끼리 옮겨 다니는 것은 떠난 것이 아니다
+    assert "dot.contains(e.relatedTarget)" in js
+
+
+def test_t_06_오늘_테두리와_지연_점이_덮이지_않는다():
+    """오늘 칸은 `inset box-shadow` 라 배경 위에 그려지고, 지연 점은 자기
+    배경을 갖고 있다. 비침이 그 위를 덮으면 안 된다."""
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    assert ".cal-cell.today{box-shadow:inset 0 0 0 2px var(--link)}" in css
+    # 비침은 배경만 건드린다 — box-shadow 나 border 를 손대지 않는다.
+    # **주석을 걷어내고 본다** — 이 저장소는 이유를 주석에 적으므로
+    # "box-shadow 라 그대로 남는다" 는 설명이 그대로 걸린다.
+    span = css[css.index(".cal-cell.inspan{"):]
+    span = span[: span.index("/* 기간이 이 달을 넘어가면")]
+    span = re.sub(r"/\*.*?\*/", "", span, flags=re.S)
+    assert "box-shadow" not in span and "border-color" not in span
+
+
+def test_t_07_달을_걸치면_이_달_안쪽만_칠한다():
+    js = code_only(read_js("calendar.js"))
+    body = js[js.index("function showSpan("):]
+    body = body[: body.index("\n}")]
+    # 격자에 실제로 있는 칸만 고른다 — 없는 칸을 만들어 낼 수 없다
+    assert ".cal-grid .cal-cell[data-date]" in body
+    assert "from <= td.dataset.date && td.dataset.date <= to" in body
+    # 잘린 끝은 각지게, 안에서 끝나면 둥글게
+    assert "span-head" in body and "span-tail" in body
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    assert ".cal-cell.inspan.span-head{border-top-left-radius" in css
+    assert ".cal-cell.inspan{border-radius:0}" in css
+
+
+def test_t_09_외_N건_안의_점에서도_동작한다():
+    """문서에 한 번만 걸어 두면 나중에 펼쳐지는 점도 그대로 잡힌다."""
+    js = code_only(read_js("calendar.js"))
+    assert "document.addEventListener('mouseover'" in js
+    assert ".cal-dot[data-start]" in js
+    # 점마다 따로 걸면 `외 N건` 안에서 나중에 옮겨 놓은 점이 빠진다
+    assert "querySelectorAll('.cal-dot').forEach(d => d.addEventListener" not in js
+
+
+def test_t_10_좁은_화면에서는_비추지_않는다():
+    """주 목록에는 날짜 격자가 없고 마우스도 없다 — 탭으로 흉내 내면
+    점을 누르려다 띠가 뜬다 (4-13)."""
+    js = code_only(read_js("calendar.js"))
+    assert "matchMedia('(min-width: 821px)')" in js
+    body = js[js.index("function showSpan("):]
+    body = body[: body.index("\n}")]
+    assert "넓은화면()" in body
+
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    narrow = css[css.index("@media (max-width:820px){", css.index(".calweeks")):]
+    assert ".cal-cell.inspan{background:none}" in narrow[:2000]
+
+
+def test_t_04c_비침은_무채색이다():
+    """**부서 색으로 면을 채우지 않는다** (4-0). 화면이 색으로 덮이면 정작
+    눈에 띄어야 할 선택 테두리와 지연 배지가 묻힌다."""
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    span = css[css.index(".cal-cell.inspan{"):]
+    span = span[: span.index("/* 오늘 칸의")]
+    assert "var(--hover)" in span, "4-0 의 호버 색을 쓰지 않는다"
+    # 부서 색이 끼어들지 않았는지
+    assert "--team" not in span and "owner" not in span
+    for bad in ("#", "rgb("):
+        assert bad not in span, f"새 색을 만들었다: {bad}"

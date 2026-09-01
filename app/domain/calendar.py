@@ -91,6 +91,11 @@ def dot_of(run: TaskRun, *, today: dt.date) -> dict:
         "background": paint["dot_background"],
         "border": paint["dot_border"],
         "assignee": run.assignee.name if run.assignee else None,
+        # **기간은 구조가 실어 보낸다** — 점에 마우스를 올렸을 때 화면이
+        # 계산하거나 서버에 다시 묻지 않는다. 점이 자기 것을 들고 있다 (4-13).
+        # 시작일이 없으면 마감일 하루짜리로 본다.
+        "start": (run.start_date or run.end_date).isoformat()
+        if (run.start_date or run.end_date) else None,
         "end": (run.end_date or run.start_date).isoformat()
         if (run.end_date or run.start_date) else None,
     }
