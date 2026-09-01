@@ -53,6 +53,10 @@ def tint(hex_color: str, ratio: float) -> str:
 # 진행중을 팀 색 20% 로 채우던 것을 없앴으므로, 진행중은 화면 쪽에서
 # 왼쪽 3px 팀색 마개(.bar.진행중::after)로 구분한다. 상태 4종은 그대로다.
 BAR_DONE = ("#F1F0EE", "#E6E5E2")        # 회색 채움 — 눈에 띄지 않게
+# 부서가 없는 업무의 색. 세 군데에 흩어져 있던 것을 한 곳으로 모은다.
+# (`Department.color` 도 색을 안 정한 부서에 같은 값을 넣어 준다)
+NO_DEPARTMENT_COLOR = "#69726D"
+
 BAR_LATE = ("#FBF1F0", "#C4554D")        # 옅은 붉은색 + 빨간 테두리
 BAR_GHOST_BORDER = "#C9C8C5"
 BAR_WIP_BG = "#FAFAF9"                   # 아주 옅은 중립 — 팀 색이 아니다
@@ -167,7 +171,7 @@ def overdue_of(run: TaskRun, today: dt.date) -> bool:
     return bool(end and end < today and run.status != "완료")
 
 
-def paint_of(run: TaskRun, today: dt.date) -> dict:
+def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
     """한 업무가 **어떻게 보이는가**. 보드의 바와 달력의 점을 함께 만든다.
 
     둘은 규칙이 다르다 — 보드의 바는 저장된 상태 그대로 칠하고, 달력의 점은
@@ -185,25 +189,26 @@ def paint_of(run: TaskRun, today: dt.date) -> dict:
     # `color_tag` 가 아니라 `color` 를 쓴다 — 색을 안 정한 부서에서 `color_tag`
     # 는 None 이고, 그대로 내보내면 화면이 `border-color: None` 을 받는다.
     # `color` 는 그 자리에 기본색을 넣어 주는 속성이다.
-    color = run.department.color if run.department else "#787774"
+    color = run.department.color if run.department else NO_DEPARTMENT_COLOR
     overdue = overdue_of(run, today)
     kind = run.library.kind
 
-    bar_bg, bar_border = bar_style(run.status, color, kind=kind, ghost=False)
+    bar_bg, bar_border = bar_style(run.status, color, kind=kind, ghost=ghost)
     # 기한이 지났는데 미완료면 붉게. 저장된 '지연' 이 아니라 날짜에서 계산한다 —
     # 놓친 사람이 직접 눌러야 시스템이 알아차리는 구조를 만들지 않는다 (4-10)
     dot_bg, dot_border = bar_style(
-        "지연" if overdue else run.status, color, kind=kind, ghost=False
+        "지연" if overdue else run.status, color, kind=kind, ghost=ghost
     )
+    # **접두사 없는 쌍을 두지 않는다.** `background`/`border` 로 두면 그쪽이
+    # 기본값처럼 보여서, 세 번째 화면이 생겼을 때 사람이 따져 보지 않고 집는다 —
+    # 이번에 고친 버그가 정확히 그 모양이었다.
     return {
         "status": run.status,
         "color": color,
         "overdue": overdue,
         "overdue_days": overdue_days_of(run, today),
-        # 보드의 바
-        "background": bar_bg,
-        "border": bar_border,
-        # 달력의 점
+        "bar_background": bar_bg,
+        "bar_border": bar_border,
         "dot_background": dot_bg,
         "dot_border": dot_border,
     }
@@ -340,7 +345,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "end": (run.end_date or run.start_date).isoformat() if run.start_date else None,
             "department_key": run.department.key if run.department else None,
             "department_name": run.department.name if run.department else "담당 없음",
-            "department_color": run.department.color if run.department else "#69726D",
+            "department_color": run.department.color if run.department else NO_DEPARTMENT_COLOR,
             "parent_run_id": by_library[lib.parent_library_id].id
             if lib.parent_library_id in by_library
             else None,
@@ -375,7 +380,11 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
         lib = run.library
         start = run.start_date or open_date
         end = run.end_date or start
-        background, border = bar_style(run.status, owner_color, kind=lib.kind, ghost=ghost)
+        # **첫 렌더도 paint_of 를 지난다.** 여기서 bar_style 을 직접 부르면
+        # 처음 그린 바와 API 로 다시 칠한 바가 서로 다른 길에서 나온다 —
+        # 그게 달력에서 어긋났던 그 구조다 (4-13).
+        paint = paint_of(run, today, ghost=ghost)
+        background, border = paint["bar_background"], paint["bar_border"]
         return {
             "run_id": run.id,
             "title": lib.title,
@@ -417,7 +426,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                 r,
                 depth=1,
                 ghost=True,
-                owner_color=r.department.color if r.department else "#69726D",
+                owner_color=r.department.color if r.department else NO_DEPARTMENT_COLOR,
             )
             for r in ghosts
         ]
@@ -439,7 +448,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
 
     unassigned = [r for r in runs if r.department_id is None]
     if unassigned:
-        rows = [make_row(r, depth=0, ghost=False, owner_color="#69726D") for r in unassigned]
+        rows = [make_row(r, depth=0, ghost=False, owner_color=NO_DEPARTMENT_COLOR) for r in unassigned]
         dept_blocks.append(
             {
                 "key": "__none__",
@@ -475,16 +484,11 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                         "department_name": short_name(r.department.name)
                         if r.department
                         else "담당 없음",
-                        "department_color": r.department.color if r.department else "#69726D",
+                        "department_color": r.department.color if r.department else NO_DEPARTMENT_COLOR,
                         "assignee": r.assignee.name if r.assignee else None,
                         "start": (r.start_date or open_date).isoformat(),
                         "end": (r.end_date or r.start_date or open_date).isoformat(),
-                        "border": bar_style(
-                            r.status,
-                            r.department.color if r.department else "#69726D",
-                            kind=r.library.kind,
-                            ghost=False,
-                        )[1],
+                        "border": paint_of(r, today)["bar_border"],
                     }
                     for r in group
                 ],

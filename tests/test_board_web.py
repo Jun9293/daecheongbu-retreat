@@ -153,7 +153,7 @@ def test_상태를_바꾸면_저장되고_바_색이_함께_온다(admin_client,
     response = admin_client.post(f"/board/task/{run_id}/status", json={"status": "완료"})
 
     assert response.status_code == 200
-    assert response.json()["background"] == board_view.BAR_DONE[0]  # 완료는 눈에 띄지 않는 회색
+    assert response.json()["bar_background"] == board_view.BAR_DONE[0]  # 완료는 눈에 띄지 않는 회색
     with app_session() as db:
         assert db.get(models.TaskRun, run_id).status == "완료"
 
@@ -454,7 +454,7 @@ def test_바를_끌어_옮기면_색도_함께_온다(admin_client, board_data):
     ).json()
 
     # 상태 변경과 **같은 모양**이다 (board.paint_of 한 곳에서 나온다)
-    for key in ("background", "border", "dot_background", "dot_border",
+    for key in ("bar_background", "bar_border", "dot_background", "dot_border",
                 "status", "overdue", "overdue_days", "color"):
         assert key in saved, f"/dates 응답에 {key} 가 없다"
 
@@ -467,8 +467,8 @@ def test_바를_끌어_옮기면_색도_함께_온다(admin_client, board_data):
     js = admin_client.get("/static/js/board.js").text
     block = js[js.index("function applySavedDates("):]
     block = block[: block.index("\n}")]
-    assert "saved.background" in block, "받은 색을 쓰지 않는다"
-    assert "saved.border" in block
+    assert "saved.bar_background" in block, "받은 색을 쓰지 않는다"
+    assert "saved.bar_border" in block
     # 고스트 바는 칠하지 않는다 — 원본이 아니다
     assert "el.dataset.ghost" in block
 

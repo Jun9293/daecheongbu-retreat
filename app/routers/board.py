@@ -359,7 +359,9 @@ def set_department(
         target_id=run.id,
         summary=f"{run.library.title}: {before} → {target.name if target else '담당 없음'}",
     )
-    return {"department_key": payload.key, "reload": True}
+    # `reload` 를 함께 보내던 것을 뺐다 — 읽는 곳이 없다. 다시 그릴지는
+    # 화면이 정한다 (drawer.js 의 onDepartment 규약).
+    return {"department_key": payload.key}
 
 
 class AssigneeIn(BaseModel):
