@@ -28,3 +28,7 @@ data/anonymize-map.json
 
 # 기록을 다시 쓸 때 쓴 치환 규칙. 실명이 들어 있다.
 data/history-rules.txt
+
+# 큰 파일을 실제로 올려 보려고 둔 자료. 진짜 문서이고 수백 MB 라
+# 저장소에 들어가면 안 된다 (CLAUDE.md 4-9 의 C-4 확인용).
+testdata/
