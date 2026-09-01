@@ -72,27 +72,24 @@ def _in_scope(run: TaskRun, *, scope: str, user: User | None,
 
 
 def dot_of(run: TaskRun, *, today: dt.date) -> dict:
-    """점 하나. **보드와 같은 규칙**으로 칠한다."""
-    overdue = board_domain.overdue_of(run, today)
-    # 기한이 지났는데 미완료면 붉게. 저장된 '지연' 이 아니라 날짜에서 계산한다 —
-    # 놓친 사람이 직접 눌러야 시스템이 알아차리는 구조를 만들지 않는다 (4-10)
-    status = "지연" if overdue else run.status
-    color = run.department.color_tag if run.department else "#787774"
-    background, border = board_domain.bar_style(
-        status, color, kind=run.library.kind, ghost=False
-    )
+    """점 하나. **보드와 같은 규칙**으로 칠한다.
+
+    색과 기한 초과는 `board.paint_of` 가 만든다 — 날짜를 옮겼을 때 화면에
+    돌려주는 값과 **같은 곳에서 나와야** 처음 그린 점과 옮긴 점이 같아진다.
+    """
+    paint = board_domain.paint_of(run, today)
     return {
         "run_id": run.id,
         "title": run.library.title,
         "kind": run.library.kind,
-        "status": run.status,
-        "overdue": overdue,
-        "overdue_days": board_domain.overdue_days_of(run, today),
+        "status": paint["status"],
+        "overdue": paint["overdue"],
+        "overdue_days": paint["overdue_days"],
         "department_key": run.department.key if run.department else None,
         "department_name": run.department.name if run.department else "담당 없음",
-        "color": color,
-        "background": background,
-        "border": border,
+        "color": paint["color"],
+        "background": paint["dot_background"],
+        "border": paint["dot_border"],
         "assignee": run.assignee.name if run.assignee else None,
         "end": (run.end_date or run.start_date).isoformat()
         if (run.end_date or run.start_date) else None,

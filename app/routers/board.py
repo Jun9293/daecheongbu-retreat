@@ -281,18 +281,9 @@ def set_status(
         after_value={"status": payload.status},
     )
 
-    view_row = {
-        "status": run.status,
-        "background": None,
-        "border": None,
-    }
-    color = run.department.color if run.department else "#69726D"
-    background, border = board_view.bar_style(
-        run.status, color, kind=run.library.kind, ghost=False
-    )
-    view_row["background"] = background
-    view_row["border"] = border
-    return JSONResponse(view_row)
+    # **생김새는 한 곳에서 만든다** (board.paint_of). 보드의 바와 달력의 점은
+    # 규칙이 달라서(4-13) 둘 다 실어 보낸다 — 화면은 받아서 칠하기만 한다.
+    return JSONResponse(board_view.paint_of(run, dt.date.today()))
 
 
 def _assignee_candidates(db: Session, run: TaskRun) -> list[dict]:
@@ -458,7 +449,10 @@ def move_dates(
         before_value=before,
         after_value={"start": start.isoformat(), "end": end.isoformat()},
     )
+    # 날짜를 옮기면 **기한 초과가 바뀌고, 달력의 점 색이 그것을 따라간다** (4-13).
+    # 화면에서 다시 계산하지 않도록 상태 변경과 **같은 모양**으로 실어 보낸다.
     return {
+        **board_view.paint_of(run, dt.date.today()),
         "start": start.isoformat(),
         "end": end.isoformat(),
         "d_week": run.d_week,

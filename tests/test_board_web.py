@@ -438,6 +438,41 @@ def test_바를_끌어_날짜를_옮길_수_있다(admin_client, board_data):
         assert run.end_date == dt.date(2026, 6, 28)
 
 
+def test_바를_끌어_옮기면_색도_함께_온다(admin_client, board_data):
+    """수용기준 4 — **한쪽만 고치면 또 두 벌이다.**
+
+    달력이 마감일을 옮길 때 색을 서버에서 받게 했으므로 보드도 같은 응답을
+    써야 한다. 지금은 보드의 바가 저장된 상태로만 칠해져서(4-13) 날짜만
+    옮기면 값이 같지만, **그 규칙이 바뀌었을 때 따라오지 않는 자리가 바로
+    어긋나는 자리다.** 그래서 응답에 색이 실려 오는지, 화면이 그것을 쓰는지
+    둘 다 본다.
+    """
+    run_id = board_data["runs"]["포스터 제작"]
+
+    saved = admin_client.post(
+        f"/board/task/{run_id}/dates", json={"start": "2026-06-07", "end": "2026-06-28"}
+    ).json()
+
+    # 상태 변경과 **같은 모양**이다 (board.paint_of 한 곳에서 나온다)
+    for key in ("background", "border", "dot_background", "dot_border",
+                "status", "overdue", "overdue_days", "color"):
+        assert key in saved, f"/dates 응답에 {key} 가 없다"
+
+    status = admin_client.post(
+        f"/board/task/{run_id}/status", json={"status": "진행중"}
+    ).json()
+    assert set(status) <= set(saved) | {"start", "end", "d_week", "label"}
+
+    # 보드 화면이 그 값을 실제로 쓰는가
+    js = admin_client.get("/static/js/board.js").text
+    block = js[js.index("function applySavedDates("):]
+    block = block[: block.index("\n}")]
+    assert "saved.background" in block, "받은 색을 쓰지 않는다"
+    assert "saved.border" in block
+    # 고스트 바는 칠하지 않는다 — 원본이 아니다
+    assert "el.dataset.ghost" in block
+
+
 def test_날짜를_옮겨도_라이브러리_기준은_그대로다(admin_client, board_data):
     """한 회차에서 일정을 당겼다고 다음 회차의 기준까지 움직이면 안 된다."""
     run_id = board_data["runs"]["포스터 제작"]

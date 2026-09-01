@@ -167,6 +167,48 @@ def overdue_of(run: TaskRun, today: dt.date) -> bool:
     return bool(end and end < today and run.status != "완료")
 
 
+def paint_of(run: TaskRun, today: dt.date) -> dict:
+    """한 업무가 **어떻게 보이는가**. 보드의 바와 달력의 점을 함께 만든다.
+
+    둘은 규칙이 다르다 — 보드의 바는 저장된 상태 그대로 칠하고, 달력의 점은
+    **기한이 지났으면 '지연' 으로 바꿔** 칠한다 (4-13). 그래서 한 값으로
+    합칠 수 없다. 그렇다고 화면마다 따로 계산하게 두면 두 벌이 되고,
+    **두 벌이 되면 반드시 어긋나며 어긋난 쪽을 아무도 눈치채지 못한다.**
+
+    실제로 어긋나 있었다: 달력이 마감일을 옮길 때 기한 초과를 화면에서
+    `iso < today` 로 다시 판단했는데, 색은 손대지 않아 **붉은 점을 미래로
+    옮겨도 붉게 남았다.**
+
+    그래서 규칙을 여기 한 곳에 두고, 날짜·상태를 바꾸는 API 가 이것을
+    그대로 실어 보낸다. 화면은 받아서 칠하기만 한다.
+    """
+    # `color_tag` 가 아니라 `color` 를 쓴다 — 색을 안 정한 부서에서 `color_tag`
+    # 는 None 이고, 그대로 내보내면 화면이 `border-color: None` 을 받는다.
+    # `color` 는 그 자리에 기본색을 넣어 주는 속성이다.
+    color = run.department.color if run.department else "#787774"
+    overdue = overdue_of(run, today)
+    kind = run.library.kind
+
+    bar_bg, bar_border = bar_style(run.status, color, kind=kind, ghost=False)
+    # 기한이 지났는데 미완료면 붉게. 저장된 '지연' 이 아니라 날짜에서 계산한다 —
+    # 놓친 사람이 직접 눌러야 시스템이 알아차리는 구조를 만들지 않는다 (4-10)
+    dot_bg, dot_border = bar_style(
+        "지연" if overdue else run.status, color, kind=kind, ghost=False
+    )
+    return {
+        "status": run.status,
+        "color": color,
+        "overdue": overdue,
+        "overdue_days": overdue_days_of(run, today),
+        # 보드의 바
+        "background": bar_bg,
+        "border": bar_border,
+        # 달력의 점
+        "dot_background": dot_bg,
+        "dot_border": dot_border,
+    }
+
+
 def overdue_days_of(run: TaskRun, today: dt.date) -> int:
     end = run.end_date or run.start_date
     if not end or run.status == "완료" or end >= today:
