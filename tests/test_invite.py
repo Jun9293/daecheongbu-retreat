@@ -717,3 +717,177 @@ def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin
     )
     assert blocked.status_code == 200
     assert "아직 회차가 없어" in blocked.text
+
+
+# ════════════════════════════════════════════════════════════════════
+#  초대 링크는 완성된 채로 나간다 (4-12) — 작업 A 수용기준 1~5
+# ════════════════════════════════════════════════════════════════════
+#
+# 전에는 주소 앞부분을 자리표시자로 찍고 사람이 그것을 손으로 갈아 끼웠는데,
+# 그러다 **토큰까지 건드려 링크가 깨졌습니다** — 하루에 대여섯 번.
+# 재발급하면 앞의 링크가 죽으므로, 그때마다 어느 것이 살아 있는지도
+# 알 수 없게 됐습니다.
+
+# 자리표시자 문자열 자체를 이 파일에 적지 않는다 — 저장소 전체를 훑는
+# 시험(수용기준 4)이 자기 자신에게 걸리기 때문이다.
+PLACEHOLDER = "<" + "내-주소" + ">"
+
+
+def test_a01_완성된_주소가_나온다():
+    """수용기준 1 — 붙여넣으면 바로 열리는 주소."""
+    from app import config
+    from app.domain import auth as invites
+
+    made = invites.invite_url("abc123")
+    assert made == f"{config.BASE_URL}/invite/abc123"
+    assert "<" not in made and ">" not in made, "자리표시자가 남았다"
+    assert made.startswith("http"), "붙여넣어 바로 열리는 형태가 아니다"
+
+
+def test_a02_환경변수로_주소를_바꾼다(monkeypatch):
+    """수용기준 2 — DCB_BASE_URL."""
+    import importlib
+
+    from app import config
+    from app.domain import auth as invites
+
+    monkeypatch.setenv("DCB_BASE_URL", "https://다른주소.example.com/")
+    importlib.reload(config)
+    try:
+        # 뒤의 / 는 떼고 붙인다 — 안 그러면 //invite 가 된다
+        assert config.BASE_URL == "https://다른주소.example.com"
+        assert invites.invite_url("tok") == "https://다른주소.example.com/invite/tok"
+    finally:
+        monkeypatch.delenv("DCB_BASE_URL", raising=False)
+        importlib.reload(config)
+
+    # 직접 넘겨도 된다
+    assert invites.invite_url("tok", base="https://other.example.com/")         == "https://other.example.com/invite/tok"
+
+
+def test_a03_스크립트가_자리표시자를_찍지_않는다():
+    """수용기준 3 — 링크를 보여주는 스크립트가 전부 같은 곳에서 주소를 만든다."""
+    for path in ("scripts/create_admin.py", "scripts/merge_users.py",
+                 "scripts/healthcheck.py"):
+        source = open(path, encoding="utf-8").read()
+        for line in source.splitlines():
+            if not line.strip().startswith("print("):
+                continue
+            assert PLACEHOLDER not in line, f"{path} 가 자리표시자를 찍는다: {line}"
+
+    # create_admin 은 공용 헬퍼로 만든다 — 주소를 두 곳에서 만들지 않는다
+    made = open("scripts/create_admin.py", encoding="utf-8").read()
+    assert "invites.invite_url(raw)" in made
+
+
+def test_a04_화면도_완성된_주소를_보여준다(admin_client):
+    """수용기준 3 — /admin/users 화면도 같다.
+
+    앱은 127.0.0.1 에만 열려 있어서 `request.base_url` 은 바깥 주소가
+    아니다 — 그걸 복사해 보내면 받는 사람 브라우저에서 열리지 않는다.
+    """
+    from app import config
+
+    with app_session() as db:
+        person = models.User(
+            name="새 사람", phone_number="01077778888", role="member")
+        db.add(person)
+        db.commit()
+        person_id = person.id
+
+    issued = admin_client.post(
+        f"/admin/users/{person_id}/invite", follow_redirects=True)
+    assert issued.status_code == 200
+
+    text = issued.text
+    assert f"{config.BASE_URL}/invite/" in text, "완성된 주소가 아니다"
+    assert "127.0.0.1" not in text and "testserver" not in text
+    assert PLACEHOLDER not in text
+
+    view = open("app/templates/admin_users.html", encoding="utf-8").read()
+    assert "request.base_url" not in view, "화면이 자기 주소를 다시 만든다"
+
+
+def test_a05_자가진단이_주소를_손으로_받지_않아도_된다():
+    source = open("scripts/healthcheck.py", encoding="utf-8").read()
+    assert "else config.BASE_URL" in source
+    assert "from app import config" in source
+
+
+# ── 수용기준 4 — 저장소 전체를 훑는다 ─────────────────────────────────
+#
+# 한 곳만 고치면 나머지에서 같은 일이 또 난다. 설명하는 글에서도 그 문자열
+# 자체는 쓰지 않는다 — 남아 있으면 다음 사람이 그것을 보고 다시 복사해 쓴다.
+
+# **git 이 아는 파일만 훑는다.** "저장소" 는 커밋되는 것을 말한다 —
+# gitignore 로 빠지는 것(발급 메모 link.txt, data/ 아래 실물 자료)까지 세면
+# 시험이 각자의 작업 폴더 사정에 따라 갈린다. 목록을 손으로 적는 대신
+# git 에게 물으면 규칙이 한 곳(.gitignore)에만 있게 된다.
+SCAN_SUFFIXES = {".py", ".md", ".html", ".js", ".css", ".bat", ".txt", ".json", ".cfg", ".ini"}
+
+
+def repo_files():
+    import subprocess
+
+    out = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+    )
+    if out.returncode != 0:                      # git 이 없는 곳에서는 건너뛴다
+        return None
+    return [ROOT / line for line in out.stdout.splitlines() if line.strip()]
+
+
+def test_a06_저장소_어디에도_자리표시자가_없다():
+    files = repo_files()
+    if files is None:
+        pytest.skip("git 저장소가 아니라 훑을 수 없습니다")
+    hits = []
+    for path in files:
+        if path.suffix.lower() not in SCAN_SUFFIXES or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if PLACEHOLDER in text:
+            hits.append(str(path.relative_to(ROOT)))
+    assert hits == [], f"자리표시자가 남아 있다: {hits}"
+
+
+# ── 수용기준 5 — 재발급하면 앞의 링크가 죽는다고 말한다 ────────────────
+#
+# 죽는다는 사실 자체는 원래도 그랬다(issue 가 revoke_all 한다). 문제는
+# **화면에 그 말이 없어서** 총무팀이 "아까 보낸 링크로 들어가세요" 라고
+# 안내하게 되는 것이었다.
+
+WARNING = "이전에 발급한 링크는 이제 쓸 수 없습니다"
+
+
+def test_a07_화면이_옛_링크가_죽는다고_말한다(admin_client):
+    with app_session() as db:
+        person = models.User(
+            name="재발급 대상", phone_number="01066665555", role="member")
+        db.add(person)
+        db.commit()
+        person_id = person.id
+
+    first = admin_client.post(
+        f"/admin/users/{person_id}/invite", follow_redirects=True)
+    assert WARNING in first.text, "화면이 옛 링크가 죽는다고 말하지 않는다"
+
+    # 실제로도 죽는가 — 말과 동작이 같아야 한다
+    with app_session() as db:
+        raw_first = invites.issue(db, user=db.get(models.User, person_id))
+    with app_session() as db:
+        invites.issue(db, user=db.get(models.User, person_id))
+    with app_session() as db:
+        person, why = invites.redeem(db, raw_first)
+        assert person is None, "옛 링크가 아직 살아 있다"
+        assert why, "왜 안 되는지 말하지 않는다"
+
+
+def test_a08_스크립트도_같은_말을_한다():
+    for path in ("scripts/create_admin.py", "scripts/merge_users.py"):
+        source = open(path, encoding="utf-8").read()
+        assert WARNING in source, f"{path} 에 그 안내가 없다"

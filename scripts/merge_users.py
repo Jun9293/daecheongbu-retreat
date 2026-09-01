@@ -234,6 +234,7 @@ def main() -> int:
             print("  남긴 계정으로 다시 들어가려면 링크만 새로 받으세요:")
             print(f"    python scripts/create_admin.py --reissue {keeper.phone_number}")
             print(f"  링크는 {config.BASE_URL} 주소로 나옵니다.")
+            print("  새로 받으면 **이전에 발급한 링크는 이제 쓸 수 없습니다.**")
         else:
             print("  아직 바꾸지 않았습니다 — 실제로 하려면 --apply 를 붙이세요.")
     return 0

@@ -82,6 +82,10 @@ def show_link(raw: str) -> None:
     else:
         print(f"(주소가 다르면 DCB_BASE_URL 로 알려주세요. 지금은 {config.BASE_URL})")
     print(f"유효기간 {invites.INVITE_TTL_DAYS}일 · 한 번 쓰면 만료됩니다.")
+    # 발급하면 그 사람의 옛 링크는 함께 죽는다 (invites.issue 가 revoke_all 한다).
+    # 그 말을 안 하면 "아까 보낸 링크로 들어가세요" 라고 안내하게 된다.
+    print("**이전에 발급한 링크는 이제 쓸 수 없습니다.** 먼저 보낸 것이 있으면")
+    print("  이 링크로 다시 보내주세요.")
     print("**링크를 잃어버렸으면 계정을 다시 만들지 마세요.** 아래로 링크만 다시 받습니다:")
     print("  python scripts/create_admin.py --reissue <연락처>")
 
@@ -105,7 +109,7 @@ def reissue(db: Session, phone: str) -> int:
         print(f"'{person.name}' 계정이 비활성이라 다시 켰습니다.")
     raw = invites.issue(db, user=person)
     print(f"'{person.name}' ({person.phone_number}) 의 링크를 다시 발급했습니다.")
-    print("  계정을 새로 만들지 않았습니다. 남아 있던 옛 링크는 함께 취소됐습니다.")
+    print("  계정을 새로 만들지 않았습니다.")
     show_link(raw)
     return 0
 
