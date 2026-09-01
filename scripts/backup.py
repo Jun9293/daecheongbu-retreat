@@ -163,6 +163,64 @@ def copy_uploads(
     return made, True
 
 
+README_NAME = "읽어보기.txt"
+
+# 백업 폴더를 여는 사람은 대개 **밖으로 복사하려고** 연다. 그 자리에서 읽지
+# 않으면 폴더째 복사해 버리는데, 업로드 zip 이 하드링크로 이어져 있어서
+# USB·클라우드에서는 전부 실체로 펼쳐진다 (11-2). 안내가 저장소 문서에만
+# 있으면 그때 아무도 안 본다. 그래서 폴더 안에 둔다.
+README_TEXT = """이 폴더에 대해 — 읽고 복사하세요
+
+■ 폴더째 통째로 복사하지 마세요
+
+  uploads-날짜.zip 은 내용이 안 바뀌면 다시 묶지 않고, 지난 것과
+  **한 파일을 같이 가리키게** 해 둡니다(하드링크).
+  그래서 이 컴퓨터에서는 30벌이 있어도 몇 벌 크기밖에 안 씁니다.
+
+  그런데 USB(exFAT) · 구글 드라이브 · 원드라이브는 그 이어짐을 모릅니다.
+  복사하는 순간 전부 진짜 파일로 펼쳐집니다 —
+  업로드가 1GB 면 30벌이 30GB 가 됩니다.
+
+■ 최근 몇 벌만 복사하세요 (파워셸에 그대로 붙여넣기)
+
+  $원본 = "{here}"
+  $받을곳 = "D:\\대청부백업"          # USB 나 클라우드 폴더로 바꾸세요
+  New-Item -ItemType Directory -Force $받을곳 | Out-Null
+  Get-ChildItem $원본 -Filter "app-*.db" |
+    Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object {{
+      $날짜 = $_.BaseName -replace '^app-',''
+      Get-ChildItem $원본 -Filter "*-$날짜.*" | Copy-Item -Destination $받을곳 -Force
+    }}
+
+  이렇게 나오면 성공 — 받을곳에 app-…db · uploads-…zip · vapid-…pem 이
+  날짜별로 세 벌씩 들어 있습니다.
+
+■ 옛 zip 을 열어서 고쳐 저장하지 마세요
+
+  같은 파일을 가리키던 **다른 날짜의 zip 도 함께 바뀝니다.**
+  안을 들여다보는 것은 괜찮습니다. 고쳐 저장하는 것만 하지 마세요.
+
+■ 되돌릴 때
+
+  서버를 끄고, **같은 날짜끼리 셋을 함께** 되돌립니다.
+    app-날짜.db      →  data\\app.db
+    uploads-날짜.zip  →  풀어서 data\\uploads\\
+    vapid-날짜.pem    →  data\\vapid_private.pem
+  날짜를 섞으면 DB 의 목록과 실제 파일이 어긋나고,
+  VAPID 를 빼먹으면 알림 구독이 살아나지 않습니다.
+
+(이 파일은 backup.py 가 돌 때마다 다시 씁니다. 고쳐도 되돌아갑니다.)
+"""
+
+
+def write_readme(out_dir: pathlib.Path) -> pathlib.Path:
+    """폴더를 여는 사람이 그 자리에서 읽도록 안내를 남긴다."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / README_NAME
+    target.write_text(README_TEXT.format(here=out_dir), encoding="utf-8")
+    return target
+
+
 def files_of(out_dir: pathlib.Path, stamp: str) -> tuple[pathlib.Path, ...]:
     """한 회차의 세 파일. 같은 날짜끼리 함께 지우고 함께 되돌린다."""
     return (
@@ -246,6 +304,7 @@ def run(
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
     uploads_copy, uploads_fresh = copy_uploads(uploads, out_dir, stamp=stamp)
     removed = prune(out_dir, keep=keep, max_total=max_total)
+    write_readme(out_dir)
     return {
         "ok": True,
         "db": db_copy,
