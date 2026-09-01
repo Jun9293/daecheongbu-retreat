@@ -29,7 +29,8 @@
    쿠키에도 남기지만, 주소에 없으면 링크를 복사해 준 사람이 다른 화면을 본다. #}
 {% set keep = "scope=" ~ cal.scope ~ "&only_open=" ~ (1 if cal.only_open else 0) %}
 <div class="calbar" data-only-open="{{ 1 if cal.only_open else 0 }}"
-     data-scope="{{ cal.scope }}" data-month="{{ cal.month }}">
+     data-scope="{{ cal.scope }}" data-month="{{ cal.month }}"
+     data-today="{{ cal.today }}" data-per-day="{{ cal.per_day }}">
   <div class="calnav">
     <a class="btn ghost sm" href="/calendar?month={{ cal.prev }}&{{ keep }}" aria-label="이전 달">‹</a>
     <b class="calmonth">{{ cal.label }}</b>
@@ -53,6 +54,8 @@
 </div>
 
 {# 넓은 화면 — 월 격자 #}
+<div class="calnote" id="calnote" hidden role="status"></div>
+
 <div class="calwrap">
   <table class="cal-grid">
     <thead>
@@ -62,7 +65,8 @@
       {% for week in cal.weeks %}
       <tr>
         {% for cell in week %}
-        <td class="cal-cell{{ ' out' if not cell.in_month }}{{ ' today' if cell.is_today }}">
+        <td class="cal-cell{{ ' out' if not cell.in_month }}{{ ' today' if cell.is_today }}"
+            data-date="{{ cell.date }}">
           <span class="cal-d">{{ cell.day }}</span>
           {% for dot in cell.dots %}{{ caldot(dot) }}{% endfor %}
           {% if cell.more %}
@@ -84,11 +88,11 @@
   {% for week in cal.weeks %}
     {% set days = week|selectattr('dots')|list + week|selectattr('more')|list %}
     {% if days %}
-    <section class="calweek">
+    <section class="calweek" data-from="{{ week[0].date }}" data-to="{{ week[6].date }}">
       <h3>{{ week[0].day }}일 – {{ week[6].day }}일</h3>
       {% for cell in week %}
         {% if cell.dots or cell.more %}
-        <div class="calday{{ ' today' if cell.is_today }}">
+        <div class="calday{{ ' today' if cell.is_today }}" data-date="{{ cell.date }}">
           <span class="calday-d">{{ cell.day }}<i>{{ cal.weekdays[cell.weekday] }}</i></span>
           <div class="calday-l">
             {% for dot in cell.dots + cell.more %}{{ caldot(dot) }}{% endfor %}

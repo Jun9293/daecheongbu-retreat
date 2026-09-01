@@ -10,12 +10,15 @@ from __future__ import annotations
 import datetime as dt
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app import models
 from app.domain import calendar as cal_domain
 from tests.conftest import app_session, login_as
+
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 OPEN = dt.date(2026, 8, 21)
 CLOSE = dt.date(2026, 8, 23)
@@ -376,8 +379,6 @@ def test_09_범위_칩_셋이_동작하고_기본이_내_것이다(admin_client,
         assert len(all_titles(every)) > len(all_titles(mine))
 
     # 주소를 안 주면 기본이 '내 것'
-    fresh = TestClient(admin_client.app if hasattr(admin_client, "app") else None) \
-        if False else None
     page = admin_client.get("/calendar?scope=mine").text
     assert 'aria-pressed="true"' in page
 
@@ -554,3 +555,175 @@ def test_17_업무가_하나도_없는_달에서도_죽지_않는다(admin_clien
         db.add(blank)
         db.commit()
         assert cal_domain.build(db, blank, today=TODAY, scope="all")["weeks"]
+
+
+# ════════════════════════════════════════════════════════════════════
+#  리뷰에서 나온 것 — 수용기준 1~5 · 12
+# ════════════════════════════════════════════════════════════════════
+#
+# 달력의 `onDates` 를 **넘기는 걸 빠뜨려서** 패널은 새 마감일을 말하는데
+# 점은 옛 칸에 남아 있었다. 베껴 놓아서 갈린 것이 아니라 **안 넘겨서** 갈렸다.
+
+
+import re
+
+JS_DIR = ROOT / "app" / "static" / "js"
+
+
+def read_js(name: str) -> str:
+    return (JS_DIR / name).read_text(encoding="utf-8")
+
+
+def handler_names() -> set[str]:
+    """`drawer.js` 가 화면에게 물어보는 이름 전부.
+
+    `call('이름')` 과 `host.이름` 둘 다 본다 — 뒤엣것으로 읽는 것도
+    화면이 넘겨야 하는 값이기는 마찬가지다.
+    """
+    js = read_js("drawer.js")
+    called = set(re.findall(r"call\('([A-Za-z_]\w*)'", js))
+    direct = set(re.findall(r"\bhost\.([A-Za-z_]\w*)", js))
+    return called | direct
+
+
+def registered(name: str) -> tuple[set[str], dict[str, str]]:
+    """(등록한 이름, 일부러 안 쓴다고 적어 둔 이름→이유)."""
+    js = read_js(name)
+    block = js[js.index("Drawer.init({"):]
+    unused_at = block.find("__unused:")
+    body = block[:unused_at] if unused_at >= 0 else block
+    keys = set(re.findall(r"^  ([A-Za-z_]\w*):", body, re.M))
+    keys |= set(re.findall(r"^  ([A-Za-z_]\w*),", body, re.M))   # 줄임 표기
+
+    excuses: dict[str, str] = {}
+    if unused_at >= 0:
+        tail = block[unused_at:]
+        tail = tail[: tail.index("},")]
+        for key, why in re.findall(r"^    ([A-Za-z_]\w*):\s*(.+)$", tail, re.M):
+            excuses[key] = why.strip().strip("',+ ")
+    return keys - {"__unused"}, excuses
+
+
+# ── 4 ─────────────────────────────────────────────────────────────────
+
+
+def test_r04_모든_핸들러가_등록됐거나_이유와_함께_적혀_있다():
+    """**빠뜨린 것과 일부러 안 쓴 것을 가른다.**
+
+    `call()` 은 없는 핸들러를 조용히 건너뛴다. 그래서 화면만 봐서는 둘이
+    똑같이 생겼고, 실제로 `onDates` 를 빠뜨려 달력이 옛 날짜를 말했다.
+    """
+    names = handler_names()
+    assert names, "drawer.js 에서 핸들러 이름을 하나도 못 찾았다 — 시험이 헛돈다"
+    # 빠뜨리기 쉬운 것들이 실제로 목록에 들어 있는지 (시험이 헛돌지 않는지)
+    for must in ("onDates", "onStatus", "onDepartment", "link", "meta"):
+        assert must in names, f"{must} 를 못 찾았다"
+
+    gaps = []
+    for screen in ("board.js", "calendar.js"):
+        keys, excuses = registered(screen)
+        for name in sorted(names):
+            if name in keys:
+                continue
+            if name in excuses and len(excuses[name]) > 10:
+                continue                      # 이유와 함께 적혀 있으면 됐다
+            gaps.append(f"{screen}: {name}"
+                        + (" (이유가 너무 짧다)" if name in excuses else ""))
+    assert gaps == [], (
+        "등록도 안 했고 '일부러 안 씀' 목록에도 없다 — "
+        f"빠뜨린 것인지 알 수 없다: {gaps}")
+
+
+def test_r04b_안_쓰는_이유가_저마다_다르다():
+    """복사해 붙인 이유는 이유가 아니다. 같은 문장이 여러 번이면 생각을
+    안 한 것이므로, 그 목록은 다음 사람에게 아무 도움이 안 된다."""
+    for screen in ("board.js", "calendar.js"):
+        _, excuses = registered(screen)
+        whys = list(excuses.values())
+        assert len(set(whys)) == len(whys), f"{screen} 의 이유가 겹친다: {whys}"
+
+
+# ── 5 ─────────────────────────────────────────────────────────────────
+
+
+def test_r05_onDepartment_는_true_규약이다():
+    """`undefined` 로 갈랐더니, 핸들러가 있어도 반환값을 빠뜨리면 핸들러가
+    돈 **뒤에** 페이지가 통째로 새로고침됐다 — 두 번 일하고 화면도 잃는다."""
+    js = read_js("drawer.js")
+    assert "call('onDepartment', d.run_id) !== true" in js
+    assert "=== undefined) location.reload()" not in js
+
+
+# ── 1 ~ 3 ─────────────────────────────────────────────────────────────
+
+
+def test_r01_달력이_마감일_변경을_받는다(admin_client, cal_data):
+    """수용기준 1 — 점의 자리를 정하는 것은 마감일이다 (4-13).
+
+    패널에서 기간을 고쳤는데 점이 옛 칸에 그대로 있으면, 한 화면이 서로
+    다른 날짜를 말한다.
+    """
+    js = read_js("calendar.js")
+    keys, _ = registered("calendar.js")
+    assert "onDates" in keys, "달력이 onDates 를 등록하지 않았다"
+    assert "applyDates" in js
+
+    # 칸이 자기 날짜를 말해야 점을 옮길 수 있다
+    page = admin_client.get("/calendar?scope=all").text
+    assert 'class="cal-cell' in page and "data-date=" in page
+    assert 'data-per-day="' in page and 'data-today="' in page
+
+    # 서버가 새 날짜를 돌려준다 — 화면은 그걸 받아 점을 옮긴다
+    run_id = cal_data["runs"]["오늘 업무"]
+    res = admin_client.post(f"/board/task/{run_id}/dates",
+                            json={"start": "2026-08-03", "end": "2026-08-07"})
+    assert res.status_code == 200
+    assert res.json()["end"] == "2026-08-07"
+
+
+def test_r02_이_달_밖으로_나가면_화면이_말한다(admin_client, cal_data):
+    """수용기준 2 — **조용히 사라지면 "지워진 건가" 로 읽힌다.**
+
+    4-13 에서 날짜 없는 업무를 조용히 빼지 않기로 한 것과 같은 자리다.
+    """
+    page = admin_client.get("/calendar?scope=all").text
+    assert 'id="calnote"' in page, "말할 자리가 없다"
+
+    js = read_js("calendar.js")
+    assert "이 달에는 보이지 않습니다" in js
+    assert "그 달로 넘겨서 보세요" in js
+    # 이 달 안이면 옮기고, 밖이면 말한다 — 두 갈래가 다 있어야 한다
+    assert '.cal-cell[data-date=' in js
+    assert "placeInGrid" in js and "placeInWeekList" in js
+
+
+def test_r03_기간을_바꿔도_다시_불러오지_않는다():
+    """수용기준 3 — 보던 달·범위 칩·`미완료만` 을 잃으면 안 된다 (4-13)."""
+    js = read_js("calendar.js")
+    assert "location.reload" not in js
+    assert "location.href" not in js
+    # 숫자도 함께 맞춘다 — 외 N건 · 날짜 없는 업무 N건 · 위쪽 건수
+    assert "recount" in js
+    assert "cal-more" in js and "calundated" in js and "calcount" in js
+
+
+def test_r03b_숫자를_더하지_않고_세어서_다시_적는다():
+    """더하고 빼면 한 번 어긋난 뒤로 영영 어긋난다."""
+    js = read_js("calendar.js")
+    block = js[js.index("function recount()"):]
+    block = block[: block.index("\n}")]
+    assert "querySelectorAll" in block
+    assert "++" not in block and "--" not in block, "세지 않고 더하고 있다"
+
+
+# ── 12 ────────────────────────────────────────────────────────────────
+
+
+def test_r12_calbar_가_없어도_죽지_않는다():
+    """이 파일은 패널이 있는 화면이면 어디서든 실릴 수 있다. 그때 `.calbar`
+    가 없다고 상태 변경이 통째로 멈추면 안 된다."""
+    js = read_js("calendar.js")
+    for guarded in ("bar?.dataset.onlyOpen", "bar?.dataset.today", "bar?.dataset.perDay"):
+        assert guarded in js, f"{guarded} 가 ?. 로 막혀 있지 않다"
+    # 옛 방식(막지 않은 접근)이 남아 있지 않은지
+    assert "document.querySelector('.calbar').dataset" not in js
