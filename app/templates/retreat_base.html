@@ -15,9 +15,14 @@
    상단 탭 줄을 없앴다. 같은 목록이 두 군데 있을 이유가 없다.
    기본은 접힘. 왼쪽 위 토글로 고정해서 열고, 화면 왼쪽 가장자리에
    마우스를 대면 잠깐 떠서 나온다. #}
+{# 보드와 달력은 **같은 데이터를 다른 축으로 보는 화면**이라 한 묶음으로 둔다
+   (4-13). 나란히 놓으면 별개 기능으로 읽힌다 — 보드는 "몇 주에 걸쳐 어떻게
+   얽혔나", 달력은 "이번 주에 내가 뭘 해야 하나" 다. #}
+{% set nav_prep = [
+  ('/board',    '보드', 'board',    none),
+  ('/calendar', '달력', 'calendar', none),
+] %}
 {% set nav_main = [
-  ('/board',    '준비 단계', 'board',    none),
-  ('/calendar', '달력',      'calendar', none),
   ('/live',     '수련회 진행', 'live',   none),
   ('/meetings', '회의록',    'meetings', '재설계 예정'),
   ('/budget',   '재정',      'budget',   '재설계 예정'),
@@ -45,6 +50,13 @@
   {% endif %}
 
   <nav>
+    {# 묶음 제목은 아래 `실무`·`회차 준비` 와 **같은 모양**이다.
+       새 스타일을 만들지 않는다 — 같은 뜻이면 같게 생겨야 한다. #}
+    <div class="navlabel">준비 단계</div>
+    {% for href, label, tab, wip in nav_prep %}
+    <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+
     {% for href, label, tab, wip in nav_main %}
     <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}
       {% if wip %}<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">{{ wip }}</i>{% endif %}</a>
