@@ -19,3 +19,12 @@ data/server.log.1
 # 발급된 초대 링크를 받아 둔 메모. **살아 있는 로그인 링크와 연락처가 들어간다.**
 link.txt
 *_link.txt
+# 실명이 든 원본 자료. 저장소에는 가명으로 바꾼 것만 둔다 (scripts/anonymize.py).
+# 실제로 넣을 때는 이 파일을 쓴다.
+data/*.real.json
+
+# 실명 <-> 가명 대응표. 이것만 있어도 원래 이름이 드러난다.
+data/anonymize-map.json
+
+# 기록을 다시 쓸 때 쓴 치환 규칙. 실명이 들어 있다.
+data/history-rules.txt

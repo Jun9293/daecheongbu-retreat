@@ -321,7 +321,7 @@ def test_10_apply_하면_log_activity_에_남는다(data):
     assert "3건" in log.summary                  # 바뀐 **항목** 수
     assert "민준→민준M" in log.summary            # 무엇을 바꿨는지
     assert "도현→도현M" in log.summary
-    assert sorted(log.after_value["names"]) == ["하윤M", "예솔M", "도현M", "민준M"]
+    assert sorted(log.after_value["names"]) == ["도현M", "민준M", "예솔M", "하윤M"]
 
 
 # ---------------------------------------------------------------- 11. 두 번
