@@ -1,6 +1,6 @@
 """자가진단 — 배포한 뒤 "왜 안 되지" 를 혼자 좁혀 보기 위한 것.
 
-무엇이 문제인지 한국어로 말한다. 넷 중 하나라도 아니면 종료 코드 1.
+무엇이 문제인지 한국어로 말한다. 하나라도 아니면 종료 코드 1.
 
     .venv\\Scripts\\python.exe scripts/healthcheck.py
 
@@ -122,6 +122,69 @@ def check_secret_key() -> tuple[bool, str]:
     )
 
 
+def folder_size(path: pathlib.Path) -> int:
+    total = 0
+    if not path.exists():
+        return 0
+    for one in path.rglob("*"):
+        try:
+            if one.is_file():
+                total += one.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def check_disk() -> tuple[bool, str]:
+    """디스크가 조용히 차지 않게 한다 (CLAUDE.md 4-9).
+
+    첨부 상한을 200MB 로 올린 뒤로 이것이 현실이 됐다. 지금까지는 찰 때까지
+    받다가 **어느 날 아무 설명 없이** 실패했다 — 되짚을 근거가 화면 어디에도
+    없는 종류의 실패다. 거절이 시작되기 전에 여기서 먼저 말한다.
+    """
+    try:
+        import shutil
+
+        from app.config import (
+            DISK_FREE_FLOOR_BYTES,
+            DISK_FREE_WARN_BYTES,
+            UPLOAD_DIR,
+        )
+
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        usage = shutil.disk_usage(UPLOAD_DIR)
+        used = folder_size(UPLOAD_DIR)
+        backups = folder_size(config.DATA_DIR / "backups")
+    except Exception as exc:                                     # noqa: BLE001
+        return False, f"디스크를 확인하지 못했습니다 — {exc}"
+
+    def mb(size: int) -> str:
+        if size >= 1024 ** 3:
+            return f"{size / 1024 ** 3:,.1f}GB"
+        return f"{size / 1024 ** 2:,.0f}MB"
+
+    detail = (
+        f"남은 공간 {mb(usage.free)} / 전체 {mb(usage.total)}\n"
+        f"        올라온 파일 {mb(used)} · 백업 {mb(backups)}"
+    )
+
+    if usage.free < DISK_FREE_FLOOR_BYTES:
+        return False, (
+            f"{detail}\n"
+            f"        여유가 {mb(DISK_FREE_FLOOR_BYTES)} 아래입니다 — "
+            "**지금 파일을 올리면 거절됩니다.**\n"
+            "        data/backups 의 오래된 것을 지우거나 다른 곳으로 옮기세요."
+        )
+    if usage.free < DISK_FREE_WARN_BYTES:
+        return False, (
+            f"{detail}\n"
+            f"        여유가 {mb(DISK_FREE_WARN_BYTES)} 아래입니다. "
+            f"{mb(DISK_FREE_FLOOR_BYTES)} 밑으로 내려가면 올리기가 막힙니다.\n"
+            "        지금 치워 두면 막히기 전에 끝납니다."
+        )
+    return True, detail
+
+
 def check_admin() -> tuple[bool, str]:
     """관리자 계정이 있는가, 그리고 **같은 이름이 여럿이지는 않은가.**
 
@@ -215,6 +278,7 @@ def main() -> int:
         ("데이터베이스", check_db()),
         ("웹 푸시(VAPID)", check_vapid()),
         ("세션 키가 고정인가", check_secret_key()),
+        ("디스크 여유", check_disk()),
         ("관리자 계정", check_admin()),
         ("바깥에서 접속", check_tunnel(url)),
     ]

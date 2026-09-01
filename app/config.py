@@ -143,13 +143,43 @@ ALLOWED_ASSET_EXTS = ALLOWED_UPLOAD_EXTS | {
 #
 # 상한을 정해 두는 이유는 거절할 때 **이유를 말할 수 있게** 하기 위해서다.
 # 상한이 없으면 디스크가 찰 때까지 받다가 어느 날 아무 설명 없이 실패한다.
-MAX_ATTACHMENT_BYTES = int(os.environ.get("DCB_MAX_ATTACHMENT_MB", "25")) * 1024 * 1024
+#
+# **200MB 인 이유는 실제로 그만한 것을 올리기 때문이다.** 25MB 로 두었더니
+# 이미지 원본·PPT·PDF 가 막혔고, 가장 큰 것이 164MB 였다. 상한은 짐작이
+# 아니라 실제로 오간 것에서 나와야 한다.
+#
+# **숫자만 올리면 안 된다.** 큰 파일은 세 곳에 같이 닿는다 —
+#   · 백업 (scripts/backup.py) — 매일 새벽 통째로 복사하면 디스크가 금세 찬다
+#   · 디스크 여유 (scripts/healthcheck.py) — 조용히 차다가 어느 날 실패한다
+#   · 올리는 동안의 화면 — 몇 분이 걸리므로 아무 반응이 없으면 창을 닫는다
+MAX_ATTACHMENT_BYTES = int(os.environ.get("DCB_MAX_ATTACHMENT_MB", "200")) * 1024 * 1024
 ALLOWED_ATTACHMENT_EXTS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".svg",
+    # 이미지 — 원본을 그대로 올리는 일이 많아 RAW 와 TIFF 까지 받는다
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".svg",
+    ".tif", ".tiff", ".bmp", ".cr2", ".nef", ".arw", ".dng",
+    # 문서
     ".pdf", ".txt", ".csv", ".md",
     ".hwp", ".hwpx", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-    ".zip", ".psd", ".ai", ".mp3", ".m4a", ".wav", ".mp4", ".mov",
+    # 디자인 · 묶음
+    ".psd", ".ai", ".eps", ".indd", ".zip", ".7z", ".rar",
+    # 소리 · 영상 (영상은 링크로 붙이는 편이 낫지만, 짧은 것은 올라온다)
+    ".mp3", ".m4a", ".wav", ".flac", ".aac",
+    ".mp4", ".mov", ".webm", ".mkv", ".avi",
 }
+
+# ── 디스크 여유 ──────────────────────────────────────────────────────
+#
+# 상한을 200MB 로 올린 순간 "디스크가 언제 차는가" 가 현실이 된다.
+# 지금까지는 찰 때까지 받다가 **아무 설명 없이** 실패하는 구조였다.
+#
+#   · 올릴 때 — 받고 나서도 이만큼은 남아야 한다. 안 되면 이유를 말하고 거절한다.
+#     받아 놓고 나중에 깨지는 것보다 낫다
+#   · 자가진단 — 이보다 적으면 [문제] 로 낸다. 거절이 시작되기 **전에** 알아야 한다
+#
+# 거절선보다 경고선을 넉넉히 두는 이유는, 경고를 보고 치울 시간이 있어야
+# 하기 때문이다. 둘이 같으면 "경고"가 곧 "이미 막힘"이다.
+DISK_FREE_FLOOR_BYTES = int(os.environ.get("DCB_DISK_FLOOR_MB", "2048")) * 1024 * 1024
+DISK_FREE_WARN_BYTES = int(os.environ.get("DCB_DISK_WARN_MB", "5120")) * 1024 * 1024
 
 # 웹 푸시 VAPID 연락처 (규격상 mailto: 또는 https: 여야 함)
 PUSH_CONTACT = os.environ.get("DCB_PUSH_CONTACT", "mailto:admin@example.com")
@@ -159,8 +189,8 @@ RISK_SCAN_INTERVAL_SECONDS = int(os.environ.get("DCB_RISK_SCAN_INTERVAL", str(60
 
 # ── 바깥에서 보이는 주소 ──────────────────────────────────────────────
 #
-# **초대 링크는 완성된 채로 나가야 합니다.** 전에는 `https://<내-주소>/invite/…`
-# 로 찍어 두고 사람이 매번 앞부분을 손으로 갈아 끼웠는데, 그러다 토큰까지
+# **초대 링크는 완성된 채로 나가야 합니다.** 전에는 주소 앞부분을 자리표시자로
+# 찍어 두고 사람이 매번 손으로 갈아 끼웠는데, 그러다 토큰까지
 # 건드려 링크가 깨졌습니다 — 하루에 대여섯 번씩 그랬습니다.
 # 자리표시자를 남기지 않습니다. 붙여넣으면 바로 열려야 합니다.
 #

@@ -464,6 +464,11 @@ class FileVersion(Base):
     original_name: Mapped[str] = mapped_column(String(300))
     stored_name: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    # 링크 첨부 (4-9). **파일과 같은 표에 둔다** — 목록에서 섞여 보여야 하고,
+    # 나누면 "저건 어디 있더라" 를 두 번 찾게 된다. 담당자에게는 둘 다 자료다.
+    # 값이 있으면 링크, 없으면 파일이다. 링크일 때 original_name 은 파일 이름이
+    # 아니라 **설명**("무엇인가요")이고 stored_name 은 비어 있다.
+    url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -961,6 +966,11 @@ class TaskAttachment(Base):
     original_name: Mapped[str] = mapped_column(String(300))
     stored_name: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    # 링크 첨부 (4-9). **파일과 같은 표에 둔다** — 목록에서 섞여 보여야 하고,
+    # 나누면 "저건 어디 있더라" 를 두 번 찾게 된다. 담당자에게는 둘 다 자료다.
+    # 값이 있으면 링크, 없으면 파일이다. 링크일 때 original_name 은 파일 이름이
+    # 아니라 **설명**("무엇인가요")이고 stored_name 은 비어 있다.
+    url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     uploaded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -970,10 +980,28 @@ class TaskAttachment(Base):
     run: Mapped[TaskRun] = relationship(back_populates="attachments")
 
     @property
+    def is_link(self) -> bool:
+        return bool(self.url)
+
+    @property
     def ext(self) -> str:
         """확장자. 목록에서 무슨 파일인지 한눈에 알아보는 표시."""
+        if self.is_link:
+            return ""
         _, dot, tail = self.original_name.rpartition(".")
         return tail.lower() if dot else ""
+
+    @property
+    def domain(self) -> str:
+        """링크의 도메인만. `youtube.com` 인지 `drive.google.com` 인지가 보이면
+        누를지 말지 판단이 된다. **전체 주소는 내지 않는다** — 목록에서 잘려서
+        아무 소용이 없다."""
+        if not self.url:
+            return ""
+        import urllib.parse
+
+        host = urllib.parse.urlsplit(self.url).hostname or ""
+        return host[4:] if host.startswith("www.") else host
 
 
 # ==========================================================================

@@ -57,6 +57,8 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("programs", "parallel", "BOOLEAN"),
     # 비활성 계정이 놓은 번호 (4-12). 되살릴 때 돌려준다.
     ("users", "retired_phone", "VARCHAR(20)"),
+    # 링크 첨부 (4-9). 기존 행은 NULL — 값이 없으면 파일이다.
+    ("task_attachments", "url", "VARCHAR(2000)"),
 )
 
 
