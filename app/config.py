@@ -181,6 +181,20 @@ ALLOWED_ATTACHMENT_EXTS = {
 DISK_FREE_FLOOR_BYTES = int(os.environ.get("DCB_DISK_FLOOR_MB", "2048")) * 1024 * 1024
 DISK_FREE_WARN_BYTES = int(os.environ.get("DCB_DISK_WARN_MB", "5120")) * 1024 * 1024
 
+# ── 바깥에서 올릴 수 있는 크기 ───────────────────────────────────────
+#
+# **앱이 받을 수 있는 크기와 터널이 실어 나를 수 있는 크기는 다릅니다.**
+# Cloudflare 무료 요금제는 **요청 본문을 100MB 로 제한**하고 Tunnel 도 같은
+# 제한을 받습니다(11-2). 내려받기(응답)에는 그 제한이 없습니다.
+#
+# 그래서 이 값은 **막는 선이 아니라 알려 주는 선**입니다 — 집 안 회선에서
+# 직접 올리면 200MB 도 올라가므로, 넘는다고 거절하면 되는 것을 못 하게 됩니다.
+# 화면은 이 값을 넘으면 "바깥에서는 실패합니다" 라고 **경고만** 합니다.
+#
+# 100 이 아니라 95 인 것은 multipart 의 머리말과 경계선이 본문에 함께
+# 실리기 때문입니다 — 파일이 딱 100MB 면 요청은 그보다 조금 큽니다.
+TUNNEL_MAX_BYTES = int(os.environ.get("DCB_TUNNEL_MAX_MB", "95")) * 1024 * 1024
+
 # 웹 푸시 VAPID 연락처 (규격상 mailto: 또는 https: 여야 함)
 PUSH_CONTACT = os.environ.get("DCB_PUSH_CONTACT", "mailto:admin@example.com")
 

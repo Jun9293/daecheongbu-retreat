@@ -915,3 +915,212 @@ def test_c17_자가진단이_디스크_여유를_보여준다(monkeypatch, tmp_p
 def test_c17b_자가진단_목록에_들어가_있다():
     source = open("scripts/healthcheck.py", encoding="utf-8").read()
     assert '("디스크 여유", check_disk())' in source
+
+
+# ════════════════════════════════════════════════════════════════════
+#  리뷰에서 나온 것 — 수용기준 8~11 · 13
+# ════════════════════════════════════════════════════════════════════
+
+import pathlib as _pathlib
+
+DRAWER_JS = (_pathlib.Path(__file__).resolve().parent.parent
+             / "app" / "static" / "js" / "drawer.js")
+
+
+# ── 8 · 9. 보내기 전에 크기를 본다 ────────────────────────────────────
+
+
+def test_r08_상한을_넘으면_보내기_전에_거절한다(admin_client, task_data):
+    """**서버까지 갔다 오면 이유가 도착하지 못한다.**
+
+    서버는 본문을 읽는 도중에 400 으로 답하는데, 클라이언트가 아직 보내는
+    중이면 XHR 이 `onerror` 로 떨어져서 "파일이 너무 큽니다" 가 화면에 닿지
+    않는다 — 사람은 몇 분을 기다린 끝에 "연결이 끊겼습니다" 만 본다.
+    """
+    js = DRAWER_JS.read_text(encoding="utf-8")
+    assert "function preflight(" in js
+    body = js[js.index("function preflight("):]
+    body = body[: body.index("\n}")]
+    assert "file.size > limits.max_bytes" in body
+    assert "too-big" in body
+
+    # 보내기 전에 부른다 — putFile 보다 앞이어야 뜻이 있다
+    send = js[js.index("async function sendFiles("):]
+    send = send[: send.index("\n}")]
+    assert send.index("preflight(file)") < send.index("putFile(cur, file)")
+
+    # 화면이 상한을 알고 있다 (그래야 보내기 전에 볼 수 있다)
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    limits = admin_client.get(f"/board/task/{run_id}").json()["attachment_limits"]
+    assert limits["max_bytes"] > 0 and limits["max_label"]
+
+
+def test_r09_터널_한계를_넘으면_경고하되_막지_않는다(admin_client, task_data):
+    """집 안 회선에서는 올라간다 — 서버가 있는 곳에서 올리면 되는 것을
+    못 하게 만들면 안 된다. **막는 선이 아니라 알려 주는 선**이다."""
+    from app import config
+
+    assert config.TUNNEL_MAX_BYTES == 95 * 1024 * 1024
+    assert config.TUNNEL_MAX_BYTES < config.MAX_ATTACHMENT_BYTES, (
+        "경고선이 상한보다 크면 경고가 뜰 일이 없다")
+
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    limits = admin_client.get(f"/board/task/{run_id}").json()["attachment_limits"]
+    assert limits["tunnel_max_bytes"] == config.TUNNEL_MAX_BYTES
+    assert limits["tunnel_max_label"]
+
+    js = DRAWER_JS.read_text(encoding="utf-8")
+    body = js[js.index("function preflight("):]
+    body = body[: body.index("\n}")]
+    assert "tunnel_max_bytes" in body
+    # 경고이지 거절이 아니다 — preflight 는 'tunnel' 을 돌려주고 sendFiles 가 묻는다
+    send = js[js.index("async function sendFiles("):]
+    send = send[: send.index("\n\n")]
+    assert "confirm(" in send, "묻지 않고 막고 있다"
+    assert "그래도 올려 보시겠습니까" in send
+
+
+def test_r09b_안내_문구가_상한과_같은_숫자를_말한다(admin_client, task_data):
+    """글에 숫자를 박아 두면 상한을 바꿨을 때 화면이 조용히 거짓말을 한다."""
+    page = admin_client.get("/board").text
+    assert 'id="dfilenote"' in page, "문구를 고쳐 쓸 자리가 없다"
+
+    js = DRAWER_JS.read_text(encoding="utf-8")
+    assert "limits.tunnel_max_label" in js
+    # 숫자를 코드에 박아 두지 않았는지
+    assert "95MB" not in js and "100MB" not in js
+
+
+# ── 10 · 11. 첨부 삭제 ────────────────────────────────────────────────
+
+
+def test_r10_파일을_못_지워도_기록이_남고_500_이_나지_않는다(
+    admin_client, task_data, monkeypatch
+):
+    """윈도우에서는 누가 내려받는 중이면 파일이 잠긴다. 지우기를 먼저 하면
+    그때 DB 행은 이미 사라졌는데 500 이 나가고 활동 기록도 안 남는다 —
+    **무엇이 없어졌는지 아무도 모른다.**"""
+    from app.routers import attachments
+
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    upload(admin_client, run_id, "잠긴시안.pdf")
+    row = admin_client.get(f"/board/task/{run_id}").json()["attachments"][0]
+
+    # 파일이 잠긴 상황을 흉내 낸다
+    real = _pathlib.Path.unlink
+
+    def locked(self, *args, **kw):
+        if self.suffix == ".pdf":
+            raise PermissionError(32, "다른 프로세스가 사용 중")
+        return real(self, *args, **kw)
+
+    monkeypatch.setattr(_pathlib.Path, "unlink", locked)
+
+    res = admin_client.post(f"/board/task/{run_id}/files/{row['id']}/delete")
+    assert res.status_code == 200, "파일을 못 지웠다고 500 이 났다"
+    assert res.json()["files"] == [], "목록에서는 사라져야 한다"
+
+    # 활동 기록이 남았는가 — 무엇이 없어졌는지 알 수 있어야 한다
+    with app_session() as db:
+        logs = list(db.scalars(
+            select(models.ActivityLog).where(models.ActivityLog.action == "첨부 삭제")))
+        assert logs, "활동 기록이 남지 않았다"
+
+
+def test_r11_못_지운_파일이_로그에_남는다(admin_client, task_data, monkeypatch, caplog):
+    """조용히 삼키지 않는다. 디스크에 남은 것은 나중에 누군가 치워야 한다."""
+    import logging
+
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    upload(admin_client, run_id, "잠긴시안2.pdf")
+    row = admin_client.get(f"/board/task/{run_id}").json()["attachments"][0]
+
+    real = _pathlib.Path.unlink
+
+    def locked(self, *args, **kw):
+        if self.suffix == ".pdf":
+            raise PermissionError(32, "다른 프로세스가 사용 중")
+        return real(self, *args, **kw)
+
+    monkeypatch.setattr(_pathlib.Path, "unlink", locked)
+
+    with caplog.at_level(logging.WARNING, logger="app.routers.attachments"):
+        admin_client.post(f"/board/task/{run_id}/files/{row['id']}/delete")
+
+    said = [r.getMessage() for r in caplog.records]
+    assert any("지우지 못했습니다" in one for one in said), \
+        f"못 지운 것이 로그에 없다: {said}"
+    # **무엇을** 못 지웠는지가 있어야 나중에 누가 치울 수 있다
+    assert any("잠긴시안2.pdf" in one for one in said), \
+        f"무엇을 못 지웠는지가 로그에 없다: {said}"
+
+
+def test_r10b_기록이_지우기보다_먼저다():
+    """순서가 이 시험의 전부다 — 지우기가 앞서면 실패했을 때 기록이 안 남는다."""
+    source = open("app/routers/attachments.py", encoding="utf-8").read()
+    body = source[source.index('@router.post("/board/task/{run_id}/files/{attachment_id}/delete")'):]
+    body = body[: body.index("@router.get")]
+    assert body.index("log_activity(") < body.index("path.unlink()"), \
+        "파일 지우기가 활동 기록보다 앞에 있다"
+
+
+# ── 13. 확장자 ────────────────────────────────────────────────────────
+
+
+def test_r13_확장자_없는_이름으로_바꿔도_점이_두_개가_되지_않는다(
+    admin_client, task_data
+):
+    """`ext` 는 점을 품지 않으므로(models 의 rpartition) `보고서..pdf` 는
+    원래 나지 않았다. 그래도 붙이는 쪽에서 막아 둔다 — 그쪽이 바뀌면 난다."""
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    upload(admin_client, run_id, "시안.pdf")
+    row = admin_client.get(f"/board/task/{run_id}").json()["attachments"][0]
+
+    res = admin_client.post(f"/board/task/{run_id}/files/{row['id']}/rename",
+                            json={"name": "보고서"})
+    assert res.status_code == 200
+    assert res.json()["files"][0]["name"] == "보고서.pdf"
+    assert ".." not in res.json()["files"][0]["name"]
+
+
+def test_r13b_끝에_점을_찍으면_확장자가_사라지던_것을_막는다(
+    admin_client, task_data
+):
+    """**이건 진짜로 있던 문제다.** `Path("보고서.").suffix` 는 빈 문자열이
+    아니라 `"."` 이라, "확장자가 있다" 로 읽혀 되붙이기를 건너뛰었다 —
+    `시안.pdf` 를 `보고서.` 로 바꾸면 확장자가 조용히 사라졌다."""
+    from pathlib import Path as _P
+
+    assert _P("보고서.").suffix == ".", "전제가 바뀌었다 — 이 시험을 다시 보라"
+
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    upload(admin_client, run_id, "시안.pdf")
+    row = admin_client.get(f"/board/task/{run_id}").json()["attachments"][0]
+
+    res = admin_client.post(f"/board/task/{run_id}/files/{row['id']}/rename",
+                            json={"name": "보고서."})
+    assert res.status_code == 200
+    saved = res.json()["files"][0]["name"]
+    assert saved == "보고서.pdf", f"확장자가 사라졌다: {saved!r}"
+
+
+def test_r13c_점만_적으면_거절한다(admin_client, task_data):
+    run_id = task_data["runs"]["포스터 제작"]["run_id"]
+    upload(admin_client, run_id, "시안.pdf")
+    row = admin_client.get(f"/board/task/{run_id}").json()["attachments"][0]
+
+    res = admin_client.post(f"/board/task/{run_id}/files/{row['id']}/rename",
+                            json={"name": "  ..  "})
+    assert res.status_code == 400
+
+
+# ── 6(d). 디스크 다시 보기를 조각 크기에 기대지 않는다 ────────────────
+
+
+def test_r6d_디스크_다시_보기를_나머지_연산으로_세지_않는다():
+    """`size % 간격 < 조각크기` 는 조각이 딱 1MB 로 올 때만 맞는다.
+    조각 크기는 클라이언트와 서버 사정에 따라 달라진다."""
+    source = open("app/routers/attachments.py", encoding="utf-8").read()
+    assert "size % DISK_RECHECK_BYTES" not in source
+    assert "next_check" in source
+    assert "if size >= next_check:" in source

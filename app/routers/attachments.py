@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import secrets
 import urllib.parse
 from pathlib import Path
@@ -26,6 +27,7 @@ from app.config import (
     ATTACHMENT_DIR,
     DISK_FREE_FLOOR_BYTES,
     MAX_ATTACHMENT_BYTES,
+    TUNNEL_MAX_BYTES,
 )
 from app.db import get_db
 from app.deps import get_current_retreat, log_activity
@@ -35,6 +37,7 @@ from app.models import Retreat, TaskAttachment, TaskRun, User
 from app.security import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # 한 번에 읽는 조각. 너무 작으면 200MB 에 조각이 수만 개가 되고,
@@ -153,10 +156,21 @@ def serialize(db: Session, user: User, run: TaskRun) -> list[dict]:
 
 
 def limits() -> dict:
-    """왜 거절당했는지 말할 수 있으려면 화면도 상한을 알아야 한다."""
+    """왜 거절당했는지 말할 수 있으려면 화면도 상한을 알아야 한다.
+
+    **보내기 전에** 알아야 하는 것이기도 하다. 서버는 본문을 읽는 도중에
+    거절하는데, 클라이언트가 아직 보내는 중이면 그 답이 도착하지 못하고
+    XHR 이 그냥 끊긴 것으로 떨어진다 — 애써 쓴 "파일이 너무 큽니다" 가
+    화면에 닿지 않고, 사람은 몇 분을 기다린 끝에 이유를 모른 채 끝난다.
+    그래서 화면이 `file.size` 를 먼저 본다.
+
+    `tunnel_max_bytes` 는 **막는 선이 아니라 알려 주는 선**이다 (config).
+    """
     return {
         "max_bytes": MAX_ATTACHMENT_BYTES,
         "max_label": _human(MAX_ATTACHMENT_BYTES),
+        "tunnel_max_bytes": TUNNEL_MAX_BYTES,
+        "tunnel_max_label": _human(TUNNEL_MAX_BYTES),
         "exts": sorted(ALLOWED_ATTACHMENT_EXTS),
     }
 
@@ -217,6 +231,7 @@ async def upload(
         _require_disk(min(declared, MAX_ATTACHMENT_BYTES))
 
     size = 0
+    next_check = DISK_RECHECK_BYTES
     try:
         with path.open("wb") as out:
             while chunk := await upload.read(CHUNK_BYTES):
@@ -231,15 +246,33 @@ async def upload(
                     )
                 # 받는 동안에도 여유를 본다. 미리 본 값은 짐작일 뿐이고,
                 # 같은 시각에 다른 사람이 올리고 있을 수도 있다.
-                if size % DISK_RECHECK_BYTES < CHUNK_BYTES:
+                #
+                # **나머지 연산으로 세지 않는다.** `size % 간격 < 조각크기` 는
+                # 조각이 딱 1MB 로 올 때만 맞는다. 조각 크기는 클라이언트와
+                # 서버 사정에 따라 달라지므로, 그렇게 두면 어떤 업로드는
+                # 디스크를 한 번도 다시 보지 않는다.
+                if size >= next_check:
                     _require_disk(0)
+                    next_check = size + DISK_RECHECK_BYTES
                 out.write(chunk)
         if not size:
             raise HTTPException(status_code=400, detail="빈 파일은 올릴 수 없습니다.")
     except BaseException:
         # 취소·끊김·거절 — 어느 쪽이든 반쯤 쓰인 파일을 남기지 않는다.
-        # ClientDisconnect 는 HTTPException 이 아니므로 BaseException 으로 받는다.
-        path.unlink(missing_ok=True)
+        #
+        # **`Exception` 이 아니라 `BaseException` 인 이유는 취소 때문이다.**
+        # 사람이 ✕ 를 누르면 브라우저가 연결을 끊고, 그때 이 코루틴은
+        # `asyncio.CancelledError` 로 깨어난다 — 파이썬 3.8 부터 그것은
+        # `BaseException` 바로 아래라 `except Exception` 에 걸리지 않는다.
+        # (`ClientDisconnect` 는 `Exception` 하위여서 좁게 잡아도 걸린다.
+        #  좁히면 정확히 '취소했을 때만' 조각이 남는다.)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:                                   # noqa: BLE001
+            # 윈도우에서는 누가 그 파일을 붙들고 있으면 지우지 못한다.
+            # **여기서 터지면 원래 예외가 이것으로 바뀐다** — 왜 실패했는지가
+            # 사라지므로, 못 지운 것은 남기되 원래 이유를 그대로 올려보낸다.
+            logger.warning("올리다 만 파일을 지우지 못했습니다: %s — %s", path, exc)
         raise
 
     attachment = TaskAttachment(
@@ -365,9 +398,18 @@ def rename(
         name = Path(payload.name.replace("\\", "/")).name.strip()
         if not name:
             raise HTTPException(status_code=400, detail="이름을 비울 수 없습니다.")
-        # 확장자를 지워 버리면 무슨 파일인지 알 수 없게 되므로 원래 것을 붙여 준다
+        # 확장자를 지워 버리면 무슨 파일인지 알 수 없게 되므로 원래 것을 붙여 준다.
+        #
+        # **끝의 점을 먼저 턴다.** `Path("보고서.").suffix` 는 빈 문자열이 아니라
+        # `"."` 이라, 그대로 물어보면 "확장자가 있다" 로 읽혀 되붙이기를 건너뛴다 —
+        # `시안.pdf` 를 `보고서.` 로 바꾸면 확장자가 조용히 사라진다.
+        # **점을 두 번 찍지도 않는다** — `ext` 는 점 없이 오지만(models 의
+        # rpartition), 그쪽이 바뀌면 `보고서..pdf` 가 되므로 여기서 막아 둔다.
+        name = name.rstrip(". ")
+        if not name:
+            raise HTTPException(status_code=400, detail="이름을 비울 수 없습니다.")
         if not Path(name).suffix and attachment.ext:
-            name = f"{name}.{attachment.ext}"
+            name = f"{name}.{attachment.ext.lstrip('.')}"
     attachment.original_name = name[:300]
     db.commit()
     db.refresh(run)
@@ -395,8 +437,10 @@ def delete(
     was_link = attachment.is_link
     db.delete(attachment)
     db.commit()
-    if path is not None and path.is_file():
-        path.unlink()
+
+    # **기록을 먼저 남긴다.** 윈도우에서는 누가 내려받는 중이면 파일이
+    # 잠겨서 지워지지 않는다. 지우기를 먼저 하면 그때 DB 행은 이미 사라졌는데
+    # 500 이 나가고, 활동 기록도 남지 않는다 — 무엇이 없어졌는지 아무도 모른다.
     log_activity(
         db,
         retreat_id=retreat.id,
@@ -406,6 +450,16 @@ def delete(
         target_id=run.id,
         before_value={"link" if was_link else "file": name},
     )
+
+    if path is not None and path.is_file():
+        try:
+            path.unlink()
+        except OSError as exc:                                   # noqa: BLE001
+            # 지우지 못해도 사람에게는 지워진 것이 맞다 — 목록에서 사라졌고
+            # 되돌릴 방법도 없다. 다만 **조용히 삼키지 않는다.** 디스크에 남은
+            # 것은 나중에 누군가 치워야 하므로 무엇인지 로그에 남긴다.
+            logger.warning(
+                "첨부 파일을 지우지 못했습니다: %s (%s) — %s", path, name, exc)
     db.refresh(run)
     return {"files": serialize(db, user, run)}
 
