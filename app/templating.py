@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import urllib.parse
 
 from fastapi import Request
@@ -13,6 +14,22 @@ from app.config import BASE_DIR
 from app.domain import permissions as perm
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+
+# **화면과 코드는 같이 움직여야 합니다.**
+#
+# Jinja 는 기본으로 요청마다 템플릿을 디스크에서 다시 읽습니다. 그런데 파이썬은
+# 켤 때 읽은 모듈을 그대로 들고 있습니다. 그래서 서버를 켜 둔 채 코드를 고치면
+# **새 화면 + 옛 코드** 가 짝지어져서, 화면이 라우터가 아직 안 넘기는 값을 읽고
+# 500 이 납니다. 실제로 이 조합으로 `/live` 와 `/live/staff` 가 세 번 죽었습니다.
+# 코드는 맞았고 테스트도 통과했는데 돌던 서버만 옛것이었습니다.
+#
+# 그래서 **운영에서는 템플릿도 켤 때 한 번만 읽습니다.** 둘이 함께 낡으므로
+# 화면이 잠깐 옛것일 수는 있어도 서로 어긋나지는 않습니다 — 고친 것을 반영하려면
+# 어차피 서버를 다시 켜야 하고, 그건 코드도 마찬가지였습니다.
+#
+# 개발에서는 `--reload` 가 프로세스를 통째로 다시 띄우므로 켜 둡니다
+# (`scripts/devserve.bat` 이 `DCB_DEV` 와 `--reload-include *.html` 을 함께 줍니다).
+templates.env.auto_reload = bool(os.environ.get("DCB_DEV"))
 
 FLASH_COOKIE = "dcb_flash"
 
@@ -58,6 +75,8 @@ templates.env.filters["num"] = num
 templates.env.filters["kdate"] = kdate
 templates.env.filters["short_date"] = short_date
 templates.env.filters["dday"] = dday
+
+
 def can_edit_dept(user, target_department_id: int | None) -> bool:
     """템플릿에서 편집 버튼 노출 여부를 판단할 때 쓴다."""
     if user is None:

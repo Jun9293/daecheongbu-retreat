@@ -33,7 +33,7 @@
 {% macro bar(row) -%}
 <div class="bar {{ 'sch' if row.kind == 'schedule' else ('s' if row.depth else 'm') }}
             {{ 'ghost' if row.ghost else row.status }}"
-     style="grid-column:{{ row.col_start }}/{{ row.col_end }};background:{{ row.background }};border-color:{{ row.border }}"
+     style="grid-column:{{ row.col_start }}/{{ row.col_end }};background:{{ row.background }};border-color:{{ row.border }};--team:{{ row.owner_color }}"
      tabindex="0" data-run="{{ row.run_id }}"{% if row.ghost %} data-ghost="1"{% endif %}>
   {%- if row.status == '지연' and not row.ghost %}<span class="flag">지연</span>{% endif -%}
   <span class="txt">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
@@ -43,8 +43,7 @@
 {% macro task_row(row, dept) -%}
 <div class="row {{ 'sub' if row.depth or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}"
      data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
-     data-status="{{ row.status }}"
-     style="--teamt:{{ dept.team_tint }};--rowt:{{ dept.row_tint }};--lct:{{ dept.label_tint }}">
+     data-status="{{ row.status }}">
   <div class="lc" data-go="{{ row.run_id }}">
     <span class="nm">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
     <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
@@ -73,8 +72,7 @@
     </div>
 
     {% for dept in board.departments %}
-    <div class="row team" data-team="{{ dept.key }}"
-         style="--teamt:{{ dept.team_tint }};--rowt:{{ dept.row_tint }};--lct:{{ dept.label_tint }}">
+    <div class="row team" data-team="{{ dept.key }}">
       <div class="lc">
         <span class="caret">▼</span>
         <span class="sw" style="background:{{ dept.color }}"></span>
@@ -129,6 +127,7 @@
       <button data-p="log" aria-selected="false">논의 내역</button>
       <button data-p="cal" aria-selected="false">달력</button>
       <button data-p="rel" aria-selected="false">연결된 업무<span class="n" id="relN"></span></button>
+      <button data-p="files" aria-selected="false">첨부파일<span class="n" id="fileN"></span></button>
     </div>
   </div>
   <div class="dbody">
@@ -169,6 +168,18 @@
       </div>
     </div>
     <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+    <!-- 첨부파일 — 회차별이다. 논의 내역과 같은 취급이고 업무 규칙과 다르다 (4-9) -->
+    <div class="pane" id="p-files">
+      <div class="files" id="dfiles"></div>
+      <div class="drop" id="ddrop" hidden>
+        <b>여기에 파일을 끌어다 놓으세요</b>
+        <span id="ddroplimit"></span>
+        <button type="button" class="pick" id="dpick">파일 고르기</button>
+        <input type="file" id="dfileinput" multiple hidden>
+      </div>
+      <div class="dropwarn" id="ddropwarn" hidden></div>
+      <div class="filenote">이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.</div>
+    </div>
     <div class="modal" id="prepick" hidden></div>
   </div>
   <!-- 진단 패널 — 하단 고정. 패널 이름이 판정 결과다 (CLAUDE.md 4-10) -->
@@ -177,8 +188,9 @@
       <button id="dgR" type="button">다시 분석</button></div>
     <div class="dg-b" id="dgB"></div>
   </div>
+  <!-- '파일 첨부' 버튼은 없앴다 — 첨부파일 탭 안에 올리는 자리가 생겼으므로
+       같은 기능이 두 군데 있게 된다 (논의 입력칸과 같은 이유, CLAUDE.md 4-9) -->
   <div class="dfoot">
-    <button disabled title="Phase 3 에서 만듭니다">파일 첨부</button>
     <button disabled title="Phase 2 에서 만듭니다">하위 업무 추가</button>
   </div>
 </aside>
@@ -186,5 +198,5 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/board.js?v=26" defer></script>
+<script src="/static/js/board.js?v=30" defer></script>
 {% endblock %}

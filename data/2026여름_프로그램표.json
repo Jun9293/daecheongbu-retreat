@@ -1,0 +1,2000 @@
+{
+  "retreat": "2026 여름수련회",
+  "source": "2026 여름수련회 일정표_Belong",
+  "days": {
+    "선발대": [
+      {
+        "start_time": "09:30",
+        "name": "본당집합",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "총무팀 들어오는 시간 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "선발대 점심 사전주문",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "재정",
+            "assignee": "하람",
+            "text": "선발대 인원계수 마지막 확인 — 만나서 카드결제",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "예린M 카드 챙기기 (현장 결제용)",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "시설로 바로 주문할 택배 확인 — 멸균우유·생수18.9L (20일 시설도착)",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "신선식품 본당 배송 확인 (성신카페 냉장고 or 본당 보관)",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "10:00",
+        "name": "짐정리",
+        "host": "총무팀",
+        "place": "본당",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "비품리스트 확인 — 가족실 짐 추가",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "총무팀·새친구팀 짐 패킹",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "성찬기 패킹",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "도현",
+            "text": "침례짐 패킹 (침례복·침례탕)",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "박스 상단에 패킹 목록·번호 작성 (예: 2/8)",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "11:00",
+        "name": "본당에서 점심식사",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "11:30",
+        "name": "짐 상차",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "12:00",
+        "name": "수련회장 이동",
+        "host": "총무팀",
+        "place": null,
+        "note": "자차 + 봉고",
+        "items": [],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "13:00",
+        "name": "수련회장 짐 하차",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "선발대 숙소 배치 — 10인실 4개, 현장 인원 보고 결정",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "시우",
+            "text": "장소 사진 찍기 (원상복구 용도) — 진행실·창고1",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "서윤",
+            "text": "강대상 물 놓는 공간 확인 (없으면 협탁)",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "하람",
+            "text": "본부 옆 창고1 원형테이블·의자 빼놓기",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "하람",
+            "text": "창고1에 봉사팀 짐 쌓을 수 있도록 안내",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "서윤",
+            "text": "총무팀 짐 임시 배치 통제 (강당 오른쪽 뒤)",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "14:00",
+        "name": "음향 및 무대설치",
+        "host": "헤브론",
+        "place": null,
+        "note": "3.5h · 봉사자 숙소 입실 15시",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "강당 의자 세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "본부세팅 — 카드키·릴선·멀티탭",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "비품 정리",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "음향 및 무대설치 (3.5h)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "도현",
+            "text": "침례탕 설치",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "17:00",
+        "name": "식수계수",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "하람",
+            "text": "시설 측에 계수 방법 확인 (식판 or 사람)",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "하람",
+            "text": "식수계수",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "17:30",
+        "name": "저녁식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "17:30~18:30",
+        "items": [],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "18:00",
+        "name": "저녁 전 준비 마무리",
+        "host": "총무팀",
+        "place": null,
+        "note": "준비 못한 부분 진행",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "강당 의자 세팅 및 정렬 (노끈)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "본부세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "전체",
+            "text": "상시간식 세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "비품 정리",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "포토존 설치",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "방석 강당 뒤쪽에 쌓아두기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "헌금함 설치 — 1·2일차는 상시간식 옆",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "서윤",
+            "text": "헤브론 포토월 자리 확인",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "18:00",
+        "name": "홀 튜닝",
+        "host": "헤브론",
+        "place": null,
+        "note": "1.5h",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "홀 튜닝 (1.5h)",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "20:00",
+        "name": "수련회 리허설",
+        "host": "헤브론 · 코람데오",
+        "place": null,
+        "note": "3h",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "1일차·2일차·3일차 콘티 리허설",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "21:00",
+        "name": "개기자 미팅",
+        "host": "건우",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "등록·관리자 페이지·푸시 전송 교육 (하윤M)",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "22:00",
+        "name": "영수증 정리",
+        "host": "재정",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "23:00",
+        "name": "정리",
+        "host": "전체",
+        "place": null,
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      }
+    ],
+    "1일차": [
+      {
+        "start_time": "06:00",
+        "name": "외부강사 준비",
+        "host": "행정",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "외부강사 차량번호 확인 — 오세영 목사 21수4532",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "08:00",
+        "name": "아침식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 08:00~09:00",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "서윤",
+            "text": "식수계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "09:00",
+        "name": "퇴실준비",
+        "host": "봉사자",
+        "place": null,
+        "note": "짐은 강당으로",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "서윤",
+            "text": "물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "퇴실 숙소 상태 확인 및 점검",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "10:00",
+        "name": "봉사자 예배",
+        "host": "한지훈 목사",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "봉사자 알아서 빨리 식사하도록 공지",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "온",
+            "text": "인원계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "11:30",
+        "name": "점심 식사 & 휴식",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 11:30~12:30",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준",
+            "text": "카드키 배부 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "온",
+            "text": "식수계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "12:00",
+        "name": "부착물 부착 · 장소 세팅",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "1층 — X배너 설치, 방명록, 짐 두는 곳, 포토존 안내문",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "다은",
+            "text": "각 층 엘레베이터 부착물 — 주의사항·카드키 챙기기",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "온·시우",
+            "text": "웰컴키트 방마다 배치",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "서윤·나윤",
+            "text": "강당 — BelongFM 진행자 자리 세팅, 의자 정렬",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "준서·하람",
+            "text": "새가족팀 세팅 — X배너·테이블·의자·접견실(6인)·다과",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "14:00",
+        "name": "Belong FM",
+        "host": "최도현M",
+        "place": "강당",
+        "note": "[프로그램 1]",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "Belong FM 준비 (13:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준",
+            "text": "롤링배너 교체",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "온",
+            "text": "인원계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "15:00",
+        "name": "오리엔테이션",
+        "host": "하윤M",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "민준M",
+            "text": "기도실·유아실 세팅 — 노트북·HDMI·블투스피커·빔프",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "16:00",
+        "name": "등록 / 입실",
+        "host": "총무팀",
+        "place": null,
+        "note": "숙소입실 15:00부터 가능",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준",
+            "text": "방인원 명단 출력 — 현장 인원 변동 가능성 있음",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "개기자",
+            "text": "회원가입 안 한 사람 확인",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "다은",
+            "text": "등록 안내",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "서윤",
+            "text": "등록 안 한 사람 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "회비 안 낸 사람 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "나윤·하람·온",
+            "text": "명찰 배부",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "하윤M",
+            "text": "당첨자 명단 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "예솔M",
+            "text": "인원 숙소로 가는 것 통솔 및 안내",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "하윤M",
+            "text": "강당 내 안내",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "17:00",
+        "name": "저녁식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 17:00~18:00",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "온",
+            "text": "식수계수",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "서윤·나윤",
+            "text": "다과 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "헤브론 집합 (17:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "수영·미르·도현",
+            "text": "외부강사 식사",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "19:00",
+        "name": "집회1",
+        "host": "오세영 목사",
+        "place": "강당",
+        "note": "집회전 담당 도현 / 집회후 백목·하윤",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "의자정렬",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "휴지 & 방석 세팅 — 각티슈·롤휴지 배치",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "코람데오 리허설 시작 (18:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "송출시작 & 18:50 스탠바이",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "강사자 차량등록 진행",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "콘티 세부 진행",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "온",
+            "text": "인원계수",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "강사비 계좌이체",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "19:00",
+        "name": "새친구",
+        "host": "강예린M",
+        "place": "힐링 30",
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "all",
+        "end_time": "23:00",
+        "parallel": true
+      },
+      {
+        "start_time": "21:00",
+        "name": "기도회1",
+        "host": "최도현M",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "콘티 세부 진행",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "온",
+            "text": "인원계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "22:00",
+        "name": "간식 세팅",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "세미나실 오픈 시설 요청 (새벽기도용) — 요청시간 확인",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "간식세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "간식세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "전체",
+            "text": "간식세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "23:00",
+        "name": "광고",
+        "host": "민준M",
+        "place": "강당",
+        "note": "안내·2일차 오전일정 광고",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "광고내용 준비 — 아침배식시간·의자정리·모자 챙기기·새벽 일정·1시 이후 정숙",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "23:00",
+        "name": "성찬 리허설",
+        "host": "최도현M",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "도현M",
+            "text": "성찬 리허설",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "23:30",
+        "name": "총무팀 전체 미팅",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "전체",
+            "text": "1일차 간식 확인 — 에너지바",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "의자정리 후 방석세팅 + 직사각형 검정마스킹테이프",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "골든벨 비품 꺼내놓기 — 코팅지·보드마카·라벨지·색종이·휴지·모자",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "다은",
+            "text": "새벽기도 비품 전달 or 세미나실 배치 — 기타·거치대·보면대·종이악보",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      }
+    ],
+    "2일차": [
+      {
+        "start_time": "06:00",
+        "name": "침묵기도 · 새벽기도",
+        "host": "한지훈 목사 · 소율M",
+        "place": "산책로 / 힐링 45",
+        "note": "자율 참여 · 담당 하윤",
+        "items": [
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "07:00",
+        "name": "기상 & 준비",
+        "host": "전체",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "전체",
+            "text": "인원계수",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "식사신청인원보다 실제인원 많을 시 관리실로 전달",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "08:00",
+        "name": "아침식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 08:00~09:00",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "식수계수",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "야식광고 롤링배너",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "08:00",
+        "name": "골든벨 준비",
+        "host": "담당M · 헤브론 · 총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "골든벨 개인 비품 직접 배부 — 명찰스티커·코팅지·보드마카·롤휴지",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "골든벨 상품 우드락 세팅",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "담당M·헤브론·총무팀",
+            "text": "골든벨 준비",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "하람",
+            "text": "침례짐 챙기기 (접견실 세팅 X)",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "하람",
+            "text": "접견실용 침례용품 — 가운·장화가운·반팔반바지·슬리퍼",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "시우",
+            "text": "침례장소 준비 — 블투스피커·수건(인당2개)·대걸레",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "하람·온",
+            "text": "색종이(힌트용) 중간 배부 — 패자들에게만",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "09:00",
+        "name": "골든벨",
+        "host": "예솔 · 하윤M",
+        "place": "강당",
+        "note": "[프로그램 2]",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "재하",
+            "text": "인원계수",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "서윤·나윤·민준",
+            "text": "다과 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "온",
+            "text": "현수막·작은 사다리 준비",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "11:00",
+        "name": "단체사진",
+        "host": "태윤M",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "식사신청인원보다 실제인원 많을 시 관리실로 전달",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "11:30",
+        "name": "점심식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 11:30~12:30",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "재하",
+            "text": "식수계수",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "하윤·예솔·소율",
+            "text": "외부강사 식사",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "12:00",
+        "name": "집회장 세팅",
+        "host": "총무팀",
+        "place": null,
+        "note": "의자 세팅 후 나중에 식사",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "강당 방석 정리 & 집회용 의자 세팅 (재하 제외)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "민준M",
+            "text": "침례탕 물 요청 전화",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "13:00",
+        "name": "특강 — 관계 중독",
+        "host": "임채원 목사",
+        "place": "강당",
+        "note": "[프로그램 3] 정-하윤, 부-소율 / 특강정리 도현 / 교차배식 광고",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "헤브론 집합 (12:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "재하",
+            "text": "인원계수",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "온",
+            "text": "마이크보이",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "행정",
+            "assignee": "서윤",
+            "text": "본부 간이테이블 — GBS 나눔지 & 볼펜 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "강사비 계좌이체",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "13:00",
+        "name": "새친구",
+        "host": "강예린M",
+        "place": "힐링 30",
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "all",
+        "end_time": "16:00",
+        "parallel": true
+      },
+      {
+        "start_time": "15:00",
+        "name": "중그룹 나눔 GBS",
+        "host": "하윤M",
+        "place": "강당 & 힐링 45",
+        "note": "[프로그램 4]",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "서윤·나윤",
+            "text": "다과 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "시우",
+            "text": "침례 접견실용 짐 전달",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "시우",
+            "text": "침례 장소 세팅 — 블루투스 스피커·수건",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "온·시우·다은",
+            "text": "인원계수 — 영미리·포도당·CCV",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "16:00",
+        "name": "침례",
+        "host": "강예린M",
+        "place": "3층 발코니",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "셀라·새친구팀",
+            "text": "침례 장소 미리 준비 안내 (대걸레 닦기)",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "교역자",
+            "assignee": "사진스탭·목사님·도현M·총무스탭",
+            "text": "침례준비 (16:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "서윤",
+            "text": "접견실 전달 — 서윤→도현→목사님·대상자·사진스탭",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "침례 후 간단히 정리 — 물 빼고 저녁식사 후 제대로",
+            "scope": "team"
+          },
+          {
+            "phase": "post",
+            "part": "비품",
+            "assignee": "다은·시우",
+            "text": "침례복 세탁 — 근처 코인세탁, 승합차 이용",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "17:00",
+        "name": "저녁식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "배식 17:00~18:30 · 뒤쪽공간 교차 · 침례봉사자 식사시간 여유",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "재하",
+            "text": "식수계수",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "헤브론 집합 (17:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "교역자",
+            "assignee": "미르·예솔",
+            "text": "외부강사 식사",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "3일차 점심 주문 & 야식 주문 확인",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "19:00",
+        "name": "집회2",
+        "host": "신태호 목사",
+        "place": "강당",
+        "note": "집회전 담당 미르 / 집회후 백목·하윤",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "의자정렬",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "휴지 & 방석 세팅 — 각티슈·롤휴지 배치",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "코람데오 리허설 시작 (18:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "송출시작 & 18:50 스탠바이",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "강사자 주차등록 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "콘티 세부 진행",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "재하",
+            "text": "인원계수",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "현장관리",
+            "assignee": "나윤",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "강사비 계좌이체",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "19:00",
+        "name": "새친구",
+        "host": "강예린M",
+        "place": "힐링 30",
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "all",
+        "end_time": "00:00",
+        "parallel": true
+      },
+      {
+        "start_time": "21:00",
+        "name": "기도회2",
+        "host": "최도현M",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "콘티 세부 진행",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "재하",
+            "text": "인원계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "22:30",
+        "name": "야식 세팅",
+        "host": "총무팀",
+        "place": null,
+        "note": "기도회 종료 30분 전 · 시간 확인 필요",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "야식 주문 — 23:30 도착으로 (엽떡 확인)",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "전체",
+            "text": "바깥 복도에 미리 세팅 — 온수통·젓가락·채반·음쓰통·종이컵·릴선·테이블·비닐식탁보",
+            "scope": "team"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "00:00",
+        "name": "광고",
+        "host": "민준M",
+        "place": "강당",
+        "note": "안내·3일차 오전일정 광고",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "민준M",
+            "text": "광고내용 준비 — 성찬방법·출차 등록·아침 9시·카드키 반납·감사헌금",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "교역자",
+            "assignee": "도현",
+            "text": "주일 봉사자 확인 후 총무방 공유 — 중그룹별 사전 확인",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "도현",
+            "text": "숙소 점검 한번 더 후 퇴실 (분실물 확인) · 짐 강당으로",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "00:00",
+        "name": "야식",
+        "host": "총무팀",
+        "place": null,
+        "note": "소그룹 단위 제공 (10인 기준) · 소그룹당 엽떡2 & 닭강정1",
+        "items": [
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "01:00",
+        "name": "총무팀 전체 미팅",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "성찬준비 — 빵 자르고 포도주 따라놓기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "짐 패킹",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "성찬 테이블 세팅 · 의자정렬",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "새친구실 철수",
+            "scope": "team"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      }
+    ],
+    "폐회": [
+      {
+        "start_time": "06:00",
+        "name": "영수증 정리",
+        "host": "재정",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "ops",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "08:00",
+        "name": "기상 & 준비 · 아침 세팅",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "총무팀 개인 짐 다 챙겨서 8시까지 나오기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "전체",
+            "text": "강당에서 아침 준비 — 테이블·음식·쓰레기봉지",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "성찬 세팅 — 빵·포도주·장갑·테이블보",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "09:00",
+        "name": "아침식사",
+        "host": "총무팀",
+        "place": null,
+        "note": "시리얼 · 숙소퇴실 10:00까지",
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "감사헌금함 세팅 — 창고1 원형테이블",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "헤브론 퇴실 & 집합 (09:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "코람데오",
+            "assignee": "코람데오",
+            "text": "코람데오 퇴실 & 리허설 시작 (09:00)",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "카드키 회수 확인",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "10:00",
+        "name": "숙소 퇴실 & 강당 이동",
+        "host": "전체",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "다은",
+            "text": "짐 두는 곳 안내문 부착",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "숙소점검 — 분실물·온돌방 이불정리·청소상태·부착물 떼기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "음식",
+            "assignee": "준서",
+            "text": "점심 주문 확인",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "10:30",
+        "name": "폐회 예배 · 성찬",
+        "host": "한지훈 목사 · 최도현M",
+        "place": "강당",
+        "note": null,
+        "items": [
+          {
+            "phase": "pre",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "송출시작 & 10:20 스탠바이",
+            "scope": "team"
+          },
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "재하",
+            "text": "진행자 물 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "pre",
+            "part": "현장관리",
+            "assignee": "하람·나윤",
+            "text": "성찬테이블 세팅",
+            "scope": "person"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "하람",
+            "text": "인원계수",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "12:00",
+        "name": "광고",
+        "host": "하윤M",
+        "place": "강당",
+        "note": "안내·주일 일정 광고",
+        "items": [
+          {
+            "phase": "pre",
+            "part": "행정",
+            "assignee": "하윤M",
+            "text": "광고내용 준비 — 점심메뉴·GBS안내·의자정리·쓰레기 처리",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "13:00",
+        "name": "점심식사",
+        "host": "총무팀",
+        "place": null,
+        "note": null,
+        "items": [],
+        "track": "main",
+        "audience": "all",
+        "parallel": false
+      },
+      {
+        "start_time": "13:00",
+        "name": "복귀 짐 패킹 · 상차 · 이동",
+        "host": "전체",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "강당 의자 다 창고로 넣기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "쓰레기 정리",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "성찬기 정리",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "짐 정리 및 짐 상차",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "자차 + 봉고 or 대중교통으로 본당 복귀",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "헤브론 복귀 짐 패킹·상차·이동",
+            "scope": "team"
+          },
+          {
+            "phase": "post",
+            "part": "재정",
+            "assignee": "준서",
+            "text": "영수증 정리 / 정산 업데이트",
+            "scope": "person"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      },
+      {
+        "start_time": "16:00",
+        "name": "본당 도착 · 하차",
+        "host": "전체",
+        "place": null,
+        "note": null,
+        "items": [
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "본당 짐 하차",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "행정",
+            "assignee": "전체",
+            "text": "분실물 확인",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "비품",
+            "assignee": "전체",
+            "text": "비품 제자리에 두기",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "현장관리",
+            "assignee": "전체",
+            "text": "총무팀 짐 먼저 본당 정리",
+            "scope": "team"
+          },
+          {
+            "phase": "mid",
+            "part": "헤브론",
+            "assignee": "헤브론",
+            "text": "하차",
+            "scope": "team"
+          }
+        ],
+        "track": "main",
+        "audience": "staff",
+        "parallel": false
+      }
+    ]
+  }
+}

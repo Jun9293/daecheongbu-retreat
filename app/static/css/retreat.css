@@ -1,80 +1,133 @@
 /* ==========================================================================
    준비 단계 보드 · 세팅 마법사 — 시각 스펙: docs/mockups/*.html
    글로 적기 어려운 배치·간격·상태 표현은 목업이 기준이다.
+
+   무채색 기조 (CLAUDE.md 4장 UI 방향).
+   · 순검정을 쓰지 않는다. 잉크는 #37352F 다
+   · 선은 전부 헤어라인. 면을 나누는 것은 선이 아니라 여백이다
+   · 부서 색은 유지하되 **면을 채우지 않는다** — 왼쪽 점과 바 테두리에만
+   · **가로 격자선을 넣지 않는다.** 세로선만 남긴다
+   화면 전체가 조용해지고, 대신 선택 테두리와 지연 배지가 확실히 눈에 띈다.
    ========================================================================== */
 
 :root{
-  --paper:#F2F4F3; --paper-2:#FAFBFA;
-  --ink:#141917; --ink-2:#39423E; --ink-3:#4E5551;
-  --rule:#DDE2DE; --rule-2:#C7CEC9;
-  --now:#C8442E; --link:#1668E3; --go:#3F6B5D; --warn:#9A6B12; --ai:#4C4193;
+  /* 면 */
+  --paper:#FFFFFF; --paper-2:#FFFFFF;
+  --side:#F7F7F5;                       /* 사이드바 · 헤더 면 */
+  --hover:rgba(55,53,47,.06);
+  --sunk:rgba(55,53,47,.045);           /* 완료 바처럼 '가라앉는' 면 */
+
+  /* 글자 — 순검정을 쓰지 않는다 */
+  --ink:#37352F; --ink-2:#787774; --ink-3:#9B9A97;
+
+  /* 선 — 전부 헤어라인 */
+  --rule:rgba(55,53,47,.09); --rule-2:rgba(55,53,47,.16);
+
+  /* 뜻이 있는 색 */
+  --link:#2383E2;                       /* 선택 표시 */
+  --now:#C4554D;                        /* 지연 */
+  --now-tint:#FBF1F0; --now-ink:#A3423B;
+  --go:#4C8A5E; --warn:#9A6B12; --ai:#6B5BB5;
+
   --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
-  --h-team:35px; --h-main:34px; --h-sub:29px;
-  --dw:400px;
+  --h-team:38px; --h-main:34px; --h-sub:29px;
+  --dw:400px;                           /* 상세 패널 폭 */
+  --sw:232px;                           /* 사이드바 폭 */
+  --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,
+    "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--paper);color:var(--ink);
-  font-family:'IBM Plex Sans KR',system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  font-family:var(--font);font-size:14px;line-height:1.5;
   -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden;
-  padding-right:0;transition:padding-right .22s cubic-bezier(.4,0,.2,1)}
+  padding-right:0;padding-left:0;
+  transition:padding-right .22s cubic-bezier(.4,0,.2,1),padding-left .18s cubic-bezier(.4,0,.2,1)}
 body.dopen{padding-right:var(--dw)}
+body.sidepin{padding-left:var(--sw)}
 body.sizing{transition:none}
 body.scroll{overflow:auto}
-.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
+
+/* ── 사이드바 ────────────────────────────────────────────────────────
+   상단 탭 줄을 없앴다. 같은 목록이 두 군데 있을 이유가 없다.
+   기본은 접힘 — 화면은 보드가 다 쓴다. 여는 길은 둘이고 뜻이 다르다:
+   토글은 '고정해서 계속 연다', 왼쪽 가장자리 호버는 '잠깐 들춰 본다'. */
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);z-index:38;
+  background:var(--side);border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;padding:10px 8px 8px;
+  transform:translateX(-100%);transition:transform .18s cubic-bezier(.4,0,.2,1);
+  box-shadow:none}
+.sidenav.peek{transform:none;box-shadow:2px 0 16px -8px rgba(55,53,47,.35)}
+body.sidepin .sidenav{transform:none;box-shadow:none}
+.sidenav .brand{display:flex;align-items:center;gap:8px;padding:4px 8px 10px;
+  font-size:14px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sidenav .brand .mark{width:20px;height:20px;border-radius:4px;background:var(--ink);
+  color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+.sidenav .pick{width:100%;font:inherit;font-size:12.5px;padding:5px 7px;margin-bottom:10px;
+  border:1px solid var(--rule);border-radius:4px;background:var(--paper);color:var(--ink-2)}
+.sidenav nav{display:flex;flex-direction:column;gap:1px;overflow-y:auto;flex:1;min-height:0}
+.sidenav nav a{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;
+  font-size:13.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidenav nav a:hover{background:var(--hover);color:var(--ink)}
+.sidenav nav a[aria-current=page]{background:var(--hover);color:var(--ink);font-weight:500}
+.sidenav .navlabel{font-size:11px;color:var(--ink-3);padding:14px 8px 4px;letter-spacing:.02em}
+.sidenav .wip{font-style:normal;font-family:var(--mono);font-size:9.5px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:3px;padding:0 4px;margin-left:auto;flex:none}
+.sidenav .wip.live{border-color:var(--now);color:var(--now-ink);font-weight:600}
+.sidefoot{border-top:1px solid var(--rule);margin-top:6px;padding:8px 8px 2px;
+  font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:5px}
+.sidefoot b{font-weight:600;color:var(--ink-2)}
+.sidefoot .links{display:flex;gap:10px}
+.sidefoot .links a:hover{color:var(--ink);text-decoration:underline}
+
+/* 화면 왼쪽 가장자리 — 마우스를 대면 사이드바가 잠깐 떠서 나온다 */
+.sideedge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:37}
+body.sidepin .sideedge{display:none}
+
+.sidetoggle{flex:none;width:28px;height:28px;border:1px solid transparent;border-radius:4px;
+  background:none;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:15px;line-height:1}
+.sidetoggle:hover{background:var(--hover);color:var(--ink)}
+.sidetoggle[aria-pressed=true]{color:var(--ink)}
 
 /* ── 상단 ───────────────────────────────────────────────────────────── */
-header.mast-wrap{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:13px 22px 0;flex:none}
-.mast{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
-.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
-.title em{font-style:normal;color:var(--ink-3);font-weight:400}
-.mast .pick{font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid var(--rule-2);
-  border-radius:3px;background:var(--paper-2);color:var(--ink-2)}
-.countdown{margin-left:auto;display:flex;align-items:baseline;gap:7px;padding:4px 12px;
-  border:1px solid var(--now);border-radius:2px}
-.countdown b{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:var(--now)}
-.countdown span{font-size:12px;color:var(--ink-3);letter-spacing:.04em}
-.whoami{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+header.mast-wrap{border-bottom:1px solid var(--rule);background:var(--paper);
+  padding:10px 20px;flex:none}
+.mast{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.title em{font-style:normal;color:var(--ink-2);font-weight:400}
+.mast .pick{font:inherit;font-size:12.5px;padding:3px 7px;border:1px solid var(--rule);
+  border-radius:4px;background:var(--paper);color:var(--ink-2)}
+.countdown{margin-left:auto;display:flex;align-items:baseline;gap:7px}
+.countdown b{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--now)}
+.countdown span{font-size:12px;color:var(--ink-3)}
+.whoami{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px}
 .whoami b{font-weight:600;color:var(--ink-2)}
+.whoami a:hover{color:var(--ink);text-decoration:underline}
 
-nav.tabs{display:flex;gap:2px;margin-top:13px;align-items:flex-end}
-nav.tabs a{font-size:14.5px;padding:8px 17px;border:1px solid transparent;border-bottom:none;
-  color:var(--ink-3);border-radius:3px 3px 0 0;position:relative;top:1px;white-space:nowrap}
-nav.tabs a[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
-nav.tabs a:hover{color:var(--ink)}
-nav.tabs .wip{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:9.5px;
-  letter-spacing:.03em;color:var(--ink-3);border:1px solid var(--rule-2);border-radius:2px;
-  padding:1px 4px;margin-left:6px;vertical-align:1px;white-space:nowrap}
-nav.tabs a[aria-selected=true] .wip{border-color:var(--rule-2)}
-nav.tabs .wip.live{border-color:var(--now);color:var(--now-ink,#8E2A19);font-weight:600}
-nav.tabs .sp{margin-left:auto}
-.addlink{font-size:12.5px;color:var(--ink-2);border:1px solid var(--rule-2);border-radius:3px;
-  padding:3px 9px;background:var(--paper-2)}
-.addlink:hover{background:var(--paper);border-color:var(--ink-3)}
-nav.tabs .new{border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);
-  border-radius:3px;padding:6px 13px;font-size:13px;top:-4px;font-weight:500}
-nav.tabs .new:hover{color:var(--paper-2)}
-
-.toolbar{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:10px 22px;
-  border-bottom:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);flex:none;background:var(--paper)}
-.ctl{display:flex;align-items:center;gap:7px}
+.toolbar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:8px 20px;
+  border-bottom:1px solid var(--rule);font-size:13px;color:var(--ink-2);flex:none;background:var(--paper)}
+.ctl{display:flex;align-items:center;gap:6px}
 .ctl label{color:var(--ink-3);font-size:12.5px}
-select,input[type=text],input[type=date],input[type=number]{font:inherit;font-size:13.5px;padding:4px 8px;
-  border:1px solid var(--rule-2);border-radius:2px;background:var(--paper-2);color:var(--ink)}
+select,input[type=text],input[type=date],input[type=number]{font:inherit;font-size:13px;
+  padding:4px 7px;border:1px solid var(--rule-2);border-radius:4px;background:var(--paper);color:var(--ink)}
+select:focus,input:focus{outline:none;border-color:var(--link)}
 .tog{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)}
-.fchip{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:3px;cursor:pointer;
-  background:var(--ink);color:var(--paper-2);border:none;display:flex;align-items:center;gap:7px}
-.fchip[hidden]{display:none}
-.fchip b{font-family:'IBM Plex Mono',monospace;font-weight:600}
-.fchip span{opacity:.65;font-size:14px;line-height:1}
-.legend{margin-left:auto;display:flex;gap:15px;align-items:center;font-size:12.5px;color:var(--ink-3)}
+.fchip{font:inherit;font-size:12.5px;padding:3px 9px;border-radius:4px;cursor:pointer;
+  background:var(--ink);color:#fff;border:none;display:flex;align-items:center;gap:7px}
+.fchip b{font-family:var(--mono);font-weight:600}
+.fchip span{opacity:.6;font-size:14px;line-height:1}
+.legend{margin-left:auto;display:flex;gap:13px;align-items:center;font-size:12px;color:var(--ink-3)}
 .lg{display:flex;align-items:center;gap:5px}
 .lg i{display:block;font-style:normal}
-.lg .k-main{width:22px;height:13px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
-.lg .k-sub{width:22px;height:9px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
-.lg .k-sch{width:22px;height:11px;border-radius:2px;background:var(--paper-2);border:1px solid #3B6EA5;border-left:4px solid #3B6EA5}
-.lg .k-done{width:22px;height:13px;border-radius:2px;background:#DFE3E0;border:1px solid #C4CBC6}
+.lg .k-main{width:22px;height:13px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5}
+.lg .k-sub{width:22px;height:9px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5}
+.lg .k-sch{width:22px;height:11px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5;border-left:4px solid #3B6EA5}
+.lg .k-done{width:22px;height:13px;border-radius:3px;background:var(--sunk);border:1px solid var(--rule-2)}
 .lg .k-gh{width:22px;height:13px;background:none;border:1px dashed var(--rule-2)}
 .lg .k-lit{width:20px;height:0;border-top:2px dashed var(--link)}
 
@@ -85,48 +138,52 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
 .row{display:grid;grid-template-columns:var(--grid)}
 
 .row.head{position:sticky;top:0;z-index:24}
-.hc{cursor:pointer;background:var(--paper-2);border-bottom:1px solid var(--rule-2);
-  border-right:1px solid var(--rule);padding:8px 0 7px;text-align:center}
-.hc .dw{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;display:block;color:var(--ink-2)}
-.hc .dt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);display:block;margin-top:2px}
-.hc.day{background:#EAEEEB}
-.hc.day .dw{font-size:11.5px;color:var(--ink-3);font-weight:500}
-.hc.day .dt{font-size:12.5px;color:var(--ink);font-weight:600}
-.hc.shift{border-left:2px solid var(--ink)}
-.hc:hover{background:#E4E9E6}
+/* 날짜 헤더 아래 한 줄만 남긴다 — 격자선이 아니라 sticky 경계다.
+   이게 없으면 스크롤할 때 헤더 위로 바가 지나가는 것처럼 보인다. */
+.hc{cursor:pointer;background:var(--paper);border-bottom:1px solid var(--rule);
+  border-right:1px solid var(--rule);padding:7px 0 6px;text-align:center}
+.hc .dw{font-family:var(--mono);font-size:12px;font-weight:600;display:block;color:var(--ink-2)}
+.hc .dt{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);display:block;margin-top:2px}
+.hc.day .dw{font-size:11px;color:var(--ink-3);font-weight:500}
+.hc.day .dt{font-size:12px;color:var(--ink-2);font-weight:600}
+.hc.shift{border-left:1px solid var(--rule-2)}
+.hc:hover{background:var(--hover)}
 .hc.sel{background:var(--ink)!important;border-right-color:var(--ink)}
-.hc.sel .dw,.hc.sel .dt{color:var(--paper-2)!important}
-.hc.rt{background:var(--ink);border-right-color:var(--ink)}
-.hc.rt .dw{color:var(--paper-2)} .hc.rt .dt{color:#A9B3AE}
-.hlbl{position:sticky;left:0;z-index:26;background:var(--paper-2);border-bottom:1px solid var(--rule-2);
-  border-right:1px solid var(--rule-2);display:flex;flex-direction:column;justify-content:center;padding-left:13px}
-.hlbl b{font-size:13px;font-weight:600}
+.hc.sel .dw,.hc.sel .dt{color:#fff!important}
+.hc.rt{background:var(--side)}
+.hc.rt .dw{color:var(--ink)} .hc.rt .dt{color:var(--ink-3)}
+.hlbl{position:sticky;left:0;z-index:26;background:var(--paper);border-bottom:1px solid var(--rule);
+  border-right:1px solid var(--rule);display:flex;flex-direction:column;justify-content:center;padding-left:14px}
+.hlbl b{font-size:12.5px;font-weight:600}
 .hlbl span{font-size:11px;color:var(--ink-3);margin-top:2px}
 
-.lc{position:sticky;left:0;z-index:20;background:var(--lct,var(--paper-2));
-  border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule);
-  display:flex;align-items:center;gap:7px;padding-left:14px;padding-right:10px;font-size:13.5px;overflow:hidden}
+/* 왼쪽 라벨 열 — 부서 색으로 면을 채우지 않는다 (--lct 를 쓰지 않는다) */
+.lc{position:sticky;left:0;z-index:20;background:var(--paper);
+  border-right:1px solid var(--rule);
+  display:flex;align-items:center;gap:7px;padding-left:14px;padding-right:10px;
+  font-size:13.5px;overflow:hidden}
 .lc .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;margin-right:auto}
 .row.main .lc,.row.sub .lc{cursor:pointer}
-.row.main .lc:hover,.row.sub .lc:hover{background:#EDF1EE}
+.row.main .lc:hover,.row.sub .lc:hover{background:var(--hover)}
 
-.row.team .lc{height:var(--h-team);background:var(--teamt,#E9EDEA);cursor:pointer;font-weight:600;
-  font-size:14px;border-bottom:1px solid var(--rule-2)}
-.row.team .lc .caret{font-size:10px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
+.row.team .lc{height:var(--h-team);background:var(--side);cursor:pointer;font-weight:600;
+  font-size:13.5px}
+.row.team .lc:hover{background:var(--hover)}
+.row.team .lc .caret{font-size:9px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
 .row.team.collapsed .lc .caret{transform:rotate(-90deg)}
-.row.team .lc .sw{width:3px;height:17px;border-radius:2px;flex:none}
-.row.team .lc .ct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-2);font-weight:400}
-.row.team .cell{height:var(--h-team);background:var(--teamt,#E9EDEA);border-bottom:1px solid var(--rule-2)}
-.row.team.dim{opacity:.78}
+/* 부서 색은 여기 — 점 하나 */
+.row.team .lc .sw{width:8px;height:8px;border-radius:50%;flex:none}
+.row.team .lc .ct{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:400}
+.row.team .cell{height:var(--h-team);background:var(--side)}
+.row.team.dim{opacity:.55}
 
-.row.main .lc{height:var(--h-main);padding-left:28px;font-weight:500}
-.row.sub  .lc{height:var(--h-sub);padding-left:46px;font-size:12.5px;color:var(--ink-2)}
+.row.main .lc{height:var(--h-main);padding-left:30px;font-weight:400}
+.row.sub  .lc{height:var(--h-sub);padding-left:48px;font-size:12.5px;color:var(--ink-2)}
 .row.main .lane{height:var(--h-main)} .row.sub .lane{height:var(--h-sub)}
-.row.main .lane,.row.sub .lane{border-bottom:1px solid var(--rule)}
-.lane{position:relative;background:var(--rowt,transparent);
-  grid-column:2/-1;display:grid;grid-template-columns:subgrid}
+/* 가로 격자선을 넣지 않는다. 넣어봤으나 화면이 답답해져 뺐다. */
+.lane{position:relative;grid-column:2/-1;display:grid;grid-template-columns:subgrid}
 .gl{border-right:1px solid var(--rule);pointer-events:none}
-.gl.shift{border-left:2px solid var(--ink)}
+.gl.shift{border-left:1px solid var(--rule-2)}
 
 .owner{font-size:11.5px;color:var(--ink-3);flex:none;display:flex;align-items:center;gap:5px;
   padding-left:8px}
@@ -135,158 +192,175 @@ select,input[type=text],input[type=date],input[type=number]{font:inherit;font-si
 /* 업무마다 담당자 — 팀만 적혀 있으면 결국 아무도 안 한다 */
 .lc .who{flex:none;padding-left:8px;font-size:11.5px;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:76px}
-.lc .who[hidden]{display:none}
 .row.team .lc .who{display:none}
-.mrow .meta .who{font-family:'IBM Plex Sans KR',sans-serif}
-.mrow .meta .who[hidden]{display:none}
+.mrow .meta .who{font-family:var(--font)}
 
-/* ── 바 ─────────────────────────────────────────────────────────────── */
+/* ── 바 ─────────────────────────────────────────────────────────────
+   부서 색은 테두리에만 온다. 면을 채우면 화면이 색으로 덮여
+   정작 눈에 띄어야 할 선택 테두리와 지연 배지가 묻힌다. */
 .bar{position:relative;align-self:center;border-radius:3px;display:flex;align-items:center;gap:5px;
   padding:0 8px;font-size:12.5px;line-height:1;cursor:pointer;border:1px solid transparent;
   white-space:nowrap;z-index:3;margin:0 1px;min-width:8px;overflow:visible;color:var(--ink)}
-.bar.m{height:24px;font-weight:500}
-.bar.s{height:19px;font-size:12px;border-radius:2px}
-.bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.bar.m{height:23px}
+.bar.s{height:19px;font-size:12px}
+.bar:focus-visible{outline:2px solid var(--link);outline-offset:1px}
+/* 진행중 — 왼쪽에 부서 색 마개. 채움이 아니라 테두리의 연장이다.
+   absolute 라 바 라벨 폭 계산(layoutLabels)에 끼어들지 않는다. */
+.bar.진행중::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  border-radius:3px 0 0 3px;background:var(--team,var(--ink-2))}
+.bar.진행중{padding-left:11px;font-weight:500}
+/* 완료는 눈에 띄지 않게 — 시선은 미완료로 가야 한다 */
+.bar.완료{color:var(--ink-2)}
 /* 라벨은 바 안에서 시작해, 바보다 길면 그대로 밖으로 흘러나감 */
 .bar .txt{overflow:visible;white-space:nowrap;flex:none;position:relative;z-index:2}
-/* 바 밖으로 넘친 부분. 같은 글자를 같은 자리에 한 겹 더 깔고 바 경계에서
-   잘라 이어붙인다 — 바 위와 바 밖은 배경이 다르기 때문이다. */
+/* 바 밖으로 넘친 부분. 같은 글자를 같은 자리에 한 겹 더 깔고
+   바 경계에서 잘라 이어붙인다 — 바 위와 바 밖은 배경이 다르기 때문이다. */
 .bar .txt.spill{position:absolute;z-index:1;pointer-events:none;color:var(--ink-2);
   text-shadow:0 0 3px var(--paper),0 0 3px var(--paper),0 0 2px var(--paper),0 0 1px var(--paper)}
-.bar.late .txt.spill{color:#8E2A19}
+.bar.late .txt.spill{color:var(--now-ink)}
 .bar.ghost .txt.spill{color:var(--ink-3)}
-.bar.late{color:#8E2A19;font-weight:600}
-.bar.late .flag{position:relative;z-index:2;font-family:'IBM Plex Mono',monospace;font-size:10px;
-  background:var(--now);color:#fff;padding:2px 4px;border-radius:2px;flex:none}
-.bar.ghost{border-style:dashed!important;color:var(--ink-2)!important}
-.bar.ghost .txt{font-style:italic}
+.bar.late{color:var(--now-ink);font-weight:500}
+.bar.late .flag{position:relative;z-index:2;font-family:var(--mono);font-size:10px;
+  background:var(--now);color:#fff;padding:2px 4px;border-radius:3px;flex:none}
+.bar.ghost{border-style:dashed!important;color:var(--ink-3)!important}
+.bar.ghost .txt{font-style:normal}
 /* 끌어서 날짜를 옮길 수 있는 바 */
 .bar[data-run]:not([data-ghost]){cursor:grab}
-.bar.dragging{cursor:grabbing;opacity:.9;box-shadow:0 0 0 2px var(--link),0 6px 14px -8px rgba(27,33,31,.5);
+.bar.dragging{cursor:grabbing;opacity:.9;box-shadow:0 0 0 2px var(--link),0 6px 14px -8px rgba(55,53,47,.4);
   z-index:10!important;transition:none}
 body.dragging-bar{cursor:grabbing;user-select:none}
 body.dragging-bar .bar{transition:none}
-.dragdate{position:fixed;z-index:50;background:var(--ink);color:var(--paper-2);
-  font-size:11.5px;padding:3px 7px;border-radius:3px;pointer-events:none;white-space:nowrap}
+.dragdate{position:fixed;z-index:50;background:var(--ink);color:#fff;
+  font-size:11.5px;padding:3px 7px;border-radius:4px;pointer-events:none;white-space:nowrap}
 
-.bar.sch{height:21px;border-width:1px;border-style:solid;border-left-width:4px;font-size:12px;font-weight:500;z-index:4}
+.bar.sch{height:20px;border-width:1px;border-style:solid;border-left-width:4px;font-size:12px;z-index:4}
 
 /* 세로 격자선 — 열마다 div 를 넣는 대신 한 겹으로 겹쳐 그린다 */
 .gridlines{position:absolute;top:0;bottom:0;left:0;right:0;pointer-events:none;z-index:1}
 .gridlines i{position:absolute;top:0;bottom:0;width:0;border-right:1px solid var(--rule)}
-.gridlines i.shift{border-right:2px solid var(--ink)}
+.gridlines i.shift{border-right:1px solid var(--rule-2)}
 
 /* ── 연결선 ─────────────────────────────────────────────────────────── */
 #wires{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:visible}
 #wires path{fill:none;stroke:var(--link);stroke-width:1.6;stroke-dasharray:4 3;opacity:.95}
 #wires circle{fill:var(--link)}
-.bar.anchor{box-shadow:0 0 0 3px var(--link);z-index:9!important;opacity:1!important;font-weight:700}
-.bar.lit{box-shadow:0 0 0 2px var(--ink);z-index:8!important;opacity:1!important}
-.row.anchorrow>.lc{box-shadow:inset 4px 0 0 var(--link);background:#EAF1FC;font-weight:700}
-.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink);background:#EBEEEC}
+.bar.anchor{box-shadow:0 0 0 2px var(--link);z-index:9!important;opacity:1!important;font-weight:600}
+.bar.lit{box-shadow:0 0 0 1.5px var(--ink);z-index:8!important;opacity:1!important}
+.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);background:rgba(35,131,226,.06);font-weight:600}
+.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink-2);background:var(--hover)}
 
 /* ── 모바일 목록: D-주차 → 부서 (CLAUDE.md Phase 1 완료 기준) ────────
    24칸 간트는 폰에서 쓸 수 없다. "이번 주에 뭐가 있나"가 먼저 보이도록
    주차를 바깥 묶음으로 두고 그 안에서 부서 순으로 정렬한다. */
 .mlist{display:none}
-.mgroup{border-bottom:1px solid var(--rule)}
-.mgroup > h3{position:sticky;top:0;z-index:5;margin:0;background:var(--paper-2);
-  border-bottom:1px solid var(--rule-2);padding:9px 14px;font-size:12.5px;font-weight:600;
-  font-family:'IBM Plex Mono',monospace;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.mgroup > h3{position:sticky;top:0;z-index:5;margin:0;background:var(--side);
+  border-bottom:1px solid var(--rule);padding:8px 14px;font-size:12px;font-weight:600;
+  font-family:var(--mono);color:var(--ink-2);display:flex;align-items:center;gap:8px}
 .mgroup > h3 .n{margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:400}
 .mrow{display:flex;align-items:center;gap:9px;width:100%;min-height:46px;padding:9px 14px;
-  border-bottom:1px solid var(--rule);background:none;border-left:none;border-right:none;
-  border-top:none;font:inherit;text-align:left;color:var(--ink);cursor:pointer}
-.mrow:last-child{border-bottom:none}
-.mrow .st{width:4px;align-self:stretch;border-radius:2px;flex:none;background:var(--rule-2)}
+  border:none;background:none;font:inherit;text-align:left;color:var(--ink);cursor:pointer}
+.mrow:hover{background:var(--hover)}
+.mrow .st{width:3px;align-self:stretch;border-radius:2px;flex:none;background:var(--rule-2)}
 .mrow .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .mrow .nm{font-size:14px;line-height:1.4}
 .mrow.sub .nm{font-size:13px;color:var(--ink-2)}
 .mrow .meta{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-3);
-  font-family:'IBM Plex Mono',monospace}
+  font-family:var(--mono)}
 .mrow .meta i{width:7px;height:7px;border-radius:50%;flex:none;display:block}
-.mrow .meta .dept{font-family:'IBM Plex Sans KR',sans-serif}
-.mrow .flag{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--now);
-  color:#fff;padding:2px 5px;border-radius:2px;flex:none}
+.mrow .meta .dept{font-family:var(--font)}
+.mrow .flag{font-family:var(--mono);font-size:10px;background:var(--now);
+  color:#fff;padding:2px 5px;border-radius:3px;flex:none}
 .mrow.done .nm{color:var(--ink-2)}
-.mrow.dim{opacity:.78}
-.mempty{padding:26px 14px;text-align:center;font-size:13px;color:var(--ink-3)}
+.mrow.dim{opacity:.55}
+.mempty{padding:26px 14px;text-align:center;font-size:13px;color:var(--ink-2)}
 
 /* ── 상세 패널 ──────────────────────────────────────────────────────── */
 .drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);min-width:320px;max-width:min(900px,95vw);
-  background:var(--paper-2);border-left:1px solid var(--rule-2);transform:translateX(100%);
+  background:var(--paper);border-left:1px solid var(--rule);transform:translateX(100%);
   transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:35;display:flex;flex-direction:column;
-  box-shadow:-14px 0 34px -22px rgba(27,33,31,.5)}
+  box-shadow:-14px 0 34px -24px rgba(55,53,47,.45)}
 .drawer.open{transform:none}
 .drawer.sizing{transition:none;user-select:none}
 .grip{position:absolute;left:-3px;top:0;width:9px;height:100%;cursor:col-resize;z-index:3}
 .grip::after{content:'';position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:38px;
-  border-radius:3px;background:var(--rule-2)}
-.grip:hover::after,.drawer.sizing .grip::after{background:var(--link)}
-.dhead{padding:20px 22px 0;border-bottom:1px solid var(--rule)}
-.dkick{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;padding:4px 8px;
-  border-radius:2px;border:1px solid var(--rule-2);color:var(--ink-3);background:none}
-.chip.solid{color:#fff;border-color:transparent}
-.chip.stat{cursor:pointer;font-family:'IBM Plex Sans KR',sans-serif;font-size:12.5px;font-weight:500;
-  display:flex;align-items:center;gap:5px}
-.chip.stat:hover{background:var(--paper)}
+  border-radius:3px;background:var(--rule-2);opacity:0;transition:opacity .12s}
+.grip:hover::after,.drawer.sizing .grip::after{opacity:1;background:var(--link)}
+.dhead{padding:22px 26px 0;border-bottom:1px solid var(--rule)}
+.dkick{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.chip{font-size:11.5px;padding:2px 8px;border-radius:3px;border:1px solid var(--rule);
+  color:var(--ink-2);background:none}
+/* 부서 칩도 면을 채우지 않는다 — 점으로 색을 알린다 */
+.chip.solid{color:var(--ink-2);border-color:var(--rule);background:none;
+  display:flex;align-items:center;gap:6px}
+.chip.solid::before{content:'';width:7px;height:7px;border-radius:50%;flex:none;
+  background:var(--team,var(--ink-3))}
+.chip.stat{cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px}
+.chip.stat:hover{background:var(--hover)}
 .chip.stat[disabled]{cursor:default;opacity:.7}
-.chip.stat .cv{width:8px;height:8px;border-radius:50%}
-.dtitle{font-size:18.5px;font-weight:600;line-height:1.35}
-.dmeta{margin-top:12px;display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px 8px;font-size:13px;align-items:center}
-.dmeta dt{color:var(--ink-3);padding-top:5px} .dmeta dd{color:var(--ink-2);min-width:0}
+.chip.stat .cv{width:7px;height:7px;border-radius:50%}
+/* 제목 — 노션의 페이지 제목 크기 */
+.dtitle{font-size:25px;font-weight:600;line-height:1.3;letter-spacing:-.02em}
+/* 속성 — 라벨(88px, 흐림) + 값 두 칸으로 정렬한다 */
+.dmeta{margin-top:16px;display:grid;grid-template-columns:88px minmax(0,1fr);
+  gap:2px 4px;font-size:13.5px;align-items:center}
+.dmeta dt{color:var(--ink-3);font-size:13px;padding:5px 0 5px 2px}
+.dmeta dd{color:var(--ink);min-width:0}
 
-/* 기간·담당자는 '고칠 수 있다'는 것만 조용히 알리고, 평소엔 글자처럼 보인다 */
+/* 값은 평소에 글자처럼 보이다가, 마우스를 올리면 배경이 뜬다.
+   테두리를 상시 그리면 읽기 위한 패널이 입력 폼으로 읽힌다 (CLAUDE.md 4-9). */
 .pill{display:inline-flex;align-items:center;gap:2px;flex-wrap:wrap;border:1px solid transparent;
-  border-radius:5px;padding:1px 2px;max-width:100%;transition:border-color .12s,background .12s}
-.pill:hover{border-color:var(--rule-2);background:var(--paper)}
-.pill.flat:hover{border-color:transparent;background:none}
-.pill:focus-within{border-color:var(--rule-2);background:var(--paper-2)}
+  border-radius:4px;padding:3px 5px;max-width:100%;transition:background .1s}
+.pill:hover{background:var(--hover)}
+.pill.flat:hover{background:none}
+.pill:focus-within{background:var(--hover)}
 
-.pill input[type=date]{font:inherit;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+.pill input[type=date]{font:inherit;font-family:var(--mono);font-size:12.5px;
   font-variant-numeric:tabular-nums;letter-spacing:-.055em;color:var(--ink);background:none;
-  border:none;border-radius:3px;padding:3px 3px;cursor:pointer;width:auto;min-width:74px}
-.pill input[type=date]:hover{background:#EAEEEB}
-.pill input[type=date]:focus{outline:none;background:var(--paper-2);
+  border:none;border-radius:3px;padding:2px 2px;cursor:pointer;width:auto;min-width:74px}
+.pill input[type=date]:hover{background:var(--hover)}
+.pill input[type=date]:focus{outline:none;background:var(--paper);
   box-shadow:inset 0 0 0 1px var(--link)}
 /* 아이콘 없이 — 날짜를 누르면 달력이 열린다 */
 .pill input[type=date]::-webkit-calendar-picker-indicator{display:none}
 .pill input[type=date]::-webkit-inner-spin-button{display:none}
 .pill .sep{width:7px;height:1px;background:var(--rule-2);flex:none;display:block}
-.pill .span{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;
-  color:var(--ink-3);background:#EAEEEB;border-radius:2px;padding:2px 5px;
-  margin-left:3px;flex:none}
+.pill .span{font-family:var(--mono);font-size:10.5px;font-weight:500;
+  color:var(--ink-3);background:var(--sunk);border-radius:3px;padding:2px 5px;
+  margin-left:4px;flex:none}
 
-.pill.person{gap:6px;padding:1px 4px}
-.pill.person .dot{width:8px;height:8px;border-radius:50%;flex:none;display:block;margin-left:4px}
-.pill.person select{font:inherit;font-size:13px;color:var(--ink);background:none;border:none;
-  padding:3px 2px;cursor:pointer;max-width:100%}
+.pill.person{gap:6px;padding:3px 6px}
+.pill.person .dot{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+.pill.person select{font:inherit;font-size:13.5px;color:var(--ink);background:none;border:none;
+  padding:1px 2px;cursor:pointer;max-width:100%}
 .pill.person select:focus{outline:none}
-.pill.flat.person{padding-left:2px}
+.pill.flat.person{padding-left:4px}
 
 .teamtag{display:inline-flex;align-items:center;gap:6px}
 .teamtag i{width:8px;height:8px;border-radius:50%;flex:none;display:block}
-.dtabs{display:flex;gap:2px;margin-top:16px}
-.dtabs button{font:inherit;font-size:13.5px;padding:8px 15px;border:1px solid transparent;border-bottom:none;
-  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
-.dtabs button[aria-selected=true]{background:var(--paper-2);border-color:var(--rule);color:var(--ink);font-weight:500}
-.dtabs .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:4px}
-.dbody{flex:1;overflow-y:auto;padding:18px 22px 30px}
+
+/* 탭 — 밑줄 없는 글자, 활성만 아래 선 */
+.dtabs{display:flex;gap:16px;margin-top:20px}
+.dtabs button{font:inherit;font-size:13.5px;padding:6px 1px 9px;border:none;
+  border-bottom:2px solid transparent;background:none;color:var(--ink-3);cursor:pointer;
+  display:flex;align-items:center;gap:5px}
+.dtabs button:hover{color:var(--ink-2)}
+.dtabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.dtabs .n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.dbody{flex:1;overflow-y:auto;padding:20px 26px 30px}
 .pane{display:none} .pane.on{display:block}
-.panehint{font-size:12.5px;line-height:1.65;color:var(--ink-3);margin:0 0 12px}
+.panehint{font-size:12.5px;line-height:1.65;color:var(--ink-2);margin:0 0 14px}
 .rulesbox .ruletext{font-size:13.5px;line-height:1.75;white-space:pre-wrap;color:var(--ink);
-  background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:13px 15px}
-.rulesbox .empty{font-size:13px;color:var(--ink-3);padding:14px 0}
-.ruleedit{font:inherit;font-size:12.5px;margin-top:10px;padding:6px 13px;border-radius:3px;
-  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-.ruleedit:hover{background:var(--paper);border-color:var(--ink-3)}
+  background:var(--side);border:none;border-radius:4px;padding:13px 15px}
+.rulesbox .empty{font-size:13px;color:var(--ink-2);padding:14px 0}
+.ruleedit{font:inherit;font-size:12.5px;margin-top:10px;padding:5px 11px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2)}
+.ruleedit:hover{background:var(--hover);color:var(--ink)}
 #drulesbody{min-height:150px}
 
 .log{font-size:13.5px;line-height:1.68}
-.log .entry{padding:10px 0;border-bottom:1px dotted var(--rule)}
-.log .entry:last-child{border:none}
-.log .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);margin-right:7px}
+.log .entry{padding:10px 0}
+.log .entry + .entry{border-top:1px solid var(--rule)}
+.log .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:7px}
 .log .who{font-size:11.5px;color:var(--ink-3);margin-left:6px}
 /* 날짜·작성자는 한 줄로 걷어 올리고 본문은 그 아래 왼쪽 끝에서 시작한다.
    본문이 날짜 옆에서 시작하면 목록의 첫 줄만 들여쓰기가 달라진다. */
@@ -297,103 +371,144 @@ body.dragging-bar .bar{transition:none}
 .log .entry .body s,.log .entry .fix s{white-space:pre-wrap}
 /* 고칠 수 있다는 것만 조용히 — 그 줄에 마우스를 올렸을 때 나온다 */
 .log .editline{font:inherit;font-size:10.5px;padding:1px 6px;margin-left:6px;border-radius:3px;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-3);cursor:pointer;
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink-3);cursor:pointer;
   opacity:0;transition:opacity .12s}
 .log .entry:hover .editline,.log .editline:focus{opacity:1}
-.log .editline:hover{color:var(--ink);border-color:var(--ink-3)}
+.log .editline:hover{color:var(--ink);border-color:var(--rule-2)}
 .log .editbox{display:block;width:100%;font:inherit;font-size:13.5px;line-height:1.6;
-  padding:8px 10px;border:1px solid var(--link);border-radius:4px;background:var(--paper-2);
+  padding:8px 10px;border:1px solid var(--link);border-radius:4px;background:var(--paper);
   color:var(--ink);resize:vertical;margin:4px 0 6px}
-.log .editbox:focus{outline:none;box-shadow:0 0 0 2px rgba(22,104,227,.15)}
+.log .editbox:focus{outline:none;box-shadow:0 0 0 2px rgba(35,131,226,.15)}
 .log .editrow{display:flex;gap:6px}
-.log .editrow button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:3px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-.log .editrow button.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
-.log .empty{font-size:12.5px;color:var(--ink-3)}
-/* 상세 패널 하단 — 목업과 같은 자리 */
-.dfoot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:8px;flex:none;flex-wrap:wrap}
-.dfoot button{font:inherit;font-size:13.5px;padding:9px 14px;border-radius:3px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-.dfoot button.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+.log .editrow button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.log .editrow button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.log .empty{font-size:12.5px;color:var(--ink-2)}
+/* 상세 패널 하단 */
+.dfoot{padding:12px 26px;border-top:1px solid var(--rule);display:flex;gap:8px;flex:none;flex-wrap:wrap}
+.dfoot button{font:inherit;font-size:13px;padding:7px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.dfoot button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
 .dfoot button:disabled{opacity:.45;cursor:default}
-.dfoot button:not(:disabled):hover{background:var(--paper)}
+.dfoot button:not(:disabled):hover{background:var(--hover)}
 
 .carried{margin-top:16px;border-top:1px solid var(--rule);padding-top:10px}
 .carried summary{font-size:12.5px;color:var(--ink-3);cursor:pointer}
 .note{margin-top:14px;font-size:12.5px;line-height:1.6;color:var(--ink-2);
-  background:#F1F3F1;border-left:3px solid var(--rule-2);padding:10px 12px;border-radius:0 3px 3px 0}
-.note b{display:block;font-size:11px;color:var(--ink-3);margin-bottom:4px;letter-spacing:.03em}
+  background:var(--side);padding:11px 13px;border-radius:4px}
+.note b{display:block;font-size:11px;color:var(--ink-3);margin-bottom:4px}
 
 .addlog{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-/* display 를 준 요소는 [hidden] 이 이기지 못한다 — 명시해 둔다 */
-[hidden]{display:none!important}
 .addlog textarea{font:inherit;font-size:13.5px;padding:9px 11px;border:1px solid var(--rule-2);
-  border-radius:3px;background:var(--paper-2);color:var(--ink);resize:vertical;min-height:74px;width:100%}
+  border-radius:4px;background:var(--paper);color:var(--ink);resize:vertical;min-height:74px;width:100%}
+.addlog textarea:focus{outline:none;border-color:var(--link)}
 .addlog .opt{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:7px}
 .addlog .addrow{display:flex;gap:6px}
-.addlog button{font:inherit;font-size:13.5px;padding:8px 14px;border-radius:3px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-.addlog button.pri{border-color:var(--ink);background:var(--ink);color:var(--paper-2)}
+.addlog button{font:inherit;font-size:13px;padding:7px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.addlog button.pri{border-color:var(--ink);background:var(--ink);color:#fff}
 .addlog button[disabled]{opacity:.4;cursor:default}
 
-.rel{display:flex;flex-direction:column;gap:2px}
+.rel{display:flex;flex-direction:column;gap:1px}
 .relitem{position:relative}
-.relitem>button.rb{width:100%;font:inherit;display:flex;align-items:center;gap:9px;padding:11px;
-  background:none;border:1px solid transparent;border-radius:3px;cursor:pointer;font-size:13.5px;
+.relitem>button.rb{width:100%;font:inherit;display:flex;align-items:center;gap:9px;padding:9px 10px;
+  background:none;border:none;border-radius:4px;cursor:pointer;font-size:13.5px;
   color:var(--ink);text-align:left}
-.relitem>button.rb:hover{background:var(--paper);border-color:var(--rule)}
+.relitem>button.rb:hover{background:var(--hover)}
 .relitem .dot{width:8px;height:8px;border-radius:50%;flex:none}
-.relitem .rl{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
-.menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper-2);border:1px solid var(--rule-2);
-  border-radius:4px;box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:5;display:none;min-width:146px;overflow:hidden}
+.relitem .rl{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
+.menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper);border:1px solid var(--rule-2);
+  border-radius:5px;box-shadow:0 8px 22px -10px rgba(55,53,47,.35);z-index:5;display:none;min-width:146px;overflow:hidden}
 .menu.on{display:block}
-.menu button{display:flex;width:100%;font:inherit;font-size:13.5px;padding:11px 14px;background:none;
+.menu button{display:flex;width:100%;font:inherit;font-size:13.5px;padding:10px 13px;background:none;
   border:none;cursor:pointer;color:var(--ink);text-align:left;gap:8px;align-items:center}
-.menu button:hover{background:var(--paper)}
+.menu button:hover{background:var(--hover)}
 .menu button+button{border-top:1px solid var(--rule)}
-.menu .mi{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);margin-left:auto}
+.menu .mi{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-left:auto}
 
-#statmenu{position:fixed;background:var(--paper-2);border:1px solid var(--rule-2);border-radius:4px;
-  box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:40;display:none;overflow:hidden;min-width:132px}
+#statmenu{position:fixed;background:var(--paper);border:1px solid var(--rule-2);border-radius:5px;
+  box-shadow:0 8px 22px -10px rgba(55,53,47,.35);z-index:40;display:none;overflow:hidden;min-width:132px}
 #statmenu.on{display:block}
 #statmenu button{display:flex;align-items:center;gap:9px;width:100%;font:inherit;font-size:13.5px;
-  padding:10px 14px;background:none;border:none;cursor:pointer;text-align:left;color:var(--ink)}
-#statmenu button:hover{background:var(--paper)}
-#statmenu .cv{width:9px;height:9px;border-radius:50%}
+  padding:9px 13px;background:none;border:none;cursor:pointer;text-align:left;color:var(--ink)}
+#statmenu button:hover{background:var(--hover)}
+#statmenu .cv{width:8px;height:8px;border-radius:50%}
 
+/* 달력 — 칸 크기는 고정이다(34px). 패널을 넓힐수록 커지면
+   더 보려고 넓힌 것이 반대로 간다. */
 .cal{display:grid;grid-template-columns:repeat(7,34px);gap:3px;justify-content:start}
 .cal .cm{grid-column:1/-1;font-size:14px;font-weight:600;margin:16px 0 8px;display:flex;align-items:baseline;gap:7px}
 .cal .cm:first-child{margin-top:0}
-.cal .wd{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);text-align:center;padding:3px 0;width:34px}
+.cal .wd{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:center;padding:3px 0;width:34px}
 .cal .wd.s{color:var(--now)}
-.cal .dcell{width:34px;height:34px;border:1px solid var(--rule);border-radius:3px;
-  font-family:'IBM Plex Mono',monospace;font-size:12px;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:2px;color:var(--ink-2);background:var(--paper-2);
+.cal .dcell{width:34px;height:34px;border:1px solid var(--rule);border-radius:4px;
+  font-family:var(--mono);font-size:12px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;color:var(--ink-2);background:var(--paper);
   position:relative}
 .cal .dcell.pad{border-color:transparent;background:none;color:transparent}
-.cal .dcell.in{background:#E7EEF9;border-color:#B9CFEE;color:var(--ink)}
+.cal .dcell.in{background:rgba(35,131,226,.08);border-color:rgba(35,131,226,.22);color:var(--ink)}
 .cal .dcell.edge{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
-.cal .dcell.late{background:#FBE9E5;border-color:var(--now);color:#8E2A19;font-weight:600}
+.cal .dcell.late{background:var(--now-tint);border-color:var(--now);color:var(--now-ink);font-weight:600}
 .cal .dots{display:flex;gap:2px;height:5px}
 .cal .dots i{width:5px;height:5px;border-radius:50%;display:block}
 .callegend{margin-top:16px;font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
 .callegend div{display:flex;align-items:center;gap:7px}
-.callegend i{width:10px;height:10px;border-radius:2px;display:block}
+.callegend i{width:10px;height:10px;border-radius:3px;display:block}
 
-.dclose{position:absolute;top:15px;right:16px;width:30px;height:30px;border:none;background:none;
-  cursor:pointer;color:var(--ink-3);font-size:22px;border-radius:3px;z-index:4}
-.dclose:hover{background:var(--paper);color:var(--ink)}
+.dclose{position:absolute;top:16px;right:18px;width:28px;height:28px;border:none;background:none;
+  cursor:pointer;color:var(--ink-3);font-size:20px;border-radius:4px;z-index:4}
+.dclose:hover{background:var(--hover);color:var(--ink)}
+
+/* ── 첨부파일 (CLAUDE.md 4-9) ────────────────────────────────────────
+   회차별이다. 새 회차를 열면 업무는 따라와도 파일은 따라오지 않는다 —
+   논의 내역과 같은 취급이고, 업무 규칙(라이브러리)과 다르다. */
+.files{display:flex;flex-direction:column;gap:1px}
+.fitem{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;
+  position:relative;font-size:13.5px}
+.fitem:hover{background:var(--hover)}
+.fitem .ext{width:30px;height:30px;border-radius:4px;flex:none;background:var(--side);
+  border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9.5px;font-weight:600;color:var(--ink-2);text-transform:uppercase}
+.fitem .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fitem .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitem .fmeta{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+.fitem .fmeta .by{font-family:var(--font)}
+/* 마우스를 올렸을 때만 나온다 — 평소에는 목록이 조용해야 한다 */
+.fitem .more{flex:none;width:26px;height:26px;border:none;border-radius:4px;background:none;
+  color:var(--ink-3);cursor:pointer;font-size:15px;line-height:1;opacity:0;transition:opacity .12s}
+.fitem:hover .more,.fitem .more:focus{opacity:1}
+.fitem .more:hover{background:var(--rule);color:var(--ink)}
+.fitem .rename{display:flex;gap:6px;width:100%;margin-top:4px}
+.fitem .rename input{flex:1;min-width:0;font:inherit;font-size:13px;padding:5px 8px;
+  border:1px solid var(--link);border-radius:4px;background:var(--paper);color:var(--ink)}
+.fitem .rename button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.fitem .rename button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.fempty{font-size:13px;color:var(--ink-2);padding:10px 0}
+/* 끌어다 놓는 자리. 하단의 '파일 첨부' 버튼은 없앴다 —
+   같은 기능이 두 군데 있으면 어느 쪽을 눌러야 할지 알 수 없다 (4-9). */
+.drop{margin-top:12px;border:1px dashed var(--rule-2);border-radius:6px;padding:18px 14px;
+  text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.7;
+  transition:border-color .12s,background .12s}
+.drop.over{border-color:var(--link);background:rgba(35,131,226,.05);color:var(--ink-2)}
+.drop b{display:block;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:3px}
+.drop .pick{font:inherit;font-size:12.5px;margin-top:9px;padding:5px 12px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.drop .pick:hover{background:var(--hover)}
+.dropwarn{margin-top:9px;font-size:12.5px;color:var(--now-ink);line-height:1.6}
+.filenote{margin-top:14px;padding-top:11px;border-top:1px solid var(--rule);
+  font-size:11.5px;color:var(--ink-2);line-height:1.6}
 
 /* ── 세팅 마법사 ────────────────────────────────────────────────────── */
-.wizhead{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:16px 26px 0;flex:none}
-.steps{display:flex;margin-top:16px;flex-wrap:wrap}
-.steps div{display:flex;align-items:center;gap:9px;padding:10px 20px 12px;font-size:13.5px;
+.wizhead{border-bottom:1px solid var(--rule);background:var(--paper);padding:14px 26px 0;flex:none}
+.steps{display:flex;margin-top:14px;flex-wrap:wrap}
+.steps div{display:flex;align-items:center;gap:8px;padding:8px 18px 10px;font-size:13px;
   color:var(--ink-3);border-bottom:2px solid transparent}
-.steps div b{width:22px;height:22px;border-radius:50%;background:var(--rule);color:var(--ink-2);
-  display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;
-  font-size:12px;font-weight:600;flex:none}
+.steps div b{width:20px;height:20px;border-radius:50%;background:var(--sunk);color:var(--ink-2);
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  font-size:11.5px;font-weight:600;flex:none}
 .steps div.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
-.steps div.on b{background:var(--ink);color:var(--paper-2)}
+.steps div.on b{background:var(--ink);color:#fff}
 .steps div.past b{background:var(--go);color:#fff}
 
 main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
@@ -402,95 +517,94 @@ main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
 .btn.back{font-size:13px;padding:6px 13px;order:-1}
 .wiz .pane{display:none;max-width:1000px}
 .wiz .pane.on{display:block}
-.wiz h2{font-size:18px;font-weight:600;margin-bottom:6px}
+.wiz h2{font-size:22px;font-weight:600;margin-bottom:6px;letter-spacing:-.015em}
 .lead{font-size:13.5px;color:var(--ink-2);line-height:1.65;margin-bottom:22px}
 .field{margin-bottom:18px;max-width:460px}
 .field label{display:block;font-size:12.5px;color:var(--ink-3);margin-bottom:6px}
-.field input,.field select{width:100%;font-size:14.5px;padding:9px 12px;border-radius:4px}
+.field input,.field select{width:100%;font-size:14px;padding:8px 11px;border-radius:4px}
 .row2{display:flex;gap:14px;max-width:460px;flex-wrap:wrap}
 .row2 .field{flex:1;max-width:none;min-width:180px}
 
-.card{border:1px solid var(--rule-2);border-radius:6px;background:var(--paper-2);padding:16px 18px;margin-bottom:16px}
-.card h3{font-size:13px;font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:8px}
-.card h3 .n{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.card{border:1px solid var(--rule);border-radius:6px;background:var(--paper);padding:16px 18px;margin-bottom:16px}
+.card h3{font-size:12.5px;font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.card h3 .n{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);font-weight:400}
 .wk{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
 .wk div{border:1px solid var(--rule);border-radius:4px;padding:7px 9px;background:var(--paper)}
-.wk b{display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-2);font-weight:600}
-.wk span{display:block;font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin-top:2px}
-.wk div.clash{border-color:var(--warn);background:#FBF3E3}
+.wk b{display:block;font-family:var(--mono);font-size:12px;color:var(--ink-2);font-weight:600}
+.wk span{display:block;font-family:var(--mono);font-size:12.5px;margin-top:2px}
+.wk div.clash{border-color:var(--warn);background:#FCF6E8}
 .wk div.clash span{color:#7A5410;font-weight:600}
 .wk div.clash i{display:block;font-style:normal;font-size:10.5px;color:#7A5410;margin-top:2px}
-.wk div.day{background:#EDF0EE}
+.wk div.day{background:var(--side)}
 
-.alert{display:flex;gap:11px;padding:13px 15px;border-radius:0 4px 4px 0;font-size:13px;
-  line-height:1.6;margin-bottom:14px;border-left:3px solid}
-.alert.warn{background:#FBF3E3;border-color:var(--warn);color:#5E4109}
+.alert{display:flex;gap:11px;padding:12px 14px;border-radius:5px;font-size:13px;
+  line-height:1.6;margin-bottom:14px}
+.alert.warn{background:#FCF6E8;color:#5E4109}
 .alert.warn b{color:#7A5410}
-.alert.info{background:#EDF3F0;border-color:#5B8C7E;color:var(--ink-2)}
-.alert.info b{color:#2F5A4C}
-.alert.stop{background:#FBEAE6;border-color:var(--now);color:#7A2517}
-.alert.stop b{color:#8E2A19}
-.alert .ic{font-family:'IBM Plex Mono',monospace;font-size:11px;flex:none;font-weight:600;padding-top:1px}
+.alert.info{background:var(--side);color:var(--ink-2)}
+.alert.info b{color:var(--ink)}
+.alert.stop{background:var(--now-tint);color:var(--now-ink)}
+.alert.stop b{color:var(--now-ink)}
+.alert .ic{font-family:var(--mono);font-size:11px;flex:none;font-weight:600;padding-top:1px}
 
 .teams{display:flex;flex-wrap:wrap;gap:8px}
 .tchip{display:flex;align-items:center;gap:8px;border:1px solid var(--rule-2);border-radius:20px;
-  padding:6px 14px;font-size:13.5px;cursor:pointer;background:var(--paper-2);user-select:none}
+  padding:5px 13px;font-size:13.5px;cursor:pointer;background:var(--paper);user-select:none}
+.tchip:hover{background:var(--hover)}
 .tchip i{width:8px;height:8px;border-radius:50%;display:block;flex:none}
 .tchip.off{opacity:.42;text-decoration:line-through;text-decoration-color:var(--rule-2)}
 .tchip .x{color:var(--ink-3);font-size:15px;line-height:1}
 
 .tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .tools button{font:inherit;font-size:12.5px;padding:5px 12px;border-radius:20px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);display:flex;align-items:center;gap:7px}
-.tools button[aria-pressed=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
-.tools button .n{font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.7}
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2);display:flex;align-items:center;gap:7px}
+.tools button:hover{background:var(--hover)}
+.tools button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tools button .n{font-family:var(--mono);font-size:11px;opacity:.7}
 .tools .cnt{margin-left:auto;font-size:13px;color:var(--ink-2)}
-.tools .cnt b{font-family:'IBM Plex Mono',monospace;font-size:14px}
-.histhead{display:flex;justify-content:flex-end;font-family:'IBM Plex Mono',monospace;
+.tools .cnt b{font-family:var(--mono);font-size:14px}
+.histhead{display:flex;justify-content:flex-end;font-family:var(--mono);
   font-size:10px;color:var(--ink-3);margin-bottom:6px;padding-right:124px}
 .histhead span{width:22px;text-align:center}
 
-.lib{border:1px solid var(--rule-2);border-radius:6px;background:var(--paper-2);overflow:hidden}
+.lib{border:1px solid var(--rule);border-radius:6px;background:var(--paper);overflow:hidden}
 /* 성격이 다른 셋을 갈라 놓는다 — Main 업무 / 일정 / Claude 제안 */
-.libsec + .libsec{border-top:1px solid var(--rule-2)}
+.libsec + .libsec{border-top:1px solid var(--rule)}
 .libsec > h3{position:sticky;top:0;z-index:2;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
-  margin:0;padding:10px 14px;background:#EAEEEB;border-bottom:1px solid var(--rule);
+  margin:0;padding:9px 14px;background:var(--side);border-bottom:1px solid var(--rule);
   font-size:12.5px;font-weight:600;color:var(--ink-2)}
-.libsec > h3 .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
+.libsec > h3 .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:400}
 .libsec > h3 em{font-style:normal;font-size:11.5px;font-weight:400;color:var(--ink-3);margin-left:auto}
 /* 진행 순서 눈금 — 시작 주차가 바뀌는 곳 */
-.weekmark{display:flex;align-items:baseline;gap:8px;padding:7px 14px 5px;
-  border-bottom:1px solid var(--rule);background:var(--paper)}
-.weekmark b{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:var(--ink-2)}
-.weekmark span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3)}
+.weekmark{display:flex;align-items:baseline;gap:8px;padding:7px 14px 5px;background:var(--paper)}
+.weekmark b{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.weekmark span{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 /* 하위 업무 — 고르는 단위가 아니라 딸려 오는 것 */
-.tgroup{border-bottom:1px solid var(--rule)}
-.tgroup:last-child{border-bottom:none}
 .tgroup .trow{border-bottom:none}
-.subrow{display:flex;align-items:center;gap:9px;padding:5px 14px 5px 47px;font-size:12.5px;
+.subrow{display:flex;align-items:center;gap:9px;padding:4px 14px 4px 47px;font-size:12.5px;
   color:var(--ink-2);background:var(--paper)}
 .subrow:last-child{padding-bottom:9px}
 .subrow.off{opacity:.45}
 .subrow .branch{color:var(--ink-3);flex:none}
 .subrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tag.sub{background:#E3E8EF;color:#3B5570}
+.tag.sub{background:var(--sunk);color:var(--ink-2)}
 .editbtn{font:inherit;font-size:11px;padding:2px 8px;border-radius:3px;flex:none;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-3);margin-left:8px}
-.editbtn:hover{background:var(--paper);color:var(--ink);border-color:var(--ink-3)}
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink-3);margin-left:8px}
+.editbtn:hover{background:var(--hover);color:var(--ink)}
 #taskEditor .field{margin-bottom:12px}
-#taskEditor .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:6px}
+#taskEditor .basis{display:block;font-size:11.5px;color:var(--ink-2);margin-top:6px}
 .field input[type=search]{width:100%;font:inherit;font-size:13.5px;padding:7px 10px;
-  border:1px solid var(--rule-2);border-radius:4px;background:var(--paper-2);color:var(--ink)}
+  border:1px solid var(--rule-2);border-radius:4px;background:var(--paper);color:var(--ink)}
 .field select[size]{width:100%;font-size:13.5px;padding:4px;border:1px solid var(--rule-2);
-  border-radius:4px;background:var(--paper-2);color:var(--ink)}
+  border-radius:4px;background:var(--paper);color:var(--ink)}
 .field select[size] option{padding:4px 6px}
-.field .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:5px}
-.libempty{padding:28px 14px;text-align:center;font-size:13px;color:var(--ink-3)}
-.trow{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
-.trow:last-child{border-bottom:none}
-.trow:hover{background:var(--paper)}
-.box{width:18px;height:18px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
-  display:flex;align-items:center;justify-content:center;background:var(--paper-2)}
+.field .basis{display:block;font-size:11.5px;color:var(--ink-2);margin-top:5px}
+.libempty{padding:28px 14px;text-align:center;font-size:13px;color:var(--ink-2)}
+.trow{display:flex;align-items:center;gap:11px;padding:9px 14px;cursor:pointer}
+.trow + .trow{border-top:1px solid var(--rule)}
+.trow:hover{background:var(--hover)}
+.box{width:17px;height:17px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
+  display:flex;align-items:center;justify-content:center;background:var(--paper)}
 .box::after{content:'';width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
   transform:rotate(-45deg) translate(1px,-1px);opacity:0}
 .trow.on .box{background:var(--go);border-color:var(--go)}
@@ -499,79 +613,93 @@ main.wiz{flex:1;overflow-y:auto;padding:26px 26px 40px}
 .trow .nm{font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .trow.off .nm{color:var(--ink-3)}
 .trow .why{font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:5px;
-  padding-left:10px;border-left:2px solid #C9C3E8}
+  padding-left:10px;border-left:2px solid var(--rule-2)}
 .trow .tm{font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px;flex:none;width:78px}
 .trow .tm i{width:7px;height:7px;border-radius:50%;flex:none}
-.tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:2px;flex:none}
-.tag.must{background:#DDEAE4;color:#2F5A4C}
-.tag.rec{background:#FAEEDA;color:#7A5410}
-.tag.low{background:#E8EAE8;color:#5A625D}
-.tag.new{background:#E4E1F1;color:var(--ai)}
+.tag{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:3px;flex:none}
+.tag.must{background:#E4EFE7;color:#356B45}
+.tag.rec{background:#FBF1DE;color:#7A5410}
+.tag.low{background:var(--sunk);color:var(--ink-2)}
+.tag.new{background:#EDEAF7;color:var(--ai)}
 .hist{display:flex;flex:none}
 .hist i{width:22px;display:flex;justify-content:center}
 .hist i b{width:9px;height:9px;border-radius:2px;display:block;background:var(--go)}
 .hist i.no b{background:none;border:1px solid var(--rule-2)}
-.dwlbl{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-3);flex:none;width:44px;text-align:right}
-.dtlbl{font-family:'IBM Plex Mono',monospace;font-size:12.5px;flex:none;width:58px;text-align:right}
+.dwlbl{font-family:var(--mono);font-size:12px;color:var(--ink-3);flex:none;width:44px;text-align:right}
+.dtlbl{font-family:var(--mono);font-size:12.5px;flex:none;width:58px;text-align:right}
 .trow.clash .dtlbl{color:#7A5410;font-weight:600}
 
 /* 라이브러리 관리 — 필수 지정 */
 .trow.libedit{cursor:pointer}
-.trow .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:4px;
-  font-family:'IBM Plex Mono',monospace}
+.trow .basis{display:block;font-size:11.5px;color:var(--ink-2);margin-top:4px;
+  font-family:var(--mono)}
 .trow.libedit .box{border-radius:3px}
 .trow.libedit.on .box{background:var(--now);border-color:var(--now)}
 .wiz .lead b{font-weight:600}
 
-.drafttable{display:flex;flex-direction:column;gap:1px;background:var(--rule);
-  border:1px solid var(--rule-2);border-radius:5px;overflow:hidden;margin-bottom:16px}
-.draftrow{display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--paper-2);font-size:13px}
-.draftrow.in{background:#F1F6F3}
+.drafttable{display:flex;flex-direction:column;border:1px solid var(--rule);
+  border-radius:6px;overflow:hidden;margin-bottom:16px}
+.draftrow{display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--paper);font-size:13px}
+.draftrow + .draftrow{border-top:1px solid var(--rule)}
+.draftrow.in{background:var(--side)}
 .draftrow b{font-weight:600;min-width:88px}
-.draftrow .st{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:2px;
-  background:var(--rule);color:var(--ink-2)}
-.draftrow.in .st{background:#DDEAE4;color:var(--go)}
-.draftrow .n{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3)}
+.draftrow .st{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:3px;
+  background:var(--sunk);color:var(--ink-2)}
+.draftrow.in .st{background:#E4EFE7;color:#356B45}
+.draftrow .n{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
 .draftrow .by{font-size:12px;color:var(--ink-3)}
-.draftrow .note{margin-left:auto;font-size:12px;color:var(--ink-2);text-align:right}
+.draftrow .note{margin-left:auto;font-size:12px;color:var(--ink-2);text-align:right;
+  background:none;padding:0;border-radius:0}
 
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:11px;margin-bottom:18px}
-.sum div{border:1px solid var(--rule-2);border-radius:6px;padding:13px 15px;background:var(--paper-2)}
-.sum b{display:block;font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-.02em}
+.sum div{border:1px solid var(--rule);border-radius:6px;padding:13px 15px;background:var(--paper)}
+.sum b{display:block;font-family:var(--mono);font-size:23px;font-weight:600;letter-spacing:-.02em}
 .sum span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:3px}
 
-footer.wizfoot{border-top:1px solid var(--rule-2);background:var(--paper-2);padding:14px 26px;flex:none;
+footer.wizfoot{border-top:1px solid var(--rule);background:var(--paper);padding:13px 26px;flex:none;
   display:flex;gap:9px;align-items:center}
 footer.wizfoot .hint{font-size:12.5px;color:var(--ink-3)}
 footer.wizfoot .sp{margin-left:auto}
-button.btn{font:inherit;font-size:14px;padding:9px 18px;border-radius:4px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-button.btn.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink);font-weight:500}
+button.btn{font:inherit;font-size:13.5px;padding:8px 16px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+button.btn:not(:disabled):hover{background:var(--hover)}
+button.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:500}
+button.btn.pri:not(:disabled):hover{background:#4A4740}
 button.btn:disabled{opacity:.4;cursor:default}
+.addlink{font-size:12.5px;color:var(--ink-2);border:1px solid var(--rule-2);border-radius:4px;
+  padding:3px 9px;background:var(--paper)}
+.addlink:hover{background:var(--hover);color:var(--ink)}
 
 /* ── 안내 화면 ──────────────────────────────────────────────────────── */
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:14px;padding:40px;text-align:center}
-.empty-state h2{font-size:17px;font-weight:600}
+.empty-state h2{font-size:18px;font-weight:600}
 .empty-state p{font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:460px}
+/* 잠깐 떴다 사라진다 — flash.js 가 시간이 지나면 지우고, 눌러도 지워진다 */
 .flash{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);
-  color:var(--paper-2);padding:10px 18px;border-radius:4px;font-size:13.5px;z-index:60}
+  color:#fff;padding:9px 16px;border-radius:6px;font-size:13.5px;z-index:60;
+  box-shadow:0 8px 22px -10px rgba(55,53,47,.5)}
 
 /* ── 모바일 (CLAUDE.md Phase 1 완료 기준: 모바일에서 깨지지 않는다) ── */
 @media (max-width:820px){
-  body{overflow:auto;padding-right:0!important}
-  header.mast-wrap{padding:11px 14px 0}
-  .title{font-size:17px}
-  .countdown{margin-left:0}
-  nav.tabs{overflow-x:auto;margin-top:10px}
-  .toolbar{padding:9px 14px;gap:12px}
+  body{overflow:auto;padding-right:0!important;padding-left:0!important}
+  .sidenav{width:min(84vw,300px)}
+  .sideedge{width:16px}
+  header.mast-wrap{padding:9px 14px}
+  .title{font-size:14px}
+  .countdown{margin-left:auto}
+  .toolbar{padding:8px 14px;gap:12px}
   .legend{display:none}
   .board{display:none}
   .mlist{display:block;flex:1;overflow:auto}
   .drawer{width:100%;max-width:100%;min-width:0;border-left:none}
   .grip{display:none}
+  .dhead{padding:18px 16px 0}
+  .dbody{padding:18px 16px 30px}
+  .dfoot{padding:12px 16px}
+  .dtitle{font-size:21px}
   main.wiz{padding:18px 14px 30px}
-  .wizhead{padding:13px 14px 0}
+  .wizhead{padding:12px 14px 0}
   .steps div{padding:8px 12px 10px;font-size:12.5px}
   .histhead{display:none}
   .trow{flex-wrap:wrap}
@@ -585,109 +713,517 @@ button.btn:disabled{opacity:.4;cursor:default}
 /* ── 선후행 (업무 라이브러리) ─────────────────────────────────────────
    필수 지정과 성격이 다르므로 구획을 나눈다. 102건을 다루는 자리라
    이름으로 좁혀 찾기가 있어야 한다. */
-.secttl{font-size:15px;font-weight:600;margin:26px 0 4px}
-.sechint{font-size:12.5px;color:var(--ink-3);line-height:1.7;margin:0 0 12px;max-width:74ch}
+.secttl{font-size:16px;font-weight:600;margin:26px 0 4px}
+.sechint{font-size:12.5px;color:var(--ink-2);line-height:1.7;margin:0 0 12px;max-width:74ch}
 .sechint b{color:var(--ink-2);font-weight:600}
 .find{font:inherit;font-size:12.5px;padding:6px 11px;border:1px solid var(--rule-2);
-  border-radius:20px;background:var(--paper-2);color:var(--ink);min-width:210px}
-.find:focus{outline:none;border-color:var(--link);box-shadow:0 0 0 2px rgba(22,104,227,.14)}
+  border-radius:20px;background:var(--paper);color:var(--ink);min-width:210px}
+.find:focus{outline:none;border-color:var(--link)}
+/* 계정 관리의 연락처 칸 — 표 안이라 좁게. 평소엔 조용하고 고칠 때만 드러난다 */
+.find.phone{min-width:0;width:122px;padding:4px 8px;border-radius:4px;
+  border-color:transparent;background:none}
+.find.phone:hover{border-color:var(--rule-2);background:var(--paper)}
+.find.phone:focus{border-color:var(--link);background:var(--paper)}
+/* 놓은 번호 — 누구였는지는 남기되 지금 쓰는 번호가 아님이 보여야 한다 */
+.retired{color:var(--ink-3);font-size:12.5px}
+.retired em{font-style:normal;font-size:11px}
 .btn.sm{font-size:12px;padding:5px 11px}
 
 .lib.pre{max-height:440px;overflow-y:auto}
-.prow{display:flex;align-items:center;gap:11px;padding:10px 14px;
-  border-bottom:1px solid var(--rule)}
-.prow:last-child{border-bottom:none}
-.prow:hover{background:var(--paper)}
-.prow.sub{padding-left:30px;background:linear-gradient(90deg,var(--paper) 0 3px,transparent 3px)}
+.prow{display:flex;align-items:center;gap:11px;padding:9px 14px}
+.prow + .prow{border-top:1px solid var(--rule)}
+.prow:hover{background:var(--hover)}
+.prow.sub{padding-left:30px}
 .prow .main{flex:1;min-width:0}
 .prow .nm{font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .prow .ind{color:var(--ink-3);margin-right:3px}
-.prow .basis{display:block;font-size:11.5px;color:var(--ink-3);margin-top:4px;line-height:1.55}
+.prow .basis{display:block;font-size:11.5px;color:var(--ink-2);margin-top:4px;line-height:1.55}
 .prow .basis .lk{color:var(--ink-2);font-weight:600}
 .prow .tm{font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px;
   flex:none;width:78px}
 .prow .tm i{width:7px;height:7px;border-radius:50%;flex:none}
-.prow[hidden]{display:none}
 
 .proplist{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
 .prop{font:inherit;font-size:12px;text-align:left;padding:6px 11px;border-radius:4px;
-  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2)}
-.prop:hover{border-color:var(--go);background:#EDF3F0}
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2)}
+.prop:hover{border-color:var(--go);background:var(--hover)}
 .prop b{font-weight:600;color:var(--ink)}
-.prop .why{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+.prop .why{display:block;font-family:var(--mono);font-size:10.5px;
   color:var(--ink-3);margin-top:2px}
 
 /* 선행 고르기 */
-.modal{position:fixed;inset:0;z-index:60;background:rgba(20,25,23,.34);
+.modal{position:fixed;inset:0;z-index:60;background:rgba(55,53,47,.32);
   display:flex;align-items:center;justify-content:center;padding:22px}
-.modal .sheetbox{background:var(--paper-2);border:1px solid var(--rule-2);border-radius:8px;
-  box-shadow:0 12px 40px rgba(20,25,23,.2);width:min(560px,100%);max-height:82vh;
+.modal .sheetbox{background:var(--paper);border:1px solid var(--rule-2);border-radius:8px;
+  box-shadow:0 16px 44px rgba(55,53,47,.22);width:min(560px,100%);max-height:82vh;
   display:flex;flex-direction:column;gap:11px;padding:18px 20px}
 .modal .sh{display:flex;align-items:center;gap:9px}
 .modal .sh b{font-size:14.5px}
 .modal .sh .btn{margin-left:auto}
 .modal .sh.end .btn{margin-left:0}
 .modal .sh.end{justify-content:flex-end}
-.plist{flex:1;overflow-y:auto;border:1px solid var(--rule-2);border-radius:5px;
-  background:var(--paper)}
-.plist label{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:13px;
-  border-bottom:1px solid var(--rule);cursor:pointer}
-.plist label:last-child{border-bottom:none}
-.plist label:hover{background:var(--paper-2)}
-.plist label[hidden]{display:none}
-.plist .dw{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;
-  color:var(--ink-3)}
+.plist{flex:1;overflow-y:auto;border:1px solid var(--rule);border-radius:5px;background:var(--paper)}
+.plist label{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:13px;cursor:pointer}
+.plist label + label{border-top:1px solid var(--rule)}
+.plist label:hover{background:var(--hover)}
+.plist .dw{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .plist .sub{color:var(--ink-3);font-size:11.5px}
 
 /* ── 상세 패널의 선행 / 후속 / 관련 ──────────────────────────────────
    셋을 한 덩어리로 그리면 무엇이 나를 막는지 읽히지 않는다. */
-.relsec + .relsec{margin-top:16px}
-.relsec > h4{font-size:11.5px;font-weight:600;letter-spacing:.04em;color:var(--ink-3);
-  margin:0 0 7px;display:flex;align-items:center;gap:7px}
-.relsec > h4 .n{font-family:'IBM Plex Mono',monospace;font-size:10.5px}
+.relsec + .relsec{margin-top:18px}
+.relsec > h4{font-size:11.5px;font-weight:600;color:var(--ink-3);
+  margin:0 0 6px;display:flex;align-items:center;gap:7px;padding-left:2px}
+.relsec > h4 .n{font-family:var(--mono);font-size:10.5px}
 .relsec > h4 .edit{margin-left:auto;font:inherit;font-size:10.5px;padding:2px 8px;
-  border-radius:3px;cursor:pointer;border:1px solid var(--rule-2);
-  background:var(--paper-2);color:var(--ink-3)}
-.relsec > h4 .edit:hover{color:var(--ink);border-color:var(--ink-3)}
-.relnone{font-size:12px;color:var(--ink-3)}
-.relnote{font-size:11.5px;color:var(--ink-3);line-height:1.6;margin-top:10px;
-  padding-top:9px;border-top:1px dotted var(--rule)}
+  border-radius:3px;cursor:pointer;border:1px solid var(--rule);
+  background:var(--paper);color:var(--ink-3)}
+.relsec > h4 .edit:hover{color:var(--ink);border-color:var(--rule-2)}
+.relnone{font-size:12px;color:var(--ink-2);padding-left:2px}
+.relnote{font-size:11.5px;color:var(--ink-2);line-height:1.6;margin-top:12px;
+  padding-top:10px;border-top:1px solid var(--rule)}
 
 
 /* ── 진단 패널 (CLAUDE.md 4-10) ───────────────────────────────────────
-   상세 패널 하단 고정. 제목 자리에 판정 결과가 그대로 들어간다 —
+   상세 패널 하단 고정. 회색 블록(노션 콜아웃) 안에 표시·판정·근거 순으로.
+   제목 자리에 판정 결과가 그대로 들어간다 —
    '진행 불가' / '일부 진행 가능' / '진행 가능' / '완료'. */
 .diag{border-top:1px solid var(--rule);background:var(--paper);flex:none;
-  max-height:38vh;display:flex;flex-direction:column}
-.dg-h{display:flex;align-items:center;gap:8px;padding:10px 22px 8px;flex:none}
+  max-height:38vh;display:flex;flex-direction:column;padding:12px 26px 14px}
+.dg-h{display:flex;align-items:center;gap:8px;padding:10px 14px 8px;flex:none;
+  background:var(--side);border-radius:6px 6px 0 0}
 .dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
-.diag.g-block .dg-h .dot{background:var(--now);box-shadow:0 0 0 3px rgba(200,68,46,.2)}
-.diag.g-block .dg-h .ttl{color:#8E2A19}
-.diag.g-part .dg-h .dot{background:#C9902B;box-shadow:0 0 0 3px rgba(201,144,43,.22)}
+.diag.g-block .dg-h .dot{background:var(--now)}
+.diag.g-block .dg-h .ttl{color:var(--now-ink)}
+.diag.g-part .dg-h .dot{background:#B8860B}
 .diag.g-part .dg-h .ttl{color:#7A5410}
-.diag.g-go .dg-h .dot{background:#4A8A5C;box-shadow:0 0 0 3px rgba(74,138,92,.2)}
-.diag.g-go .dg-h .ttl{color:#3F6B5D}
+.diag.g-go .dg-h .dot{background:var(--go)}
+.diag.g-go .dg-h .ttl{color:#3B6E4B}
 .diag.g-done .dg-h .ttl{color:var(--ink-2)}
-.dg-h .ttl{font-size:12.5px;font-weight:600;letter-spacing:-.01em}
-.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:3px;
-  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-3)}
+.dg-h .ttl{font-size:12.5px;font-weight:600}
+.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:2px 9px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-3)}
 .dg-h button:hover{background:var(--paper);color:var(--ink)}
-.dg-b{overflow-y:auto;padding:0 22px 14px;font-size:12.5px;line-height:1.6}
-.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;
-  padding-left:10px;border-left:3px solid var(--rule-2);color:var(--ink-2)}
-.dg-v.block{border-left-color:var(--now);color:#8E2A19}
-.dg-v.part{border-left-color:#C9902B;color:#7A5410}
-.dg-v.go{border-left-color:#5B8C7E;color:#3F6B5D}
+.dg-b{overflow-y:auto;padding:0 14px 12px;font-size:12.5px;line-height:1.6;
+  background:var(--side);border-radius:0 0 6px 6px}
+.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;color:var(--ink-2)}
+.dg-v.block{color:var(--now-ink)}
+.dg-v.part{color:#7A5410}
+.dg-v.go{color:#3B6E4B}
 .dg-b ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px}
 .dg-b li{display:flex;gap:7px;color:var(--ink-2);font-size:12px;line-height:1.5}
 .dg-b li b{font-weight:600;color:var(--ink)}
-.dg-b li .ic{flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-3);
+.dg-b li .ic{flex:none;font-family:var(--mono);font-size:10px;color:var(--ink-3);
   width:26px;padding-top:2px}
 .dg-b .src{margin-top:9px;font-size:10.5px;color:var(--ink-3);line-height:1.5}
 .diag.busy .dg-b{opacity:.35}
 
 /* ── 알림 미리보기: 실제로 갈 문구를 그대로 보여준다 ────────────────── */
-.pushnote{border:1px solid var(--rule-2);border-radius:8px;background:var(--paper);
+/* 숫자와 이름이 한 줄에 붙어 "0받는 사람" 으로 읽히던 것을 세로로 세운다.
+   이 선택자는 처음부터 스타일이 없었다 — UI 를 옮기면서 눈에 띄어 함께 고쳤다. */
+.figures{display:flex;flex-wrap:wrap;gap:22px;margin:14px 0 18px}
+.figures div{display:flex;flex-direction:column;gap:2px}
+.figures b{font-family:var(--mono);font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.figures span{font-size:12.5px;color:var(--ink-2)}
+
+.pushnote{border:1px solid var(--rule);border-radius:8px;background:var(--side);
   padding:12px 14px;max-width:420px}
 .pn-title{font-size:13.5px;font-weight:600;margin-bottom:6px}
 .pn-body{font-size:12.5px;line-height:1.75;color:var(--ink-2);white-space:pre-wrap}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   수련회 진행 (CLAUDE.md 5장) — 시각 스펙: docs/mockups/retreat-live.html
+
+   **이 화면만 조건이 다르다.** 준비 보드는 몇 달에 걸쳐 천천히 보지만
+   여기는 현장에서 휴대폰으로 급히 본다 — 사람이 뛰어다니면서 한 손으로
+   누른다. 그래서 체크 버튼을 44px 로 잡고, 좁은 화면에서는 목록과
+   체크리스트를 한 번에 하나씩 보여준다.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 일자 탭 */
+.days{display:flex;gap:6px;align-items:center;padding:8px 20px;
+  border-bottom:1px solid var(--rule);background:var(--paper);flex:none;flex-wrap:wrap}
+.dayb{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--rule-2);
+  background:var(--paper);color:var(--ink-2);cursor:pointer;border-radius:4px;
+  display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.dayb:hover{background:var(--hover);color:var(--ink)}
+.dayb[aria-selected=true]{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:500}
+.dayb i{font-style:normal;font-family:var(--mono);font-size:11px;opacity:.7}
+.dayb .td{font-style:normal;font-size:10px;color:var(--now);font-weight:600}
+.dayb[aria-selected=true] .td{color:#F3C7C3}
+.days .prog{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-2)}
+.days .prog .pl{color:var(--ink-3)}
+.days .bar{width:150px;height:6px;background:var(--sunk);border-radius:4px;overflow:hidden;display:block}
+.days .bar i{display:block;height:100%;background:var(--go);border-radius:4px;transition:width .3s}
+.days .prog b{font-size:13px}
+/* 종료된 회차인데 체크가 0건이면 0% 막대 대신 사정을 적는다 (5-6).
+   실제로는 다 했는데 그때 이 시스템이 없었을 뿐이다. */
+.days .prog.carried{font-size:12.5px;color:var(--ink-2);background:var(--side);
+  padding:5px 11px;border-radius:5px;line-height:1.5}
+
+.wrap{flex:1;display:grid;grid-template-columns:336px minmax(0,1fr);overflow:hidden}
+
+/* 왼쪽 — 시각순 프로그램 목록. 가로선 대신 여백으로 나눈다 */
+.rail{border-right:1px solid var(--rule);overflow-y:auto;background:var(--paper);padding:6px}
+.pgm{display:flex;gap:11px;padding:9px 10px;border-radius:5px;cursor:pointer;width:100%;
+  align-items:flex-start;text-align:left;font:inherit;color:var(--ink);
+  background:none;border:none;position:relative}
+.pgm:hover{background:var(--hover)}
+.pgm[aria-current=true]{background:var(--side);box-shadow:inset 3px 0 0 var(--go)}
+.pgm .t{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);flex:none;width:42px;padding-top:1px}
+.pgm .b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pgm .nm{font-size:14px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm[aria-current=true] .nm{font-weight:500}
+.pgm .sub{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm .ct{flex:none;font-size:11px;color:var(--ink-3);border:1px solid var(--rule);
+  border-radius:10px;padding:2px 7px;margin-top:1px}
+.pgm.done .nm{color:var(--ink-2)}
+.pgm.done .ct{background:var(--sunk)}
+.pgm.live .ct{border-color:var(--now);color:var(--now-ink);font-weight:600}
+.pgm .flag{flex:none;font-family:var(--mono);font-size:10px;background:var(--now);color:#fff;
+  padding:2px 5px;border-radius:3px;margin-top:1px}
+/* 끝났는데 남은 정리 항목 — 넘어가면 화면에서 사라지는 자리다 (5-2) */
+.pgm .left{font-size:11px;color:var(--now-ink);font-weight:600}
+.nowline{display:flex;align-items:center;gap:9px;padding:0 10px;height:0;position:relative;z-index:2}
+.nowline::before{content:'';flex:1;height:1.5px;background:var(--now)}
+.nowline b{font-family:var(--mono);font-size:10.5px;color:#fff;background:var(--now);
+  padding:2px 7px;border-radius:3px;white-space:nowrap}
+.railadd{width:100%;margin-top:8px;font:inherit;font-size:12.5px;padding:8px;border-radius:5px;
+  cursor:pointer;border:1px dashed var(--rule-2);background:none;color:var(--ink-3)}
+.railadd:hover{background:var(--hover);color:var(--ink)}
+
+/* 오른쪽 — 전 / 중 / 후 */
+.detail{overflow-y:auto;padding:24px 28px 40px;min-width:0}
+.detail .dh{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.detail .dh h1{font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.3}
+.detail .dh .when{font-size:13px;color:var(--ink-2);flex:none;padding-top:7px}
+.detail .dmeta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-bottom:20px}
+.detail .dmeta span b{color:var(--ink-3);font-weight:400;margin-right:5px}
+.detail .note{font-size:12.5px;line-height:1.6;background:var(--side);padding:11px 13px;
+  border-radius:5px;color:var(--ink-2);margin-bottom:18px}
+/* 보드의 .note 는 b 를 블록으로 쓴다(작은 제목). 여기서는 문장 안의 강조라
+   인라인으로 되돌린다 — 안 그러면 한 문장이 네 줄로 쪼개진다. */
+.detail .note b{display:inline;font-size:inherit;margin:0;color:var(--ink)}
+.detail .note.warn{background:var(--now-tint);color:var(--now-ink)}
+.detail .note.warn b{color:var(--now-ink)}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:20px;
+  border-bottom:1px solid var(--rule)}
+.filters button{font:inherit;font-size:12.5px;padding:7px 12px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2);
+  display:flex;align-items:center;gap:6px;min-height:34px}
+.filters button:hover{background:var(--hover)}
+.filters button i{width:7px;height:7px;border-radius:50%;display:block;flex:none}
+.filters button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.phase{margin-bottom:28px}
+.ph-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.ph-h h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+/* 구간 표시도 면을 채우지 않는다 — 점으로 알린다 (4-0) */
+.ph-h h2 .tag{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:3px;
+  color:var(--ink-2);border:1px solid var(--rule);display:flex;align-items:center;gap:6px}
+.ph-h h2 .tag::before{content:'';width:7px;height:7px;border-radius:50%;flex:none;
+  background:var(--tagc,var(--ink-3))}
+.ph-h .n{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.ph-h .hint{font-size:12px;color:var(--ink-3)}
+/* 정리(후)를 눈에 띄게 둔다 — 다음 프로그램 준비와 겹치면 누락되는 자리다 */
+.phase.ph-post{border-left:2px solid var(--rule-2);padding-left:12px;margin-left:-14px}
+
+/* ── 팀 단위 / 개인 단위 (5-2) ────────────────────────────────────
+   구간(준비·진행·정리) 안에서 다시 두 덩어리로 나눈다. 팀이 움직여야
+   개인 일이 돌아가므로 팀을 위에 둔다. 라벨은 작게 — 구간 제목보다
+   커지면 무엇이 먼저인지 뒤집힌다 (4-0 무채색 기조). */
+.scopegroup + .scopegroup{margin-top:10px}
+.sg-h{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-3);
+  padding:2px 0 4px 50px}
+.sg-h .n{color:var(--ink-3)}
+/* 팀 덩어리는 왼쪽에 얇은 선 하나로만 묶는다 */
+.sg-team{border-left:2px solid var(--rule);margin-left:-2px}
+.sg-team .sg-h{padding-left:52px}
+
+/* 범위 칩은 파트 칩 아래 줄에 — 서로 다른 축이라 섞지 않는다 */
+.filters.scopes{margin-top:-12px;padding-bottom:14px}
+
+.item{display:flex;gap:10px;padding:4px 6px 4px 0;border-radius:5px;align-items:center}
+.item:hover{background:var(--hover)}
+/* 손가락으로 누를 크기 — 최소 44px (5-0) */
+.tick{flex:none;width:44px;height:44px;border:none;background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-radius:6px;padding:0}
+.tick:hover{background:var(--rule)}
+.tick .box{width:22px;height:22px;border:1.5px solid var(--rule-2);border-radius:4px;
+  display:flex;align-items:center;justify-content:center;background:var(--paper)}
+.tick .box::after{content:'';width:10px;height:6px;border-left:2px solid #fff;
+  border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px);opacity:0}
+.item.on .tick .box{background:var(--go);border-color:var(--go)}
+.item.on .tick .box::after{opacity:1}
+.item .txt{flex:1;min-width:0;font-size:13.5px;line-height:1.5}
+.item.on .txt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--rule-2)}
+/* 언제 누가 눌렀는지 — 끝난 뒤 정리가 몇 시에 처리됐는지 볼 수 있어야 한다 */
+.item .stamp{display:block;font-style:normal;font-size:10.5px;color:var(--ink-3);
+  text-decoration:none;margin-top:2px}
+.item .who{flex:none;display:flex;align-items:center;gap:7px}
+.item .part{font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:3px;
+  color:var(--ink-2);border:1px solid var(--rule);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.item .part::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;
+  background:var(--partc,var(--ink-3))}
+.item .as{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.item .flag{font-size:10.5px;font-family:var(--mono);background:var(--now);color:#fff;
+  padding:2px 5px;border-radius:3px;flex:none}
+/* 개인 단위는 이름을 앞세운다 — "누구 일인가" 가 먼저다 */
+.item .txt .lead{font-weight:600;color:var(--ink)}
+.item.on .txt .lead{color:var(--ink-3)}
+/* 총무팀이 범위를 그 자리에서 바꾼다 (넣을 때의 추측이 틀렸을 수 있다) */
+.item .scopeswap{flex:none;height:24px;padding:0 8px;border:1px solid var(--rule);
+  background:none;color:var(--ink-3);cursor:pointer;border-radius:12px;
+  font:inherit;font-size:10.5px;opacity:0}
+.item:hover .scopeswap,.item .scopeswap:focus{opacity:1}
+.item .scopeswap:hover{background:var(--hover);color:var(--ink)}
+.item .itemdel{flex:none;width:28px;height:28px;border:none;background:none;color:var(--ink-3);
+  cursor:pointer;border-radius:4px;font-size:16px;line-height:1;opacity:0}
+.item:hover .itemdel,.item .itemdel:focus{opacity:1}
+.item .itemdel:hover{background:var(--rule);color:var(--ink)}
+.detail .empty{font-size:13px;color:var(--ink-2);padding:10px 0 10px 50px}
+.itemadd{margin:6px 0 0 50px;font:inherit;font-size:12px;padding:6px 12px;border-radius:4px;
+  cursor:pointer;border:1px dashed var(--rule-2);background:none;color:var(--ink-3)}
+.itemadd:hover{background:var(--hover);color:var(--ink)}
+
+.copyrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+.copywarn{color:var(--now-ink);font-size:12.5px}
+.backrail{display:none}
+
+/* 실패를 화면에 말한다 — 현장에서는 콘솔을 아무도 안 본다 */
+.livewarn{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:60;
+  max-width:min(560px,calc(100vw - 24px));background:var(--now);color:#fff;
+  padding:11px 16px;border-radius:6px;font-size:13px;line-height:1.5;cursor:pointer;
+  box-shadow:0 8px 22px -10px rgba(55,53,47,.5)}
+
+/* ── 휴대폰 — 현장에서는 이쪽이 기본이다 ────────────────────────────
+   좁은 화면에 좌우 2단이 들어가지 않는다. 목록과 체크리스트를
+   한 번에 하나씩 보여주고, 되돌아가는 길을 위에 고정한다. */
+@media (max-width:820px){
+  .days{padding:8px 12px;gap:5px}
+  .days .prog{width:100%;margin-left:0;order:2}
+  .days .bar{flex:1;width:auto}
+  .wrap{display:block;overflow:visible}
+  .rail{border-right:none;overflow:visible;padding:6px 8px 20px}
+  .detail{display:none;padding:16px 14px 90px}
+  .wrap.showdetail .rail{display:none}
+  .wrap.showdetail .detail{display:block}
+  .backrail{display:block;position:sticky;top:0;z-index:6;width:100%;
+    font:inherit;font-size:13px;padding:12px 14px;text-align:left;
+    border:none;border-bottom:1px solid var(--rule);background:var(--paper);
+    color:var(--ink-2);cursor:pointer;min-height:44px}
+  .backrail[hidden]{display:none}
+  .pgm{padding:11px 10px;min-height:56px}
+  .detail .dh h1{font-size:21px}
+  .phase.ph-post{margin-left:0}
+  .item{padding:2px 4px 2px 0}
+  .item .who{flex-wrap:wrap;justify-content:flex-end}
+  .detail .empty,.itemadd{margin-left:44px;padding-left:6px}
+  .filters button{min-height:40px}
+  /* 두 덩어리는 좁은 화면에서도 갈라져 보여야 한다 — 들여쓰기를 줄이는 대신
+     라벨을 왼쪽 끝으로 당기고 팀 덩어리에 옅은 면을 준다 */
+  .sg-h{padding-left:4px;font-size:11.5px}
+  .sg-team{border-left:none;margin-left:0;background:var(--side);
+    border-radius:6px;padding:6px 4px}
+  .sg-team .sg-h{padding-left:6px}
+  .scopegroup + .scopegroup{margin-top:14px}
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   봉사팀 보기 (CLAUDE.md 5-8)
+
+   **화면과 내려받는 파일이 같은 표다.** 병합·색·테두리가 파일과 같아 보여야
+   하므로 여기서는 색을 정하지 않는다 — 칸의 배경색은 서버가 실어 보낸다.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.sheetbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:8px 20px;
+  border-bottom:1px solid var(--rule);background:var(--paper);flex:none}
+.tabish{font-size:13.5px;padding:6px 2px;color:var(--ink-3);
+  border-bottom:2px solid transparent}
+.tabish:hover{color:var(--ink-2)}
+.tabish.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.sheetbar .sp{margin-left:auto}
+.sheetbar .hint{font-size:12px;color:var(--ink-3)}
+
+/* 가로로 길다 — 휴대폰에서는 가로로 넘긴다. 세로로 접지 않는다. */
+.sheetwrap{flex:1;overflow:auto;background:var(--paper)}
+/* 열 너비를 지킨다 — 좁은 화면에서 표가 찌그러지는 대신 가로로 넘어가게 */
+/* **글자 크기를 여기서 정하지 않는다.** 칸 크기와 같은 자리(staff_sheet)에서
+   나와 표에 실려 온다 — 칸만 커지고 글자는 그대로인 상태가 또 생기지 않게. */
+.ssheet{border-collapse:separate;border-spacing:0;table-layout:fixed;
+  width:max-content;min-width:100%;
+  font-size:var(--fs);line-height:var(--lh);color:var(--ink)}
+.ssheet th,.ssheet td{border:1px solid rgba(0,0,0,.55);padding:0;
+  vertical-align:top;word-break:break-word;background:var(--paper)}
+
+/* **한 시각의 높이를 같게 붙드는 자리.** 칸 안의 이 상자가 높이를 정하므로
+   글이 많다고 줄이 밀려나지 않는다 — 밀려나면 왼쪽 시각 눈금이 오른쪽
+   내용과 어긋난다. 여백도 여기 둔다(칸에 두면 높이 계산이 어긋난다). */
+/* `border-collapse:separate` 라 칸마다 위아래 테두리 1px 씩이 더 붙는다.
+   그만큼 빼야 rowspan 2 짜리 한 칸과 rowspan 1 짜리 두 칸의 높이가 같아진다 —
+   안 빼면 줄마다 2px 씩 어긋나 아래로 갈수록 시각 눈금이 밀린다. */
+.cx{box-sizing:border-box;height:calc(var(--rowh) * var(--n) - 2px);
+  padding:3px 5px;line-height:var(--lh);overflow:hidden;white-space:pre-line}
+/* 넘치는 칸만 작게. **기본이 커진 만큼 이쪽도 같이 커진다** */
+.cx.dense{font-size:var(--fs-dense);line-height:var(--lh-dense)}
+/* 머리줄과 시각 열은 본문보다 크고 굵다 — 시각은 이 표에서 가장 자주 보는 글자다 */
+.c-head > .cx,.c-time > .cx{font-size:var(--fs-head);font-weight:600}
+.c-head > .cx{display:flex;align-items:center;justify-content:center;
+  white-space:nowrap}
+/* 시각은 **그 시각이 시작하는 자리**에 붙인다. 가운데에 두면 한 칸(한 시간)의
+   한복판에 떠서 오른쪽 내용보다 반 칸 아래로 보인다. */
+.c-time > .cx{display:flex;align-items:flex-start;justify-content:center;
+  white-space:nowrap}
+.c-note > .cx{display:flex;align-items:center;justify-content:center;
+  color:var(--ink-3)}
+/* 일자 사이만 굵게 — 파일의 double 테두리에 대응한다 */
+.ssheet .edge{border-left:3px double rgba(0,0,0,.75)}
+
+/* 시각 열과 머리 두 줄은 스크롤해도 붙어 있게 */
+.ssheet .c-head{position:sticky;top:0;z-index:6;font-weight:600;text-align:center;
+  white-space:nowrap}
+/* 머리 줄 높이와 둘째 줄이 붙는 자리는 **같은 값 하나**여야 한다 —
+   따로 적으면 그 틈으로 본문이 비쳐 지나간다 */
+.ssheet .headrow th{height:var(--headh)}
+.ssheet .headrow .cx{height:calc(var(--headh) - 2px);
+  line-height:calc(var(--headh) - 2px);padding:0 5px}
+/* 내용 줄의 높이는 전부 같다 */
+.ssheet tr:not(.headrow){height:var(--rowh)}
+.ssheet tr.headrow + tr.headrow .c-head{top:var(--headh)}
+.ssheet .c-time{position:sticky;left:0;z-index:5;font-family:var(--mono);
+  text-align:center;color:var(--ink-2)}
+/* 왼쪽 시각 열만 붙인다. 오른쪽 것은 표 끝이라 붙일 필요가 없다. */
+.ssheet tr > .c-time:last-child{position:static}
+/* **왼쪽 위 모서리만** 가로·세로 둘 다 붙는다. `.c-head:first-child` 로 적으면
+   둘째 머리 줄의 첫 칸(첫 부서의 `봉사자`)까지 왼쪽에 붙어 시각 열을 덮는다. */
+.ssheet tr:first-child .c-head:first-child{left:0;z-index:8}
+.ssheet .c-empty{background:var(--paper)}
+
+/* **열 너비는 여기서 정하지 않는다.** 원본 시트에서 읽은 값이 구조에 실려
+   오고 `<colgroup>` 이 그대로 씁니다 — 화면과 파일이 같은 비율이어야 하므로
+   너비를 CSS 에도 적어 두면 그 순간 출처가 둘이 됩니다. */
+
+@media (max-width:820px){
+  .sheetbar{padding:8px 12px;gap:10px}
+  .sheetbar .hint{display:none}
+  /* 표 모양을 바꾸지 않는다 — 같은 표를 보는 것이 이 화면의 목적이다.
+     좁아지면 줄여 넣지 않고 가로로 넘긴다. */
+}
+
+
+/* ── 프로그램 만들기·고치기 창 (5-1) ──────────────────────────────────
+   `.modal` 은 보드의 선행 고르기가 쓰던 것을 그대로 쓴다 — 껍데기를 또
+   만들면 두 창이 서로 다르게 뜬다.
+
+   셋(누가 함께하나 · 어떤 일인가 · 나란히 도는가)은 **뜻을 옆에 적어 주지
+   않으면 고를 수가 없다.** `staff` 를 보고 무엇인지 아는 사람은 이걸 만든
+   사람뿐이다. 그래서 라디오마다 한 줄씩 붙인다. */
+.sheetform{background:var(--paper);border:1px solid var(--rule-2);border-radius:8px;
+  box-shadow:0 16px 44px rgba(55,53,47,.22);padding:18px 20px;
+  width:min(560px,100%);max-height:86vh;overflow-y:auto}
+.sheetform h3{font-size:14.5px;font-weight:600;margin:0 0 14px}
+.sheetform .frow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.sheetform .frow.end{justify-content:flex-end;gap:8px;margin:16px 0 0}
+.sheetform .frow > label{flex:1;min-width:110px;display:flex;flex-direction:column;
+  gap:4px;font-size:11.5px;color:var(--ink-3)}
+.sheetform input,.sheetform select{font:inherit;font-size:13.5px;color:var(--ink);
+  border:1px solid var(--rule-2);border-radius:4px;padding:6px 8px;
+  background:var(--paper);min-width:0}
+.sheetform input:focus,.sheetform select:focus{outline:2px solid var(--link);
+  outline-offset:-1px;border-color:transparent}
+
+.sheetform .picks{border:0;padding:0;margin:0 0 14px;min-width:0}
+.sheetform legend{font-size:11.5px;color:var(--ink-3);padding:0;margin-bottom:4px}
+.sheetform .pick{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;
+  align-items:baseline;padding:6px 8px;border-radius:4px;cursor:pointer;flex:none}
+.sheetform .pick:hover{background:var(--hover)}
+.sheetform .pick input{grid-row:span 2;align-self:center;margin:0}
+.pick-l{font-size:13.5px;color:var(--ink)}
+/* 뜻은 값 **바로 옆**에 붙어 있어야 읽힌다. 따로 떼면 아무도 안 본다 */
+.pick-h{grid-column:2;font-size:11.5px;color:var(--ink-2);line-height:1.45}
+.sheetform .warn{color:var(--now-ink);font-size:12.5px;margin:0}
+.btn.sm{padding:4px 9px;font-size:12px}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   달력 보기 (CLAUDE.md 4-13)
+
+   **마감일에 점 하나.** 기간 띠가 아니다 — 15일짜리 업무를 띠로 그리면
+   한 주에 몇 개만 있어도 달력이 꽉 찬다. 색과 테두리는 구조가 실어 보낸
+   보드의 값을 그대로 쓴다(두 벌이 되면 어긋난다).
+   ══════════════════════════════════════════════════════════════════════ */
+
+.calbar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  padding:10px 20px;border-bottom:1px solid var(--rule);background:var(--paper);flex:none}
+.calnav{display:flex;gap:6px;align-items:center}
+.calmonth{font-size:15px;font-weight:600;min-width:104px;text-align:center}
+.calchips{display:flex;gap:6px;flex-wrap:wrap}
+.calchips .chip{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:999px;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2);cursor:pointer}
+.calchips .chip:hover{background:var(--hover);color:var(--ink)}
+.calchips .chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:500}
+.calcount{margin-left:auto;font-size:12px;color:var(--ink-3)}
+
+.calwrap{flex:1;overflow:auto;padding:16px 20px 28px}
+.cal-grid{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+.cal-wd{font-size:11.5px;font-weight:500;color:var(--ink-3);padding:0 0 7px;
+  text-align:left;border-bottom:1px solid var(--rule)}
+.cal-wd:first-child,.calweek .calday-d i{color:var(--now)}   /* 일요일 */
+.cal-cell{vertical-align:top;height:104px;padding:5px 4px 7px;
+  border-bottom:1px solid var(--rule);border-right:1px solid var(--rule)}
+.cal-cell:last-child{border-right:0}
+.cal-d{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:4px;
+  font-family:var(--mono)}
+/* 이 달이 아닌 날은 숨기지 않고 흐리게 — 소속 외 업무를 흐리게 두는 것과 같다 */
+.cal-cell.out{background:var(--sunk)}
+.cal-cell.out .cal-d{color:var(--ink-3)}
+/* 오늘 칸 */
+.cal-cell.today{box-shadow:inset 0 0 0 2px var(--link)}
+.cal-cell.today .cal-d{color:var(--link);font-weight:600}
+
+.cal-dot{display:flex;align-items:center;gap:5px;min-width:0;
+  padding:2px 5px 2px 3px;margin-bottom:2px;border-radius:3px;
+  border:1px solid transparent;font-size:11.5px;line-height:1.35;color:var(--ink)}
+.cal-dot:hover{filter:brightness(.97)}
+.cal-tm{width:3px;align-self:stretch;min-height:13px;border-radius:2px;flex:none}
+.cal-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 완료는 눈에 띄지 않는다 — 시선은 미완료로 가야 한다 (4-3) */
+.cal-dot.done .cal-t{color:var(--ink-3);text-decoration:line-through}
+.cal-dot.late .cal-t{color:var(--now-ink);font-weight:500}
+
+.cal-more{font-size:11px}
+.cal-more summary{color:var(--ink-3);cursor:pointer;padding:1px 5px;list-style:none}
+.cal-more summary::-webkit-details-marker{display:none}
+.cal-more summary:hover{color:var(--ink-2)}
+.cal-more[open] summary{color:var(--ink-2)}
+
+.calempty{padding:28px 20px;color:var(--ink-3);font-size:13px;text-align:center}
+
+.calundated{margin:0 20px 24px;border:1px solid var(--rule-2);border-radius:6px;
+  padding:10px 14px;background:var(--side)}
+.calundated summary{font-size:13px;font-weight:500;cursor:pointer}
+.calundated .hint{font-size:12px;color:var(--ink-2);margin:8px 0 10px}
+
+/* 좁은 화면 — 주 단위 목록 (넓은 화면에서는 안 쓴다) */
+.calweeks{display:none}
+.calweek{padding:14px 16px 4px;border-bottom:1px solid var(--rule)}
+.calweek h3{font-size:11.5px;font-weight:500;color:var(--ink-3);margin:0 0 8px}
+.calday{display:flex;gap:10px;padding:5px 0}
+.calday.today{background:rgba(35,131,226,.06);border-radius:4px;padding:5px 6px;margin:0 -6px}
+.calday-d{flex:none;width:38px;font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.calday-d i{display:block;font-style:normal;font-size:10.5px;color:var(--ink-3)}
+.calday-l{flex:1;min-width:0}
+.calday-l .cal-dot{font-size:13px;padding:4px 6px 4px 4px}
+.calday-l .cal-t{white-space:normal}
+
+@media (max-width:820px){
+  /* 7칸 격자는 글자가 안 들어간다. 억지로 우겨넣지 않고 목록으로 바꾼다 */
+  .calwrap{display:none}
+  .calweeks{display:block;flex:1;overflow:auto}
+  .calbar{padding:8px 12px;gap:10px}
+  .calcount{display:none}
+  .calundated{margin:16px 12px}
+}

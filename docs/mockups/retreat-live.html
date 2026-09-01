@@ -4,134 +4,183 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BELONG · 수련회 진행</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* 무채색 기조 — 순검정을 쓰지 않고, 선은 전부 헤어라인이다.
+   파트 색은 유지하되 면을 채우지 않는다 (점과 테두리에만). */
 :root{
-  --paper:#F2F4F3; --paper-2:#FAFBFA;
-  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
-  --rule:#DDE2DE; --rule-2:#C7CEC9;
-  --now:#C8442E; --go:#3F6B5D; --link:#1668E3;
+  --paper:#FFFFFF; --side:#F7F7F5;
+  --hover:rgba(55,53,47,.06); --sunk:rgba(55,53,47,.045);
+  --ink:#37352F; --ink-2:#787774; --ink-3:#9B9A97;
+  --rule:rgba(55,53,47,.09); --rule-2:rgba(55,53,47,.16);
+  --link:#2383E2; --now:#C4554D; --now-tint:#FBF1F0; --now-ink:#A3423B;
+  --go:#4C8A5E; --sw:232px;
+  --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,
+    "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',system-ui,sans-serif;
-  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
-.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden;
+  padding-left:0;transition:padding-left .18s cubic-bezier(.4,0,.2,1)}
+body.sidepin{padding-left:var(--sw)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
 
-/* masthead */
-header{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:13px 22px 0;flex:none}
-.mast{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
-.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
-.title em{font-style:normal;color:var(--ink-3);font-weight:400}
-.clock{margin-left:auto;display:flex;align-items:baseline;gap:9px;padding:4px 13px;
-  border:1px solid var(--now);border-radius:2px}
-.clock b{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:var(--now)}
+/* ── 사이드바 — 상단 탭 줄을 없앴다. 화면 이동은 여기로만 한다 ── */
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);z-index:38;background:var(--side);
+  border-right:1px solid var(--rule);display:flex;flex-direction:column;padding:10px 8px 8px;
+  transform:translateX(-100%);transition:transform .18s cubic-bezier(.4,0,.2,1)}
+.sidenav.peek{transform:none;box-shadow:2px 0 16px -8px rgba(55,53,47,.35)}
+body.sidepin .sidenav{transform:none;box-shadow:none}
+.sidenav .brand{display:flex;align-items:center;gap:8px;padding:4px 8px 10px;
+  font-size:14px;font-weight:600;letter-spacing:-.01em}
+.sidenav .brand .mark{width:20px;height:20px;border-radius:4px;background:var(--ink);color:#fff;
+  font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+.sidenav nav{display:flex;flex-direction:column;gap:1px;flex:1;overflow-y:auto}
+.sidenav nav a{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;
+  font-size:13.5px;color:var(--ink-2);white-space:nowrap}
+.sidenav nav a:hover{background:var(--hover);color:var(--ink)}
+.sidenav nav a[aria-current=page]{background:var(--hover);color:var(--ink);font-weight:500}
+.sidenav .navlabel{font-size:11px;color:var(--ink-3);padding:14px 8px 4px}
+.sidefoot{border-top:1px solid var(--rule);margin-top:6px;padding:8px;font-size:12px;color:var(--ink-3)}
+.sidefoot b{font-weight:600;color:var(--ink-2)}
+.sideedge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:37}
+body.sidepin .sideedge{display:none}
+.sidetoggle{flex:none;width:28px;height:28px;border:1px solid transparent;border-radius:4px;
+  background:none;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:15px;line-height:1}
+.sidetoggle:hover{background:var(--hover);color:var(--ink)}
+
+/* 상단 */
+header{border-bottom:1px solid var(--rule);background:var(--paper);padding:10px 20px;flex:none}
+.mast{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.title em{font-style:normal;color:var(--ink-2);font-weight:400}
+.clock{margin-left:auto;display:flex;align-items:baseline;gap:8px}
+.clock b{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--now)}
 .clock span{font-size:12px;color:var(--ink-3)}
-nav{display:flex;gap:2px;margin-top:13px}
-nav button{font:inherit;font-size:14.5px;padding:8px 17px;border:1px solid transparent;border-bottom:none;
-  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
-nav button[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
 
-/* day strip */
-.days{display:flex;gap:2px;align-items:center;padding:9px 22px;border-bottom:1px solid var(--rule);
-  background:var(--paper-2);flex:none;flex-wrap:wrap}
-.days button{font:inherit;font-size:13.5px;padding:6px 14px;border:1px solid var(--rule-2);
-  background:var(--paper-2);color:var(--ink-2);cursor:pointer;border-radius:3px;display:flex;
+/* 일자 탭 */
+.days{display:flex;gap:6px;align-items:center;padding:8px 20px;border-bottom:1px solid var(--rule);
+  background:var(--paper);flex:none;flex-wrap:wrap}
+.days button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--rule-2);
+  background:var(--paper);color:var(--ink-2);cursor:pointer;border-radius:4px;display:flex;
   align-items:baseline;gap:7px}
-.days button[aria-selected=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink);font-weight:500}
-.days button i{font-style:normal;font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.7}
+.days button:hover{background:var(--hover)}
+.days button[aria-selected=true]{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:500}
+.days button i{font-style:normal;font-family:var(--mono);font-size:11px;opacity:.7}
 .days .prog{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2)}
-.days .bar{width:150px;height:7px;background:var(--rule);border-radius:4px;overflow:hidden}
+.days .bar{width:150px;height:6px;background:var(--sunk);border-radius:4px;overflow:hidden}
 .days .bar i{display:block;height:100%;background:var(--go);border-radius:4px;transition:width .3s}
-.days .prog b{font-family:'IBM Plex Mono',monospace;font-size:13px}
+.days .prog b{font-family:var(--mono);font-size:13px}
 
-/* layout */
+/* 배치 */
 .wrap{flex:1;display:grid;grid-template-columns:336px 1fr;overflow:hidden}
 
-/* rail */
-.rail{border-right:1px solid var(--rule-2);overflow-y:auto;background:var(--paper-2)}
-.pgm{display:flex;gap:11px;padding:11px 16px;border-bottom:1px solid var(--rule);cursor:pointer;
+/* 왼쪽 — 시각순 프로그램 목록. 가로선 대신 여백으로 나눈다 */
+.rail{border-right:1px solid var(--rule);overflow-y:auto;background:var(--paper);padding:6px}
+.pgm{display:flex;gap:11px;padding:9px 10px;border-radius:5px;cursor:pointer;
   position:relative;align-items:flex-start}
-.pgm:hover{background:var(--paper)}
-.pgm[aria-current=true]{background:#E9EFEB;box-shadow:inset 4px 0 0 var(--go)}
-.pgm .t{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);flex:none;width:42px;padding-top:1px}
+.pgm:hover{background:var(--hover)}
+.pgm[aria-current=true]{background:var(--side);box-shadow:inset 3px 0 0 var(--go)}
+.pgm .t{font-family:var(--mono);font-size:12.5px;color:var(--ink-3);flex:none;width:42px;padding-top:1px}
 .pgm .b{flex:1;min-width:0}
-.pgm .nm{font-size:14px;font-weight:500;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm .nm{font-size:14px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgm[aria-current=true] .nm{font-weight:500}
 .pgm .sub{font-size:11.5px;color:var(--ink-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pgm .ct{flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);
-  border:1px solid var(--rule-2);border-radius:10px;padding:2px 7px;background:var(--paper-2);margin-top:1px}
+.pgm .ct{flex:none;font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  border:1px solid var(--rule);border-radius:10px;padding:2px 7px;margin-top:1px}
 .pgm.done .nm{color:var(--ink-2)}
-.pgm.done .ct{background:#E4EAE6;border-color:#C2CFC7;color:var(--go)}
-.pgm.live .ct{background:#FBE9E5;border-color:var(--now);color:var(--now);font-weight:600}
-.pgm.free{opacity:.8}
-.nowline{display:flex;align-items:center;gap:9px;padding:0 16px;height:0;position:relative;z-index:2}
-.nowline::before{content:'';flex:1;height:2px;background:var(--now)}
-.nowline b{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#fff;background:var(--now);
-  padding:2px 7px;border-radius:2px;letter-spacing:.05em}
+.pgm.done .ct{background:var(--sunk);border-color:var(--rule);color:var(--ink-2)}
+.pgm.live .ct{border-color:var(--now);color:var(--now-ink);font-weight:600}
+.pgm.free{color:var(--ink-2)}
+.nowline{display:flex;align-items:center;gap:9px;padding:0 10px;height:0;position:relative;z-index:2}
+.nowline::before{content:'';flex:1;height:1.5px;background:var(--now)}
+.nowline b{font-family:var(--mono);font-size:10.5px;color:#fff;background:var(--now);
+  padding:2px 7px;border-radius:3px}
 
-/* detail */
-.detail{overflow-y:auto;padding:22px 26px 40px}
+/* 오른쪽 — 전 / 중 / 후 */
+.detail{overflow-y:auto;padding:24px 28px 40px}
 .dh{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-.dh h1{font-size:23px;font-weight:600;letter-spacing:-.02em;line-height:1.25}
-.dh .when{font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink-2);
-  border:1px solid var(--rule-2);border-radius:3px;padding:4px 10px;background:var(--paper-2);flex:none}
-.dmeta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-bottom:18px}
+.dh h1{font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.3}
+.dh .when{font-family:var(--mono);font-size:13px;color:var(--ink-2);flex:none;padding-top:7px}
+.dmeta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-bottom:20px}
 .dmeta span b{color:var(--ink-3);font-weight:400;margin-right:5px}
 
-.filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--rule)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--rule)}
 .filters button{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:20px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);display:flex;align-items:center;gap:6px}
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.filters button:hover{background:var(--hover)}
 .filters button i{width:7px;height:7px;border-radius:50%;display:block}
-.filters button[aria-pressed=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+.filters button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
 
-.phase{margin-bottom:26px}
+.phase{margin-bottom:28px}
 .ph-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
-.ph-h h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
-.ph-h h2 .tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;
-  padding:2px 7px;border-radius:2px;color:#fff}
-.ph-h .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-3);margin-left:auto}
+.ph-h h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+/* 구간 표시도 면을 채우지 않는다 — 점으로 알린다 */
+.ph-h h2 .tag{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:3px;
+  color:var(--ink-2);border:1px solid var(--rule);display:flex;align-items:center;gap:6px}
+.ph-h h2 .tag::before{content:'';width:7px;height:7px;border-radius:50%;flex:none;
+  background:var(--tagc,var(--ink-3))}
+.ph-h .n{font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-left:auto}
 .ph-h .hint{font-size:12px;color:var(--ink-3)}
 
-.item{display:flex;gap:11px;padding:10px 12px;border:1px solid var(--rule);border-radius:4px;
-  background:var(--paper-2);margin-bottom:5px;align-items:flex-start;cursor:pointer}
-.item:hover{border-color:var(--rule-2);background:#fff}
-.item .box{width:19px;height:19px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
-  display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--paper-2)}
+/* 실행 항목 — 테두리 상자 대신 여백과 호버로 나눈다 */
+.item{display:flex;gap:11px;padding:8px 10px;border-radius:5px;align-items:flex-start;cursor:pointer}
+.item:hover{background:var(--hover)}
+.item .box{width:18px;height:18px;border:1.5px solid var(--rule-2);border-radius:3px;flex:none;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;background:var(--paper)}
 .item .box::after{content:'';width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
   transform:rotate(-45deg) translate(1px,-1px);opacity:0}
 .item.on .box{background:var(--go);border-color:var(--go)}
 .item.on .box::after{opacity:1}
 .item .txt{flex:1;font-size:13.5px;line-height:1.5}
-.item.on .txt{color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--rule-2)}
+.item.on .txt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--rule-2)}
 .item .who{flex:none;display:flex;align-items:center;gap:7px;padding-top:1px}
-.item .part{font-size:11px;font-family:'IBM Plex Mono',monospace;padding:2px 6px;border-radius:2px;color:#fff}
+/* 파트 색도 점으로 — 화면 전체가 색으로 덮이면 지연 배지가 묻힌다 */
+.item .part{font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:3px;
+  color:var(--ink-2);border:1px solid var(--rule);display:flex;align-items:center;gap:5px}
+.item .part::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;
+  background:var(--partc,var(--ink-3))}
 .item .as{font-size:12px;color:var(--ink-2)}
 .item.dim{opacity:.32}
-.item .flag{font-size:10.5px;font-family:'IBM Plex Mono',monospace;background:var(--now);color:#fff;
-  padding:2px 5px;border-radius:2px;flex:none;margin-top:1px}
+.item .flag{font-size:10.5px;font-family:var(--mono);background:var(--now);color:#fff;
+  padding:2px 5px;border-radius:3px;flex:none;margin-top:1px}
 
-.note{font-size:12.5px;line-height:1.6;background:#EDF3F0;border-left:3px solid #5B8C7E;
-  padding:11px 13px;border-radius:0 3px 3px 0;color:var(--ink-2);margin-bottom:18px}
-.note b{color:#3F6B5D}
+.note{font-size:12.5px;line-height:1.6;background:var(--side);
+  padding:11px 13px;border-radius:5px;color:var(--ink-2);margin-bottom:18px}
+.note b{color:var(--ink)}
 .empty{font-size:13px;color:var(--ink-3);padding:14px 0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
+<!-- 상단 탭 줄을 없앴다. 화면 이동은 왼쪽 사이드바로만 한다. -->
+<div class="sideedge" id="sideedge" aria-hidden="true"></div>
+<aside class="sidenav" id="sidenav">
+  <div class="brand"><span class="mark">대</span>BELONG</div>
+  <nav>
+    <a href="#">준비 단계</a>
+    <a href="#" aria-current="page">수련회 진행</a>
+    <a href="#">회의록</a>
+    <a href="#">재정</a>
+    <div class="navlabel">회차 준비</div>
+    <a href="#">업무 라이브러리</a>
+    <a href="#">새 회차 만들기</a>
+    <a href="#">계정 관리</a>
+  </nav>
+  <div class="sidefoot"><b>박민준</b> · 총무팀(관리자)</div>
+</aside>
+
 <header>
   <div class="mast">
+    <button class="sidetoggle" id="sidetoggle" type="button" aria-pressed="false"
+            aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
     <div class="title">BELONG <em>· 수련회 진행</em></div>
     <div class="clock"><b class="mono">15:20</b><span>8/22(토) 2일차</span></div>
   </div>
-  <nav role="tablist">
-    <button role="tab" aria-selected="false">회의록</button>
-    <button role="tab" aria-selected="false">준비 단계</button>
-    <button role="tab" aria-selected="true">수련회 진행</button>
-    <button role="tab" aria-selected="false">재정</button>
-  </nav>
 </header>
 
 <div class="days" id="days"></div>
@@ -142,6 +191,22 @@ nav button[aria-selected=true]{background:var(--paper);border-color:var(--rule-2
 </div>
 
 <script>
+/* ── 사이드바 — 토글은 고정, 왼쪽 가장자리 호버는 잠깐 들춰 보기 ── */
+(()=>{
+  const nav=document.getElementById('sidenav'),edge=document.getElementById('sideedge');
+  const tg=document.getElementById('sidetoggle');let t=null;
+  const pinned=()=>document.body.classList.contains('sidepin');
+  const peek=on=>{if(pinned())return;clearTimeout(t);
+    if(on)nav.classList.add('peek');
+    else t=setTimeout(()=>nav.classList.remove('peek'),160)};
+  edge.addEventListener('mouseenter',()=>peek(true));
+  edge.addEventListener('mouseleave',()=>peek(false));
+  nav.addEventListener('mouseenter',()=>peek(true));
+  nav.addEventListener('mouseleave',()=>peek(false));
+  tg.onclick=()=>{const on=!pinned();document.body.classList.toggle('sidepin',on);
+    tg.setAttribute('aria-pressed',on?'true':'false');if(on)nav.classList.remove('peek')};
+})();
+
 /* ── 총무팀 파트 (실제 시간표의 열 구성) ── */
 const PARTS={
   행정:'#2F4858', 현장관리:'#4A8A5C', 비품:'#C0782F',
@@ -382,9 +447,9 @@ function renderRail(){
 }
 
 /* ── 상세: 전 / 중 / 후 ── */
-const PH=[['pre','준비','전','#5B8C7E','프로그램 시작 전에 끝나 있어야 하는 것'],
-          ['mid','진행','중','#C8442E','프로그램이 도는 동안 챙길 것'],
-          ['post','정리','후','#4A544F','끝나고 반드시 처리할 것']];
+const PH=[['pre','준비','전','#4C8A5E','프로그램 시작 전에 끝나 있어야 하는 것'],
+          ['mid','진행','중','#C4554D','프로그램이 도는 동안 챙길 것'],
+          ['post','정리','후','#787774','끝나고 반드시 처리할 것']];
 function renderDetail(){
   const p=PGM[day][sel],el=document.getElementById('detail'),st=state(day,sel);
   const parts=[...new Set(['pre','mid','post'].flatMap(ph=>(p[ph]||[]).map(r=>r[0])))];
@@ -408,7 +473,7 @@ function renderDetail(){
     const vis=rows.filter(r=>part==='전체'||r[0]===part);
     const c=rows.filter((_,k)=>done.has(doneKey(day,sel,key,k))).length;
     h+=`<div class="phase"><div class="ph-h">
-      <h2><span class="tag" style="background:${color}">${tag}</span>${name}</h2>
+      <h2><span class="tag" style="--tagc:${color}">${tag}</span>${name}</h2>
       <span class="hint">${hint}</span><span class="n">${c}/${rows.length}</span></div>`;
     if(!rows.length)h+=`<div class="empty">등록된 항목이 없습니다.</div>`;
     else if(!vis.length)h+=`<div class="empty">${part} 파트가 맡은 항목이 없습니다.</div>`;
@@ -419,7 +484,7 @@ function renderDetail(){
       h+=`<div class="item${on?' on':''}" data-k="${key}|${k}">
         <span class="box"></span><span class="txt">${r[2]}</span>
         ${late?'<span class="flag">지연</span>':''}
-        <span class="who"><span class="part" style="background:${PARTS[r[0]]||'#888'}">${r[0]}</span>
+        <span class="who"><span class="part" style="--partc:${PARTS[r[0]]||'#888'}">${r[0]}</span>
         <span class="as">${r[1]}</span></span></div>`});
     h+=`</div>`});
   el.innerHTML=h;

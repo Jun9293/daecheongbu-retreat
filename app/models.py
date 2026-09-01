@@ -10,10 +10,12 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,11 +94,34 @@ class Department(Base):
         return self.color_tag or "#69726D"
 
 
+# 번호를 놓은 상태 (4-12). NULL 이 아니라 빈 문자열인 이유는 쓰던 SQLite 파일의
+# `phone_number` 가 NOT NULL 이라서다 — 컬럼을 NULL 허용으로 바꾸려면 표를 통째로
+#다시 만들어야 하는데, 운영 중인 파일에 그런 위험을 지울 이유가 없다.
+NO_PHONE = ""
+
+
 class User(Base):
     __tablename__ = "users"
+    # **활성·비활성을 가리지 않고 '번호를 쥔 계정' 끼리만 겹치지 않으면 된다.**
+    # 비활성 계정은 번호를 놓으므로(NO_PHONE) 여럿이 될 수 있고, 그래서 전체
+    # 유니크가 아니라 **번호가 있는 행만** 보는 부분 인덱스를 쓴다.
+    __table_args__ = (
+        Index(
+            "ix_users_phone_held",
+            "phone_number",
+            unique=True,
+            sqlite_where=text("phone_number != ''"),
+            postgresql_where=text("phone_number != ''"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    phone_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # 비었을 수 있다 — 비활성 계정은 번호를 놓는다. **로그인은 초대 링크로 하지
+    # 번호로 하지 않으므로** 번호가 없어도 계정은 멀쩡하다.
+    phone_number: Mapped[str] = mapped_column(String(20), default=NO_PHONE)
+    # 놓기 전에 쓰던 번호. 되살릴 때 돌려주기 위한 것이고, 화면에서 "누구였는지"
+    # 를 보여주는 근거이기도 하다 — 빈 칸으로 두면 알 수 없다.
+    retired_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     name: Mapped[str] = mapped_column(String(50))
     department_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
@@ -107,6 +132,16 @@ class User(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     department: Mapped[Department | None] = relationship()
+
+    @property
+    def holds_phone(self) -> bool:
+        """번호를 쥐고 있는가. 겹침 검사는 이것이 참인 계정끼리만 한다."""
+        return bool(self.phone_number)
+
+    @property
+    def shown_phone(self) -> str:
+        """화면에 보일 번호. 놓았으면 원래 번호를 돌려준다 (표시용)."""
+        return self.phone_number or (self.retired_phone or "")
 
 
 class InviteToken(Base):
@@ -701,6 +736,12 @@ class TaskRun(Base):
         cascade="all, delete-orphan",
         order_by="DiscussionEntry.authored_at, DiscussionEntry.id",
     )
+    # 회차별이다 — 새 회차의 run 은 자기 파일을 처음부터 다시 쌓는다
+    attachments: Mapped[list[TaskAttachment]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="TaskAttachment.uploaded_at, TaskAttachment.id",
+    )
 
     @property
     def title(self) -> str:
@@ -734,6 +775,205 @@ class DiscussionEntry(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     run: Mapped[TaskRun] = relationship(back_populates="discussions")
+
+
+# ==========================================================================
+# 수련회 진행 (CLAUDE.md 5장)
+#
+# 준비 보드와 성격이 다르다. 보드는 몇 달에 걸쳐 천천히 보는 것이고, 이것은
+# 현장에서 휴대폰으로 급히 보는 것이다 — 사람이 뛰어다니면서 한 손으로 누른다.
+# ==========================================================================
+
+# 일자 — 회차 길이에서 계산한다(app/domain/live.py). 여기엔 이름만 남긴다.
+PROGRAM_DAYS = ("선발대", "1일차", "2일차", "폐회")
+
+# 전 / 중 / 후 (5-2)
+PROGRAM_PHASES = ("pre", "mid", "post")
+PHASE_LABELS = {"pre": "준비", "mid": "진행", "post": "정리"}
+
+# 총무팀 파트 (5-3) — 실제 일자별 시트의 열 구성 그대로.
+# 여기에 봉사팀(헤브론·코람데오)이 맡는 항목이 더해진다.
+PROGRAM_PARTS = (
+    "행정", "현장관리", "비품", "음식", "재정", "교역자", "헤브론", "코람데오",
+)
+
+# 범위 (5-2) — 팀이 통째로 움직이는 것과 개인에게 붙는 것.
+# 시트에서 온 구분이다: 봉사자 열은 "헤브론 집합"처럼 팀이 움직이고,
+# 총무팀 파트 열은 "인원계수_온"처럼 개인 이름까지 붙는다.
+PROGRAM_SCOPES = ("team", "person")
+
+# 참가자가 함께하는가 (5-8). 전체일정 칸으로 갈지 봉사자 칸으로 갈지를 가른다.
+PROGRAM_AUDIENCES = ("all", "staff")
+# 정규 흐름인가, 총무팀이 뒤에서 돌리는 일인가.
+# `ops` 는 봉사자 시간표에 넣지 않는다 — 그것이 그 표의 이유다.
+PROGRAM_TRACKS = ("main", "ops")
+SCOPE_LABELS = {"team": "팀", "person": "개인"}
+
+# 화면에서 프로그램을 만들 때 이 셋을 고른다 (5-1).
+# **뜻을 사람 말로 적어 둔다** — `audience=staff` 를 보고 무엇인지 알 수 있는
+# 사람은 이걸 만든 사람뿐이다. 목록과 설명을 한자리에 두어야 한쪽만 늘지 않는다.
+AUDIENCE_LABELS = {"all": "참가자와 함께", "staff": "봉사자만"}
+AUDIENCE_HINTS = {
+    "all": "참가자가 함께하는 일정입니다 — 봉사자 시간표의 전체일정 칸에 섭니다.",
+    "staff": "봉사자끼리 하는 일입니다 — 봉사자 칸에 섭니다.",
+}
+TRACK_LABELS = {"main": "정규일정", "ops": "총무팀 작업"}
+TRACK_HINTS = {
+    "main": "시간표에 드러나는 일정입니다.",
+    "ops": "뒤에서 도는 일입니다 — 봉사자 시간표에 넣지 않습니다.",
+}
+PARALLEL_HINT = "정규 일정 옆에서 따로 도는 프로그램입니다(새친구 등) — 칸의 오른쪽 열에 섭니다."
+
+# 담당 칸에 이것이 적혀 있으면 개인이 아니라 묶음이다.
+# 가져올 때 scope 가 없는 파일의 기준으로 쓴다 (5-2).
+TEAM_WORDS = frozenset({
+    "전체", "총무팀", "봉사자", "봉사팀", "헤브론", "코람데오",
+    "총무팀 전체", "봉사자 전체", "다같이", "모두",
+})
+
+
+class Program(Base):
+    """수련회 기간의 프로그램 하나.
+
+    **회차별이다** — TaskRun 처럼 회차에 붙는다. 프로그램표는 매 회차 새로 만들고,
+    지난 회차에서 통째로 복사해 온다(5-5).
+
+    날짜를 저장하지 않고 `day`(선발대·1일차…)만 남긴다. 절대 날짜는 회차의
+    개회일에서 매번 계산한다 — 라이브러리가 D-주차만 갖는 것과 같은 이유로,
+    개회일이 바뀌면 프로그램표도 따라 움직여야 한다.
+    """
+
+    __tablename__ = "programs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(
+        ForeignKey("retreats.id", ondelete="CASCADE"), index=True
+    )
+    day: Mapped[str] = mapped_column(String(20))
+    start_time: Mapped[str] = mapped_column(String(5))          # "HH:MM"
+    # 끝나는 시각. **없으면 다음 프로그램 시작 전까지로 본다** (5-8) —
+    # 실제 시트에 끝 시각이 적힌 것은 몇 개뿐이라 없는 것이 정상이다.
+    end_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    name: Mapped[str] = mapped_column(String(200))
+    host: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    place: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 참가자가 함께하는가 (5-8). all 이면 전체일정 칸, staff 면 봉사자 칸.
+    audience: Mapped[str | None] = mapped_column(String(10), nullable=True, default="all")
+    # 정규 흐름인가(main), 총무팀이 뒤에서 돌리는 일인가(ops).
+    track: Mapped[str | None] = mapped_column(String(10), nullable=True, default="main")
+    # 정규 흐름 **옆에서 따로** 도는가 (새친구). 그 칸의 오른쪽 열로 뺀다.
+    # 시각으로 추측하지 않는다 — 길이를 모르면 판단할 수 없다 (5-8 함정)
+    parallel: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    retreat: Mapped[Retreat] = relationship()
+    items: Mapped[list[ProgramItem]] = relationship(
+        back_populates="program",
+        cascade="all, delete-orphan",
+        order_by="ProgramItem.sort_order, ProgramItem.id",
+    )
+
+    # ALTER 로 붙은 컬럼들이라 기존 행에서는 NULL 이다. 읽는 자리는 늘 이것을 쓴다.
+    @property
+    def audience_key(self) -> str:
+        return self.audience or "all"
+
+    @property
+    def track_key(self) -> str:
+        return self.track or "main"
+
+    @property
+    def is_parallel(self) -> bool:
+        return bool(self.parallel)
+
+
+class ProgramItem(Base):
+    """프로그램 하나에 붙는 실행 항목 (전 / 중 / 후)."""
+
+    __tablename__ = "program_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("programs.id", ondelete="CASCADE"), index=True
+    )
+    phase: Mapped[str] = mapped_column(String(4))               # pre | mid | post
+    part_key: Mapped[str] = mapped_column(String(20))
+    # **이름 문자열이다. User 로 잇지 않는다** — 현장에는 계정 없는 사람이 섞이고
+    # (`하람` `서윤` `전체`) 실제 시트가 그렇게 쓰여 있다. 계정과 잇고 싶어지면
+    # 그때 컬럼을 더한다.
+    assignee_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    text: Mapped[str] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 팀이 통째로 움직이는 것인가, 개인에게 붙는 것인가 (5-2).
+    #
+    # **파트에서 계산하지 않고 컬럼으로 둔다.** 헤브론·코람데오가 팀이고 총무팀
+    # 파트가 개인인 것은 대체로 맞지만 예외가 있다 — 총무팀 항목에도
+    # "강당 의자 세팅_전체" 처럼 팀 단위가 섞이고, 봉사팀도 개인에게 붙는 일이
+    # 생긴다. 계산으로 두면 그 예외를 표현할 방법이 없고 화면에서 고칠 수도 없다.
+    #
+    # 나중에 붙은 컬럼이라 기존 행에는 NULL 이다. 읽는 자리는 `scope_of()` 를 쓴다.
+    scope: Mapped[str | None] = mapped_column(String(10), nullable=True, default="person")
+    # **누른 시각을 남긴다.** 체크 여부만 남기면 끝난 뒤 "정리 항목이 몇 시에
+    # 처리됐나" 를 볼 수 없다.
+    done_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    done_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    program: Mapped[Program] = relationship(back_populates="items")
+    done_by: Mapped[User | None] = relationship()
+
+    @property
+    def done(self) -> bool:
+        return self.done_at is not None
+
+    @property
+    def scope_key(self) -> str:
+        """ALTER 로 붙은 컬럼이라 기존 행은 NULL 이다. 읽는 자리는 늘 이것을 쓴다."""
+        return self.scope or "person"
+
+    @property
+    def is_team(self) -> bool:
+        return self.scope_key == "team"
+
+
+class TaskAttachment(Base):
+    """업무 하나에 붙는 첨부파일.
+
+    **회차별이다.** TaskRun 에 붙으므로 새 회차를 열 때 업무는 따라와도
+    파일은 따라오지 않는다. 논의 내역과 같은 취급이고, 업무 규칙과 다르다 —
+    규칙은 "이 업무를 어떻게 하는가"라 회차를 넘어가지만, 첨부는 이번 회차의
+    시안·견적·명단이라 다음 회차에 그대로 쓰면 오히려 틀린 자료가 된다.
+
+    **파일 이름을 그대로 디스크에 쓰지 않는다.** 올린 이름은 여기 남기고
+    실제 파일은 임의의 이름으로 저장한다 — 경로 조작(`../`), 같은 이름끼리의
+    덮어쓰기, 한글 파일명 인코딩이 한꺼번에 사라진다.
+    """
+
+    __tablename__ = "task_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("task_runs.id", ondelete="CASCADE"), index=True
+    )
+    original_name: Mapped[str] = mapped_column(String(300))
+    stored_name: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    uploaded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_by_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    run: Mapped[TaskRun] = relationship(back_populates="attachments")
+
+    @property
+    def ext(self) -> str:
+        """확장자. 목록에서 무슨 파일인지 한눈에 알아보는 표시."""
+        _, dot, tail = self.original_name.rpartition(".")
+        return tail.lower() if dot else ""
 
 
 # ==========================================================================

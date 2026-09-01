@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app import models
+from app.domain import board as board_view
 from tests.conftest import app_session, login_as
 
 OPEN = dt.date(2026, 8, 21)
@@ -152,7 +153,7 @@ def test_상태를_바꾸면_저장되고_바_색이_함께_온다(admin_client,
     response = admin_client.post(f"/board/task/{run_id}/status", json={"status": "완료"})
 
     assert response.status_code == 200
-    assert response.json()["background"] == "#DFE3E0"  # 완료는 눈에 띄지 않는 회색
+    assert response.json()["background"] == board_view.BAR_DONE[0]  # 완료는 눈에 띄지 않는 회색
     with app_session() as db:
         assert db.get(models.TaskRun, run_id).status == "완료"
 

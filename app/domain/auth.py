@@ -23,6 +23,22 @@ INVITE_TTL_DAYS = 7        # 링크의 유효기간
 TOKEN_BYTES = 32           # secrets.token_urlsafe 에 넘길 바이트 수
 
 
+def invite_url(raw: str, *, base: str | None = None) -> str:
+    """붙여넣으면 바로 열리는 초대 주소.
+
+    **자리표시자를 남기지 않습니다.** 전에는 `https://<내-주소>/invite/…` 로
+    찍고 사람이 앞부분을 손으로 갈아 끼웠는데, 그러다 토큰까지 건드려
+    링크가 깨졌습니다.
+
+    주소를 만드는 곳은 **여기 하나**입니다 — 스크립트와 화면이 같이 씁니다.
+    두 곳에서 만들면 한쪽만 고쳐집니다.
+    """
+    from app import config
+
+    root = (base or config.BASE_URL or "").rstrip("/")
+    return f"{root}/invite/{raw}"
+
+
 def normalize_phone(raw: str) -> str:
     """연락처를 숫자만 남겨 정규화한다.
 

@@ -4,59 +4,90 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>대청부 수련회 준비 보드 — BELONG</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* 무채색 기조 — 순검정을 쓰지 않고, 선은 전부 헤어라인이다.
+   부서 색은 유지하되 **면을 채우지 않는다** (왼쪽 점과 바 테두리에만).
+   **가로 격자선은 넣지 않는다** — 넣어봤으나 화면이 답답해져 뺐다. */
 :root{
-  --paper:#F2F4F3; --paper-2:#FAFBFA;
-  --ink:#141917; --ink-2:#39423E; --ink-3:#69726D;
-  --rule:#DDE2DE; --rule-2:#C7CEC9;
-  --now:#C8442E; --link:#1668E3;
+  --paper:#FFFFFF; --side:#F7F7F5;
+  --hover:rgba(55,53,47,.06); --sunk:rgba(55,53,47,.045);
+  --ink:#37352F; --ink-2:#787774; --ink-3:#9B9A97;
+  --rule:rgba(55,53,47,.09); --rule-2:rgba(55,53,47,.16);
+  --link:#2383E2; --now:#C4554D; --now-tint:#FBF1F0; --now-ink:#A3423B;
+  --go:#4C8A5E;
   --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
-  --h-team:35px; --h-main:34px; --h-sub:29px;
-  --dw:400px;
+  --h-team:38px; --h-main:34px; --h-sub:29px;
+  --dw:400px; --sw:232px;
+  --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,
+    "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans KR',system-ui,sans-serif;
+body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;
   -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden;
-  padding-right:0;transition:padding-right .22s cubic-bezier(.4,0,.2,1)}
+  padding-right:0;padding-left:0;
+  transition:padding-right .22s cubic-bezier(.4,0,.2,1),padding-left .18s cubic-bezier(.4,0,.2,1)}
 body.dopen{padding-right:var(--dw)}
+body.sidepin{padding-left:var(--sw)}
 body.sizing{transition:none}
-.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
+[hidden]{display:none!important}
 
-header{border-bottom:1px solid var(--rule-2);background:var(--paper-2);padding:13px 22px 0;flex:none}
-.mast{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
-.title{font-size:21px;font-weight:600;letter-spacing:-.02em}
-.title em{font-style:normal;color:var(--ink-3);font-weight:400}
-.countdown{margin-left:auto;display:flex;align-items:baseline;gap:7px;padding:4px 12px;border:1px solid var(--now);border-radius:2px}
-.countdown b{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:var(--now)}
-.countdown span{font-size:12px;color:var(--ink-3);letter-spacing:.04em}
-nav{display:flex;gap:2px;margin-top:13px}
-nav button{font:inherit;font-size:14.5px;padding:8px 17px;border:1px solid transparent;border-bottom:none;
-  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
-nav button[aria-selected=true]{background:var(--paper);border-color:var(--rule-2);color:var(--ink);font-weight:500}
-nav button:focus-visible{outline:2px solid var(--now);outline-offset:-2px}
+/* ── 사이드바 — 상단 탭 줄을 없앴다. 화면 이동은 여기로만 한다.
+   기본은 접힘. 토글로 고정해서 열고, 왼쪽 가장자리에 마우스를 대면
+   잠깐 떠서 나온다 (본문은 그대로고 위에 겹친다). ── */
+.sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);z-index:38;background:var(--side);
+  border-right:1px solid var(--rule);display:flex;flex-direction:column;padding:10px 8px 8px;
+  transform:translateX(-100%);transition:transform .18s cubic-bezier(.4,0,.2,1)}
+.sidenav.peek{transform:none;box-shadow:2px 0 16px -8px rgba(55,53,47,.35)}
+body.sidepin .sidenav{transform:none;box-shadow:none}
+.sidenav .brand{display:flex;align-items:center;gap:8px;padding:4px 8px 10px;
+  font-size:14px;font-weight:600;letter-spacing:-.01em}
+.sidenav .brand .mark{width:20px;height:20px;border-radius:4px;background:var(--ink);color:#fff;
+  font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+.sidenav nav{display:flex;flex-direction:column;gap:1px;flex:1;overflow-y:auto}
+.sidenav nav a{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;
+  font-size:13.5px;color:var(--ink-2);white-space:nowrap}
+.sidenav nav a:hover{background:var(--hover);color:var(--ink)}
+.sidenav nav a[aria-current=page]{background:var(--hover);color:var(--ink);font-weight:500}
+.sidenav .navlabel{font-size:11px;color:var(--ink-3);padding:14px 8px 4px}
+.sidefoot{border-top:1px solid var(--rule);margin-top:6px;padding:8px;font-size:12px;color:var(--ink-3)}
+.sidefoot b{font-weight:600;color:var(--ink-2)}
+.sideedge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:37}
+body.sidepin .sideedge{display:none}
+.sidetoggle{flex:none;width:28px;height:28px;border:1px solid transparent;border-radius:4px;
+  background:none;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:15px;line-height:1}
+.sidetoggle:hover{background:var(--hover);color:var(--ink)}
 
-.toolbar{display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:10px 22px;
-  border-bottom:1px solid var(--rule);font-size:13.5px;color:var(--ink-2);flex:none}
-.ctl{display:flex;align-items:center;gap:7px}
+header{border-bottom:1px solid var(--rule);background:var(--paper);padding:10px 20px;flex:none}
+.mast{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.title em{font-style:normal;color:var(--ink-2);font-weight:400}
+.countdown{margin-left:auto;display:flex;align-items:baseline;gap:7px}
+.countdown b{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--now)}
+.countdown span{font-size:12px;color:var(--ink-3)}
+
+.toolbar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:8px 20px;
+  border-bottom:1px solid var(--rule);font-size:13px;color:var(--ink-2);flex:none}
+.ctl{display:flex;align-items:center;gap:6px}
 .ctl label{color:var(--ink-3);font-size:12.5px}
-select{font:inherit;font-size:13.5px;padding:4px 8px;border:1px solid var(--rule-2);border-radius:2px;background:var(--paper-2);color:var(--ink)}
+select{font:inherit;font-size:13px;padding:4px 7px;border:1px solid var(--rule-2);
+  border-radius:4px;background:var(--paper);color:var(--ink)}
 .tog{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink-2)}
-.fchip{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:3px;cursor:pointer;
-  background:var(--ink);color:var(--paper-2);border:none;display:flex;align-items:center;gap:7px}
-.fchip[hidden]{display:none}
-.fchip b{font-family:'IBM Plex Mono',monospace;font-weight:600}
-.fchip span{opacity:.65;font-size:14px;line-height:1}
-.legend{margin-left:auto;display:flex;gap:15px;align-items:center;font-size:12.5px;color:var(--ink-3)}
+.fchip{font:inherit;font-size:12.5px;padding:3px 9px;border-radius:4px;cursor:pointer;
+  background:var(--ink);color:#fff;border:none;display:flex;align-items:center;gap:7px}
+.fchip b{font-family:var(--mono);font-weight:600}
+.fchip span{opacity:.6;font-size:14px;line-height:1}
+.legend{margin-left:auto;display:flex;gap:13px;align-items:center;font-size:12px;color:var(--ink-3)}
 .lg{display:flex;align-items:center;gap:5px}
-.lg i{display:block;background:var(--ink-3);font-style:normal}
-.lg .k-main{width:22px;height:13px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
-.lg .k-sub{width:22px;height:9px;border-radius:2px;background:#D4DFE8;border:1px solid #3B6EA5}
-.lg .k-sch{width:22px;height:11px;border-radius:2px;background:var(--paper-2);border:1px solid #3B6EA5;border-left:4px solid #3B6EA5}
-.lg .k-done{width:22px;height:13px;border-radius:2px;background:#DFE3E0;border:1px solid #C4CBC6}
+.lg i{display:block;font-style:normal}
+.lg .k-main{width:22px;height:13px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5}
+.lg .k-sub{width:22px;height:9px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5}
+.lg .k-sch{width:22px;height:11px;border-radius:3px;background:var(--paper);border:1px solid #3B6EA5;border-left:4px solid #3B6EA5}
+.lg .k-done{width:22px;height:13px;border-radius:3px;background:var(--sunk);border:1px solid var(--rule-2)}
 .lg .k-gh{width:22px;height:13px;background:none;border:1px dashed var(--rule-2)}
 .lg .k-lit{width:20px;height:0;border-top:2px dashed var(--link)}
 
@@ -65,220 +96,272 @@ select{font:inherit;font-size:13.5px;padding:4px 8px;border:1px solid var(--rule
 .row{display:grid;grid-template-columns:var(--label-w) repeat(11,var(--wk)) repeat(12,var(--day)) var(--retreat)}
 
 .row.head{position:sticky;top:0;z-index:24}
-.hc{cursor:pointer;background:var(--paper-2);border-bottom:1px solid var(--rule-2);border-right:1px solid var(--rule);
-  padding:8px 0 7px;text-align:center}
-.hc .dw{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;display:block;color:var(--ink-2)}
-.hc .dt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);display:block;margin-top:2px}
-.hc.day{background:#EAEEEB}
-.hc.day .dw{font-size:11.5px;color:var(--ink-3);font-weight:500}
-.hc.day .dt{font-size:12.5px;color:var(--ink);font-weight:600}
-.hc.shift{border-left:2px solid var(--ink)}
-.hc:hover{background:#E4E9E6}
+/* 날짜 헤더 아래 한 줄만 남긴다 — 격자선이 아니라 sticky 경계다 */
+.hc{cursor:pointer;background:var(--paper);border-bottom:1px solid var(--rule);
+  border-right:1px solid var(--rule);padding:7px 0 6px;text-align:center}
+.hc .dw{font-family:var(--mono);font-size:12px;font-weight:600;display:block;color:var(--ink-2)}
+.hc .dt{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);display:block;margin-top:2px}
+.hc.day .dw{font-size:11px;color:var(--ink-3);font-weight:500}
+.hc.day .dt{font-size:12px;color:var(--ink-2);font-weight:600}
+.hc.shift{border-left:1px solid var(--rule-2)}
+.hc:hover{background:var(--hover)}
 .hc.sel{background:var(--ink)!important;border-right-color:var(--ink)}
-.hc.sel .dw,.hc.sel .dt{color:var(--paper-2)!important}
-.hc.rt{background:var(--ink);border-right-color:var(--ink)}
-.hc.rt .dw{color:var(--paper-2)} .hc.rt .dt{color:#A9B3AE}
-.hlbl{position:sticky;left:0;z-index:26;background:var(--paper-2);border-bottom:1px solid var(--rule-2);
-  border-right:1px solid var(--rule-2);display:flex;flex-direction:column;justify-content:center;padding-left:13px}
-.hlbl b{font-size:13px;font-weight:600}
+.hc.sel .dw,.hc.sel .dt{color:#fff!important}
+.hc.rt{background:var(--side)}
+.hc.rt .dw{color:var(--ink)} .hc.rt .dt{color:var(--ink-3)}
+.hlbl{position:sticky;left:0;z-index:26;background:var(--paper);border-bottom:1px solid var(--rule);
+  border-right:1px solid var(--rule);display:flex;flex-direction:column;justify-content:center;padding-left:14px}
+.hlbl b{font-size:12.5px;font-weight:600}
 .hlbl span{font-size:11px;color:var(--ink-3);margin-top:2px}
 
-.lc{position:sticky;left:0;z-index:20;background:var(--lct,var(--paper-2));
-  border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule);
+/* 왼쪽 라벨 열 — 부서 색으로 면을 채우지 않는다 */
+.lc{position:sticky;left:0;z-index:20;background:var(--paper);border-right:1px solid var(--rule);
   display:flex;align-items:center;gap:7px;padding-left:14px;padding-right:10px;font-size:13.5px;overflow:hidden}
 .lc .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row.main .lc,.row.sub .lc{cursor:pointer}
-.row.main .lc:hover,.row.sub .lc:hover{background:#EDF1EE}
+.row.main .lc:hover,.row.sub .lc:hover{background:var(--hover)}
 
-.row.team .lc{height:var(--h-team);background:var(--teamt,#E9EDEA);cursor:pointer;font-weight:600;font-size:14px;border-bottom:1px solid var(--rule-2)}
-.row.team .lc .caret{font-size:10px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
+.row.team .lc{height:var(--h-team);background:var(--side);cursor:pointer;font-weight:600;font-size:13.5px}
+.row.team .lc:hover{background:var(--hover)}
+.row.team .lc .caret{font-size:9px;color:var(--ink-3);width:10px;flex:none;transition:transform .15s}
 .row.team.collapsed .lc .caret{transform:rotate(-90deg)}
-.row.team .lc .sw{width:3px;height:17px;border-radius:2px;flex:none}
-.row.team .lc .ct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
-.row.team .cell{height:var(--h-team);background:var(--teamt,#E9EDEA);border-bottom:1px solid var(--rule-2)}
+/* 부서 색은 여기 — 점 하나 */
+.row.team .lc .sw{width:8px;height:8px;border-radius:50%;flex:none}
+.row.team .lc .ct{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:400}
+.row.team .cell{height:var(--h-team);background:var(--side)}
 
-.row.main .lc{height:var(--h-main);padding-left:28px;font-weight:500}
-.row.sub  .lc{height:var(--h-sub);padding-left:46px;font-size:12.5px;color:var(--ink-2)}
+.row.main .lc{height:var(--h-main);padding-left:30px}
+.row.sub  .lc{height:var(--h-sub);padding-left:48px;font-size:12.5px;color:var(--ink-2)}
 .row.main .lane{height:var(--h-main)} .row.sub .lane{height:var(--h-sub)}
-.row.main .lane,.row.sub .lane{border-bottom:1px solid var(--rule)}
-.lane{position:relative;background:var(--rowt,transparent)}
+/* 가로 격자선을 넣지 않는다 */
+.lane{position:relative}
 .gl{border-right:1px solid var(--rule);pointer-events:none}
-.gl.shift{border-left:2px solid var(--ink)}
+.gl.shift{border-left:1px solid var(--rule-2)}
 
 .owner{font-size:11.5px;color:var(--ink-3);flex:none;display:flex;align-items:center;gap:5px;
   margin-left:auto;padding-left:8px}
 .owner i{width:6px;height:6px;border-radius:50%;flex:none;display:block}
 
-/* ── bars ── */
+/* ── 바 — 부서 색은 테두리에만 온다 ── */
 .bar{position:relative;align-self:center;border-radius:3px;display:flex;align-items:center;gap:5px;
   padding:0 8px;font-size:12.5px;line-height:1;cursor:pointer;border:1px solid transparent;
   white-space:nowrap;z-index:3;margin:0 1px;min-width:8px;overflow:visible;color:var(--ink)}
-.bar.m{height:24px;font-weight:500}
-.bar.s{height:19px;font-size:12px;border-radius:2px}
-.bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-/* 라벨은 바 안에서 시작해, 바보다 길면 그대로 밖으로 흘러나감 */
+.bar.m{height:23px}
+.bar.s{height:19px;font-size:12px}
+.bar:focus-visible{outline:2px solid var(--link);outline-offset:1px}
 .bar .txt{overflow:visible;white-space:nowrap;flex:none;position:relative;z-index:2}
-
-.bar.done{color:var(--ink)}
-.bar.late{color:#8E2A19;font-weight:600}
-.bar.late .flag{position:relative;z-index:2;font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--now);color:#fff;padding:2px 4px;border-radius:2px;flex:none}
-.bar.ghost{border-style:dashed!important;color:var(--ink-2)!important}
-.bar.ghost .txt{font-style:italic}
-.bar.sch{height:21px;border-width:1px;border-style:solid;border-left-width:4px;
-  font-size:12px;font-weight:500;z-index:4}
+/* 진행중 — 왼쪽에 부서 색 마개. 채움이 아니라 테두리의 연장이다 */
+.bar.wip{padding-left:11px;font-weight:500}
+.bar.wip::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  border-radius:3px 0 0 3px;background:var(--team,var(--ink-2))}
+.bar.done{color:var(--ink-2)}
+.bar.late{color:var(--now-ink);font-weight:500}
+.bar.late .flag{position:relative;z-index:2;font-family:var(--mono);font-size:10px;
+  background:var(--now);color:#fff;padding:2px 4px;border-radius:3px;flex:none}
+.bar.ghost{border-style:dashed!important;color:var(--ink-3)!important}
+.bar.sch{height:20px;border-width:1px;border-style:solid;border-left-width:4px;font-size:12px;z-index:4}
 
 /* ── 연결: 보드는 건드리지 않고 선으로 잇는다 ── */
 #wires{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:visible}
 #wires path{fill:none;stroke:var(--link);stroke-width:1.6;stroke-dasharray:4 3;opacity:.95}
 #wires circle{fill:var(--link)}
-.bar.anchor{box-shadow:0 0 0 3px var(--link);z-index:9!important;opacity:1!important;font-weight:700}
-.bar.anchor .txt{text-decoration:none}
-.bar.lit{box-shadow:0 0 0 2px var(--ink);z-index:8!important;opacity:1!important}
-.bar.lit .txt{text-decoration:none}
-  .row.anchorrow>.lc{box-shadow:inset 4px 0 0 var(--link);background:#EAF1FC;font-weight:700}
-.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink);background:#EBEEEC}
+.bar.anchor{box-shadow:0 0 0 2px var(--link);z-index:9!important;opacity:1!important;font-weight:600}
+.bar.lit{box-shadow:0 0 0 1.5px var(--ink);z-index:8!important;opacity:1!important}
+.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);background:rgba(35,131,226,.06);font-weight:600}
+.row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink-2);background:var(--hover)}
 
-
-/* ── drawer ── */
+/* ── 상세 패널 ── */
 .drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);min-width:320px;max-width:min(900px,95vw);
-  background:var(--paper-2);border-left:1px solid var(--rule-2);transform:translateX(100%);
+  background:var(--paper);border-left:1px solid var(--rule);transform:translateX(100%);
   transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:35;display:flex;flex-direction:column;
-  box-shadow:-14px 0 34px -22px rgba(27,33,31,.5)}
+  box-shadow:-14px 0 34px -24px rgba(55,53,47,.45)}
 .drawer.open{transform:none}
 .drawer.sizing{transition:none;user-select:none}
 .grip{position:absolute;left:-3px;top:0;width:9px;height:100%;cursor:col-resize;z-index:3}
 .grip::after{content:'';position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:38px;
-  border-radius:3px;background:var(--rule-2)}
-.grip:hover::after,.drawer.sizing .grip::after{background:var(--link)}
-.dhead{padding:20px 22px 0;border-bottom:1px solid var(--rule)}
-.dkick{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.05em;padding:4px 8px;
-  border-radius:2px;border:1px solid var(--rule-2);color:var(--ink-3);background:none}
-.chip.solid{color:#fff;border-color:transparent}
-.chip.stat{cursor:pointer;font-family:'IBM Plex Sans KR',sans-serif;font-size:12.5px;font-weight:500;
+  border-radius:3px;background:var(--rule-2);opacity:0;transition:opacity .12s}
+.grip:hover::after,.drawer.sizing .grip::after{opacity:1;background:var(--link)}
+.dhead{padding:22px 26px 0;border-bottom:1px solid var(--rule)}
+.dkick{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.chip{font-size:11.5px;padding:2px 8px;border-radius:3px;border:1px solid var(--rule);
+  color:var(--ink-2);background:none}
+/* 부서 칩도 면을 채우지 않는다 — 점으로 색을 알린다 */
+.chip.solid{color:var(--ink-2);border-color:var(--rule);background:none;
+  display:flex;align-items:center;gap:6px}
+.chip.solid::before{content:'';width:7px;height:7px;border-radius:50%;flex:none;
+  background:var(--team,var(--ink-3))}
+.chip.stat{cursor:pointer;font-size:12px;display:flex;align-items:center;gap:5px}
+.chip.stat:hover{background:var(--hover)}
+.chip.stat .cv{width:7px;height:7px;border-radius:50%}
+/* 제목 — 노션의 페이지 제목 크기 */
+.dtitle{font-size:25px;font-weight:600;line-height:1.3;letter-spacing:-.02em}
+/* 속성 — 라벨(88px, 흐림) + 값. 값은 평소에 글자처럼 보이다가
+   마우스를 올리면 배경이 뜬다 (테두리를 상시 그리면 입력 폼으로 읽힌다). */
+.dmeta{margin-top:16px;display:grid;grid-template-columns:88px minmax(0,1fr);
+  gap:2px 4px;font-size:13.5px;align-items:center}
+.dmeta dt{color:var(--ink-3);font-size:13px;padding:5px 0 5px 2px}
+.dmeta dd{color:var(--ink);min-width:0}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:4px;padding:3px 5px;
+  max-width:100%;transition:background .1s}
+.pill:hover{background:var(--hover)}
+.pill i{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+/* 탭 — 밑줄 없는 글자, 활성만 아래 선 */
+.dtabs{display:flex;gap:16px;margin-top:20px}
+.dtabs button{font:inherit;font-size:13.5px;padding:6px 1px 9px;border:none;
+  border-bottom:2px solid transparent;background:none;color:var(--ink-3);cursor:pointer;
   display:flex;align-items:center;gap:5px}
-.chip.stat:hover{background:var(--paper)}
-.chip.stat .cv{width:8px;height:8px;border-radius:50%}
-.dtitle{font-size:18.5px;font-weight:600;line-height:1.35}
-.dmeta{margin-top:12px;display:grid;grid-template-columns:62px 1fr;gap:6px 12px;font-size:13px}
-.dmeta dt{color:var(--ink-3)} .dmeta dd{color:var(--ink-2)}
-.dtabs{display:flex;gap:2px;margin-top:16px}
-.dtabs button{font:inherit;font-size:13.5px;padding:8px 15px;border:1px solid transparent;border-bottom:none;
-  background:none;color:var(--ink-3);cursor:pointer;border-radius:3px 3px 0 0;position:relative;top:1px}
-.dtabs button[aria-selected=true]{background:var(--paper-2);border-color:var(--rule);color:var(--ink);font-weight:500}
-.dtabs .n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:4px}
-.dbody{flex:1;overflow-y:auto;padding:18px 22px 30px}
+.dtabs button:hover{color:var(--ink-2)}
+.dtabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+.dtabs .n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.dbody{flex:1;overflow-y:auto;padding:20px 26px 30px}
 .pane{display:none} .pane.on{display:block}
 .log{font-size:13.5px;line-height:1.68}
-.log .entry{padding:10px 0;border-bottom:1px dotted var(--rule)}
-.log .entry:last-child{border:none}
-.log .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);margin-right:7px}
+.log .entry{padding:10px 0}
+.log .entry + .entry{border-top:1px solid var(--rule)}
+.log .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:7px}
 .log s{color:var(--ink-3)}
 .log .fix{display:block;margin-top:5px;padding-left:12px;border-left:2px solid var(--rule-2)}
 
 /* 연결 목록 */
-.rel{display:flex;flex-direction:column;gap:2px}
+.rel{display:flex;flex-direction:column;gap:1px}
 .relitem{position:relative}
-.relitem>button.rb{width:100%;font:inherit;display:flex;align-items:center;gap:9px;padding:11px 11px;
-  background:none;border:1px solid transparent;border-radius:3px;cursor:pointer;font-size:13.5px;color:var(--ink);text-align:left}
-.relitem>button.rb:hover{background:var(--paper);border-color:var(--rule)}
+.relitem>button.rb{width:100%;font:inherit;display:flex;align-items:center;gap:9px;padding:9px 10px;
+  background:none;border:none;border-radius:4px;cursor:pointer;font-size:13.5px;color:var(--ink);text-align:left}
+.relitem>button.rb:hover{background:var(--hover)}
 .relitem .dot{width:8px;height:8px;border-radius:50%;flex:none}
-.relitem .rl{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
-.menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper-2);border:1px solid var(--rule-2);
-  border-radius:4px;box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:5;display:none;min-width:146px;overflow:hidden}
+.relitem .rl{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto;flex:none}
+.menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper);border:1px solid var(--rule-2);
+  border-radius:5px;box-shadow:0 8px 22px -10px rgba(55,53,47,.35);z-index:5;display:none;min-width:146px;overflow:hidden}
 .menu.on{display:block}
-.menu button{display:flex;width:100%;font:inherit;font-size:13.5px;padding:11px 14px;background:none;border:none;
+.menu button{display:flex;width:100%;font:inherit;font-size:13.5px;padding:10px 13px;background:none;border:none;
   cursor:pointer;color:var(--ink);text-align:left;gap:8px;align-items:center}
-.menu button:hover{background:var(--paper)}
+.menu button:hover{background:var(--hover)}
 .menu button+button{border-top:1px solid var(--rule)}
-.menu .mi{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);margin-left:auto}
+.menu .mi{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-left:auto}
+
+/* 첨부파일 — 회차별이다. 논의 내역과 같은 취급이고 업무 규칙과 다르다.
+   하단의 '파일 첨부' 버튼은 없앴다 — 같은 기능이 두 군데 있게 되므로. */
+.files{display:flex;flex-direction:column;gap:1px}
+.fitem{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;font-size:13.5px}
+.fitem:hover{background:var(--hover)}
+.fitem .ext{width:30px;height:30px;border-radius:4px;flex:none;background:var(--side);
+  border:1px solid var(--rule);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9.5px;font-weight:600;color:var(--ink-2);text-transform:uppercase}
+.fitem .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fitem .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitem .fmeta{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+.fitem .fmeta .by{font-family:var(--font)}
+.fitem .more{flex:none;width:26px;height:26px;border:none;border-radius:4px;background:none;
+  color:var(--ink-3);cursor:pointer;font-size:15px;line-height:1;opacity:0;transition:opacity .12s}
+.fitem:hover .more{opacity:1}
+.fitem .more:hover{background:var(--rule);color:var(--ink)}
+.drop{margin-top:12px;border:1px dashed var(--rule-2);border-radius:6px;padding:18px 14px;
+  text-align:center;font-size:12.5px;color:var(--ink-3);line-height:1.7}
+.drop.over{border-color:var(--link);background:rgba(35,131,226,.05);color:var(--ink-2)}
+.drop b{display:block;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:3px}
+.drop .pick{font:inherit;font-size:12.5px;margin-top:9px;padding:5px 12px;border-radius:4px;
+  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.filenote{margin-top:14px;padding-top:11px;border-top:1px solid var(--rule);
+  font-size:11.5px;color:var(--ink-3);line-height:1.6}
 
 /* 상태 메뉴 */
-#statmenu{position:fixed;background:var(--paper-2);border:1px solid var(--rule-2);border-radius:4px;
-  box-shadow:0 6px 20px -8px rgba(27,33,31,.4);z-index:40;display:none;overflow:hidden;min-width:132px}
+#statmenu{position:fixed;background:var(--paper);border:1px solid var(--rule-2);border-radius:5px;
+  box-shadow:0 8px 22px -10px rgba(55,53,47,.35);z-index:40;display:none;overflow:hidden;min-width:132px}
 #statmenu.on{display:block}
 #statmenu button{display:flex;align-items:center;gap:9px;width:100%;font:inherit;font-size:13.5px;
-  padding:10px 14px;background:none;border:none;cursor:pointer;text-align:left;color:var(--ink)}
-#statmenu button:hover{background:var(--paper)}
-#statmenu .cv{width:9px;height:9px;border-radius:50%}
+  padding:9px 13px;background:none;border:none;cursor:pointer;text-align:left;color:var(--ink)}
+#statmenu button:hover{background:var(--hover)}
+#statmenu .cv{width:8px;height:8px;border-radius:50%}
 
-/* 달력 */
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+/* 달력 — 칸 크기 고정 */
+.cal{display:grid;grid-template-columns:repeat(7,34px);gap:3px;justify-content:start}
 .cal .cm{grid-column:1/-1;font-size:14px;font-weight:600;margin:16px 0 8px;display:flex;align-items:baseline;gap:7px}
 .cal .cm:first-child{margin-top:0}
-.cal .cm span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);font-weight:400}
-.cal .wd{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-3);text-align:center;padding:4px 0}
+.cal .cm span{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:400}
+.cal .wd{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:center;padding:3px 0;width:34px}
 .cal .wd.s{color:var(--now)}
-.cal .dcell{aspect-ratio:1;border:1px solid var(--rule);border-radius:3px;font-family:'IBM Plex Mono',monospace;
-  font-size:12.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  color:var(--ink-2);background:var(--paper-2);position:relative}
+.cal .dcell{width:34px;height:34px;border:1px solid var(--rule);border-radius:4px;font-family:var(--mono);
+  font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  color:var(--ink-2);background:var(--paper);position:relative}
 .cal .dcell.pad{border-color:transparent;background:none;color:transparent}
-.cal .dcell.in{background:#E7EEF9;border-color:#B9CFEE;color:var(--ink)}
+.cal .dcell.in{background:rgba(35,131,226,.08);border-color:rgba(35,131,226,.22);color:var(--ink)}
 .cal .dcell.edge{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
-.cal .dcell.late{background:#FBE9E5;border-color:var(--now);color:#8E2A19;font-weight:600}
+.cal .dcell.late{background:var(--now-tint);border-color:var(--now);color:var(--now-ink);font-weight:600}
 .cal .dots{display:flex;gap:2px;height:5px}
 .cal .dots i{width:5px;height:5px;border-radius:50%;display:block}
 .callegend{margin-top:16px;font-size:12.5px;color:var(--ink-3);display:flex;flex-direction:column;gap:6px}
 .callegend div{display:flex;align-items:center;gap:7px}
-.callegend i{width:10px;height:10px;border-radius:2px;display:block}
+.callegend i{width:10px;height:10px;border-radius:3px;display:block}
 
-/* Claude 진단 패널 */
-.diag{border-top:1px solid var(--rule);background:#F4F6F5;flex:none;max-height:38vh;display:flex;flex-direction:column}
-.dg-h{display:flex;align-items:center;gap:8px;padding:10px 22px 8px;flex:none}
-.dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none;
-  box-shadow:0 0 0 3px rgba(139,148,143,.2)}
-.diag.g-block .dg-h .dot{background:var(--now);box-shadow:0 0 0 3px rgba(200,68,46,.2)}
-.diag.g-block .dg-h .ttl{color:#8E2A19}
-.diag.g-part  .dg-h .dot{background:#C9902B;box-shadow:0 0 0 3px rgba(201,144,43,.22)}
-.diag.g-part  .dg-h .ttl{color:#8A6216}
-.diag.g-go    .dg-h .dot{background:#4A8A5C;box-shadow:0 0 0 3px rgba(74,138,92,.2)}
-.diag.g-go    .dg-h .ttl{color:#3F6B5D}
+/* 진단 패널 — 회색 블록(노션 콜아웃) 안에 표시·판정·근거 순으로 */
+.diag{border-top:1px solid var(--rule);background:var(--paper);flex:none;max-height:38vh;
+  display:flex;flex-direction:column;padding:12px 26px 14px}
+.dg-h{display:flex;align-items:center;gap:8px;padding:10px 14px 8px;flex:none;
+  background:var(--side);border-radius:6px 6px 0 0}
+.dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.diag.g-block .dg-h .dot{background:var(--now)}
+.diag.g-block .dg-h .ttl{color:var(--now-ink)}
+.diag.g-part  .dg-h .dot{background:#B8860B}
+.diag.g-part  .dg-h .ttl{color:#7A5410}
+.diag.g-go    .dg-h .dot{background:var(--go)}
+.diag.g-go    .dg-h .ttl{color:#3B6E4B}
 .diag.g-done  .dg-h .ttl{color:var(--ink-2)}
-.dg-h .ttl{font-size:12.5px;font-weight:600;letter-spacing:-.01em}
-.dg-h .ts{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3)}
-.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:3px;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink-2);cursor:pointer}
-.dg-h button:hover{background:var(--paper)}
-.dg-b{overflow-y:auto;padding:0 22px 14px;font-size:12.5px;line-height:1.6}
-.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;
-  padding-left:11px;border-left:3px solid var(--ink-3)}
-.dg-v.block{border-left-color:var(--now);color:#8E2A19}
-.dg-v.warn{border-left-color:#C9902B}
-.dg-v.ok{border-left-color:#5B8C7E;color:#3F6B5D}
+.dg-h .ttl{font-size:12.5px;font-weight:600}
+.dg-h .ts{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.dg-h button{margin-left:auto;font:inherit;font-size:11.5px;padding:2px 9px;border-radius:4px;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-3);cursor:pointer}
+.dg-h button:hover{color:var(--ink)}
+.dg-b{overflow-y:auto;padding:0 14px 12px;font-size:12.5px;line-height:1.6;
+  background:var(--side);border-radius:0 0 6px 6px}
+.dg-v{font-weight:600;font-size:13px;line-height:1.5;margin-bottom:9px;color:var(--ink-2)}
+.dg-v.block{color:var(--now-ink)}
+.dg-v.warn{color:#7A5410}
+.dg-v.ok{color:#3B6E4B}
 .dg-b ul{list-style:none;display:flex;flex-direction:column;gap:5px}
 .dg-b li{display:flex;gap:7px;color:var(--ink-2);font-size:12px;line-height:1.5}
 .dg-b li b{font-weight:600;color:var(--ink)}
-.dg-b li .ic{flex:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-3);
-  border:1px solid var(--rule-2);border-radius:2px;padding:1px 4px;background:var(--paper-2);
-  min-width:38px;text-align:center}
+.dg-b li .ic{flex:none;font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  min-width:38px;text-align:left;padding-top:1px}
 .dg-b .src{margin-top:9px;font-size:10.5px;color:var(--ink-3);line-height:1.5}
 .diag.busy .dg-b{opacity:.35}
-.diag.busy .dg-h .dot{animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.25}}
 
-.dfoot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:8px}
-.dfoot button{font:inherit;font-size:13.5px;padding:9px 14px;border-radius:3px;cursor:pointer;
-  border:1px solid var(--rule-2);background:var(--paper-2);color:var(--ink)}
-.dfoot button.pri{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
-.dclose{position:absolute;top:15px;right:16px;width:30px;height:30px;border:none;background:none;
-  cursor:pointer;color:var(--ink-3);font-size:22px;border-radius:3px;z-index:4}
-.dclose:hover{background:var(--paper);color:var(--ink)}
+.dfoot{padding:12px 26px;border-top:1px solid var(--rule);display:flex;gap:8px}
+.dfoot button{font:inherit;font-size:13px;padding:7px 13px;border-radius:4px;cursor:pointer;
+  border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
+.dfoot button:hover{background:var(--hover)}
+.dclose{position:absolute;top:16px;right:18px;width:28px;height:28px;border:none;background:none;
+  cursor:pointer;color:var(--ink-3);font-size:20px;border-radius:4px;z-index:4}
+.dclose:hover{background:var(--hover);color:var(--ink)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
+<!-- 상단 탭 줄을 없앴다. 같은 목록이 두 군데 있을 이유가 없다.
+     화면 이동은 왼쪽 사이드바로만 한다. -->
+<div class="sideedge" id="sideedge" aria-hidden="true"></div>
+<aside class="sidenav" id="sidenav">
+  <div class="brand"><span class="mark">대</span>BELONG</div>
+  <nav>
+    <a href="#" aria-current="page">준비 단계</a>
+    <a href="#">수련회 진행</a>
+    <a href="#">회의록</a>
+    <a href="#">재정</a>
+    <div class="navlabel">회차 준비</div>
+    <a href="#">업무 라이브러리</a>
+    <a href="#">새 회차 만들기</a>
+    <a href="#">계정 관리</a>
+  </nav>
+  <div class="sidefoot"><b>박민준</b> · 총무팀(관리자)</div>
+</aside>
+
 <header>
   <div class="mast">
+    <button class="sidetoggle" id="sidetoggle" type="button" aria-pressed="false"
+            aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
     <div class="title">BELONG <em>· 2026 여름수련회 준비 보드</em></div>
     <div class="countdown"><b class="mono">D-5</b><span>2026.08.21 개회</span></div>
   </div>
-  <nav role="tablist">
-    <button role="tab" aria-selected="false">회의록</button>
-    <button role="tab" aria-selected="true">준비 단계</button>
-    <button role="tab" aria-selected="false">수련회 진행</button>
-    <button role="tab" aria-selected="false">재정</button>
-  </nav>
 </header>
 
 <div class="toolbar">
@@ -316,6 +399,7 @@ select{font:inherit;font-size:13.5px;padding:4px 8px;border:1px solid var(--rule
       <button data-p="log" aria-selected="true">논의 내역</button>
       <button data-p="cal" aria-selected="false">달력</button>
       <button data-p="rel" aria-selected="false">연결된 업무<span class="n" id="relN"></span></button>
+      <button data-p="files" aria-selected="false">첨부파일<span class="n" id="fileN"></span></button>
     </div>
   </div>
   <div class="dbody">
@@ -328,13 +412,25 @@ select{font:inherit;font-size:13.5px;padding:4px 8px;border:1px solid var(--rule
         <div><i style="background:none;border:1px solid var(--rule-2)"></i>· 점 = 연결된 업무 일정</div>
       </div></div>
     <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+    <!-- 첨부파일 — 회차별이다. 새 회차를 열면 업무는 따라와도 파일은 따라오지 않는다 -->
+    <div class="pane" id="p-files">
+      <div class="files" id="dfiles"></div>
+      <div class="drop" id="ddrop">
+        <b>여기에 파일을 끌어다 놓으세요</b>
+        <span>25.0MB 까지 · 이미지 · 문서 · 압축 파일</span>
+        <button type="button" class="pick">파일 고르기</button>
+      </div>
+      <div class="filenote">이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.</div>
+    </div>
   </div>
   <div class="diag" id="diag">
     <div class="dg-h"><span class="dot"></span><span class="ttl">시작하지 못하는 이유</span>
       <span class="ts" id="dgTs"></span><button id="dgR">다시 분석</button></div>
     <div class="dg-b" id="dgB"></div>
   </div>
-  <div class="dfoot"><button class="pri">논의 추가</button><button>파일 첨부</button><button>하위 업무 추가</button></div>
+  <!-- '파일 첨부' 버튼은 없앴다 — 첨부파일 탭 안에 올리는 자리가 생겼으므로
+       같은 기능이 두 군데 있게 된다 (논의 입력칸과 같은 이유) -->
+  <div class="dfoot"><button>하위 업무 추가</button></div>
 </aside>
 
 <script>
@@ -350,7 +446,7 @@ const TEAMS=[
  {id:'saechingu',n:'9 새친구팀',s:'새친구',c:'#A98A1E'},
 ];
 const TC=Object.fromEntries(TEAMS.map(t=>[t.id,t]));
-const STATUS={done:{l:'완료',c:'#8B948F'},wip:{l:'진행중',c:'#1668E3'},todo:{l:'예정',c:'#4A544F'},late:{l:'지연',c:'#C8442E'}};
+const STATUS={done:{l:'완료',c:'#9B9A97'},wip:{l:'진행중',c:'#2383E2'},todo:{l:'예정',c:'#787774'},late:{l:'지연',c:'#C4554D'}};
 
 const DATA={
 chongmuM:[
@@ -559,16 +655,19 @@ H+=`<div class="hc rt" data-cs="2026-08-21" data-ce="2026-08-23" data-lb="수련
 const NC=NW+13;
 const gl=(()=>{let s='';for(let i=1;i<=NC;i++)s+=`<div class="gl${i===NW+1?' shift':''}" style="grid-column:${i}"></div>`;return s})();
 
-/* 상태별 채움색 — 글자가 검정이므로 모두 연한 톤 */
-function tint(hex,a){const n=parseInt(hex.slice(1),16);
-  const r=(n>>16)&255,g=(n>>8)&255,b=n&255,m=(v,p)=>Math.round(v*a+p*(1-a));
-  return `rgb(${m(r,250)},${m(g,251)},${m(b,250)})`}
+/* 상태별 표현 — 부서 색은 **면을 채우지 않고** 테두리에만 온다.
+   면을 색으로 덮으면 정작 눈에 띄어야 할 선택 테두리와 지연 배지가 묻힌다.
+   상태 4종은 그대로 구분된다:
+     대기   흰 바탕 + 팀 색 테두리
+     진행중 흰 바탕 + 팀 색 테두리 + 왼쪽 팀 색 마개(.bar.wip::after)
+     완료   회색 채움 — 눈에 띄지 않게. 시선은 미완료로 가야 한다
+     지연   옅은 붉은색 + 빨간 테두리 + '지연' 배지 */
 function fill(st,c,sch,ghost){
   if(ghost)return{bg:'none',bd:'var(--rule-2)'};
-  if(st==='done')return{bg:'#DFE3E0',bd:'#C4CBC6'};   // 일정 포함 모든 완료 = 회색
-  if(st==='late')return{bg:'#FBE4DF',bd:'#C8442E'};
-  if(sch||st==='todo')return{bg:'var(--paper-2)',bd:c};
-  return{bg:tint(c,.20),bd:c}}          // 진행중 = 팀 색상의 옅은 톤
+  if(st==='done')return{bg:'#F1F0EE',bd:'#E6E5E2'};   // 일정 포함 모든 완료 = 회색
+  if(st==='late')return{bg:'#FBF1F0',bd:'#C4554D'};
+  if(sch||st==='todo')return{bg:'#FFFFFF',bd:c};
+  return{bg:'#FAFAF9',bd:c}}           // 진행중 — 팀 색이 아닌 중립 톤
 
 function bar(x,c,depth,ghost){
   const a=col(x.s),b=x.e?col(x.e):a,id=encodeURIComponent(x.t);
@@ -576,7 +675,7 @@ function bar(x,c,depth,ghost){
   const f=fill(x.st||'done',c,x.sch,ghost);
   const fl=x.st==='late'?'<span class="flag">지연</span>':'';
   const lb=ghost?'↳ '+x.t:x.t;
-  return `<div class="${cls}" style="grid-column:${a}/${b+1};background:${f.bg};border-color:${f.bd}"
+  return `<div class="${cls}" style="grid-column:${a}/${b+1};background:${f.bg};border-color:${f.bd};--team:${c}"
     tabindex="0" data-t="${id}">${fl}<span class="txt">${lb}</span></div>`}
 
 TEAMS.forEach(tm=>{
@@ -585,7 +684,7 @@ TEAMS.forEach(tm=>{
     if(m.ghost&&m.ghost.includes(tm.id))gh.push({...m,_from:ot});
     (m.subs||[]).forEach(s=>{if(s.ghost&&s.ghost.includes(tm.id))gh.push({...s,_from:ot})})})});
   const n=list.length+list.reduce((s,m)=>s+(m.subs?m.subs.length:0),0);
-  const TT=`--teamt:${tint(tm.c,.20)};--rowt:${tint(tm.c,.055)};--lct:${tint(tm.c,.03)}`;
+  const TT='';   // 부서 색으로 면을 채우지 않는다 — 왼쪽 점과 바 테두리에만
   H+=`<div class="row team" data-team="${tm.id}" style="${TT}"><div class="lc">
       <span class="caret">▼</span><span class="sw" style="background:${tm.c}"></span>
       <span class="nm">${tm.n}</span><span class="ct">${n}건${gh.length?' +'+gh.length:''}</span></div>
@@ -717,7 +816,7 @@ function drawWires(){
     const mx=(ax+lx)/2;
     d+=`<path d="M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${ly}, ${lx} ${ly}"/>`;
     d+=`<circle cx="${lx}" cy="${ly}" r="2.6"/>`});
-  d+=d?`<circle cx="${ax}" cy="${ay}" r="4.5" fill="#1668E3"/>`:'';
+  d+=d?`<circle cx="${ax}" cy="${ay}" r="4.5" fill="#2383E2"/>`:'';
   wires.innerHTML=d;
   wires.setAttribute('width',sheet.scrollWidth);wires.setAttribute('height',sheet.scrollHeight)}
 addEventListener('resize',drawWires);
@@ -805,6 +904,56 @@ function renderDiag(title){
         `<li><span class="ic">${k}</span><span>${t}</span></li>`).join('')}</ul>`:'')
     +`<div class="src">${d.ctx?d.ctx+'<br>':''}보드 전체의 일정·상태·연결 관계와 논의 기록을 함께 분석했습니다. 상황이 바뀌면 주기적으로 다시 판단합니다.</div>`;
 }
+/* ── 첨부파일 (회차별) ──────────────────────────────────────────────
+   TaskRun 에 붙는다. 새 회차를 열면 업무는 따라와도 파일은 따라오지 않는다 —
+   논의 내역과 같은 취급이고, 업무 규칙(라이브러리)과 다르다. */
+const FILES={
+ '포스터 제작':[
+   {n:'belong_poster_v3.psd',s:'18.4MB',by:'박시안',at:'2026-07-02'},
+   {n:'시안검토_회의메모.pdf',s:'240KB',by:'박민준',at:'2026-06-28'}],
+ '수련회장 계약내용 최종 조정·확인':[
+   {n:'계약서_최종.hwp',s:'96KB',by:'박민준',at:'2026-08-14'}],
+};
+function renderFiles(title){
+  const list=FILES[title]||[];
+  document.getElementById('fileN').textContent=list.length||'';
+  document.getElementById('dfiles').innerHTML=list.length?list.map(f=>{
+    const ext=f.n.split('.').pop();
+    return `<div class="fitem">
+      <span class="ext">${ext}</span>
+      <span class="mid"><span class="fname">${f.n}</span>
+        <span class="fmeta">${f.s} · <span class="by">${f.by}</span> · ${f.at}</span></span>
+      <button class="more" type="button" aria-label="파일 메뉴">⋯</button>
+      <div class="menu"><button>내려받기</button><button>이름 변경</button><button>삭제</button></div>
+    </div>`}).join('')
+    :'<div style="font-size:13px;color:var(--ink-3);padding:10px 0">아직 올린 파일이 없습니다.</div>';
+}
+document.getElementById('dfiles').onclick=e=>{
+  const more=e.target.closest('.more');if(!more)return;
+  const menu=more.nextElementSibling,was=menu.classList.contains('on');
+  closeMenus();menu.classList.toggle('on',!was)};
+['dragenter','dragover'].forEach(t=>document.getElementById('ddrop')
+  .addEventListener(t,e=>{e.preventDefault();e.currentTarget.classList.add('over')}));
+['dragleave','drop'].forEach(t=>document.getElementById('ddrop')
+  .addEventListener(t,e=>{e.preventDefault();e.currentTarget.classList.remove('over')}));
+
+/* ── 사이드바 — 토글은 고정, 왼쪽 가장자리 호버는 잠깐 들춰 보기 ── */
+(()=>{
+  const nav=document.getElementById('sidenav'),edge=document.getElementById('sideedge');
+  const tg=document.getElementById('sidetoggle');let t=null;
+  const pinned=()=>document.body.classList.contains('sidepin');
+  const peek=on=>{if(pinned())return;clearTimeout(t);
+    if(on)nav.classList.add('peek');
+    else t=setTimeout(()=>nav.classList.remove('peek'),160)};
+  edge.addEventListener('mouseenter',()=>peek(true));
+  edge.addEventListener('mouseleave',()=>peek(false));
+  nav.addEventListener('mouseenter',()=>peek(true));
+  nav.addEventListener('mouseleave',()=>peek(false));
+  tg.onclick=()=>{const on=!pinned();document.body.classList.toggle('sidepin',on);
+    tg.setAttribute('aria-pressed',on?'true':'false');
+    if(on)nav.classList.remove('peek');dispatchEvent(new Event('resize'))};
+})();
+
 let dgMin=12;
 function stampDiag(){document.getElementById('dgTs').textContent=dgMin?`${dgMin}분 전 분석`:'방금 분석'}
 document.getElementById('dgR').onclick=()=>{
@@ -817,15 +966,17 @@ function open(title){
   const x=IX[title];if(!x)return;cur=title;
   const c=TC[x.team].c,st=x.st||'done';
   document.getElementById('dkick').innerHTML=
-    `<span class="chip solid" style="background:${c}">${TC[x.team].n}</span><span class="chip">${x.kind}</span>
+    `<span class="chip solid" style="--team:${c}">${TC[x.team].n}</span><span class="chip">${x.kind}</span>
      <button class="chip stat" id="statchip"><span class="cv" style="background:${STATUS[st].c}"></span>${STATUS[st].l} ▾</button>`;
   document.getElementById('statchip').onclick=e=>{e.stopPropagation();statMenu(e.currentTarget)};
   document.getElementById('dtitle').textContent=title;
   const rels=[...(REL[title]||[])].filter(n=>IX[n]);
   document.getElementById('dmeta').innerHTML=
-    `<dt>기간</dt><dd class="mono">${x.e?fmt(x.s)+' → '+fmt(x.e):fmt(x.s)}</dd>
-     <dt>담당</dt><dd>${TC[x.team].n}</dd><dt>상위</dt><dd>${x.parent||'—'}</dd>
-     <dt>관련팀</dt><dd>${(x.ghost||[]).map(g=>TC[g].n).join(', ')||'—'}</dd>`;
+    `<dt>기간</dt><dd><span class="pill mono">${x.e?fmt(x.s)+' → '+fmt(x.e):fmt(x.s)}</span></dd>
+     <dt>담당팀</dt><dd><span class="pill"><i style="background:${c}"></i>${TC[x.team].n}</span></dd>
+     <dt>담당자</dt><dd><span class="pill">${x.who||'지정 안 함'}</span></dd>
+     <dt>상위</dt><dd><span class="pill">${x.parent||'—'}</span></dd>
+     <dt>관련팀</dt><dd><span class="pill">${(x.ghost||[]).map(g=>TC[g].n).join(', ')||'—'}</span></dd>`;
   document.getElementById('dlog').innerHTML=(LOG[title]||[['—','아직 기록된 논의가 없습니다.']])
     .map(([d,a,b])=>`<div class="entry"><span class="d">${d}</span>${a}${b?`<span class="fix">${b}</span>`:''}</div>`).join('');
   document.getElementById('relN').textContent=rels.length||'';
@@ -836,6 +987,7 @@ function open(title){
       <button data-act="move">이동<span class="mi">보드</span></button></div></div>`}).join('')
     :'<div style="font-size:12px;color:var(--ink-3)">연결된 업무 없음</div>';
   calendar(x,rels);
+  renderFiles(title);
   renderDiag(title);stampDiag();
   dw.classList.add('open');dw.setAttribute('aria-hidden','false');
   document.body.classList.add('dopen');

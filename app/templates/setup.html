@@ -5,16 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>새 수련회 회차 만들기</title>
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/retreat.css?v=26">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=46">
 </head>
 <body>
 
+{# 마법사도 사이드바를 쓴다 — 상단 탭 줄을 없앤 뒤 화면 이동 수단은 이것뿐이다.
+   기본은 접힘이라 만드는 중에 눈에 걸리지 않는다. #}
+<div class="sideedge" id="sideedge" aria-hidden="true"></div>
+<aside class="sidenav" id="sidenav">
+  <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
+  <nav>
+    <a href="/board">준비 단계</a>
+    <a href="/schedule">수련회 진행</a>
+    <a href="/meetings">회의록</a>
+    <a href="/budget">재정</a>
+    <div class="navlabel">회차 준비</div>
+    <a href="/library">업무 라이브러리</a>
+    <a href="/setup" aria-current="page">새 회차 만들기</a>
+    <a href="/admin/users">계정 관리</a>
+    <a href="/admin/notify/preview">알림 미리보기</a>
+  </nav>
+  <div class="sidefoot">
+    <span><b>{{ user.name }}</b> · {{ ROLE_LABELS.get(user.role, user.role) }}</span>
+    <span class="links"><a href="/settings">설정</a><a href="/logout">로그아웃</a></span>
+  </div>
+</aside>
+
 <header class="wizhead">
-  <div class="title">새 수련회 회차 만들기 <em>· 대청부</em>
-    <a href="/board" style="font-size:13px;color:var(--ink-3);margin-left:14px">← 보드로</a></div>
+  <div class="masthead" style="display:flex;align-items:center;gap:10px">
+    <button class="sidetoggle" id="sidetoggle" type="button" aria-pressed="false"
+            aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
+    <div class="title">새 수련회 회차 만들기 <em>· 대청부</em>
+      <a href="/board" style="font-size:13px;color:var(--ink-3);margin-left:14px">← 보드로</a></div>
+  </div>
   <div class="steps" id="steps">
     <div class="on"><b>1</b>회차 정보</div>
     <div><b>2</b>부서 확정</div>
@@ -129,7 +152,9 @@
   <button class="btn pri" id="next">다음</button>
 </footer>
 
+<script src="/static/js/flash.js?v=1" defer></script>
+<script src="/static/js/sidenav.js?v=1" defer></script>
 <script id="setup-departments" type="application/json">{{ departments|tojson }}</script>
-<script src="/static/js/setup.js?v=26" defer></script>
+<script src="/static/js/setup.js?v=30" defer></script>
 </body>
 </html>

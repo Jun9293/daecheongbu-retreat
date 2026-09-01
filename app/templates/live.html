@@ -1,0 +1,124 @@
+{% extends "retreat_base.html" %}
+{% block title %}수련회 진행 · {{ retreat.name }}{% endblock %}
+
+{% block body %}
+{#
+  현장에서 휴대폰으로 급히 보는 화면입니다 (CLAUDE.md 5-0).
+  좁은 화면에서는 프로그램 목록과 체크리스트를 한 번에 하나씩 보여주므로
+  둘 다 서버가 그려 두고 JS 가 어느 쪽을 보일지만 정합니다 —
+  네트워크가 느린 자리라 화면이 뜬 뒤 다시 받아오는 구조를 만들지 않습니다.
+#}
+{# 봉사팀 보기로 건너가는 자리 (5-8). 소속이 헤브론·코람데오면 그쪽이 기본이다. #}
+<div class="sheetbar">
+  <a class="tabish on" href="/live" aria-current="page">수련회 진행</a>
+  <a class="tabish" href="/live/staff">봉사팀 보기</a>
+  {% if staff_default %}
+  <span class="hint">봉사팀은 <b>봉사팀 보기</b>가 보기 편합니다.</span>
+  {% endif %}
+</div>
+
+<div class="days" id="days">
+  {% for d in live.days %}
+  <a class="dayb" href="/live?day={{ d.name }}"
+     data-day="{{ d.name }}"
+     {% if d.name == live.day %}aria-selected="true"{% endif %}>
+    {{ d.label }}<i>{{ d.name }}</i>{% if d.is_today %}<em class="td">오늘</em>{% endif %}
+  </a>
+  {% endfor %}
+  {# 종료된 회차인데 체크가 하나도 없으면 0% 막대를 그리지 않는다.
+     실제로는 다 했는데 그때 이 시스템이 없었을 뿐이다 (CLAUDE.md 5-6). #}
+  {% if live.carried_only %}
+  <div class="prog carried">
+    이 회차는 시스템 밖에서 진행했습니다 — 프로그램표만 옮겨온 것입니다.
+  </div>
+  {% else %}
+  <div class="prog">
+    <span class="pl">진행률</span>
+    <span class="bar"><i style="width:{{ live.progress.percent }}%"></i></span>
+    <b class="mono">{{ live.progress.done }}/{{ live.progress.total }}</b>
+  </div>
+  {% endif %}
+</div>
+
+{% if not live.programs %}
+<div class="empty-state">
+  <h2>{{ live.day or '이 회차' }}에 등록된 프로그램이 없습니다.</h2>
+  <p>프로그램표는 매 회차 새로 만듭니다. 손으로 하나씩 넣는 대신
+     <b>지난 회차에서 통째로 가져오는 것</b>이 빠릅니다 — 날짜와 시각은 새 회차에
+     맞춰 다시 계산되고, 체크 상태는 따라오지 않습니다.</p>
+  {% if can_manage %}
+    {% if sources %}
+    <div class="copyrow">
+      <select id="copysrc" aria-label="가져올 회차">
+        {% for s in sources %}
+        <option value="{{ s.id }}">{{ s.name }} · {{ s.count }}개</option>
+        {% endfor %}
+      </select>
+      <button class="btn pri" id="copybtn" type="button">가져오기</button>
+    </div>
+    <p class="copywarn" id="copywarn" hidden></p>
+    {% else %}
+    <p>가져올 회차가 아직 없습니다. 아래에서 직접 추가하세요.</p>
+    {% endif %}
+    <button class="btn" id="addpgm0" type="button">+ 프로그램 추가</button>
+  {% else %}
+  <p>총무팀이 프로그램표를 넣으면 여기에 보입니다.</p>
+  {% endif %}
+</div>
+{% else %}
+
+<div class="wrap" id="wrap">
+  {# ── 왼쪽: 시각순 프로그램 목록 ── #}
+  <div class="rail" id="rail">
+    {% for p in live.programs %}
+    {% if live.is_today and loop.first and p.start_time > live.now %}
+    <div class="nowline"><b>NOW {{ live.now }}</b></div>
+    {% endif %}
+    {% if live.is_today and not loop.first
+          and p.start_time > live.now and live.programs[loop.index0 - 1].start_time <= live.now %}
+    <div class="nowline"><b>NOW {{ live.now }}</b></div>
+    {% endif %}
+    <button type="button" class="pgm {{ p.state }}" data-pgm="{{ p.id }}"
+            data-i="{{ loop.index0 }}"
+            {% if loop.index0 == live.selected %}aria-current="true"{% endif %}>
+      <span class="t mono">{{ p.start_time }}</span>
+      <span class="b">
+        <span class="nm">{{ p.name }}</span>
+        <span class="sub">{{ [p.host, p.place, p.note]|select|join(' · ') }}</span>
+        {# 끝났는데 정리가 남으면 여기서도 보인다 — 넘어가면 사라지는 자리다 (5-2) #}
+        {% if p.leftover_post %}
+        <span class="left" data-left="{{ p.id }}">정리 {{ p.leftover_post }}건 남음</span>
+        {% endif %}
+      </span>
+      {% if p.late %}<span class="flag" data-late="{{ p.id }}">지연</span>{% endif %}
+      <span class="ct mono" data-ct="{{ p.id }}">{{ p.done }}/{{ p.total }}</span>
+    </button>
+    {% endfor %}
+    {% if live.is_today and live.programs and live.programs[-1].start_time <= live.now %}
+    <div class="nowline"><b>NOW {{ live.now }}</b></div>
+    {% endif %}
+    {% if can_manage %}
+    <button class="railadd" id="addpgm" type="button">+ 프로그램 추가</button>
+    {% endif %}
+  </div>
+
+  {# ── 오른쪽: 전 / 중 / 후 ── #}
+  <div class="detail" id="detail"></div>
+</div>
+
+{# 좁은 화면에서 목록 ↔ 체크리스트를 오간다. 한 번에 하나만 보여준다. #}
+<button class="backrail" id="backrail" type="button" hidden>← 프로그램 목록</button>
+{% endif %}
+
+<div class="modal" id="pgmedit" hidden></div>
+{% endblock %}
+
+{% block scripts %}
+<script id="live-meta" type="application/json">{{ live|tojson }}</script>
+<script id="live-opts" type="application/json">{{
+  {'can_manage': can_manage, 'days': day_names|list, 'parts': part_names|list,
+   'team_parts': team_parts, 'team_words': team_words,
+   'audiences': audiences, 'tracks': tracks, 'parallel_hint': parallel_hint,
+   'sources': sources}|tojson }}</script>
+<script src="/static/js/live.js?v=5" defer></script>
+{% endblock %}

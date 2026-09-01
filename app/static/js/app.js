@@ -67,15 +67,7 @@
   });
   if (attInput) attInput.addEventListener("input", updateAttCount);
 
-  // 2) 안내 배너는 4초 뒤 사라지게
-  var flash = document.querySelector(".flash");
-  if (flash) {
-    setTimeout(function () {
-      flash.style.transition = "opacity .4s";
-      flash.style.opacity = "0";
-      setTimeout(function () { flash.remove(); }, 400);
-    }, 4000);
-  }
+  // 2) 안내 배너는 flash.js 가 맡는다 — 보드 쪽과 같은 한 벌을 쓴다
 
   // 3) PWA 서비스워커 등록 (Phase 2의 웹 푸시 기반)
   if ("serviceWorker" in navigator && location.protocol !== "file:") {

@@ -19,6 +19,7 @@ from app.domain import library as lib_domain
 from app.domain import permissions as perm
 from app.domain.departments import department_key_of, short_name
 from app.models import DiscussionEntry, Retreat, TaskRun, User
+from app.routers import attachments
 from app.security import get_current_user
 from app.templating import render
 
@@ -219,6 +220,10 @@ def task_detail(
             if other.id != run.id
         ],
         "discussions": _serialize_discussions(run, user),
+        # 첨부는 회차별이라 run 에 붙는다 (CLAUDE.md 4-9). 상세 패널이
+        # 탭을 열기 전에 개수를 보여줘야 해서 여기서 함께 내려보낸다.
+        "attachments": attachments.serialize(db, user, run),
+        "attachment_limits": attachments.limits(),
         "rules": lib.rules,
         "reclassification_note": lib.reclassification_note,
         "suggestion_rationale": lib.suggestion_rationale

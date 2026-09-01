@@ -15,3 +15,7 @@ data/backups/
 data/secret_key.txt
 data/server.log
 data/server.log.1
+
+# 발급된 초대 링크를 받아 둔 메모. **살아 있는 로그인 링크와 연락처가 들어간다.**
+link.txt
+*_link.txt

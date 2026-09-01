@@ -3,34 +3,87 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#F2F4F3">
+  <meta name="theme-color" content="#FFFFFF">
   <title>{% block title %}대청부 수련회{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/retreat.css?v=26">
+  <link rel="stylesheet" href="/static/css/retreat.css?v=46">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 
+{# ── 사이드바 ─────────────────────────────────────────────────────────
+   상단 탭 줄을 없앴다. 같은 목록이 두 군데 있을 이유가 없다.
+   기본은 접힘. 왼쪽 위 토글로 고정해서 열고, 화면 왼쪽 가장자리에
+   마우스를 대면 잠깐 떠서 나온다. #}
+{% set nav_main = [
+  ('/board',    '준비 단계', 'board',    none),
+  ('/calendar', '달력',      'calendar', none),
+  ('/live',     '수련회 진행', 'live',   none),
+  ('/meetings', '회의록',    'meetings', '재설계 예정'),
+  ('/budget',   '재정',      'budget',   '재설계 예정'),
+] %}
+{% set nav_work = [
+  ('/tasks',    '할 일',     'tasks',    none),
+  ('/expenses', '지출',      'expenses', none),
+  ('/files',    '작업 파일', 'files',    none),
+  ('/reviews',  '확인 요청', 'reviews',  none),
+  ('/checklists', '체크리스트', 'checklists', none),
+  ('/notifications', '알림함', 'notifications', none),
+] %}
+
+<div class="sideedge" id="sideedge" aria-hidden="true"></div>
+<aside class="sidenav" id="sidenav">
+  <a class="brand" href="/board"><span class="mark">대</span>{{ retreat.name if retreat else '대청부 수련회' }}</a>
+
+  {% if retreats and retreats|length > 1 %}
+  <select class="pick" aria-label="회차 선택"
+          onchange="location.href='?retreat_id='+this.value">
+    {% for r in retreats %}
+    <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+
+  <nav>
+    {% for href, label, tab, wip in nav_main %}
+    <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}
+      {% if wip %}<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">{{ wip }}</i>{% endif %}</a>
+    {% endfor %}
+
+    <div class="navlabel">실무</div>
+    {% for href, label, tab, wip in nav_work %}
+    <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+
+    {% if active_draft or is_admin(user) %}
+    <div class="navlabel">회차 준비</div>
+    {% if active_draft %}
+    <a href="/draft" {% if active_tab == 'draft' %}aria-current="page"{% endif %}>회차 준비
+      <i class="wip live">{{ active_draft.submitted }}/{{ active_draft.total }}</i></a>
+    {% endif %}
+    {% if is_admin(user) %}
+    <a href="/library" {% if active_tab == 'library' %}aria-current="page"{% endif %}>업무 라이브러리</a>
+    <a href="/setup" {% if active_tab == 'setup' %}aria-current="page"{% endif %}>새 회차 만들기</a>
+    <a href="/admin/users" {% if active_tab == 'users' %}aria-current="page"{% endif %}>계정 관리</a>
+    <a href="/admin/notify/preview" {% if active_tab == 'notify' %}aria-current="page"{% endif %}>알림 미리보기</a>
+    {% endif %}
+    {% endif %}
+  </nav>
+
+  <div class="sidefoot">
+    <span><b>{{ user.name }}</b> · {{ ROLE_LABELS.get(user.role, user.role) }}{% if user.department %} · {{ user.department.name }}{% endif %}</span>
+    <span class="links"><a href="/settings">설정</a><a href="/logout">로그아웃</a></span>
+  </div>
+</aside>
+
 <header class="mast-wrap">
   <div class="mast">
+    <button class="sidetoggle" id="sidetoggle" type="button"
+            aria-pressed="false" aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
     <div class="title">
       {{ retreat.name if retreat else '대청부 수련회' }}
       <em>· {{ page_subtitle }}</em>
     </div>
-    {% if retreats and retreats|length > 1 %}
-    <select class="pick" aria-label="회차 선택"
-            onchange="location.href='?retreat_id='+this.value">
-      {% for r in retreats %}
-      <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
-      {% endfor %}
-    </select>
-    {% endif %}
-    <span class="whoami"><b>{{ user.name }}</b>
-      {{ ROLE_LABELS.get(user.role, user.role) }}{% if user.department %} · {{ user.department.name }}{% endif %}
-      · <a href="/settings">설정</a> · <a href="/logout">로그아웃</a></span>
     {% if retreat and retreat.start_date %}
     <div class="countdown">
       <b class="mono">{{ retreat.start_date|dday }}</b>
@@ -38,25 +91,13 @@
     </div>
     {% endif %}
   </div>
-  <nav class="tabs">
-    <a href="/meetings" {% if active_tab == 'meetings' %}aria-selected="true"{% endif %}>회의록<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
-    <a href="/board" {% if active_tab == 'board' %}aria-selected="true"{% endif %}>준비 단계</a>
-    <a href="/schedule" {% if active_tab == 'live' %}aria-selected="true"{% endif %}>수련회 진행<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
-    <a href="/budget" {% if active_tab == 'budget' %}aria-selected="true"{% endif %}>재정<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">재설계 예정</i></a>
-    <span class="sp"></span>
-    {% if active_draft %}
-    <a href="/draft" {% if active_tab == 'draft' %}aria-selected="true"{% endif %}>회차 준비<i class="wip live">{{ active_draft.submitted }}/{{ active_draft.total }}</i></a>
-    {% endif %}
-    {% if is_admin(user) %}
-    <a href="/library" {% if active_tab == 'library' %}aria-selected="true"{% endif %}>업무 라이브러리</a>
-    <a class="new" href="/setup">새 회차 만들기</a>
-    {% endif %}
-  </nav>
 </header>
 
 {% block body %}{% endblock %}
 
 {% if flash %}<div class="flash" role="status">{{ flash }}</div>{% endif %}
+<script src="/static/js/flash.js?v=1" defer></script>
+<script src="/static/js/sidenav.js?v=1" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

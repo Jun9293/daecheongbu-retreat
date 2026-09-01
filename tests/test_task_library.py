@@ -348,8 +348,8 @@ def test_completed_tasks_are_grey_and_late_ones_shout():
     """완료를 눈에 띄게 하지 않는다 — 시선은 미완료로 가야 한다."""
     done_bg, _ = board_view.bar_style("완료", "#B95A83", kind="main", ghost=False)
     late_bg, late_border = board_view.bar_style("지연", "#B95A83", kind="main", ghost=False)
-    assert done_bg == "#DFE3E0"
-    assert late_border == "#C8442E"
+    assert done_bg == board_view.BAR_DONE[0]
+    assert late_border == board_view.BAR_LATE[1]
     assert late_bg != done_bg
 
 

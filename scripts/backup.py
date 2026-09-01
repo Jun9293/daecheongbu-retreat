@@ -1,4 +1,4 @@
-"""백업 — SQLite 파일과 VAPID 키 (CLAUDE.md 운영).
+"""백업 — SQLite 파일 · VAPID 키 · 업로드 폴더 (CLAUDE.md 운영).
 
 **파일 복사가 아니라 `VACUUM INTO` 를 쓴다.** 누군가 쓰는 중에 복사하면 반쯤
 쓰인 페이지가 섞인 파일이 남는데, 그 파일은 열릴 때까지 멀쩡해 보인다.
@@ -6,6 +6,10 @@
 
 VAPID 키도 함께 남긴다. 그 파일이 바뀌면 **기존 구독이 전부 조용히 죽는다** —
 아무 오류도 나지 않고 그냥 안 간다 (4-11).
+
+**업로드 폴더도 함께 남긴다.** 첨부파일과 영수증은 DB 밖에 쌓이므로 app.db 만
+되돌리면 목록에는 파일이 있는데 열리지 않는다 — 되돌리고 나서야 알게 되는
+종류의 실패다. 폴더째 zip 으로 묶어 같은 날짜를 붙인다.
 
     .venv\\Scripts\\python.exe scripts/backup.py
 """
@@ -30,12 +34,13 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from app.config import DATA_DIR                                  # noqa: E402
+from app.config import DATA_DIR, UPLOAD_DIR                      # noqa: E402
 
 KEEP = 30                      # 이만큼만 남기고 오래된 것부터 지운다
 BACKUP_DIR = DATA_DIR / "backups"
 DB_PATH = DATA_DIR / "app.db"
 VAPID_PATH = DATA_DIR / "vapid_private.pem"
+UPLOADS_PATH = UPLOAD_DIR
 
 
 def snapshot(
@@ -65,15 +70,36 @@ def copy_vapid(key_path: pathlib.Path, out_dir: pathlib.Path, *, stamp: str) -> 
     return target
 
 
+def copy_uploads(
+    uploads: pathlib.Path, out_dir: pathlib.Path, *, stamp: str
+) -> pathlib.Path | None:
+    """업로드 폴더를 zip 하나로 묶는다.
+
+    파일이 하나도 없으면 만들지 않는다 — 빈 zip 이 30개 쌓여 있으면
+    "백업에 파일이 있다"와 "파일이 원래 없었다"를 구별할 수 없다.
+    """
+    if not uploads.exists():
+        return None
+    if not any(path.is_file() for path in uploads.rglob("*")):
+        return None
+    target = out_dir / f"uploads-{stamp}"
+    made = shutil.make_archive(str(target), "zip", root_dir=str(uploads))
+    return pathlib.Path(made)
+
+
 def prune(out_dir: pathlib.Path, *, keep: int = KEEP) -> list[pathlib.Path]:
-    """오래된 것부터 지운다. DB 와 키를 같은 회차로 묶어 함께 지운다."""
+    """오래된 것부터 지운다. DB · 키 · 업로드를 같은 회차로 묶어 함께 지운다."""
     stamps = sorted(
         {path.stem.split("-", 1)[1] for path in out_dir.glob("app-*.db")},
         reverse=True,
     )
     removed: list[pathlib.Path] = []
     for stamp in stamps[keep:]:
-        for path in (out_dir / f"app-{stamp}.db", out_dir / f"vapid-{stamp}.pem"):
+        for path in (
+            out_dir / f"app-{stamp}.db",
+            out_dir / f"vapid-{stamp}.pem",
+            out_dir / f"uploads-{stamp}.zip",
+        ):
             if path.exists():
                 path.unlink()
                 removed.append(path)
@@ -82,6 +108,7 @@ def prune(out_dir: pathlib.Path, *, keep: int = KEEP) -> list[pathlib.Path]:
 
 def run(
     *, db_path: pathlib.Path = DB_PATH, key_path: pathlib.Path = VAPID_PATH,
+    uploads: pathlib.Path = UPLOADS_PATH,
     out_dir: pathlib.Path = BACKUP_DIR, keep: int = KEEP,
 ) -> dict:
     if not db_path.exists():
@@ -90,11 +117,13 @@ def run(
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     db_copy = snapshot(db_path, out_dir, stamp=stamp)
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
+    uploads_copy = copy_uploads(uploads, out_dir, stamp=stamp)
     removed = prune(out_dir, keep=keep)
     return {
         "ok": True,
         "db": db_copy,
         "vapid": key_copy,
+        "uploads": uploads_copy,
         "removed": len(removed),
         "kept": len(list(out_dir.glob("app-*.db"))),
     }
@@ -111,6 +140,11 @@ if __name__ == "__main__":
         print(f"  VAPID 키도 함께: {result['vapid'].name}")
     else:
         print("  ! VAPID 키 파일이 없습니다 — 푸시를 아직 쓰지 않았다면 정상입니다.")
+    if result["uploads"]:
+        up_size = result["uploads"].stat().st_size / 1024
+        print(f"  업로드 폴더도 함께: {result['uploads'].name} ({up_size:,.0f} KB)")
+    else:
+        print("  · 올라온 파일이 아직 없습니다.")
     if result["removed"]:
         print(f"  오래된 백업 {result['removed']}개를 지웠습니다.")
     print(f"  현재 {result['kept']}개 보관 중 (최대 {KEEP}개)")

@@ -29,25 +29,48 @@ MAX_FIRST_WEEK = 40  # 이보다 이른 업무는 첫 칸에 몰아 넣는다
 
 
 def tint(hex_color: str, ratio: float) -> str:
-    """팀 색을 종이색 쪽으로 흐리게 섞는다. 글자가 검정이므로 연한 톤만 쓴다."""
-    raw = hex_color.lstrip("#")
-    r, g, b = (int(raw[i : i + 2], 16) for i in (0, 2, 4))
+    """팀 색을 종이색 쪽으로 흐리게 섞는다. 글자가 검정이므로 연한 톤만 쓴다.
+
+    **읽을 수 없는 색이 와도 보드를 죽이지 않는다.** `#888` 같은 3자리도 CSS 에서는
+    멀쩡한 색이고, 부서 색은 사람이 넣는 값이다. 여기서 터지면 그 회차의 보드가
+    통째로 500 이 되는데, 원인이 "부서 색이 세 글자" 라는 것을 아무도 짐작하지 못한다.
+    """
+    raw = (hex_color or "").lstrip("#").strip()
+    if len(raw) == 3:                        # #888 → #888888
+        raw = "".join(ch * 2 for ch in raw)
+    if len(raw) != 6:
+        return "rgb(250,251,250)"            # 못 읽으면 종이색
+    try:
+        r, g, b = (int(raw[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return "rgb(250,251,250)"
     mix = lambda v, paper: round(v * ratio + paper * (1 - ratio))  # noqa: E731
     return f"rgb({mix(r, 250)},{mix(g, 251)},{mix(b, 250)})"
+
+
+# 무채색 기조 (CLAUDE.md 4장 UI 방향).
+# **부서 색으로 면을 채우지 않는다** — 왼쪽 점과 바 테두리에만 쓴다.
+# 진행중을 팀 색 20% 로 채우던 것을 없앴으므로, 진행중은 화면 쪽에서
+# 왼쪽 3px 팀색 마개(.bar.진행중::after)로 구분한다. 상태 4종은 그대로다.
+BAR_DONE = ("#F1F0EE", "#E6E5E2")        # 회색 채움 — 눈에 띄지 않게
+BAR_LATE = ("#FBF1F0", "#C4554D")        # 옅은 붉은색 + 빨간 테두리
+BAR_GHOST_BORDER = "#C9C8C5"
+BAR_WIP_BG = "#FAFAF9"                   # 아주 옅은 중립 — 팀 색이 아니다
+BAR_TODO_BG = "#FFFFFF"
 
 
 def bar_style(status: str, color: str, *, kind: str, ghost: bool) -> tuple[str, str]:
     """(배경, 테두리색). 완료를 눈에 띄게 하지 않는 것이 핵심이다 —
     목적이 구멍 방지라면 시선은 미완료로 가야 한다."""
     if ghost:
-        return "none", "#C7CEC9"
+        return "none", BAR_GHOST_BORDER
     if status == "완료":
-        return "#DFE3E0", "#C4CBC6"
+        return BAR_DONE
     if status == "지연":
-        return "#FBE4DF", "#C8442E"
+        return BAR_LATE
     if kind == "schedule" or status == "대기":
-        return "#FAFBFA", color
-    return tint(color, 0.20), color
+        return BAR_TODO_BG, color
+    return BAR_WIP_BG, color
 
 
 class Axis:

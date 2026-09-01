@@ -337,7 +337,7 @@ function renderDrawer() {
   const d = detail;
   const st = STATUS[d.status] || STATUS['대기'];
   document.getElementById('dkick').innerHTML =
-    `<span class="chip solid" style="background:${d.department_color}">${d.department}</span>
+    `<span class="chip solid" style="--team:${d.department_color}">${d.department}</span>
      <span class="chip">${d.kind_label}</span>
      <button class="chip stat" id="statchip" ${d.can_edit ? '' : 'disabled'}>
        <span class="cv" style="background:${st.color}"></span>${st.label}${d.can_edit ? ' ▾' : ''}</button>`;
@@ -431,6 +431,7 @@ function renderDrawer() {
   document.getElementById('daddlog').hidden = !d.can_edit;
 
   renderRel(d);
+  renderFiles(d);
   renderDiag(d);
 
   calendar(d);
@@ -521,6 +522,144 @@ function openPrereqPicker(d) {
   };
 }
 
+
+/* ── 첨부파일 (CLAUDE.md 4-9) ──────────────────────────────────────
+   회차별이다. 새 회차를 열면 업무는 따라와도 파일은 따라오지 않는다 —
+   논의 내역과 같은 취급이고, 업무 규칙(라이브러리)과 다르다.
+
+   하단의 '파일 첨부' 버튼은 없앴다. 탭 안에 올리는 자리가 생겼으므로
+   같은 기능이 두 군데 있게 되는데, 그러면 어느 쪽을 눌러야 할지 알 수
+   없어진다 — 논의 입력칸을 상시 노출로 바꾼 것과 같은 이유다. */
+function fileItem(f) {
+  return `<div class="fitem" data-file="${f.id}">
+    <span class="ext">${esc(f.ext || '?')}</span>
+    <span class="mid">
+      <span class="fname">${esc(f.name)}</span>
+      <span class="fmeta">${esc(f.size_label)}${f.by ? ' · <span class="by">' + esc(f.by) + '</span>' : ''} · ${esc(f.at)}</span>
+    </span>
+    <button class="more" type="button" data-fmenu="${f.id}" aria-label="파일 메뉴">⋯</button>
+    <div class="menu">
+      <button data-fact="download">내려받기</button>
+      ${f.can_edit ? '<button data-fact="rename">이름 변경</button>' +
+                    '<button data-fact="delete">삭제</button>' : ''}
+    </div></div>`;
+}
+
+function renderFiles(d) {
+  const list = document.getElementById('dfiles');
+  const files = d.attachments || [];
+  document.getElementById('fileN').textContent = files.length || '';
+  list.innerHTML = files.length
+    ? files.map(fileItem).join('')
+    : '<div class="fempty">아직 올린 파일이 없습니다.</div>';
+
+  const drop = document.getElementById('ddrop');
+  drop.hidden = !d.can_edit;
+  const limits = d.attachment_limits || {};
+  const limit = document.getElementById('ddroplimit');
+  if (limit) limit.textContent = limits.max_label
+    ? `${limits.max_label} 까지 · ${(limits.exts || []).length}가지 형식`
+    : '';
+  document.getElementById('ddropwarn').hidden = true;
+}
+
+function fileWarn(text) {
+  const box = document.getElementById('ddropwarn');
+  box.textContent = text;
+  box.hidden = !text;
+}
+
+/* 서버가 돌려준 목록으로 화면을 다시 그린다. 개수도 함께 움직인다. */
+function applyFiles(data) {
+  if (!detail) return;
+  detail.attachments = data.files || [];
+  renderFiles(detail);
+}
+
+async function sendFiles(fileList) {
+  if (!cur || !fileList || !fileList.length) return;
+  fileWarn('');
+  for (const file of fileList) {
+    const form = new FormData();
+    form.append('upload', file, file.name);
+    const res = await fetch(`/board/task/${cur}/files`, {method: 'POST', body: form});
+    const data = await res.json().catch(() => ({}));
+    // 거절당했으면 왜인지 말한다 — 용량인지 형식인지 권한인지
+    if (!res.ok) { fileWarn(data.detail || '올리지 못했습니다.'); return; }
+    applyFiles(data);
+  }
+}
+
+document.getElementById('dfiles').addEventListener('click', async e => {
+  const open = e.target.closest('[data-fmenu]');
+  if (open) {
+    const menu = open.nextElementSibling, was = menu.classList.contains('on');
+    closeMenus();
+    menu.classList.toggle('on', !was);
+    return;
+  }
+  const act = e.target.closest('[data-fact]');
+  if (!act) return;
+  const item = act.closest('.fitem');
+  const id = item.dataset.file;
+  const file = (detail.attachments || []).find(f => String(f.id) === String(id));
+  closeMenus();
+  if (!file) return;
+
+  if (act.dataset.fact === 'download') { location.href = file.url; return; }
+
+  if (act.dataset.fact === 'rename') {
+    const mid = item.querySelector('.mid');
+    mid.insertAdjacentHTML('beforeend',
+      `<span class="rename"><input type="text" value="${esc(file.name)}" aria-label="새 이름">
+        <button class="pri" data-frename="${id}">저장</button>
+        <button data-fcancel="1">취소</button></span>`);
+    const input = mid.querySelector('.rename input');
+    input.focus();
+    input.setSelectionRange(0, input.value.lastIndexOf('.') + 1 || input.value.length);
+    return;
+  }
+
+  if (act.dataset.fact === 'delete') {
+    if (!confirm(`${file.name} 을(를) 지웁니다. 되돌릴 수 없습니다.`)) return;
+    const res = await fetch(`/board/task/${cur}/files/${id}/delete`, {method: 'POST'});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { fileWarn(data.detail || '지우지 못했습니다.'); return; }
+    applyFiles(data);
+  }
+});
+
+document.getElementById('dfiles').addEventListener('click', async e => {
+  const cancel = e.target.closest('[data-fcancel]');
+  if (cancel) { renderFiles(detail); return; }
+  const save = e.target.closest('[data-frename]');
+  if (!save) return;
+  const id = save.dataset.frename;
+  const input = save.closest('.rename').querySelector('input');
+  const res = await fetch(`/board/task/${cur}/files/${id}/rename`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: input.value}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { fileWarn(data.detail || '이름을 바꾸지 못했습니다.'); return; }
+  applyFiles(data);
+});
+
+/* 끌어다 놓는 자리 */
+(() => {
+  const drop = document.getElementById('ddrop');
+  const input = document.getElementById('dfileinput');
+  if (!drop || !input) return;
+  document.getElementById('dpick').onclick = () => input.click();
+  input.onchange = () => { sendFiles(input.files); input.value = ''; };
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => {
+    e.preventDefault(); drop.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => {
+    e.preventDefault(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', e => { sendFiles(e.dataTransfer.files); });
+})();
 
 /* ── 진단 패널 — 패널 이름이 판정 결과다 (CLAUDE.md 4-10) ──────────
    판정은 서버가 계산한다. 화면은 그것을 그대로 보여줄 뿐 다시 판단하지 않는다.
@@ -1164,7 +1303,7 @@ addEventListener('click', e => {
     drawer: at('#drawer'),
     statmenu: at('#statmenu'),
     statchip: at('#statchip'),
-    relitem: at('.relitem'),
+    relitem: at('.relitem') || at('.fitem'),
     task: at('.bar[data-run],[data-go]'),
     chrome: at('header') || at('.toolbar'),
   };

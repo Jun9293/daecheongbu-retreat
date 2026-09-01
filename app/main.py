@@ -15,7 +15,10 @@ from app.config import BASE_DIR, RISK_SCAN_INTERVAL_SECONDS
 from app.db import init_db
 from app.routers import (
     invite,
+    attachments,
     board,
+    calendar,
+    live,
     budget,
     checklists,
     dashboard,
@@ -72,6 +75,16 @@ async def _risk_scan_loop() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    # 세션 키가 어디서 왔는지 남긴다 (CLAUDE.md 4-12).
+    # **지문이 재시작마다 달라지면 그것이 "로그인이 풀린다" 의 원인이다.**
+    # 키 자체는 절대 남기지 않는다 — 로그가 새면 세션을 위조할 수 있다.
+    from app.config import SECRET_KEY_FINGERPRINT, SECRET_KEY_SOURCE
+
+    logger.info(
+        "세션 키: %s · 지문 %s (재시작 전후로 지문이 같으면 로그인이 유지됩니다)",
+        SECRET_KEY_SOURCE,
+        SECRET_KEY_FINGERPRINT,
+    )
     scanner = None
     if RISK_SCAN_INTERVAL_SECONDS > 0:
         scanner = asyncio.create_task(_risk_scan_loop())
@@ -88,6 +101,9 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(invite.router)
 # 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
 app.include_router(board.router)
+app.include_router(calendar.router)
+app.include_router(attachments.router)
+app.include_router(live.router)
 app.include_router(setup.router)
 app.include_router(library.router)
 app.include_router(drafts.router)

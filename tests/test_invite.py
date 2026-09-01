@@ -136,21 +136,33 @@ def test_05c_비활성화하면_링크도_함께_죽는다(person, admin_client,
 
 
 def test_06_SECRET_KEY_가_고정이라_재시작해도_유지된다(tmp_path, monkeypatch):
-    """매번 새로 만들면 서버를 켤 때마다 전원이 로그아웃된다."""
+    """매번 새로 만들면 서버를 켤 때마다 전원이 로그아웃된다.
+
+    **이 테스트가 통과하는데도 실전에서 끊길 수 있었다.** 여기서 보는 것은
+    "한 프로세스 안에서 두 번 부르면 같은 값" 까지다. 파일이 실제로 **남았는지**,
+    쓰기가 조용히 실패하지는 않았는지는 보지 않았다 — 그 경우가 바로
+    "재시작할 때마다 로그인이 풀린다" 인데 아무 오류도 나지 않는다.
+    그쪽은 `tests/test_secret_key.py` 가 본다.
+    """
     from app import config
 
     # 환경변수가 있으면 그것을 쓴다 (운영에서 권장하는 길)
     monkeypatch.setenv("DCB_SECRET_KEY", "고정된-키")
-    assert config._secret_key() == "고정된-키"
+    key, source = config._secret_key()
+    assert key == "고정된-키"
+    assert "환경변수" in source                     # 어디서 왔는지 함께 돌려준다
 
     # 없으면 데이터 폴더에 만들어 두고, 다음 번에도 같은 값을 읽는다
     monkeypatch.delenv("DCB_SECRET_KEY", raising=False)
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
-    first = config._secret_key()
+    monkeypatch.setattr(config, "SECRET_KEY_PATH", tmp_path / "secret_key.txt")
+    first, made = config._secret_key()
     saved = tmp_path / "secret_key.txt"
     assert saved.exists()
     assert len(first) >= 32
-    assert config._secret_key() == first           # 재시작해도 같다
+    assert "새로 만듦" in made
+    again, reread = config._secret_key()           # 재시작해도 같다
+    assert again == first
+    assert "파일" in reread
     assert saved.read_text(encoding="utf-8").strip() == first
 
 

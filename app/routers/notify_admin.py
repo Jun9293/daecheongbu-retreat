@@ -70,7 +70,7 @@ def preview(
             "user": user,
             "retreat": resolve_retreat(db, user, None),
             "retreats": all_retreats(db),
-            "active_tab": None,
+            "active_tab": "notify",
             "page_subtitle": "알림 미리보기",
             **payload,
         },

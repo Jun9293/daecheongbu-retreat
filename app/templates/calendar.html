@@ -1,0 +1,119 @@
+{% extends "retreat_base.html" %}
+{% block title %}달력 · {{ retreat.name }}{% endblock %}
+
+{% block body %}
+{% macro caldot(dot) %}
+{#- 점 하나. **보드와 같은 색·테두리**를 구조가 실어 보낸 그대로 쓴다 (4-13).
+    누르면 보드의 상세 패널이 열린다 — 여기서 새로 만들지 않는다. -#}
+<a class="cal-dot{{ ' late' if dot.overdue }}{{ ' done' if dot.status == '완료' }}"
+   href="/board?task={{ dot.run_id }}"
+   style="background:{{ dot.background }};border-color:{{ dot.border }}"
+   title="{{ dot.department_name }} · {{ dot.status }}{% if dot.assignee %} · {{ dot.assignee }}{% endif %}{% if dot.overdue %} · 마감에서 {{ dot.overdue_days }}일 경과{% endif %}">
+  <i class="cal-tm" style="background:{{ dot.color }}"></i>
+  <span class="cal-t">{{ dot.title }}</span>
+</a>
+{%- endmacro %}
+
+{#
+  달력 보기 (CLAUDE.md 4-13).
+  **마감일에 점 하나**입니다 — 기간 띠가 아닙니다.
+  점을 누르면 `/board?task=` 로 가서 **보드의 상세 패널**이 열립니다.
+  여기서 패널을 새로 만들지 않습니다.
+#}
+{# 달을 넘겨도 칩이 유지되도록 **링크마다 지금 값을 달고 다닌다.**
+   쿠키에도 남기지만, 주소에 없으면 링크를 복사해 준 사람이 다른 화면을 본다. #}
+{% set keep = "scope=" ~ cal.scope ~ "&only_open=" ~ (1 if cal.only_open else 0) %}
+<div class="calbar">
+  <div class="calnav">
+    <a class="btn ghost sm" href="/calendar?month={{ cal.prev }}&{{ keep }}" aria-label="이전 달">‹</a>
+    <b class="calmonth">{{ cal.label }}</b>
+    <a class="btn ghost sm" href="/calendar?month={{ cal.next }}&{{ keep }}" aria-label="다음 달">›</a>
+    <a class="btn ghost sm" href="/calendar?month={{ cal.today_month }}&{{ keep }}">오늘</a>
+  </div>
+
+  {# 달을 넘길 때 칩이 유지되도록 링크마다 지금 값을 달고 다닌다 #}
+  <div class="calchips" role="group" aria-label="범위">
+    {% for s in cal.scopes %}
+    <a class="chip{{ ' on' if s.value == cal.scope }}"
+       href="/calendar?month={{ cal.month }}&scope={{ s.value }}&only_open={{ 1 if cal.only_open else 0 }}"
+       aria-pressed="{{ 'true' if s.value == cal.scope else 'false' }}">{{ s.label }}</a>
+    {% endfor %}
+    <a class="chip{{ ' on' if cal.only_open }}"
+       href="/calendar?month={{ cal.month }}&scope={{ cal.scope }}&only_open={{ 0 if cal.only_open else 1 }}"
+       aria-pressed="{{ 'true' if cal.only_open else 'false' }}">미완료만</a>
+  </div>
+
+  <span class="calcount">{{ cal.count }}건</span>
+</div>
+
+{# 넓은 화면 — 월 격자 #}
+<div class="calwrap">
+  <table class="cal-grid">
+    <thead>
+      <tr>{% for w in cal.weekdays %}<th class="cal-wd">{{ w }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for week in cal.weeks %}
+      <tr>
+        {% for cell in week %}
+        <td class="cal-cell{{ ' out' if not cell.in_month }}{{ ' today' if cell.is_today }}">
+          <span class="cal-d">{{ cell.day }}</span>
+          {% for dot in cell.dots %}{{ caldot(dot) }}{% endfor %}
+          {% if cell.more %}
+          <details class="cal-more">
+            <summary>외 {{ cell.more|length }}건</summary>
+            {% for dot in cell.more %}{{ caldot(dot) }}{% endfor %}
+          </details>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# 좁은 화면 — 주 단위 목록. 7칸 격자는 글자가 안 들어간다 (4-13) #}
+<div class="calweeks">
+  {% for week in cal.weeks %}
+    {% set days = week|selectattr('dots')|list + week|selectattr('more')|list %}
+    {% if days %}
+    <section class="calweek">
+      <h3>{{ week[0].day }}일 – {{ week[6].day }}일</h3>
+      {% for cell in week %}
+        {% if cell.dots or cell.more %}
+        <div class="calday{{ ' today' if cell.is_today }}">
+          <span class="calday-d">{{ cell.day }}<i>{{ cal.weekdays[cell.weekday] }}</i></span>
+          <div class="calday-l">
+            {% for dot in cell.dots + cell.more %}{{ caldot(dot) }}{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if not cal.count and not cal.undated %}
+<p class="calempty">이 달에는 마감인 업무가 없습니다.</p>
+{% endif %}
+
+{% if cal.undated %}
+{#
+  **놓을 자리가 없다고 조용히 빼지 않습니다.** 날짜가 없어서 달력에 못
+  올라간 업무야말로 놓치는 자리입니다 (4-13).
+#}
+<details class="calundated">
+  <summary>날짜가 없는 업무 {{ cal.undated|length }}건</summary>
+  <p class="hint">마감일이 없어 달력에 놓지 못했습니다. 보드에서 기간을 정해 주세요.</p>
+  <div class="calday-l">
+    {% for dot in cal.undated %}{{ caldot(dot) }}{% endfor %}
+  </div>
+</details>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script id="cal-data" type="application/json">{{ cal|tojson }}</script>
+{% endblock %}
