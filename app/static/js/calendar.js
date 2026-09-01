@@ -61,7 +61,7 @@ function paint(dot, p) {
   dot.classList.toggle('filtered', onlyOpen() && p.status === '완료');
 }
 
-function applyStatus(runId, status, view) {
+function applyStatus(runId, view) {
   dots(runId).forEach(dot => paint(dot, view));
 }
 

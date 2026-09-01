@@ -470,14 +470,14 @@ function applySavedDates(runId, saved) {
     // 생김새를 돌려준다(`board.paint_of`) — 한쪽만 고치면 또 두 벌이 된다.
     // 보드의 바는 저장된 상태로 칠하므로 날짜만 옮기면 지금은 값이 같지만,
     // 규칙이 바뀌면 여기가 따라오지 않는 것이 바로 어긋나는 자리다.
-    if (saved.background && !el.dataset.ghost) {
-      el.style.background = saved.background;
-      el.style.borderColor = saved.border;
+    if (saved.bar_background && !el.dataset.ghost) {
+      el.style.background = saved.bar_background;
+      el.style.borderColor = saved.bar_border;
     }
   });
-  if (saved.border) {
+  if (saved.bar_border) {
     document.querySelectorAll(`.mrow[data-run="${runId}"] .st`).forEach(el => {
-      el.style.background = saved.border;
+      el.style.background = saved.bar_border;
     });
   }
   document.querySelectorAll(`.mrow[data-run="${runId}"]`).forEach(row => {
@@ -490,16 +490,20 @@ function applySavedDates(runId, saved) {
   drawWires();
 }
 
-/* 패널에서 상태를 바꾸면 보드의 바도 따라 바뀐다 — 다시 불러오지 않는다 */
-function applyStatus(runId, status, view) {
+/* 패널에서 상태를 바꾸면 보드의 바도 따라 바뀐다 — 다시 불러오지 않는다.
+
+   상태는 `view.status` 가 들고 온다 (`board.paint_of`). 인자로 또 받으면
+   같은 값이 두 자리에 있게 되고, 둘이 어긋났을 때 어느 쪽이 맞는지 알 수 없다. */
+function applyStatus(runId, view) {
+  const status = view.status;
   META[runId].status = status;
   sheet.querySelectorAll(`.bar[data-run="${runId}"]`).forEach(el => {
     el.closest('.row').dataset.status = status;
     if (el.dataset.ghost) return;
     el.classList.remove('대기', '진행중', '완료', '지연');
     el.classList.add(status);
-    el.style.background = view.background;
-    el.style.borderColor = view.border;
+    el.style.background = view.bar_background;
+    el.style.borderColor = view.bar_border;
     const flag = el.querySelector('.flag');
     if (flag) flag.remove();
     if (status === '지연') el.insertAdjacentHTML('afterbegin', '<span class="flag">지연</span>');
@@ -507,7 +511,7 @@ function applyStatus(runId, status, view) {
   document.querySelectorAll(`.mrow[data-run="${runId}"]`).forEach(row => {
     row.dataset.status = status;
     row.classList.toggle('done', status === '완료');
-    row.querySelector('.st').style.background = view.border;
+    row.querySelector('.st').style.background = view.bar_border;
     const f = row.querySelector('.flag');
     if (f) f.remove();
     if (status === '지연') row.insertAdjacentHTML('beforeend', '<span class="flag">지연</span>');

@@ -336,7 +336,11 @@ def test_08c_상태를_바꾸면_점이_따라_바뀐다(admin_client, cal_data)
     assert res.status_code == 200
     view = res.json()
     # 점을 다시 칠할 재료를 그 응답이 들고 있다 — 보드의 바와 같은 값이다
-    assert "background" in view and "border" in view
+    # **접두사 없는 쌍을 두지 않는다** — 보드의 바인지 달력의 점인지가
+    # 이름에 있어야, 세 번째 화면이 생겼을 때 아무거나 집지 않는다
+    assert "bar_background" in view and "bar_border" in view
+    assert "dot_background" in view and "dot_border" in view
+    assert "background" not in view and "border" not in view
 
     js = open("app/static/js/calendar.js", encoding="utf-8").read()
     assert "onStatus" in js
@@ -581,11 +585,72 @@ def code_only(js: str) -> str:
     "왜 그렇게 했는가" 를 주석에 길게 적으므로, 고친 내용을 설명한 문장이
     그대로 시험에 걸린다 — 실제로 `iso < today` 를 지웠다고 적은 주석 때문에
     "날짜를 아직 견주고 있다" 로 잘못 읽혔다.
-    """
-    import re
 
-    js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
-    return "\n".join(line.split("//")[0] for line in js.splitlines())
+    **문자열·정규식 안의 `//` 를 자르지 않는다.** 줄에서 `//` 만 찾아 뒤를
+    버리면 `'https://x'` 가 든 줄이 통째로 잘려 나가고, **없음을 확인하는
+    시험이 그때 조용히 통과한다** — 코드가 사라졌으니 당연히 없다.
+
+    정규식까지 따라가는 이유는 `/[&<>"]/g` 처럼 **정규식 안에 따옴표가 든**
+    자리가 실제로 있기 때문이다. 그것을 문자열 시작으로 잘못 읽으면 그 뒤가
+    통째로 문자열이 되어 파일의 절반이 사라진다.
+
+    정규식인지 나눗셈인지는 앞의 글자로 가른다 — 자바스크립트를 제대로
+    해석하는 것이 아니라, **이 저장소의 코드에서 틀리지 않을 만큼**이다.
+    """
+    # `/` 앞에 이런 글자가 오면 정규식의 시작이다 (값이 올 자리가 아니므로)
+    before_regex = set("(,=:[!&|?{};+-*%~^<>") | {"\n", "\r"}
+    out, i, n = [], 0, len(js)
+    prev = ""                       # 바로 앞의 뜻있는 글자
+    while i < n:
+        ch = js[i]
+
+        if ch in "\"'`":           # ── 문자열
+            quote, j = ch, i + 1
+            out.append(ch)
+            while j < n:
+                out.append(js[j])
+                if js[j] == "\\" and j + 1 < n:
+                    out.append(js[j + 1])
+                    j += 2
+                    continue
+                if js[j] == quote:
+                    j += 1
+                    break
+                j += 1
+            i, prev = j, quote
+            continue
+
+        if js.startswith("//", i):                # ── 줄 주석
+            j = js.find("\n", i)
+            i = n if j < 0 else j
+            continue
+
+        if js.startswith("/*", i):                # ── 블록 주석
+            j = js.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+
+        if ch == "/" and (prev == "" or prev in before_regex):   # ── 정규식
+            out.append(ch)
+            j = i + 1
+            while j < n and js[j] != "\n":
+                out.append(js[j])
+                if js[j] == "\\" and j + 1 < n:
+                    out.append(js[j + 1])
+                    j += 2
+                    continue
+                if js[j] == "/":
+                    j += 1
+                    break
+                j += 1
+            i, prev = j, "/"
+            continue
+
+        out.append(ch)
+        if not ch.isspace():
+            prev = ch
+        i += 1
+    return "".join(out)
 
 
 def handler_names() -> set[str]:
@@ -813,14 +878,19 @@ def test_r2_02b_보드의_바와_달력의_점을_함께_준다(admin_client, ca
     past = (dt.date.today() - dt.timedelta(days=5)).isoformat()
     paint = _paint_run(admin_client, run_id, past, past)
 
-    for key in ("background", "border", "dot_background", "dot_border",
+    for key in ("bar_background", "bar_border", "dot_background", "dot_border",
                 "status", "overdue", "overdue_days", "color"):
         assert key in paint, f"{key} 가 없다"
+    # **접두사 없는 쌍을 남기지 않는다.** 그쪽이 기본값처럼 보여서, 세 번째
+    # 화면이 생겼을 때 사람이 따져 보지 않고 집는다 — 이번에 고친 버그가 그 모양이었다.
+    assert "background" not in paint and "border" not in paint
 
     # 기한이 지난 '대기' 업무: 바는 대기 색, 점은 지연 색
     assert paint["status"] == "대기"
-    assert paint["background"] != paint["dot_background"], \
-        "바와 점이 같은 색이면 둘을 나눈 뜻이 없다"
+    assert paint["bar_background"] != paint["dot_background"], \
+        "바와 점의 배경이 같으면 둘을 나눈 뜻이 없다"
+    assert paint["bar_border"] != paint["dot_border"], \
+        "바와 점의 테두리가 같으면 둘을 나눈 뜻이 없다"
 
 
 def test_r2_02c_상태_변경도_같은_모양으로_돌려준다(admin_client, cal_data):
@@ -830,7 +900,7 @@ def test_r2_02c_상태_변경도_같은_모양으로_돌려준다(admin_client, 
     status = admin_client.post(f"/board/task/{run_id}/status",
                                json={"status": "진행중"}).json()
     shared = {"status", "color", "overdue", "overdue_days",
-              "background", "border", "dot_background", "dot_border"}
+              "bar_background", "bar_border", "dot_background", "dot_border"}
     assert shared <= set(dates), f"/dates 에 없는 것: {shared - set(dates)}"
     assert shared <= set(status), f"/status 에 없는 것: {shared - set(status)}"
 
@@ -846,6 +916,14 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     assert "board_domain.bar_style(" not in cal_src, "달력에 두 번째 계산이 남아 있다"
     assert router_src.count("paint_of(") == 2, "/status 와 /dates 둘 다 써야 한다"
     assert "board_view.bar_style(" not in router_src
+
+    # **보드 첫 렌더도 지나야 한다.** 여기서 bar_style 을 직접 부르면
+    # paint_of 는 API 경로만 쓰는 껍데기가 되고 첫 렌더가 세 번째 길로 남는다.
+    body = board_src[board_src.index("def build("):]
+    assert "bar_style(" not in body, "보드 첫 렌더가 아직 bar_style 을 직접 부른다"
+    assert "paint_of(run, today, ghost=ghost)" in body
+    # 정의 자체를 빼면 남는 것은 paint_of 안의 두 번뿐이다
+    assert board_src.count("bar_style(") == 3, "bar_style 을 부르는 곳이 늘었다"
 
 
 # ── 3. 화면이 날짜를 견주지 않는다 ────────────────────────────────────
@@ -970,3 +1048,145 @@ def test_r2_09_README_가_지금_상태와_맞는다():
     }
     for name in set(re.findall(r"DCB_[A-Z_]+", text)):
         assert name in real, f"README 가 없는 환경변수를 적고 있다: {name}"
+
+
+# ── 6. code_only 가 문자열 안의 `//` 를 자르지 않는다 ────────────────
+
+
+def test_s_06_code_only_가_문자열_속_주소를_살린다():
+    """줄에서 `//` 만 찾아 뒤를 버리면 `'https://x'` 가 든 줄이 통째로 잘려
+    나가고, **없음을 확인하는 시험이 그때 조용히 통과한다** — 코드가
+    사라졌으니 당연히 없다.
+
+    고치기 전에는 실제로 잘랐다:
+        "const u = 'https://x'; // 설명"  →  "const u = 'https:"
+    """
+    assert code_only("const u = 'https://x'; // 설명").strip() \
+        == "const u = 'https://x';"
+    assert "https://" in code_only('const M = "주소는 https:// 로 시작"; // 문구')
+    # 정규식 리터럴도 살아야 한다 (drawer.js 의 URL_RE)
+    kept = code_only(r"const RE = /^https?:\/\/[^\s]+$/i;  // 주소인가")
+    assert r"https?:\/\/" in kept
+    # 템플릿 문자열 안도 마찬가지
+    assert "//y" in code_only("const t = `${x}//y`; // 진짜 주석")
+    # 그러면서 진짜 주석은 여전히 걷어낸다
+    assert "진짜 주석" not in code_only("const t = `${x}//y`; // 진짜 주석")
+    assert "속" not in code_only("a(); /* 여러\n줄 속 */ b();")
+
+
+def test_s_06b_실제_파일의_주소가_살아남는다():
+    """`drawer.js` 에 정말로 그런 줄이 있다 — 시험이 헛돌지 않는지 본다."""
+    src = read_js("drawer.js")
+    assert "https://" in src, "전제가 바뀌었다 — 이 시험을 다시 보라"
+    kept = code_only(src)
+    assert "https:// 로 시작하는 주소를 넣어주세요" in kept, \
+        "안내 문구가 통째로 잘렸다"
+    assert "URL_RE" in kept
+
+
+# ── 6(a). 세 번 옮겨도 점이 늘어나지 않는다 ─────────────────────────
+
+
+def test_s_09_옮겨도_점이_늘어나지_않는다():
+    """`stash` 가 안 쌓이는 이유는 **옮길 때 그 업무의 복사본을 먼저 전부
+    걷어낸다** 한 줄에 걸려 있다. 그 줄이 사라지면 밖으로 내보낼 때마다
+    복사본이 하나씩 쌓인다.
+    """
+    js = code_only(read_js("calendar.js"))
+    block = js[js.index("function applyDates("):]
+    block = block[: block.index("\n}")]
+
+    # 먼저 전부 걷어내고, 그 다음에 다시 놓는다
+    assert "existing.forEach(el => el.remove());" in block
+    assert block.index("existing.forEach(el => el.remove());") \
+        < block.index("placeInGrid("), "걷어내기가 다시 놓기보다 뒤에 있다"
+    assert block.index("existing.forEach(el => el.remove());") \
+        < block.index("stash(model)"), "걷어내기가 치워 두기보다 뒤에 있다"
+
+    # 격자와 주 목록에 각각 하나씩만 놓는다 (그래서 최대 2)
+    assert block.count("placeInGrid(") == 1
+    assert block.count("placeInWeekList(") == 1
+    assert block.count("stash(") == 1
+
+
+def test_s_09b_치워_둘_때는_하나만_남긴다():
+    """밖 → 안 → 밖 으로 세 번 옮겨도 `dots(runId)` 가 2를 넘지 않아야 한다.
+    격자 1 + 주 목록 1 이 최대이고, 치워 둘 때는 1 이다."""
+    js = code_only(read_js("calendar.js"))
+    block = js[js.index("function applyDates("):]
+    block = block[: block.index("\n}")]
+    # 치워 두는 것은 model 하나뿐 — 주 목록 복사본까지 치우지 않는다
+    assert "stash(model)" in block
+    assert "stash(model.cloneNode" not in block
+    # 다시 놓을 때만 복사본을 만든다
+    assert "placeInWeekList(iso, model.cloneNode(true))" in block
+
+
+# ── 6(c). 상태를 두 번 넘기지 않는다 ────────────────────────────────
+
+
+def test_s_06c_onStatus_는_view_하나만_받는다():
+    """`view.status` 가 상태를 들고 온다. 인자로 또 받으면 같은 값이 두 자리에
+    있게 되고, 둘이 어긋났을 때 어느 쪽이 맞는지 알 수 없다."""
+    drawer = code_only(read_js("drawer.js"))
+    assert "call('onStatus', runId, view)" in drawer
+    assert "call('onStatus', runId, status, view)" not in drawer
+
+    for name in ("board.js", "calendar.js"):
+        js = code_only(read_js(name))
+        assert "function applyStatus(runId, view)" in js, f"{name} 의 서명이 다르다"
+
+
+# ── 6(b). 아무도 안 읽는 값을 보내지 않는다 ─────────────────────────
+
+
+def test_s_06b2_담당팀_응답에_reload_가_없다(admin_client, cal_data):
+    body = (ROOT / "app" / "routers" / "board.py").read_text(encoding="utf-8")
+    assert '"reload": True' not in body
+    for name in ("board.js", "calendar.js", "drawer.js"):
+        assert ".reload" not in code_only(read_js(name)).replace("location.reload", "")
+
+
+# ── 7. 413 을 사람 말로 옮긴다 ───────────────────────────────────────
+
+
+def test_s_07_413_이면_사람이_읽을_수_있는_이유가_뜬다():
+    """**413 은 우리 응답이 아니다.** 파일이 서버에 닿기 전에 Cloudflare 가
+    앞에서 끊은 것이라 `detail` 이 없다 — 그대로 두면 몇 분을 기다린 끝에
+    "올리지 못했습니다." 만 보고 이유를 모른 채 끝난다."""
+    js = code_only(read_js("drawer.js"))
+    body = js[js.index("function putFile("):]
+    body = body[: body.index("\n}")]
+
+    assert "xhr.status === 413" in body, "413 을 따로 알아보지 않는다"
+    # 우리 detail 이 없으므로 문구를 직접 만든다
+    assert "올릴 수 없습니다" in body
+    assert "링크로 붙이시거나" in body
+    # 숫자를 코드에 박지 않고 상한에서 끌어온다
+    assert "tunnel_max_label" in body
+    # 413 갈래가 일반 갈래보다 먼저다 — 뒤에 있으면 절대 닿지 않는다
+    assert body.index("413") < body.index("올리지 못했습니다")
+
+
+def test_s_07b_내려받기에는_제한이_없다고_적는다():
+    """올리기와 내려받기는 제한이 다르다. 이 한 줄이 없으면 "큰 파일은 아예
+    못 쓴다" 로 읽혀서, 집 안에서 올려 두면 되는 길을 아무도 안 쓴다."""
+    js = read_js("drawer.js")
+    assert "내려받기에는" in js and "제한이 없" in js
+
+
+# ── 8. 문서의 근거가 크기로 바뀌었다 ────────────────────────────────
+
+
+def test_s_08_문서가_터널_한계를_크기로_적는다():
+    """"30초 · 2MB/s · 60MB 언저리" 로 두면 다음 사람이 상한을 60 으로 내린다.
+    그 측정은 로그인하지 않은 요청이라 서버가 먼저 답했을 수 있었다."""
+    for path in ("CLAUDE.md", "app/config.py"):
+        text = (ROOT / path).read_text(encoding="utf-8")
+        assert "100MB" in text, f"{path} 에 크기 근거가 없다"
+        assert "413" in text, f"{path} 에 413 이 없다"
+
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "60MB 언저리가" not in claude and "60MB 언저리**가" not in claude, \
+        "낡은 근거가 아직 결론처럼 적혀 있다"
+    assert "내려받기에는 이 제한이 없습니다" in claude

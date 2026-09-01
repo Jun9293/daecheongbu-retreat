@@ -353,8 +353,12 @@ function renderFiles(d) {
   const tip = $('dfilenote');
   if (tip && limits.tunnel_max_label) {
     tip.innerHTML = '이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.<br>'
-      + `<b>${esc(limits.tunnel_max_label)}</b> 를 넘는 것은 바깥에서 올릴 때 실패합니다 — `
-      + '영상처럼 큰 것은 링크로 붙이세요.';
+      + `<b>${esc(limits.tunnel_max_label)}</b> 를 넘는 것은 바깥에서 <b>올릴 때만</b> 실패합니다 — `
+      + '영상처럼 큰 것은 링크로 붙이세요.<br>'
+      // 올리기와 내려받기는 제한이 다르다. 이 한 줄이 없으면 "큰 파일은 아예
+      // 못 쓴다" 로 읽혀서, 집 안에서 올려 두면 되는 길을 아무도 안 쓴다.
+      + '<b>내려받기에는 제한이 없습니다.</b> 큰 것은 서버가 있는 곳에서 올려 두면 '
+      + '바깥에서 받는 것은 됩니다.';
   }
   $('ddropwarn').hidden = true;
 }
@@ -493,6 +497,22 @@ function putFile(runId, file) {
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch (err) { /* 형식이 아니면 아래에서 말한다 */ }
       if (xhr.status < 200 || xhr.status >= 300) {
+        // **413 은 우리 응답이 아니다.** 파일이 서버에 닿기 전에 Cloudflare 가
+        // 앞에서 끊은 것이라 `data.detail` 이 없다 — 그대로 두면 몇 분을
+        // 기다린 끝에 "올리지 못했습니다." 만 보고 이유를 모른 채 끝난다.
+        const limits = (detail && detail.attachment_limits) || {};
+        if (xhr.status === 413) {
+          // 숫자는 상한에서 끌어온다. 못 받아 왔으면 **숫자 없이 말한다** —
+          // 코드에 박아 두면 상한을 바꿨을 때 화면이 조용히 거짓말을 한다.
+          const cap = limits.tunnel_max_label;
+          fileWarn((cap
+            ? `바깥에서는 ${cap} 를 넘는 파일을 올릴 수 없습니다. `
+            : '이 파일은 바깥에서 올리기에 너무 큽니다. ')
+            + '링크로 붙이시거나, 서버가 있는 곳에서 올려 주세요. '
+            + '(내려받기에는 이 제한이 없습니다.)');
+          resolve(null);
+          return;
+        }
         // 거절당했으면 왜인지 말한다 — 용량인지 형식인지 권한인지 디스크인지
         fileWarn(data.detail || '올리지 못했습니다.');
         resolve(null);
@@ -548,7 +568,8 @@ async function sendFiles(fileList) {
       const go = confirm(
         `${file.name} 은(는) ${hsize(file.size)} 입니다.\n\n`
         + `${limits.tunnel_max_label} 를 넘는 파일은 바깥(인터넷)에서 올릴 때 `
-        + '실패합니다. 링크로 붙이시거나, 서버가 있는 곳에서 올려 주세요.\n\n'
+        + '실패합니다. 링크로 붙이시거나, 서버가 있는 곳에서 올려 주세요.\n'
+        + '(내려받기에는 이 제한이 없습니다.)\n\n'
         + '그래도 올려 보시겠습니까?');
       if (!go) {
         fileWarn(`${file.name} 을(를) 올리지 않았습니다. `
@@ -872,7 +893,9 @@ async function setStatus(runId, status) {
   const view = await res.json();
   // 자기 화면을 어떻게 고쳐 그릴지는 화면이 안다 — 보드는 바를, 달력은 점을.
   // **다시 불러오지 않는다.** 달력은 보던 달과 칩을 잃으면 안 된다.
-  call('onStatus', runId, status, view);
+  // `view.status` 가 상태를 들고 오므로 따로 넘기지 않는다 — 같은 값이
+  // 두 자리에 있으면 어긋났을 때 어느 쪽이 맞는지 알 수 없다.
+  call('onStatus', runId, view);
   if (detail) { detail.status = status; renderDrawer(); }
   refreshDiag(runId);
 }
