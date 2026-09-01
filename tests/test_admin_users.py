@@ -425,7 +425,7 @@ def test_r1_비활성화하면_번호를_놓고_원래_번호는_남는다(round
 def test_r2_놓은_번호를_다른_활성_계정이_곧바로_쓸_수_있다(rounds, admin_client):
     """중복을 정리한 뒤 남긴 계정에 실제 번호를 넣는 길 — 이것이 목적이다."""
     old_one = make_person(admin_client, "박민준", "01077770001")
-    keeper = make_person(admin_client, "김준영2", "01000000001")
+    keeper = make_person(admin_client, "박민준2", "01000000001")
 
     deactivate(admin_client, old_one)
     assert save(admin_client, keeper, phone_number="01077770001").status_code == 303
