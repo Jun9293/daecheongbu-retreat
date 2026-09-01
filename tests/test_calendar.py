@@ -574,6 +574,20 @@ def read_js(name: str) -> str:
     return (JS_DIR / name).read_text(encoding="utf-8")
 
 
+def code_only(js: str) -> str:
+    """주석을 걷어낸 코드.
+
+    **설명하는 글에 적힌 낱말을 코드로 착각하지 않기 위해서다.** 이 저장소는
+    "왜 그렇게 했는가" 를 주석에 길게 적으므로, 고친 내용을 설명한 문장이
+    그대로 시험에 걸린다 — 실제로 `iso < today` 를 지웠다고 적은 주석 때문에
+    "날짜를 아직 견주고 있다" 로 잘못 읽혔다.
+    """
+    import re
+
+    js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
+    return "\n".join(line.split("//")[0] for line in js.splitlines())
+
+
 def handler_names() -> set[str]:
     """`drawer.js` 가 화면에게 물어보는 이름 전부.
 
@@ -581,7 +595,9 @@ def handler_names() -> set[str]:
     화면이 넘겨야 하는 값이기는 마찬가지다.
     """
     js = read_js("drawer.js")
-    called = set(re.findall(r"call\('([A-Za-z_]\w*)'", js))
+    # **두 따옴표를 다 받는다.** 홑따옴표만 보면 `call("onFoo")` 로 쓴 이름이
+    # 안 잡히고, 그러면 그것을 빠뜨려도 이 시험이 통과한다 — 시험이 헛돈다.
+    called = set(re.findall(r'''call\(\s*['"]([A-Za-z_]\w*)['"]''', js))
     direct = set(re.findall(r"\bhost\.([A-Za-z_]\w*)", js))
     return called | direct
 
@@ -671,7 +687,9 @@ def test_r01_달력이_마감일_변경을_받는다(admin_client, cal_data):
     # 칸이 자기 날짜를 말해야 점을 옮길 수 있다
     page = admin_client.get("/calendar?scope=all").text
     assert 'class="cal-cell' in page and "data-date=" in page
-    assert 'data-per-day="' in page and 'data-today="' in page
+    assert 'data-per-day="' in page
+    # `data-today` 는 뺐다 — 화면이 날짜를 견주지 않으므로 필요 없다
+    assert 'data-today="' not in page
 
     # 서버가 새 날짜를 돌려준다 — 화면은 그걸 받아 점을 옮긴다
     run_id = cal_data["runs"]["오늘 업무"]
@@ -723,7 +741,232 @@ def test_r12_calbar_가_없어도_죽지_않는다():
     """이 파일은 패널이 있는 화면이면 어디서든 실릴 수 있다. 그때 `.calbar`
     가 없다고 상태 변경이 통째로 멈추면 안 된다."""
     js = read_js("calendar.js")
-    for guarded in ("bar?.dataset.onlyOpen", "bar?.dataset.today", "bar?.dataset.perDay"):
+    for guarded in ("bar?.dataset.onlyOpen", "bar?.dataset.perDay"):
         assert guarded in js, f"{guarded} 가 ?. 로 막혀 있지 않다"
     # 옛 방식(막지 않은 접근)이 남아 있지 않은지
     assert "document.querySelector('.calbar').dataset" not in js
+
+
+# ════════════════════════════════════════════════════════════════════
+#  점이 날짜를 따라갈 때 생긴 두 가지 (수용기준 1~3 · 5~8)
+# ════════════════════════════════════════════════════════════════════
+#
+# **기한 초과를 화면에서 다시 계산하고 있었다.** 4-13 은 점의 색·상태·기한
+# 초과가 보드의 `bar_style`·`overdue_of` 를 그대로 쓴다고 못박았는데 두 벌이
+# 됐고, 이미 어긋나 있었다 — `applyStatus` 는 인라인 배경을 다시 칠하는데
+# `applyDates` 는 클래스만 건드려서 **붉은 점을 미래로 옮겨도 붉게 남았다.**
+
+
+def _paint_run(admin_client, run_id, start, end):
+    res = admin_client.post(f"/board/task/{run_id}/dates",
+                            json={"start": start, "end": end})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+# ── 1 · 2. 서버가 색을 함께 돌려준다 ─────────────────────────────────
+#
+# **브라우저로만 보면 착각한다.** 과거끼리 옮겨 보고 "안 붉어졌다" 며
+# 통과로 읽을 수 있다. 응답에 든 색으로 본다.
+
+
+def test_r2_01_과거에서_미래로_옮기면_더_이상_붉지_않다(admin_client, cal_data):
+    run_id = cal_data["runs"]["오늘 업무"]
+    past = dt.date.today() - dt.timedelta(days=10)
+    future = dt.date.today() + dt.timedelta(days=10)
+
+    late = _paint_run(admin_client, run_id, past.isoformat(), past.isoformat())
+    assert late["overdue"] is True
+    assert late["overdue_days"] == 10
+
+    fresh = _paint_run(admin_client, run_id, future.isoformat(), future.isoformat())
+    assert fresh["overdue"] is False
+    assert fresh["overdue_days"] == 0
+    # **색까지 바뀐다.** 클래스만 바꾸면 인라인 스타일이 CSS 를 이겨 붉게 남는다.
+    assert fresh["dot_background"] != late["dot_background"], "점 배경이 그대로다"
+    assert fresh["dot_border"] != late["dot_border"], "점 테두리가 그대로다"
+
+
+def test_r2_02_미래에서_과거로_옮기면_붉어진다(admin_client, cal_data):
+    from app.domain import board as board_domain
+
+    run_id = cal_data["runs"]["오늘 업무"]
+    future = dt.date.today() + dt.timedelta(days=10)
+    past = dt.date.today() - dt.timedelta(days=3)
+
+    _paint_run(admin_client, run_id, future.isoformat(), future.isoformat())
+    late = _paint_run(admin_client, run_id, past.isoformat(), past.isoformat())
+
+    assert late["overdue"] is True
+    # 붉은 것은 '지연' 의 색이다 — 저장된 상태가 아니라 날짜에서 나온다 (4-10)
+    late_bg, late_border = board_domain.BAR_LATE
+    assert late["dot_background"] == late_bg
+    assert late["dot_border"] == late_border
+    # 저장된 상태는 그대로다. 손으로 '지연' 을 누른 적이 없다.
+    assert late["status"] != "지연"
+
+
+def test_r2_02b_보드의_바와_달력의_점을_함께_준다(admin_client, cal_data):
+    """둘은 규칙이 다르다 — 바는 저장된 상태대로, 점은 기한이 지나면 '지연'.
+    그래서 한 값으로 합칠 수 없고, 그렇다고 화면마다 계산하게 두면 두 벌이 된다."""
+    run_id = cal_data["runs"]["오늘 업무"]
+    past = (dt.date.today() - dt.timedelta(days=5)).isoformat()
+    paint = _paint_run(admin_client, run_id, past, past)
+
+    for key in ("background", "border", "dot_background", "dot_border",
+                "status", "overdue", "overdue_days", "color"):
+        assert key in paint, f"{key} 가 없다"
+
+    # 기한이 지난 '대기' 업무: 바는 대기 색, 점은 지연 색
+    assert paint["status"] == "대기"
+    assert paint["background"] != paint["dot_background"], \
+        "바와 점이 같은 색이면 둘을 나눈 뜻이 없다"
+
+
+def test_r2_02c_상태_변경도_같은_모양으로_돌려준다(admin_client, cal_data):
+    """`/status` 와 `/dates` 가 같아야 화면이 한 가지 방법으로 칠한다."""
+    run_id = cal_data["runs"]["오늘 업무"]
+    dates = _paint_run(admin_client, run_id, "2026-08-03", "2026-08-07")
+    status = admin_client.post(f"/board/task/{run_id}/status",
+                               json={"status": "진행중"}).json()
+    shared = {"status", "color", "overdue", "overdue_days",
+              "background", "border", "dot_background", "dot_border"}
+    assert shared <= set(dates), f"/dates 에 없는 것: {shared - set(dates)}"
+    assert shared <= set(status), f"/status 에 없는 것: {shared - set(status)}"
+
+
+def test_r2_02d_생김새를_만드는_곳이_하나다():
+    """`board.paint_of` 하나가 만들고, 달력의 `dot_of` 도 그것을 부른다."""
+    board_src = (ROOT / "app" / "domain" / "board.py").read_text(encoding="utf-8")
+    cal_src = (ROOT / "app" / "domain" / "calendar.py").read_text(encoding="utf-8")
+    router_src = (ROOT / "app" / "routers" / "board.py").read_text(encoding="utf-8")
+
+    assert "def paint_of(" in board_src
+    assert "board_domain.paint_of(" in cal_src, "달력이 따로 칠하고 있다"
+    assert "board_domain.bar_style(" not in cal_src, "달력에 두 번째 계산이 남아 있다"
+    assert router_src.count("paint_of(") == 2, "/status 와 /dates 둘 다 써야 한다"
+    assert "board_view.bar_style(" not in router_src
+
+
+# ── 3. 화면이 날짜를 견주지 않는다 ────────────────────────────────────
+
+
+def test_r2_03_달력_코드에_날짜_비교가_없다():
+    js = code_only(read_js("calendar.js"))
+    assert "todayIso" not in js, "오늘 날짜를 들고 있다"
+    assert "< today" not in js and "dataset.today" not in js, "날짜를 견주고 있다"
+    # 서버가 준 것을 그대로 쓴다
+    assert "p.overdue" in js and "p.dot_background" in js
+    # 칠하는 곳이 하나다 — applyStatus 와 applyDates 가 같은 함수를 부른다
+    assert js.count("function paint(") == 1
+    for caller in ("applyStatus", "applyDates"):
+        block = js[js.index(f"function {caller}("):]
+        block = block[: block.index("\n}")]
+        assert "paint(" in block, f"{caller} 가 paint 를 안 쓴다"
+
+    page_src = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
+    assert "data-today" not in page_src, "안 쓰는 값을 아직 실어 보낸다"
+
+
+# ── 5 · 6 · 7. 내보냈다가 되돌리기 ───────────────────────────────────
+
+
+def test_r2_05_이_달_밖으로_내보낸_점을_지우지_않는다():
+    """지워 버리면 `if (!existing.length) return;` 에서 그냥 나가 **점이
+    안 돌아오고 낡은 안내문이 그대로 남는다** — 패널과 안내문이 서로 다른
+    날짜를 말한다."""
+    js = read_js("calendar.js")
+    assert "function stash(" in js
+    assert "calstash" in js
+
+    block = js[js.index("function applyDates("):]
+    block = block[: block.index("\n}")]
+    assert "stash(model)" in block, "이 달 밖일 때 치워 두지 않는다"
+
+    # 치워 두는 자리는 화면에 그리지 않는다
+    stash = js[js.index("function stash("):]
+    stash = stash[: stash.index("\n}")]
+    assert "hidden = true" in stash
+
+
+def test_r2_06_되돌아오면_그_업무의_안내만_지운다():
+    """다른 업무의 안내가 떠 있었다면 건드리지 않는다 — 남의 말을 대신
+    지우면 그쪽이 조용해진다."""
+    js = read_js("calendar.js")
+    block = js[js.index("function applyDates("):]
+    block = block[: block.index("\n}")]
+    assert "note.dataset.run === String(runId)" in block
+
+    say = js[js.index("function say("):]
+    say = say[: say.index("\n}")]
+    assert "note.dataset.run" in say, "누구에 대한 말인지 기억하지 않는다"
+
+
+def test_r2_07_치워_둔_것은_숫자에_들어가지_않는다():
+    """화면에 없는 것이 숫자에 들어가면 `외 N건` 과 위쪽 건수가 눈에 보이는
+    것과 어긋난다."""
+    js = code_only(read_js("calendar.js"))
+    block = js[js.index("function recount()"):]
+    block = block[: block.index("\n}\n")]
+    # 위쪽 건수는 격자에 실제로 놓인 점만 센다 (치워 둔 자리는 body 아래에 있다)
+    assert ".cal-cell:not(.out) .cal-dot" in block
+    assert "calstash" not in block, "치워 둔 자리를 세고 있다"
+    # 여전히 세어서 다시 적는다
+    assert "++" not in block and "--" not in block
+
+
+# ── 8. 시험이 헛돌지 않는다 ──────────────────────────────────────────
+
+
+def test_r2_08_두_따옴표로_쓴_핸들러도_잡는다():
+    """`call("onFoo")` 로 쓰면 이름이 안 잡히고, 그러면 빠뜨려도 통과한다."""
+    import re
+
+    js = '''call("onDouble") call('onSingle') call( "onSpaced" )'''
+    found = set(re.findall(r"""call\(\s*['"]([A-Za-z_]\w*)['"]""", js))
+    assert found == {"onDouble", "onSingle", "onSpaced"}
+
+    # 실제 시험이 그 정규식을 쓰는지
+    src = (ROOT / "tests" / "test_calendar.py").read_text(encoding="utf-8")
+    block = src[src.index("def handler_names("):]
+    block = block[: block.index("\n\n\n")]
+    assert "['\"]" in block, "홑따옴표만 보고 있다"
+    assert len(handler_names()) >= 13
+
+
+# ── 9. README ────────────────────────────────────────────────────────
+
+
+def test_r2_09_README_가_지금_상태와_맞는다():
+    """저장소가 공개라 처음 여는 사람이 만나는 문서다."""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    # 없어진 것을 아직 말하고 있지 않은가
+    for stale in ("Phase 1 완료", "pytest 163", "DCB_SMS_PROVIDER", "DCB_DEV_MODE",
+                  "인증번호", "SMS 벤더", "Solapi"):
+        assert stale not in text, f"낡은 내용이 남아 있다: {stale}"
+
+    # 지금 있는 화면을 말하는가
+    for path in ("/board", "/calendar", "/live", "/library", "/admin/users"):
+        assert path in text, f"{path} 가 없다"
+
+    # 로그인은 초대 링크다
+    assert "초대 링크" in text and "create_admin.py" in text
+
+    # 설계는 CLAUDE.md 를 가리키는가 (두 곳에 같은 것을 적지 않는다)
+    assert "CLAUDE.md" in text
+    assert "app/config.py" in text, "환경변수는 config.py 를 가리켜야 한다"
+
+    # 환경변수 표를 남겼다면 실제로 있는 것만 적혀 있는가
+    import re
+
+    from app import config
+
+    real = {"DCB_" + n for n in dir(config)} | {
+        "DCB_BASE_URL", "DCB_DATABASE_URL", "DCB_DATA_DIR", "DCB_SECRET_KEY",
+        "DCB_PUSH_CONTACT", "DCB_RISK_SCAN_INTERVAL", "DCB_MAX_ASSET_MB",
+        "DCB_MAX_ATTACHMENT_MB", "DCB_DISK_FLOOR_MB", "DCB_DISK_WARN_MB",
+        "DCB_TUNNEL_MAX_MB", "DCB_DEV",
+    }
+    for name in set(re.findall(r"DCB_[A-Z_]+", text)):
+        assert name in real, f"README 가 없는 환경변수를 적고 있다: {name}"

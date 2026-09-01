@@ -22,7 +22,6 @@ const note = document.getElementById('calnote');
    **`.calbar` 가 없어도 죽지 않는다** — 이 파일은 패널이 있는 화면이면
    어디서든 실릴 수 있고, 그때 상태 변경이 통째로 멈추면 안 된다. */
 const onlyOpen = () => bar?.dataset.onlyOpen === '1';
-const todayIso = () => bar?.dataset.today || '';
 const perDay = () => Number(bar?.dataset.perDay) || 3;
 
 const dots = runId => [...document.querySelectorAll(`.cal-dot[data-run="${runId}"]`)];
@@ -35,24 +34,35 @@ function titleOf(runId) {
   return label ? label.textContent.trim() : '';
 }
 
-function say(text) {
+function say(text, runId) {
   if (!note) return;
   note.textContent = text || '';
   note.hidden = !text;
+  // 누구에 대한 말인지 기억해 둔다 — 그 업무가 되돌아왔을 때만 지우기 위해서다
+  if (text) note.dataset.run = String(runId ?? '');
+  else delete note.dataset.run;
 }
 
-/* ── 상태가 바뀌면 점을 다시 칠한다 ─────────────────────────────────── */
+/* ── 점을 칠한다 ─────────────────────────────────────────────────────
+   **색도 기한 초과도 서버가 정한 것을 그대로 쓴다** (4-13).
+   화면에서 다시 계산하면 두 벌이 되고, 두 벌은 반드시 어긋난다 —
+   실제로 어긋나 있었다. 마감일을 옮길 때 `iso < today` 로 초과를 다시
+   판단하면서 색은 손대지 않아, **붉은 점을 미래로 옮겨도 붉게 남았다.**
+
+   `paint` 는 `/status` 와 `/dates` 가 똑같은 모양으로 돌려준다
+   (`board.paint_of`). 달력은 그중 `dot_*` 를 쓴다 — 보드의 바는 저장된
+   상태 그대로 칠하지만 점은 기한이 지나면 '지연' 으로 칠하기 때문이다. */
+function paint(dot, p) {
+  dot.style.background = p.dot_background;
+  dot.style.borderColor = p.dot_border;
+  dot.dataset.overdue = p.overdue ? '1' : '0';
+  dot.classList.toggle('done', p.status === '완료');
+  dot.classList.toggle('late', !!p.overdue);
+  dot.classList.toggle('filtered', onlyOpen() && p.status === '완료');
+}
+
 function applyStatus(runId, status, view) {
-  const hide = onlyOpen() && status === '완료';
-  dots(runId).forEach(dot => {
-    dot.style.background = view.background;
-    dot.style.borderColor = view.border;
-    dot.classList.toggle('done', status === '완료');
-    // 기한 초과는 **날짜에서 계산한 것**이다 (4-10). 구조가 실어 보낸 값을
-    // 그대로 쓰되, 완료되면 더 이상 초과가 아니다.
-    dot.classList.toggle('late', dot.dataset.overdue === '1' && status !== '완료');
-    dot.classList.toggle('filtered', hide);
-  });
+  dots(runId).forEach(dot => paint(dot, view));
 }
 
 /* ── 마감일이 바뀌면 점이 그 날로 옮겨간다 ───────────────────────────
@@ -65,27 +75,43 @@ function applyDates(runId, saved) {
   const existing = dots(runId);
   if (!existing.length) return;
   const model = existing[0].cloneNode(true);
+  // **지우지 않고 치워 둔다.** 이 달 밖으로 내보낸 점을 지워 버리면, 패널을
+  // 닫지 않은 채 다시 이 달 안으로 되돌렸을 때 찾을 것이 없어 돌아오지
+  // 못한다 — 패널과 안내문이 서로 다른 날짜를 말하게 된다.
+  // 숨긴 자리(`#calstash`)에 두면 `dots()` 가 계속 찾는다.
   existing.forEach(el => el.remove());
-
-  // 기한 초과도 날짜가 정한다 — 옮기면서 함께 다시 본다
-  const today = todayIso();
-  const overdue = !!today && iso < today && !model.classList.contains('done');
-  model.dataset.overdue = overdue ? '1' : '0';
-  model.classList.toggle('late', overdue);
+  paint(model, saved);
 
   const cell = document.querySelector(`.cal-cell[data-date="${iso}"]:not(.out)`);
   if (cell) {
     placeInGrid(cell, model);
     placeInWeekList(iso, model.cloneNode(true));
-    say('');
+    // 되돌아왔으면 그 업무의 안내만 지운다. 다른 업무의 안내가 떠 있었다면
+    // 건드리지 않는다 — 남의 말을 대신 지우면 그쪽이 조용해진다.
+    if (note && note.dataset.run === String(runId)) say('');
   } else {
+    stash(model);
     // **조용히 사라지면 "지워진 건가" 로 읽힌다.** 어디로 갔는지 말해 준다.
     const title = model.querySelector('.cal-t');
     // 조사는 붙여 쓴다 — "방명록 의" 가 아니라 "방명록의"
     say(`${title ? title.textContent.trim() + '의 ' : ''}마감일이 ${iso} 로 바뀌어 `
-      + '이 달에는 보이지 않습니다. 그 달로 넘겨서 보세요.');
+      + '이 달에는 보이지 않습니다. 그 달로 넘겨서 보세요.', runId);
   }
   recount();
+}
+
+/* 이 달 밖으로 나간 점을 치워 두는 자리. 화면에 그리지 않지만 DOM 에는
+   남아 있어서, 되돌리면 그대로 살아난다. **숫자에는 들어가지 않는다** —
+   `recount()` 가 이 자리를 빼고 세므로 `외 N건` 과 위쪽 건수가 화면과 맞는다. */
+function stash(dot) {
+  let box = document.getElementById('calstash');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'calstash';
+    box.hidden = true;
+    document.body.appendChild(box);
+  }
+  box.appendChild(dot);
 }
 
 /* 한 칸에 `per_day` 개까지만 펼치고 나머지는 `외 N건` 안에 넣는다 (4-13).
@@ -150,6 +176,8 @@ function recount() {
     else undated.querySelector('summary').textContent = `날짜가 없는 업무 ${n}건`;
   }
 
+  // **치워 둔 것(`#calstash`)은 세지 않는다.** 화면에 없는 것이 숫자에
+  // 들어가면 `외 N건` 과 위쪽 건수가 눈에 보이는 것과 어긋난다.
   const count = document.querySelector('.calcount');
   if (count) {
     const grid = document.querySelector('.cal-grid');

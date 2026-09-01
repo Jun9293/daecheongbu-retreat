@@ -466,7 +466,20 @@ function applySavedDates(runId, saved) {
   const a = colOf(saved.start), b = Math.max(a, colOf(saved.end));
   sheet.querySelectorAll(`.bar[data-run="${runId}"]`).forEach(el => {
     el.style.gridColumn = `${a}/${b + 1}`;
+    // **색도 서버가 준 것을 그대로 쓴다.** `/dates` 는 `/status` 와 같은 모양으로
+    // 생김새를 돌려준다(`board.paint_of`) — 한쪽만 고치면 또 두 벌이 된다.
+    // 보드의 바는 저장된 상태로 칠하므로 날짜만 옮기면 지금은 값이 같지만,
+    // 규칙이 바뀌면 여기가 따라오지 않는 것이 바로 어긋나는 자리다.
+    if (saved.background && !el.dataset.ghost) {
+      el.style.background = saved.background;
+      el.style.borderColor = saved.border;
+    }
   });
+  if (saved.border) {
+    document.querySelectorAll(`.mrow[data-run="${runId}"] .st`).forEach(el => {
+      el.style.background = saved.border;
+    });
+  }
   document.querySelectorAll(`.mrow[data-run="${runId}"]`).forEach(row => {
     row.dataset.s = saved.start;
     row.dataset.e = saved.end;

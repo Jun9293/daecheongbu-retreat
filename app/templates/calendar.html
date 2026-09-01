@@ -30,7 +30,7 @@
 {% set keep = "scope=" ~ cal.scope ~ "&only_open=" ~ (1 if cal.only_open else 0) %}
 <div class="calbar" data-only-open="{{ 1 if cal.only_open else 0 }}"
      data-scope="{{ cal.scope }}" data-month="{{ cal.month }}"
-     data-today="{{ cal.today }}" data-per-day="{{ cal.per_day }}">
+     data-per-day="{{ cal.per_day }}">
   <div class="calnav">
     <a class="btn ghost sm" href="/calendar?month={{ cal.prev }}&{{ keep }}" aria-label="이전 달">‹</a>
     <b class="calmonth">{{ cal.label }}</b>
