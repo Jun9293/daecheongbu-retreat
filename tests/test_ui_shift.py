@@ -259,6 +259,44 @@ def test_17_배포_안내에_cloudflared_서비스_등록_실제_절차가_들�
     stuck = guide[guide.index("## 11. 막혔을 때"):guide.index("## 12.")]
     assert "1067" in stuck
 
+
+def test_18_다시_켜기_절차가_포트를_쥔_프로세스를_끝낸다():
+    """`Stop-ScheduledTask` 는 **작업만** 멈추고 그 아래 파이썬을 끝내지 않는다.
+
+    포트는 계속 열려 있어서 겉으로는 재시작된 것처럼 보이는데 어제 뜬
+    프로세스가 그대로 답한다 — 2026-09-02 에 그것으로 새 화면 + 옛 코드가
+    짝지어져 상세 패널이 `Drawer is not defined` 로 안 열렸다.
+    """
+    guide = (ROOT / "docs" / "배포-안내.md").read_text(encoding="utf-8")
+    section = guide[guide.index("## 12. 고친 것을 반영하려면"):guide.index("## 13.")]
+
+    # 포트를 쥔 것을 실제로 찾아서 끝낸다
+    assert "Get-NetTCPConnection -LocalPort" in section
+    assert "Stop-Process" in section and "-Force" in section
+    # 작업을 먼저 멈춘다 — 안 그러면 "실패하면 다시 시작" 이 되살린다
+    assert section.index("Stop-ScheduledTask") < section.index("Stop-Process")
+    assert "다시 시작" in section
+
+    # **성공은 PID 가 바뀌는 것으로 적는다.** 포트로는 알 수 없다
+    assert "이렇게 나오면 성공" in section
+    assert "PID 가 바뀌었습니다" in section
+    assert "포트가 열려 있는 것으로는" in section
+
+    # 처음 하는 사람 기준 — 관리자 권한과 손으로 하는 순서도 있다
+    assert "관리자 권한으로 실행" in section
+    assert "손으로 하려면" in section
+
+    # 왜 이 장이 생겼는지 (다음 사람이 지우지 않게)
+    assert "Drawer is not defined" in section
+
+    # 서버가 떠 있나 항목에서 이리로 보낸다 — HTML 이 나와도 옛 코드일 수 있다
+    stuck = guide[guide.index("## 11. 막혔을 때"):guide.index("## 12.")]
+    assert "12장" in stuck
+
+    # 기준 문서에도 같은 사실이 적혀 있다
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "작업만 멈추고" in claude and "PID 가 바뀌었는지" in claude
+
     # 백업 대상에 업로드 폴더가 들어갔다
     routine = guide[guide.index("## 12."):]
     assert "uploads" in routine
