@@ -104,8 +104,10 @@
         </div>
       </div>
       <div class="dropwarn" id="ddropwarn" hidden></div>
-      {# 두 줄로 나눕니다 — 한 줄이면 드로어 폭에서 읽히지 않습니다 #}
-      <div class="filenote">이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.<br>
+      {# 두 줄로 나눕니다 — 한 줄이면 드로어 폭에서 읽히지 않습니다.
+         뒷줄의 숫자는 drawer.js 가 상한에서 끌어와 채웁니다 — 글에 박아 두면
+         상한을 바꿨을 때 화면이 조용히 거짓말을 합니다. #}
+      <div class="filenote" id="dfilenote">이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.<br>
         영상처럼 큰 것은 올리지 말고 링크로 붙이세요.</div>
     </div>
     <div class="modal" id="prepick" hidden></div>

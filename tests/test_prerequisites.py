@@ -504,3 +504,81 @@ def test_11_catalog_은_그대로다(libs):
         poster = next(r for r in rows if r["title"] == "포스터 제작")
         assert [c["title"] for c in poster["children"]] == ["시안 확정"]
         assert "prerequisites" not in poster      # catalog 의 모양은 그대로
+
+
+# ════════════════════════════════════════════════════════════════════
+#  상태를 바꾸면 판정도 함께 바뀐다 (수용기준 6·7)
+# ════════════════════════════════════════════════════════════════════
+#
+# `setStatus` 가 `detail.status` 만 갈아끼우고 다시 그리는데 `renderDiag` 는
+# 손대지 않은 `detail.diagnosis` 를 그렸다. **상태 변경은 판정을 바꾸는 바로
+# 그 동작**이라(4-10 의 1번: 완료면 맨 위에서 끊는다), 완료로 바꿔도 위쪽에
+# '진행 불가' 가 남았다. 패널 이름이 판정 결과인 화면이라 더 그렇다.
+
+import pathlib as _pathlib
+
+DRAWER_JS = _pathlib.Path(__file__).resolve().parent.parent / "app" / "static" / "js" / "drawer.js"
+
+
+def test_r06_상태를_바꾸면_판정을_다시_받아온다():
+    js = DRAWER_JS.read_text(encoding="utf-8")
+
+    body = js[js.index("async function setStatus("):]
+    body = body[: body.index("\n}")]
+    assert "refreshDiag" in body, "상태를 바꾸고 판정을 다시 받지 않는다"
+
+    # '다시 분석' 버튼과 같은 길을 쓴다 — 두 벌로 두면 한쪽만 고쳐진다
+    assert "$('dgR').onclick = () => { if (cur !== null) refreshDiag(cur); };" in js
+
+
+def test_r06b_서버가_상태에_맞는_판정을_준다(libs, admin_client):
+    """화면이 다시 받아 올 값이 실제로 바뀌는지 — 안 바뀌면 다시 받아도 소용없다.
+
+    4-10 의 1번은 **완료를 맨 위에서 끊는다.** 선행이 미완료인 채로 끝낸
+    업무가 '진행 불가' 로 찍히면 안 되기 때문이다.
+    """
+    # **종료된 회차는 판정하지 않는다** (4-10) — 그 상태로는 상태를 바꿔도
+    # 판정이 그대로라 이 시험이 헛돈다. 진행 중인 회차로 옮겨 놓고 본다.
+    import datetime as _dt
+
+    from sqlalchemy import select
+    with app_session() as db:
+        retreat = db.get(models.Retreat, libs["retreat_id"])
+        retreat.start_date = _dt.date.today() + _dt.timedelta(days=30)
+        retreat.end_date = _dt.date.today() + _dt.timedelta(days=32)
+        for run in db.scalars(select(models.TaskRun)):
+            run.end_date = _dt.date.today() + _dt.timedelta(days=20)
+        db.commit()
+
+    deliver = libs["runs"]["장비 전달"]
+    gear = libs["runs"]["장비 확인"]
+    admin_client.post(f"/board/task/{deliver}/prerequisites", json={"run_ids": [gear]})
+
+    before = admin_client.get(f"/board/task/{deliver}").json()["diagnosis"]
+    assert before["verdict"] == "진행 불가"
+
+    admin_client.post(f"/board/task/{deliver}/status", json={"status": "완료"})
+    after = admin_client.get(f"/board/task/{deliver}").json()["diagnosis"]
+    assert after["verdict"] == "완료", "상태를 바꿨는데 판정이 그대로다"
+    assert before["verdict"] != after["verdict"]
+
+
+def test_r07_판정을_못_받아와도_패널이_살아_있다():
+    """4-10 조건 8 — 판정 한 자리가 비는 것으로 끝나야지, 나머지 근거까지
+    사라지면 결정적인 절반을 애써 분리한 이유가 없어진다."""
+    js = DRAWER_JS.read_text(encoding="utf-8")
+
+    body = js[js.index("async function refreshDiag("):]
+    body = body[: body.index("\n}\n")]
+
+    # 실패는 삼키되, 옛 판정을 지우지 않는다
+    assert "catch" in body, "실패를 받지 않는다 — 패널이 통째로 멈춘다"
+    assert "if (!res.ok) return;" in body
+    assert "renderDiag(null)" not in body and "innerHTML = ''" not in body
+
+    # 받아 오는 동안 옛것임이 보이고, 끝나면 반드시 풀린다
+    assert "classList.add('busy')" in body
+    assert "finally" in body and "classList.remove('busy')" in body
+
+    # 그 사이에 다른 업무를 열었으면 남의 판정을 덮어쓰지 않는다
+    assert "String(cur) !== String(fresh.run_id)" in body

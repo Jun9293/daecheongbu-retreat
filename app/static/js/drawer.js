@@ -10,11 +10,19 @@
  *
  *     Drawer.init({
  *       meta(runId), onOpen, onClose, onStatus, onDates, onAssignee,
- *       goTo, canGoTo, isTaskClick, afterLayout,
+ *       onDepartment, link, goTo, canGoTo, isTaskClick, afterLayout,
+ *       openFromUrl,
+ *       __unused: {이름: '왜 안 쓰는가'},
  *     });
  *
  * 여기에 무언가 더할 때 **어느 한 화면만 생각하면 안 됩니다** —
  * 달력에는 바가 없고 보드에는 점이 없습니다.
+ *
+ * **안 쓰는 것은 `__unused` 에 이유와 함께 적습니다.** `call()` 은 없는
+ * 핸들러를 조용히 건너뛰므로, 적어 두지 않으면 "일부러 안 쓴 것" 과
+ * "넘기는 걸 빠뜨린 것" 이 화면에서 똑같이 생겼습니다 — 실제로 달력의
+ * `onDates` 를 빠뜨려서, 패널은 새 날짜를 말하는데 점은 옛 칸에 남아
+ * 있었습니다. `tests/test_calendar.py` 가 이 목록과 실제 등록을 대조합니다.
  */
 (function () {
 'use strict';
@@ -94,16 +102,16 @@ function renderDrawer() {
   const d = detail;
   const st = STATUS[d.status] || STATUS['대기'];
   $('dkick').innerHTML =
-    `<span class="chip solid" style="--team:${d.department_color}">${d.department}</span>
+    `<span class="chip solid" style="--team:${esc(d.department_color)}">${esc(d.department)}</span>
      <span class="chip">${d.kind_label}</span>
      <button class="chip stat" id="statchip" ${d.can_edit ? '' : 'disabled'}>
-       <span class="cv" style="background:${st.color}"></span>${st.label}${d.can_edit ? ' ▾' : ''}</button>`;
+       <span class="cv" style="background:${esc(st.color)}"></span>${esc(st.label)}${d.can_edit ? ' ▾' : ''}</button>`;
   if (d.can_edit) {
     $('statchip').onclick = e => { e.stopPropagation(); statMenu(e.currentTarget); };
   }
   $('dtitle').textContent = d.title;
   const teams = (d.departments || []).map(t =>
-    `<option value="${t.key}" data-color="${t.color}" ${t.key === d.department_key ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    `<option value="${esc(t.key)}" data-color="${esc(t.color)}" ${t.key === d.department_key ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
   const people = (d.candidates || []).map(p =>
     `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   $('dmeta').innerHTML =
@@ -117,9 +125,9 @@ function renderDrawer() {
              d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>
              <b class="span">${spanLabel(d.start, d.end)}</b></span>`}</dd>
      <dt>담당팀</dt><dd>${d.can_edit
-        ? `<span class="pill person"><i class="dot" id="ddeptdot" style="background:${d.department_color}"></i>
+        ? `<span class="pill person"><i class="dot" id="ddeptdot" style="background:${esc(d.department_color)}"></i>
              <select id="ddept"><option value="">담당 없음</option>${teams}</select></span>`
-        : `<span class="pill flat person"><i class="dot" style="background:${d.department_color}"></i>${esc(d.department)}</span>`}</dd>
+        : `<span class="pill flat person"><i class="dot" style="background:${esc(d.department_color)}"></i>${esc(d.department)}</span>`}</dd>
      <dt>담당자</dt><dd>${d.can_edit
         ? `<span class="pill person"><select id="dassignee"><option value="">지정 안 함</option>${people}</select></span>`
         : `<span class="pill flat person">${esc(d.assignee || '지정 안 함')}</span>`}</dd>
@@ -162,8 +170,11 @@ function renderDrawer() {
         e.target.value = d.department_key || '';
         return;
       }
-      // 업무가 다른 부서의 줄로 옮겨간다 — 화면을 다시 그려야 한다
-      if (call('onDepartment', d.run_id) === undefined) location.reload();
+      // 업무가 다른 부서의 줄로 옮겨간다 — 화면을 다시 그려야 한다.
+      // **직접 고쳐 그렸다고 `true` 를 돌려준 화면만** 새로고침을 건너뛴다.
+      // `undefined` 로 갈랐더니, 핸들러가 있어도 반환값을 빠뜨리면 핸들러가
+      // 돈 **뒤에** 페이지가 통째로 새로고침됐다 — 두 번 일하고 화면도 잃는다.
+      if (call('onDepartment', d.run_id) !== true) location.reload();
     };
 
     $('dassignee').onchange = async e => {
@@ -215,7 +226,7 @@ function relItem(r) {
     ? '<button data-act="move">이동<span class="mi">보드</span></button>' : '';
   return `<div class="relitem">
     <button class="rb" data-rel="${r.run_id}">
-      <span class="dot" style="background:${r.color}"></span>${esc(r.title)}
+      <span class="dot" style="background:${esc(r.color)}"></span>${esc(r.title)}
       <span class="rl">${r.kind_label} · ${esc(r.department)}</span></button>
     <div class="menu">
       <button data-act="open">열기<span class="mi">상세</span></button>
@@ -255,7 +266,7 @@ function openPrereqPicker(d) {
     <input type="search" class="find" id="prepickfind" placeholder="이름으로 좁혀 찾기" autocomplete="off">
     <div class="plist" id="prepicklist">${(d.link_candidates || []).map(c =>
       `<label data-name="${esc(c.title)}">
-        <input type="checkbox" value="${c.run_id}" ${chosen.has(c.run_id) ? 'checked' : ''}>
+        <input type="checkbox" value="${esc(c.run_id)}" ${chosen.has(c.run_id) ? 'checked' : ''}>
         <span>${esc(c.title)}</span><span class="dw">D-${c.d_week}주</span></label>`).join('')}</div>
     <div class="sh end">
       <button type="button" class="btn pri" id="prepicksave">저장</button>
@@ -337,6 +348,14 @@ function renderFiles(d) {
   if (limit) limit.textContent = limits.max_label
     ? `${limits.max_label} 까지 · ${(limits.exts || []).length}가지 형식`
     : '';
+  // 안내 문구가 상한과 **같은 숫자**를 말하게 한다. 글에 숫자를 박아 두면
+  // 상한을 바꿨을 때 화면이 조용히 거짓말을 한다.
+  const tip = $('dfilenote');
+  if (tip && limits.tunnel_max_label) {
+    tip.innerHTML = '이번 회차에만 남습니다. 다음 회차에는 따라가지 않습니다.<br>'
+      + `<b>${esc(limits.tunnel_max_label)}</b> 를 넘는 것은 바깥에서 올릴 때 실패합니다 — `
+      + '영상처럼 큰 것은 링크로 붙이세요.';
+  }
   $('ddropwarn').hidden = true;
 }
 
@@ -496,10 +515,47 @@ function putFile(runId, file) {
   });
 }
 
+/* **보내기 전에 크기를 본다.**
+
+   서버도 상한을 보지만, 서버는 본문을 읽는 **도중에** 400/507 로 답한다.
+   클라이언트가 아직 보내는 중에 답이 오면 XHR 이 `onerror` 로 떨어져서,
+   애써 쓴 "파일이 너무 큽니다" 가 화면에 도착하지 못한다 — 사람은 몇 분을
+   기다린 끝에 "연결이 끊겼습니다" 만 보고 이유를 모른 채 끝난다.
+   상한은 이미 `limits` 로 화면에 와 있으므로 여기서 먼저 거른다.
+
+   돌려주는 것: 'ok' | 'too-big' | 'tunnel' */
+function preflight(file) {
+  const limits = (detail && detail.attachment_limits) || {};
+  if (limits.max_bytes && file.size > limits.max_bytes) {
+    fileWarn(`${file.name} 은(는) ${hsize(file.size)} 라 너무 큽니다. `
+      + `${limits.max_label} 까지 올릴 수 있습니다. 큰 것은 링크로 붙여 주세요.`);
+    return 'too-big';
+  }
+  if (limits.tunnel_max_bytes && file.size > limits.tunnel_max_bytes) return 'tunnel';
+  return 'ok';
+}
+
 async function sendFiles(fileList) {
   if (!cur || !fileList || !fileList.length) return;
   fileWarn('');
   for (const file of fileList) {
+    const verdict = preflight(file);
+    if (verdict === 'too-big') return;              // 이유는 preflight 가 말했다
+    if (verdict === 'tunnel') {
+      // **막지 않는다.** 집 안 회선에서는 올라간다 — 서버가 있는 곳에서
+      // 올리면 되는 것을 못 하게 만들면 안 된다. 대신 미리 말해 준다.
+      const limits = detail.attachment_limits || {};
+      const go = confirm(
+        `${file.name} 은(는) ${hsize(file.size)} 입니다.\n\n`
+        + `${limits.tunnel_max_label} 를 넘는 파일은 바깥(인터넷)에서 올릴 때 `
+        + '실패합니다. 링크로 붙이시거나, 서버가 있는 곳에서 올려 주세요.\n\n'
+        + '그래도 올려 보시겠습니까?');
+      if (!go) {
+        fileWarn(`${file.name} 을(를) 올리지 않았습니다. `
+          + `${limits.tunnel_max_label} 를 넘는 것은 링크로 붙이는 편이 확실합니다.`);
+        return;
+      }
+    }
     const data = await putFile(cur, file);
     if (!data) return;                 // 실패·취소하면 뒤엣것도 올리지 않는다
     applyFiles(data);
@@ -615,18 +671,9 @@ function renderDiag(d) {
       상황이 바뀌면 다시 판단합니다.</div>`;
 }
 
-$('dgR').onclick = async () => {
-  if (cur === null) return;
-  const dg = $('diag');
-  dg.classList.add('busy');
-  const res = await fetch(`/board/task/${cur}`, {headers: {'Accept': 'application/json'}});
-  dg.classList.remove('busy');
-  if (!res.ok) return;
-  const fresh = await res.json();
-  if (String(cur) !== String(fresh.run_id)) return;
-  detail.diagnosis = fresh.diagnosis;
-  renderDiag(detail);
-};
+// '다시 분석' 과 상태 변경은 같은 일을 한다 — 판정을 다시 받아 온다.
+// 두 벌로 두면 한쪽만 고쳐진다.
+$('dgR').onclick = () => { if (cur !== null) refreshDiag(cur); };
 
 /* ── 업무 규칙 ── */
 function renderRules() {
@@ -803,7 +850,7 @@ function statMenu(btn) {
   // 같은 배지를 다시 누르면 상태를 바꾸지 않고 목록만 닫는다
   if (menu.classList.contains('on')) { closeMenus(); return; }
   menu.innerHTML = Object.entries(STATUS).map(([key, v]) =>
-    `<button data-s="${key}"><span class="cv" style="background:${v.color}"></span>${v.label}</button>`).join('');
+    `<button data-s="${esc(key)}"><span class="cv" style="background:${esc(v.color)}"></span>${esc(v.label)}</button>`).join('');
   menu.style.left = r.left + 'px';
   menu.style.top = (r.bottom + 4) + 'px';
   menu.classList.add('on');
@@ -827,6 +874,33 @@ async function setStatus(runId, status) {
   // **다시 불러오지 않는다.** 달력은 보던 달과 칩을 잃으면 안 된다.
   call('onStatus', runId, status, view);
   if (detail) { detail.status = status; renderDrawer(); }
+  refreshDiag(runId);
+}
+
+/* 상태를 바꾸면 **판정도 바뀐다.** 상태는 판정에 들어가는 값이므로
+   (CLAUDE.md 4-10 의 1번: `status == '완료'` 면 맨 위에서 끊는다),
+   손대지 않은 옛 판정을 그대로 다시 그리면 완료로 바꿔도 위쪽에
+   '진행 불가' 가 남는다. **패널 이름이 판정 결과인 화면**이라 더 그렇다.
+
+   받아 오는 동안에는 판정이 옛것임이 보이게 흐려 둔다. 그리고
+   **실패해도 패널은 살아 있어야 한다** (4-10 조건 8) — 판정 한 자리가
+   비는 것으로 끝나야지, 나머지 근거까지 사라지면 안 된다. */
+async function refreshDiag(runId) {
+  const dg = $('diag');
+  dg.classList.add('busy');
+  try {
+    const res = await fetch(`/board/task/${runId}`, {headers: {'Accept': 'application/json'}});
+    if (!res.ok) return;
+    const fresh = await res.json();
+    // 그 사이에 다른 업무를 열었으면 남의 판정을 덮어쓰지 않는다
+    if (!detail || String(cur) !== String(fresh.run_id)) return;
+    detail.diagnosis = fresh.diagnosis;
+    renderDiag(detail);
+  } catch (err) {
+    // 못 받아 왔으면 옛 판정을 그대로 둔다. 지우면 근거까지 사라진다.
+  } finally {
+    dg.classList.remove('busy');
+  }
 }
 
 /* ── 노션처럼 쓰는 입력칸 ──────────────────────────────────────────
@@ -930,7 +1004,7 @@ function calendar(d) {
       const edge = iso === d.start || iso === d.end;
       const cls = ['dcell', inRange ? 'in' : '', edge ? (d.status === '지연' ? 'late' : 'edge') : '']
         .filter(Boolean).join(' ');
-      const dots = (marks[iso] || []).slice(0, 4).map(c => `<i style="background:${c}"></i>`).join('');
+      const dots = (marks[iso] || []).slice(0, 4).map(c => `<i style="background:${esc(c)}"></i>`).join('');
       out += `<div class="${cls}">${day}<span class="dots">${dots}</span></div>`;
     }
     cursor.setMonth(cursor.getMonth() + 1);
