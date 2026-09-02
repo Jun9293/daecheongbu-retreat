@@ -2007,6 +2007,11 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 보드 축·행·바 계산 · 기한 초과 계산 | `app/domain/board.py` |
 | 바·점의 생김새 (색·테두리) | `app/domain/board.py` 의 `paint_of` — **여기 하나다** |
 | 툴팁 문장 만들기 (4-13) | `app/domain/board.py` 의 `tooltip_of` — **문장을 만드는 곳은 여기 하나다.** 매크로도 화면도 받아 쓰기만 한다 |
+| 노션 회의록 자르기 | `app/domain/meeting_import.py` (`cut` · `people_notes`) |
+| 회의록 옮기기 (일회성) | `scripts/import_meetings.py` — 미리보기가 기본. `--until` 로 시뮬레이션, `--undo` 로 되돌림 |
+| 회의록 화면 | `app/routers/meetings.py` · `templates/meetings.html` · `meeting_detail.html` |
+| 회의록을 읽고 제안하기 | `app/domain/suggest.py` — **읽고 제안하는 창구는 여기 하나다** (화면이든 채팅이든) |
+| 노션처럼 쓰는 입력칸 | `app/static/js/listinput.js` — **여기 한 벌**. 논의 입력칸과 회의록 본문이 함께 쓴다 |
 | 정적 주소에 내용 해시 (11-2) | `app/templating.py` 의 `static` · `app/main.py` 의 `HashedStatic` |
 | 달력 보기 (4-13) | `app/domain/calendar.py` · `routers/calendar.py` · `templates/calendar.html` · `static/js/calendar.js` |
 | **상세 패널 — 보드·달력 공용** (4-13) | `templates/partials/drawer.html` · `static/js/drawer.js` — **여기 한 벌뿐이다** |
@@ -2051,7 +2056,8 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 **아직 없는 것** — 재정(7장)은 Phase 3입니다.
 진단 패널(4-10)은 만들었습니다 — 근거 중 '논의 기록에서 온 맥락'만 후속으로 남았습니다.
 수련회 진행(5장)은 만들었습니다 — 사이드바의 `수련회 진행` 은 `/live` 로 갑니다.
-사이드바의 `회의록` `재정` 은 이전 설계에서 만든 화면으로 연결되어 있습니다.
+**회의록은 새 껍데기로 옮겼습니다** — 회의록 2단계. 사이드바의 `재정` 은
+이전 설계에서 만든 화면으로 연결되어 있습니다.
 동작은 하지만 이 문서의 스펙과는 다른 화면이며, 각 Phase 에서 다시 만듭니다.
 **그 화면들은 아직 옛 껍데기(`base.html` · `app.css`)를 씁니다** — 4-0 의 무채색 기조는
 `retreat_base.html` 쪽(보드·진행·마법사·라이브러리·초안·계정·알림 미리보기)에

@@ -520,7 +520,11 @@ def test_16_좁은_화면에서_주_단위_목록으로_바뀐다(admin_client, 
     css = open("app/static/css/retreat.css", encoding="utf-8").read()
     narrow = css[css.index(".calweeks{"):]
     assert ".calweeks{display:none}" in css        # 넓은 화면에서는 안 쓴다
-    block = css[css.rindex("@media (max-width:820px){"):]
+    # **마지막 블록을 집지 않는다.** 좁은 화면 블록은 여럿이라(회의록 등)
+    # 마지막을 집으면 남이 CSS 를 덧붙일 때마다 이 시험이 깨진다.
+    # 달력 것을 이름으로 찾는다.
+    at = css.index(".calwrap{display:none}")
+    block = css[css.rindex("@media (max-width:820px){", 0, at):]
     assert ".calwrap{display:none}" in block
     assert ".calweeks{display:block" in block
 
