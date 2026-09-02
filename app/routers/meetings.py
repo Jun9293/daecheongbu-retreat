@@ -24,6 +24,7 @@ from app.models import (
     Task,
     User,
 )
+from app.domain import permissions as perm
 from app.security import get_current_user, require_editor
 from app.templating import redirect, render
 
@@ -74,6 +75,8 @@ def meeting_list(
             "retreats": all_retreats(db),
             "meetings": meetings,
             "today": dt.date.today().isoformat(),
+            "active_tab": "meetings",
+            "can_edit": not perm.is_readonly(user.role),
         },
     )
 
@@ -95,6 +98,8 @@ def meeting_detail(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "meeting": meeting,
+            "active_tab": "meetings",
+            "can_edit": not perm.is_readonly(user.role),
             "kinds": MEETING_ITEM_KINDS,
             "departments": list(
                 db.scalars(

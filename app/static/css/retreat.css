@@ -1359,3 +1359,60 @@ button.btn:disabled{opacity:.4;cursor:default}
   .calcount{display:none}
   .calundated{margin:16px 12px}
 }
+
+/* ── 회의록 (CLAUDE.md 회의록 2단계) ───────────────────────────────────
+   **회의 하나**를 적는다 — 날짜 · 참석자 · 본문. 그뿐이다.
+   4-0 을 따른다: 무채색, 헤어라인, 뜻이 있는 색은 선택·지연·비침 셋뿐. */
+.mt-wrap{flex:1;min-height:0;overflow:auto}
+.mt-head{display:flex;align-items:center;gap:12px;padding:18px 22px 10px}
+.mt-head h1{font-size:19px;font-weight:600;color:var(--ink)}
+.mt-head-r{margin-left:auto}
+.mt-count{font-size:12.5px;color:var(--ink-2);font-family:var(--mono)}
+.mt-back{font-size:13px;color:var(--ink-2);text-decoration:none}
+.mt-back:hover{color:var(--ink)}
+
+.mt-new{margin:0 22px 18px;padding:14px;border:1px solid var(--rule);border-radius:6px;
+  display:flex;flex-direction:column;gap:8px;max-width:900px}
+.mt-new-row{display:flex;gap:8px;flex-wrap:wrap}
+.mt-new-row input[name=title]{flex:1;min-width:220px}
+.mt-new input,.mt-new textarea,.mt-one input,.mt-one textarea{
+  font:inherit;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule);border-radius:4px;padding:7px 9px}
+.mt-new input:focus,.mt-new textarea:focus,.mt-one input:focus,.mt-one textarea:focus{
+  outline:none;border-color:var(--link)}
+.mt-new-foot{display:flex;justify-content:flex-end}
+
+.mt-list{margin:0 22px 24px;max-width:900px;border-top:1px solid var(--rule)}
+.mt-row{display:flex;align-items:baseline;gap:12px;padding:10px 8px;
+  border-bottom:1px solid var(--rule);text-decoration:none;color:var(--ink)}
+.mt-row:hover{background:linear-gradient(var(--hover),var(--hover)),var(--paper)}
+.mt-date{font-family:var(--mono);font-size:12px;color:var(--ink-2);flex:none;width:92px}
+.mt-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-tags{display:flex;gap:6px;flex:none}
+.mt-from,.mt-who{font-style:normal;font-size:11px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:3px;padding:0 5px}
+/* 옮겨 온 것은 **같아 보이면 안 된다** — 왼쪽에 점선 마개를 둔다 */
+.mt-row.mt-notion{box-shadow:inset 2px 0 0 var(--rule-2)}
+.mt-empty{margin:0 22px;color:var(--ink-2);font-size:13.5px}
+
+.mt-one{margin:0 22px 30px;max-width:900px;display:flex;flex-direction:column;gap:10px}
+.mt-one-title{font-size:18px;font-weight:600;border:1px solid transparent!important;
+  padding:6px 8px!important;margin-left:-8px}
+.mt-one-title:hover{border-color:var(--rule)!important}
+.mt-one-meta{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.mt-one-meta label{display:flex;flex-direction:column;gap:4px;
+  font-size:11.5px;color:var(--ink-3)}
+.mt-one-meta label.grow{flex:1;min-width:220px}
+.mt-one-body{min-height:340px;line-height:1.65;white-space:pre-wrap;resize:vertical}
+.mt-one-foot{display:flex;align-items:center;gap:12px}
+.mt-one-hint{font-size:12px;color:var(--ink-3)}
+.mt-from-note{font-size:12.5px;color:var(--ink-2);line-height:1.6;
+  border-left:2px solid var(--rule-2);padding:2px 0 2px 10px}
+.mt-from-note code{font-family:var(--mono);font-size:11.5px}
+
+@media (max-width:820px){
+  .mt-head,.mt-new,.mt-list,.mt-one,.mt-empty{margin-left:12px;margin-right:12px}
+  .mt-head{padding-left:0;padding-right:0}
+  .mt-date{width:auto}
+  .mt-row{flex-wrap:wrap;gap:6px}
+}

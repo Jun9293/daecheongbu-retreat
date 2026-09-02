@@ -1,74 +1,64 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import empty %}
-{% block title %}회의록{% endblock %}
-{% block content %}
+{% extends "retreat_base.html" %}
+{% block title %}회의록 · {{ retreat.name }}{% endblock %}
+{% block body %}
+<div class="mt-wrap">
+{#
+  회의록 (CLAUDE.md 회의록 2단계). **앞으로 실제로 쓸 것은 이 화면뿐이다** —
+  노션에는 더 쓰지 않는다.
 
-<div class="page-head">
+  적는 것은 **회의 하나**다 — 날짜 · 참석자 · 본문. 그뿐이다.
+  안건/결정사항 같은 칸을 나누지 않는다. 실제 회의록이 그렇게 쓰여 있지 않다
+  (옮겨 온 50건 중 그 모양으로 적힌 것은 하나도 없다).
+
+  **옮긴 것과 사람이 적은 것이 같은 목록에 있다** — 나누면 "그 얘기 어디
+  있더라" 를 두 번 찾는다. 다만 **같아 보이면 안 된다.** 옮긴 것에는 형광펜이
+  `⟨미완료?⟩` 라는 **추측**으로 붙어 있어서, 그 사실이 보여야 한다.
+#}
+<div class="mt-head">
   <h1>회의록</h1>
-  <p class="sub">액션아이템은 클릭 한 번으로 할 일이 됩니다 — 회의 따로, 실행 따로가 되지 않게.</p>
+  <div class="mt-head-r">
+    <span class="mt-count">{{ meetings|length }}건</span>
+  </div>
 </div>
 
-{% if not is_readonly(user.role) %}
-<details class="panel" {% if not meetings %}open{% endif %}>
-  <summary>{{ icon('plus', 17) }}<span class="grow">회의록 작성</span></summary>
-  <div class="panel-body">
-    <form method="post" action="/meetings/create">
-      <div class="field">
-        <label for="m-title">제목</label>
-        <input id="m-title" name="title" required placeholder="예: 총무팀 4차 회의">
-      </div>
-      <div class="grid-2">
-        <div class="field"><label for="m-date">일시</label><input id="m-date" name="meeting_date" type="date" value="{{ today }}"></div>
-        <div class="field">
-          <label for="m-link">수련회 연결</label>
-          <select id="m-link" name="link_retreat">
-            <option value="retreat">{{ retreat.name }}</option>
-            <option value="none">연결 안 함 (일반 회의)</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label for="m-att">참석자</label>
-        <textarea id="m-att" name="attendees" rows="2" placeholder="이름을 띄어쓰기·쉼표로 구분"></textarea>
-      </div>
-      <div class="field">
-        <label for="m-body">회의 내용</label>
-        <textarea id="m-body" name="body" rows="4" placeholder="자유롭게 기록"></textarea>
-      </div>
-      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}회의록 만들기</button>
-    </form>
+{% if can_edit %}
+<form class="mt-new" method="post" action="/meetings/create">
+  <div class="mt-new-row">
+    <input name="title" required placeholder="회의 제목" aria-label="제목">
+    <input name="meeting_date" type="date" value="{{ today }}" aria-label="날짜">
   </div>
-</details>
+  <input name="attendees" placeholder="참석자 — 이름을 띄어쓰기나 쉼표로" aria-label="참석자">
+  {# 본문 입력칸은 **논의 입력칸과 같은 코드**를 쓴다 (4-9) —
+     번호 매기기 · 글머리표 · 탭 들여쓰기. 새로 만들지 않는다. #}
+  <textarea name="body" data-listedit rows="4" aria-label="회의 내용"
+    placeholder="회의 내용. 1. 로 시작하면 번호가, - 뒤에 스페이스면 글머리표가 붙습니다"></textarea>
+  <input type="hidden" name="link_retreat" value="retreat">
+  <div class="mt-new-foot">
+    <button class="btn" type="submit">회의록 만들기</button>
+  </div>
+</form>
 {% endif %}
 
-<div class="card">
-  <div class="card-body flush">
-    {% if meetings %}
-    <div class="list">
-      {% for m in meetings %}
-      <a class="item" href="/meetings/{{ m.id }}">
-        <span style="color:var(--ink-3);margin-top:2px">{{ icon('notes', 19) }}</span>
-        <div class="item-main">
-          <div class="item-title">{{ m.title }}</div>
-          <div class="item-meta">
-            <span class="tag">{{ icon('calendar') }}{{ m.meeting_date | kdate }}</span>
-            {% if m.retreat_id is none %}<span class="tag tag-outline">일반 회의</span>{% endif %}
-            {% if m.attendee_names %}<span class="tag">{{ icon('users') }}{{ m.attendee_names|length }}명</span>{% endif %}
-            {% set actions = m.items | selectattr('kind', 'equalto', '액션아이템') | list %}
-            {% if actions %}
-            {% set done = actions | selectattr('converted_task_id') | list | length %}
-            <span class="tag {% if done < actions|length %}tag-warn{% else %}tag-ok{% endif %}">
-              액션 {{ done }}/{{ actions|length }} 등록
-            </span>
-            {% endif %}
-          </div>
-        </div>
-        <span style="color:var(--ink-3)">{{ icon('chevron-right', 17) }}</span>
-      </a>
-      {% endfor %}
-    </div>
-    {% else %}{{ empty('작성된 회의록이 없습니다', 'notes') }}{% endif %}
-  </div>
+{% if meetings %}
+<div class="mt-list">
+  {% for m in meetings %}
+  <a class="mrow{{ ' mt-notion' if m.origin == '노션' }}" href="/meetings/{{ m.id }}">
+    <span class="mt-date">{{ m.meeting_date.isoformat() if m.meeting_date else '날짜 없음' }}</span>
+    <span class="mt-title">{{ m.title }}</span>
+    <span class="mt-tags">
+      {% if m.origin == '노션' %}<i class="mt-from" title="노션에서 옮겨 온 것 — {{ m.source_ref }}">옮김</i>{% endif %}
+      {% if m.retreat_id is none %}<i class="mt-who">일반 회의</i>{% endif %}
+      {% if m.attendee_names %}<i class="mt-who">{{ m.attendee_names|length }}명</i>{% endif %}
+    </span>
+  </a>
+  {% endfor %}
 </div>
+{% else %}
+<p class="mt-empty">아직 회의록이 없습니다.</p>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/listinput.js') }}" defer></script>
 {% endblock %}

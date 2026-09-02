@@ -1,120 +1,57 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import dept_tag, due_tag, empty %}
-{% block title %}{{ meeting.title }}{% endblock %}
-{% block content %}
+{% extends "retreat_base.html" %}
+{% block title %}{{ meeting.title }} · 회의록{% endblock %}
+{% block body %}
+<div class="mt-wrap">
+{#
+  회의 하나 (CLAUDE.md 회의록 2단계). **날짜 · 참석자 · 본문. 그뿐이다.**
 
-<a class="tag tag-outline" href="/meetings" style="margin-bottom:12px">{{ icon('chevron-left') }}회의록 목록</a>
-
-<div class="card">
-  <div class="card-head">
-    <div class="grow">
-      <h1 style="font-size:18px">{{ meeting.title }}</h1>
-      <div class="item-meta">
-        <span class="tag">{{ icon('calendar') }}{{ meeting.meeting_date | kdate }}</span>
-        {% if meeting.retreat_id is none %}<span class="tag tag-outline">일반 회의</span>{% endif %}
-      </div>
-    </div>
-    {% if not is_readonly(user.role) %}
-    <form method="post" action="/meetings/{{ meeting.id }}/delete" onsubmit="return confirm('이 회의록을 삭제할까요?')">
-      <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 16) }}</button>
-    </form>
-    {% endif %}
-  </div>
-  <div class="card-body">
-    {% if meeting.attendee_names %}
-    <div class="row tight" style="margin-bottom:12px">
-      {% for name in meeting.attendee_names %}<span class="tag">{{ icon('user') }}{{ name }}</span>{% endfor %}
-    </div>
-    {% endif %}
-    {% if meeting.body %}<div class="prewrap">{{ meeting.body }}</div>{% endif %}
-
-    {% if not is_readonly(user.role) %}
-    <details class="inline" style="margin-top:12px">
-      <summary>{{ icon('settings', 13) }}회의록 수정</summary>
-      <form method="post" action="/meetings/{{ meeting.id }}/update">
-        <div class="field"><input name="title" value="{{ meeting.title }}" required></div>
-        <div class="field">
-          <input name="meeting_date" type="date" value="{{ meeting.meeting_date.isoformat() if meeting.meeting_date else '' }}">
-        </div>
-        <div class="field"><textarea name="attendees" rows="2" placeholder="참석자">{{ meeting.attendee_names | join(' ') }}</textarea></div>
-        <div class="field"><textarea name="body" rows="5" placeholder="회의 내용">{{ meeting.body or '' }}</textarea></div>
-        <button class="btn btn-sm" type="submit">저장</button>
-      </form>
-    </details>
-    {% endif %}
-  </div>
+  **지우기를 두지 않는다** (0장) — 이번 회차에 안 하는 것도 기록만 바꾼다.
+  잘못 만든 회의록은 제목과 본문을 고쳐서 쓴다.
+#}
+<div class="mt-head">
+  <a class="mt-back" href="/meetings">← 회의록</a>
 </div>
 
-{% for kind in kinds %}
-{% set rows = meeting.items | selectattr('kind', 'equalto', kind) | list %}
-<div class="card">
-  <div class="card-head">
-    <h2>{{ kind }}</h2>
-    {% if rows %}<span class="tag">{{ rows|length }}</span>{% endif %}
-    {% if kind == '액션아이템' %}<span class="muted">담당자·기한을 지정하면 그대로 할 일이 됩니다</span>{% endif %}
+<form class="mt-one" method="post" action="/meetings/{{ meeting.id }}/update">
+  <input class="mt-one-title" name="title" value="{{ meeting.title }}"
+         aria-label="제목" {{ 'readonly' if not can_edit }}>
+  <div class="mt-one-meta">
+    <label>날짜
+      <input name="meeting_date" type="date"
+             value="{{ meeting.meeting_date.isoformat() if meeting.meeting_date else '' }}"
+             {{ 'readonly' if not can_edit }}></label>
+    <label class="grow">참석자
+      <input name="attendees" value="{{ (meeting.attendee_names or [])|join(' ') }}"
+             placeholder="이름을 띄어쓰기나 쉼표로" {{ 'readonly' if not can_edit }}></label>
   </div>
 
-  <div class="card-body flush">
-    {% if rows %}
-    <div class="list">
-      {% for item in rows %}
-      <div class="item">
-        <div class="item-main">
-          <div class="item-title">{{ item.content }}</div>
-          {% if item.department or item.assignee or item.due_date or item.converted_task_id %}
-          <div class="item-meta">
-            {% if item.department %}{{ dept_tag(item.department) }}{% endif %}
-            {% if item.assignee %}<span class="tag">{{ icon('user') }}{{ item.assignee.name }}</span>{% endif %}
-            {{ due_tag(item.due_date, today()) }}
-            {% if item.converted_task_id %}<span class="tag tag-ok">{{ icon('check') }}할 일 등록됨</span>{% endif %}
-          </div>
-          {% endif %}
-        </div>
-        <div class="item-side">
-          {% if kind == '액션아이템' and not item.converted_task_id and not is_readonly(user.role) %}
-          <form method="post" action="/meetings/items/{{ item.id }}/to-task">
-            <button class="btn btn-sm" type="submit">{{ icon('plus', 14) }}할 일로 등록</button>
-          </form>
-          {% endif %}
-          {% if not is_readonly(user.role) %}
-          <form method="post" action="/meetings/items/{{ item.id }}/delete">
-            <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 14) }}</button>
-          </form>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}{{ empty(kind ~ '이(가) 없습니다', 'notes') }}{% endif %}
-  </div>
+  {% if meeting.origin == '노션' %}
+  {# **옮긴 것과 사람이 적은 것이 같아 보이면 안 된다.** 형광펜은 '안 끝난 것'
+     이라는 **추측**으로 붙었으므로, 그 사실이 이 화면에 적혀 있어야 한다. #}
+  <p class="mt-from-note">
+    노션에서 옮겨 온 회의록입니다 (<b>{{ meeting.source_ref }}</b>).
+    본문의 <code>⟨미완료?⟩</code> 는 원본의 <b>형광펜</b>을 옮긴 것이고,
+    그 뜻이 '안 끝난 것' 이라는 <b>확인된 적 없는 추측</b>입니다 —
+    물음표를 뗄지는 사람이 정합니다.
+  </p>
+  {% endif %}
 
-  {% if not is_readonly(user.role) %}
-  <div class="card-body" style="border-top:1px solid var(--line)">
-    <form method="post" action="/meetings/{{ meeting.id }}/items">
-      <input type="hidden" name="kind" value="{{ kind }}">
-      <div class="field"><input name="content" placeholder="{{ kind }} 추가" required></div>
-      {% if kind == '액션아이템' %}
-      <div class="grid-3">
-        <div class="field">
-          <select name="department_id">
-            <option value="">부서</option>
-            {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <select name="assignee_id">
-            <option value="">담당자</option>
-            {% for m in members %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="field"><input name="due_date" type="date"></div>
-      </div>
-      {% endif %}
-      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('plus', 15) }}추가</button>
-    </form>
+  {# 본문 입력칸은 **논의 입력칸과 같은 코드**를 쓴다 (4-9 · static/js/listinput.js).
+     줄바꿈은 저장 후에도 그대로 보인다 — 화면 쪽은 white-space: pre-wrap #}
+  <textarea class="mt-one-body" name="body" data-listedit rows="20"
+            aria-label="회의 내용"
+            {{ 'readonly' if not can_edit }}>{{ meeting.body or '' }}</textarea>
+
+  {% if can_edit %}
+  <div class="mt-one-foot">
+    <button class="btn" type="submit">저장</button>
+    <span class="mt-one-hint">지우기는 없습니다 — 기록은 남깁니다 (0장)</span>
   </div>
   {% endif %}
+</form>
 </div>
-{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/listinput.js') }}" defer></script>
 {% endblock %}
