@@ -653,3 +653,205 @@ def test_y_14_as_of_를_왜_받아만_두는지_적혔다():
     doc = inspect.getdoc(mod.board_as_of) or ""
     assert "받아 두고 쓰지 않는다" in doc
     assert "의식하고 넘기게" in doc, "왜 남겨 두는지가 없다"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 두 번째 리뷰 (1~13)
+# ══════════════════════════════════════════════════════════════════════
+
+
+@pytest.fixture()
+def 짧은업무(admin_client):
+    """**이름이 짧은 업무** 하나. 그물이 기울어 있으면 여기 걸린다 —
+    `선발대 운영`(2낱말) 과 `선발대 점심 주문 준비`(4낱말)는 한 낱말만
+    겹쳐서, 고치기 전에는 **보드에 있는데 새 업무로** 나왔다."""
+    with app_session() as db:
+        retreat = models.Retreat(name="짧은 회차", start_date=dt.date(2026, 8, 21),
+                                 end_date=dt.date(2026, 8, 23))
+        db.add(retreat)
+        db.flush()
+        for 제목 in ("선발대 운영", "포토존", "명찰 제작", "교재 제작",
+                    "출력물 제작", "비품 제작", "영상 제작"):
+            lib = models.TaskLibrary(title=제목, kind="main", default_d_week=5)
+            db.add(lib)
+            db.flush()
+            db.add(models.TaskRun(library_id=lib.id, retreat_id=retreat.id,
+                                  included=True, d_week=5,
+                                  start_date=dt.date(2026, 8, 1),
+                                  end_date=dt.date(2026, 8, 10), status="대기"))
+        db.commit()
+        return retreat.id
+
+
+def _제안(retreat_id: int, body: str, title: str = "시험 회의"):
+    with app_session() as db:
+        retreat = db.get(models.Retreat, retreat_id)
+        m = models.Meeting(retreat_id=retreat.id, title=title,
+                           meeting_date=dt.date(2026, 6, 1), body=body)
+        db.add(m)
+        db.commit()
+        return suggest(db, retreat=retreat, meeting=m, as_of=dt.date(2026, 6, 1))
+
+
+# ── 1 · 2. 새 업무의 근거를 바꾼다 ───────────────────────────────────
+
+
+def test_z_01_새_업무에_가장_가까운_기존_업무가_함께_나온다(짧은업무):
+    """전에는 `evidence` 가 **그 줄 자신의 낱말**이라 아무것도 증명하지
+    않았다. 사람이 한눈에 "이건 있는 거네" 를 알 수 있어야 한다."""
+    것들 = _제안(짧은업무, "- 선발대 점심 주문 준비\n")
+    새것 = [x for x in 것들 if x.kind == "new"]
+    if not 새것:
+        return                       # 걸러졌으면 그것도 맞다 (아래 시험이 본다)
+    for x in 새것:
+        assert "가장 가까운 것" in x.why or "한 낱말도 겹치지 않습니다" in x.why
+        if "가장 가까운 것" in x.why:
+            assert "「" in x.why and "겹친 낱말" in x.why
+
+
+def test_z_02_보드_전체_낱말과도_견준다(짧은업무):
+    """줄의 낱말이 **전부 보드 어딘가에 이미 있으면** 새 업무가 아닐
+    가능성이 크다."""
+    # `제작` · `교재` 둘 다 보드에 있다 → 새 업무로 내지 않는다
+    것들 = _제안(짧은업무, "- 교재 제작 준비\n")
+    assert not [x for x in 것들 if x.kind == "new"], \
+        "낱말이 전부 보드에 있는데 새 업무로 냈다"
+
+    import inspect
+
+    from app.domain import suggest as mod
+
+    src = inspect.getsource(mod.suggest)
+    assert "말낱말 <= 보드전체" in src
+
+
+def test_z_02b_마크업이_새어_나오지_않는다():
+    """`04.22 1차 구상안** ⇒ …` 처럼 `**` 가 그대로 붙어 나왔다."""
+    from app.domain.suggest import 할일줄
+
+    for 말 in 할일줄("**시설 대걸레 문의**\n~~취소된 것 확인~~\n"):
+        assert "**" not in 말 and "~~" not in 말
+
+
+def test_z_02c_가운데_있는_말은_할_일이_아니다():
+    """`외부강사 섭외의 경우 진행해보면서 대안 설정이 계속 필요할 것으로
+    예상됨` 은 할 일이 아니라 의견이다. **꼬리에 있어야** 한다."""
+    from app.domain.suggest import 할일줄
+
+    말들 = 할일줄(
+        "- 세미나실 셀프조작 가능여부 확인 필요\n"
+        "- 외부강사 섭외의 경우 진행해보면서 대안 설정이 계속 필요할 것으로 예상됨\n")
+    assert any("세미나실" in x for x in 말들)
+    assert not any("예상됨" in x for x in 말들)
+
+
+# ── 5 ~ 7. 논의 제안의 하한과 빈 목록 ────────────────────────────────
+
+
+def test_z_05_흔한_낱말만으로는_논의_제안이_안_된다(짧은업무):
+    """`제작` 은 이 보드에서 업무 이름 다섯 개에 나온다. 그런 낱말만으로
+    겹친 것은 관계를 말해 주지 않는다."""
+    from app.domain.suggest import 흔한낱말, board_as_of
+
+    with app_session() as db:
+        retreat = db.get(models.Retreat, 짧은업무)
+        rows = board_as_of(db, retreat, dt.date(2026, 6, 1))
+    assert "제작" in 흔한낱말(rows), "흔한 낱말을 못 골라낸다"
+
+
+def test_z_07_빈_목록이_실제로_나온다(짧은업무):
+    """4-10 조건 4. 회의 50건에서 24건이 빈 목록이었다 — **하한이 아무
+    일도 안 하는 것이 아니다.**"""
+    것들 = _제안(짧은업무, "- 오늘 날씨가 좋았습니다\n")
+    assert [x for x in 것들 if x.kind == "discussion"] == []
+
+
+def test_z_07b_잘렸으면_잘렸다고_말한다(짧은업무):
+    """조용히 자르지 않는다. 걸린 것이 더 있다는 사실을 말한다."""
+    것들 = _제안(짧은업무, "- 명찰 제작 교재 제작 출력물 제작 비품 제작 영상 제작 포토존 선발대 운영\n")
+    더 = [x for x in 것들 if x.kind == "더있음"]
+    논의 = [x for x in 것들 if x.kind == "discussion"]
+    assert len(논의) <= 5
+    if 더:
+        assert "더 있습니다" in 더[0].text
+
+
+# ── 8. 형광펜에 뜻을 붙이지 않는다 ───────────────────────────────────
+
+
+def test_z_08_형광펜이_뜻을_주장하지_않는다():
+    """`⟨미완료?⟩` 는 물음표가 있어도 뜻을 주장한다 — 나중에 읽는 사람은
+    물음표를 안 읽고 "미완료" 만 읽는다. 근거는 2/20 이다."""
+    from scripts.import_meetings import mark_highlights
+
+    나온것 = mark_highlights('<span color="yellow_bg">대걸레 문의</span>')
+    assert "⟨형광펜⟩" in 나온것
+    assert "미완료" not in 나온것
+
+    본문 = (ROOT / "scripts" / "import_meetings.py").read_text(encoding="utf-8")
+    assert "⟨미완료?⟩" not in 본문.replace("처음에는 `⟨미완료?⟩` 였는데", "")
+
+    from app.domain import meeting_import
+
+    doc = meeting_import.__doc__ or ""
+    assert "뜻을 붙이지 않는다" in doc
+    assert "6-9" in doc, "왜 사실만 남기는지가 없다"
+
+
+# ── 9. 말한 것에 대한 판정을 적어 둔다 ───────────────────────────────
+
+
+def test_z_09_날짜같은줄_2건의_판정이_적혔다():
+    """**경고는 판정이 적히는 순간 제 몫을 다한다** — 다음에 돌릴 때 같은
+    두 줄을 또 들여다볼 이유가 없다."""
+    import inspect
+
+    from app.domain import meeting_import
+
+    # 판정은 **자르는 함수** 옆에 있어야 한다 — 다음에 돌릴 때 읽는 자리다
+    doc = inspect.getdoc(meeting_import.cut) or ""
+    assert "이미 본 것" in doc
+    assert "26.04.22 1차 구상안" in doc and "26.05.17" in doc
+    assert "접어 둔 토글" in doc and "상호 참조" in doc
+    assert "자르지 않음" in doc or "지금 처리" in doc
+
+
+# ── 10 · 11. 성적표 ──────────────────────────────────────────────────
+
+
+def test_z_10_성적표의_표본이_먼저_못박혔다():
+    """눈에 띄는 것부터 채우면 점수가 표본을 따라 움직인다."""
+    표 = (ROOT / "docs" / "review" / "제안-성적표.md").read_text(encoding="utf-8")
+    assert "표본 — 이 넷만 봅니다" in 표
+    for 날 in ("2026-03-29", "2026-05-24", "2026-07-05", "2026-08-09"):
+        assert 날 in 표
+    assert "그 안의 제안을 전부" in 표
+    assert "건너뛰지 않습니다" in 표
+    # 걸리는 시간을 잰다 — 안 채운 성적표는 없는 것과 같다
+    assert "걸린 시간" in 표 and "30분" in 표
+
+
+def test_z_11_X_이유를_한_단어로_고르게_되어_있다():
+    표 = (ROOT / "docs" / "review" / "제안-성적표.md").read_text(encoding="utf-8")
+    for 이유 in ("다른업무", "할일아님", "중복", "기타"):
+        assert 이유 in 표
+    assert "X 이유별" in 표, "세는 자리가 없다"
+
+
+# ── 12. 10장에 두 줄 ─────────────────────────────────────────────────
+
+
+def test_z_12_10장에_두_번_이상_당한_것이_적혔다():
+    """**횟수가 적혀 있어야 다음 사람이 진지하게 읽는다.**"""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 10. 화면 변경을 끝냈다고")
+    section = text[at : text.index("## 11.", at)]
+
+    assert "글자를 찾는 시험은 코드와 설명을 못 가립니다" in section
+    assert "네 번" in section
+    for 이름 in ("code_only", "test_v_09", "_token", "test_y_04"):
+        assert 이름 in section, f"{이름} 이 안 적혔다"
+
+    assert "pytest 는 화면을 못 봅니다" in section
+    assert "세 번" in section
+    assert ".mlist" in section
