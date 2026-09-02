@@ -187,7 +187,9 @@ function renderDrawer() {
       const saved = await res.json();
       detail.assignee_id = saved.assignee_id;
       detail.assignee = saved.assignee;
-      call('onAssignee', d.run_id, saved.assignee);
+      // 이름만이 아니라 **응답 전부**를 넘긴다 — 달력은 서버가 만든
+      // 툴팁 문장이 필요하고, 보드는 지금처럼 이름만 쓴다.
+      call('onAssignee', d.run_id, saved.assignee, saved);
     };
   }
 

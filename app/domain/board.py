@@ -202,16 +202,46 @@ def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
     # **접두사 없는 쌍을 두지 않는다.** `background`/`border` 로 두면 그쪽이
     # 기본값처럼 보여서, 세 번째 화면이 생겼을 때 사람이 따져 보지 않고 집는다 —
     # 이번에 고친 버그가 정확히 그 모양이었다.
+    days = overdue_days_of(run, today)
     return {
         "status": run.status,
         "color": color,
         "overdue": overdue,
-        "overdue_days": overdue_days_of(run, today),
+        "overdue_days": days,
         "bar_background": bar_bg,
         "bar_border": bar_border,
         "dot_background": dot_bg,
         "dot_border": dot_border,
+        # **문장도 여기서 만든다.** 색과 같은 이유다 — 조립하는 곳이 둘이면
+        # 반드시 어긋나고 어긋난 쪽을 아무도 눈치채지 못한다. 실제로 이
+        # 구조로 세 번 당했다(색·기간·툴팁). `title` 이라 부르지 않는 것은
+        # 달력의 점에서 그 이름이 **업무 이름**을 뜻하기 때문이다.
+        "tooltip": tooltip_of(run, status=run.status, overdue=overdue,
+                              overdue_days=days),
     }
+
+
+def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
+               overdue_days: int) -> str:
+    """점에 마우스를 올렸을 때 뜨는 한 줄.
+
+    **부서 · 상태 · 담당자 · 기간 · 기한 경과** 순이고 없는 것은 빠진다.
+    담당자와 부서를 점에 `data-*` 로 실어 두고 화면이 다시 조립하던 것을
+    걷어냈다 — 담당자를 바꾸면 아무도 그 값을 갱신하지 않아서 **옛 사람이
+    툴팁에 계속 남았다.**
+
+    기간은 `dot_of` 와 같은 규칙이다 — 한쪽이 비면 있는 쪽을 하루짜리로 본다.
+    """
+    start = run.start_date or run.end_date
+    end = run.end_date or run.start_date
+    조각 = [run.department.name if run.department else "담당 없음", status]
+    if run.assignee:
+        조각.append(run.assignee.name)
+    if start:
+        조각.append(f"기간 {start.isoformat()} → {end.isoformat()}")
+    if overdue and overdue_days:
+        조각.append(f"마감에서 {overdue_days}일 경과")
+    return " · ".join(x for x in 조각 if x)
 
 
 def overdue_days_of(run: TaskRun, today: dt.date) -> int:

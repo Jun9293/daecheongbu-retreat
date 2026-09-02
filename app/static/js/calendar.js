@@ -69,31 +69,32 @@ function paint(dot, p) {
    그래서 "점 하나가 무엇을 들고 있는가" 를 여기 한 자리에 모은다.
    새로 무언가를 실을 때 여기만 고치면 된다.
 
-   `title` 은 **여기가 기준**이다. 처음 그릴 때는 템플릿 매크로가 같은
-   문장을 만들지만, 날짜가 바뀐 뒤에도 맞아야 하는 것은 이쪽이다 —
-   최근.md 가 "정확한 날짜는 툴팁에 있다" 고 적은 그 툴팁이라, 옛 값이
-   남으면 그 문장이 거짓이 된다. 템플릿 쪽 문구를 고치면 여기도 고친다. */
-function retitle(dot, p) {
-  const 조각 = [dot.dataset.department || '', p.status];
-  if (dot.dataset.assignee) 조각.push(dot.dataset.assignee);
-  if (p.start) 조각.push(`기간 ${p.start} → ${p.end}`);
-  if (p.overdue && p.overdue_days) 조각.push(`마감에서 ${p.overdue_days}일 경과`);
-  dot.title = 조각.filter(Boolean).join(' · ');
-}
-
+   `title` 은 **여기서 만들지 않는다.** 서버가 완성된 문장을 준다
+   (`board.tooltip_of`). 화면이 조각을 다시 이어 붙이던 때는 조립하는 곳이
+   둘이어서, 담당자를 바꿔도 점이 들고 있던 옛 이름이 계속 다시 쓰였다 —
+   그 값을 갱신하는 사람이 아무도 없었기 때문이다. 색을 서버가 정하도록
+   고친 것과 같은 자리다. */
 function reload(dot, p) {
   paint(dot, p);
   // **기간도 따라온다.** 이것이 빠져서 옮긴 뒤 옛 기간이 비쳤다.
-  if (p.start) { dot.dataset.start = p.start; dot.dataset.end = p.end || p.start; }
-  else { delete dot.dataset.start; delete dot.dataset.end; }
-  retitle(dot, p);
+  // 다만 **서버가 날짜를 말해 줬을 때만** 손댄다 — 상태나 담당자를 바꾼
+  // 응답에는 날짜가 없는데, 없는 것을 "비었다" 로 읽으면 멀쩡한 기간이
+  // 지워져 비침이 사라진다.
+  if ('start' in p) {
+    if (p.start) { dot.dataset.start = p.start; dot.dataset.end = p.end || p.start; }
+    else { delete dot.dataset.start; delete dot.dataset.end; }
+  }
+  if (p.tooltip !== undefined) dot.title = p.tooltip;
 }
 
 function applyStatus(runId, view) {
-  // 상태만 바뀌어도 기간은 그대로이므로 점이 들고 있는 값을 함께 맞춘다 —
-  // `title` 의 상태 낱말이 옛것으로 남으면 안 된다.
-  dots(runId).forEach(dot => reload(dot, {
-    ...view, start: dot.dataset.start, end: dot.dataset.end}));
+  dots(runId).forEach(dot => reload(dot, view));
+}
+
+/* 담당자는 점에 적히지 않지만 **툴팁에는 들어간다.** 서버가 새 문장을
+   함께 돌려주므로 그것으로 갈아 끼운다. */
+function applyAssignee(runId, _name, saved) {
+  dots(runId).forEach(dot => reload(dot, saved));
 }
 
 /* ── 마감일이 바뀌면 점이 그 날로 옮겨간다 ───────────────────────────
@@ -230,6 +231,7 @@ Drawer.init({
   meta: runId => ({title: titleOf(runId)}),
   onStatus: applyStatus,
   onDates: applyDates,
+  onAssignee: applyAssignee,
   isTaskClick: el => el.closest('.cal-dot'),
   // 점을 누르면 마우스가 움직이지 않아 `mouseout` 이 뜨지 않는다 —
   // 비침이 켜진 채로 패널이 열린다. 열릴 때 지운다.
@@ -243,8 +245,7 @@ Drawer.init({
     goTo: '달력에는 스크롤해서 갈 자리가 없다. canGoTo:false 라 불리지도 않는다',
     link: '연결 강조는 보드의 바 사이에 선을 긋는 것이다. 점에는 그을 선이 없다',
     afterLayout: '다시 그릴 것이 없다. 달력은 서버가 그린 표 그대로다',
-    onClose: '닫을 때도 마찬가지다. 보드는 연결 강조를 지우지만 달력엔 없다',
-    onAssignee: '담당자는 점에 적히지 않는다. 마우스를 올렸을 때 뜨는 설명뿐이라 그대로 둔다',
+    onClose: '닫을 때 되돌릴 것이 없다. 보드는 연결 강조를 지우지만 달력엔 그을 선이 없고, 비침은 마우스를 떼면 사라진다',
     onDepartment: '담당팀을 옮기면 부서 색이 바뀌는데, 그건 통째로 다시 그리는 것이 맞다. 기본값(새로고침)을 쓴다',
     openFromUrl: '`?task=` 로 들어오면 그냥 열면 된다. 보드처럼 스크롤해서 옮길 자리가 없다',
   },

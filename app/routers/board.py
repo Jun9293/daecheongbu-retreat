@@ -400,7 +400,14 @@ def set_assignee(
         target_id=run.id,
         summary=f"{run.library.title}: {before or '없음'} → {run.assignee.name if run.assignee else '없음'}",
     )
-    return {"assignee_id": run.assignee_id, "assignee": run.assignee.name if run.assignee else None}
+    # **생김새와 함께 돌려준다** (board.paint_of). 담당자는 점에 적히지 않지만
+    # 마우스를 올렸을 때 뜨는 한 줄에는 들어간다 — 그 문장을 화면이 다시
+    # 조립하게 두면 옛 이름이 남는다. 실제로 그랬다 (4-13).
+    return {
+        "assignee_id": run.assignee_id,
+        "assignee": run.assignee.name if run.assignee else None,
+        **board_view.paint_of(run, dt.date.today()),
+    }
 
 
 class DatesIn(BaseModel):

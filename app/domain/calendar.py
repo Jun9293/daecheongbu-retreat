@@ -86,11 +86,13 @@ def dot_of(run: TaskRun, *, today: dt.date) -> dict:
         "overdue": paint["overdue"],
         "overdue_days": paint["overdue_days"],
         "department_key": run.department.key if run.department else None,
-        "department_name": run.department.name if run.department else "담당 없음",
         "color": paint["color"],
         "background": paint["dot_background"],
         "border": paint["dot_border"],
-        "assignee": run.assignee.name if run.assignee else None,
+        # **마우스를 올렸을 때 뜨는 한 줄도 구조가 준다** — 부서·담당자를
+        # 점에 실어 두고 화면이 다시 조립하던 것을 걷어냈다. 담당자를 바꾸면
+        # 그 값을 아무도 갱신하지 않아 옛 사람이 남았다 (board.tooltip_of).
+        "tooltip": paint["tooltip"],
         # **기간은 구조가 실어 보낸다** — 점에 마우스를 올렸을 때 화면이
         # 계산하거나 서버에 다시 묻지 않는다. 점이 자기 것을 들고 있다 (4-13).
         # 시작일이 없으면 마감일 하루짜리로 본다.
