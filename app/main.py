@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -38,7 +40,7 @@ from app.routers import (
     notify_admin,
 )
 from app.security import get_optional_user
-from app.templating import render
+from app.templating import HASHED_SUFFIXES, render
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dcb.main")
@@ -98,27 +100,55 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="대청부 수련회 관리 시스템", lifespan=lifespan)
 
 
-class ImmutableStatic(StaticFiles):
-    """`/static` 응답에 **우리가 정한** 캐시 기간을 붙인다.
+class HashedStatic(StaticFiles):
+    """`/static/js/calendar.<해시>.js` 를 받아 실제 파일을 내주고,
+    **우리가 정한** 캐시 기간을 붙인다.
+
+    ## 왜 캐시 기간을 우리가 말하는가
 
     지금까지 원점은 아무 캐시 헤더도 보내지 않았고, 4시간(`max-age=14400`)은
     **Cloudflare 가 알아서 정한 값**이었다. 우리가 말한 적이 없으므로 언제
     달라져도 알 수 없고, 실제로 그 4시간 때문에 고친 코드가 사용자에게
-    가지 않았다.
+    가지 않았다. 주소가 내용에 따라 바뀌므로 같은 주소는 영원히 같은
+    내용이고, 그래서 1년 + `immutable` 이 안전하다.
 
-    이제 주소가 **내용에 따라 바뀌므로**(`templating.static`) 같은 주소는
-    영원히 같은 내용이다. 그래서 1년 + `immutable` 이 안전하고, 재확인
-    요청조차 없어진다.
+    ## 왜 쿼리가 아니라 경로인가
 
-    **다만 이것이 통하려면 주소가 정말 내용에 따라 달라져야 한다.**
-    `?v=` 를 손으로 박거나 빼면 그 순간 사람들이 1년짜리 옛 파일을 물고
-    있게 된다 — 지난번(4시간)보다 훨씬 나쁘다.
+    `?v=<해시>` 가 통하려면 Cloudflare 의 캐시 키에 쿼리가 들어가야 하는데
+    **그 스위치는 이 저장소에 없다.** 대시보드에서 `Ignore Query String` 으로
+    바뀌는 순간 1년짜리 옛 파일을 물게 되고, 그건 지난번 4시간보다 훨씬 나쁘다.
 
-    > 캐시 키에 쿼리가 들어가는지는 Cloudflare 대시보드의 캐싱 수준
-    > 설정에 달려 있고 **그 스위치는 이 저장소에 없다.** `Ignore Query
-    > String` 으로 바뀌면 해시가 붙어도 소용이 없다. 그때는 주소를
-    > `/static/js/calendar.<해시>.js` 처럼 **경로**로 바꿔야 한다.
+    경로에 넣으면 하나 더 얻는다 — **손으로 박을 수가 없다.** 해시 없는
+    `/static/js/calendar.js` 는 **404 다.** 조용히 옛 파일을 먹이는 대신
+    눈앞에서 깨지는 쪽을 골랐다. `?v=` 는 빠뜨려도 아무 일이 없어서
+    실제로 한 화면이 몇 달 동안 `?v=1` 이었다.
+
+    **해시가 맞는지까지는 보지 않는다.** 어떤 8자리가 와도 떼고 지금 파일을
+    내준다. 요청마다 파일을 다시 해시로 뜨는 값을 치를 만한 이득이 없어서다 —
+    막으려던 것은 "해시를 아예 안 붙이는 것"(그건 위에서 404 로 막힌다)이고,
+    `calendar.deadbeef.js` 를 손으로 지어내는 사람은 없다. 덤으로 **열어 둔
+    옛 탭이 계속 돈다** — 그 탭은 새로고침하면 어차피 새 주소를 받는다
+    (HTML 은 `cf-cache-status: DYNAMIC` 이라 캐시되지 않는다).
+
+    **해시를 붙이지 않는 것들** — 아이콘 같은 것은 그대로 통과시킨다.
+    `sw.js` 와 `manifest.webmanifest` 가 고정 주소로 가리키고 있어서
+    해시를 붙이면 그쪽이 못 찾는다. 목록은 `templating.HASHED_SUFFIXES`.
     """
+
+    #  이름.<8자리 16진수>.확장자
+    _HASHED = re.compile(r"^(?P<stem>.+)\.(?P<stamp>[0-9a-f]{8})(?P<ext>\.[A-Za-z0-9]+)$")
+
+    def get_path(self, scope) -> str:
+        path = super().get_path(scope)
+        head, name = os.path.split(path)
+        m = self._HASHED.match(name)
+        if m:
+            return os.path.join(head, m["stem"] + m["ext"])
+        # 해시가 붙어야 하는 종류인데 안 붙어 있으면 **없는 파일로 둔다.**
+        # 손으로 박은 주소가 그 자리에서 드러나야 하기 때문이다.
+        if name.endswith(HASHED_SUFFIXES):
+            return os.path.join(head, name + ".해시가-빠졌습니다")
+        return path
 
     def file_response(self, *args, **kwargs):
         resp = super().file_response(*args, **kwargs)
@@ -126,7 +156,7 @@ class ImmutableStatic(StaticFiles):
         return resp
 
 
-app.mount("/static", ImmutableStatic(directory=str(STATIC_DIR)), name="static")
+app.mount("/static", HashedStatic(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(invite.router)
 # 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)

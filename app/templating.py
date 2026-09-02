@@ -49,13 +49,26 @@ FLASH_COOKIE = "dcb_flash"
 #
 # 그래서 **파일 내용에서 번호를 만듭니다.** 파일이 바뀌면 주소가 바뀌고,
 # 안 바뀌면 그대로라 쓸데없이 다시 받지도 않습니다.
-# 되돌리지 마세요 — `?v=1` 로 돌아가면 같은 일이 또 납니다.
+#
+# **번호는 쿼리(`?v=`)가 아니라 경로에 넣습니다** — `/static/js/calendar.<해시>.js`.
+# 쿼리로 두면 Cloudflare 의 캐시 키에 쿼리가 들어가야만 통하는데, **그 스위치는
+# 이 저장소에 없습니다.** 대시보드에서 `Ignore Query String` 으로 바뀌는 순간
+# 사람들이 1년짜리 옛 파일을 물게 되고, 그건 지난번 4시간보다 훨씬 나쁩니다.
+#
+# 경로에 넣으면 하나 더 얻습니다 — **손으로 박을 수가 없습니다.** 해시 없는
+# 주소는 파일이 나오지 않으므로(`main.HashedStatic`) 그 자리에서 드러납니다.
+# 조용히 옛 파일을 먹이는 대신 눈앞에서 깨지는 쪽을 고른 것입니다.
 _STATIC_DIR = BASE_DIR / "app" / "static"
 _static_stamps: dict[str, str] = {}
 
+# 해시를 붙이는 종류. **아이콘·매니페스트는 뺍니다** — 서비스워커와
+# `manifest.webmanifest` 가 고정 주소로 가리키고 있어서(11-3), 해시를 붙이면
+# 그쪽이 못 찾습니다.
+HASHED_SUFFIXES = (".js", ".css")
+
 
 def static(path: str) -> str:
-    """`/static/<path>` + 내용에서 뽑은 번호."""
+    """`/static/js/calendar.<해시>.js` — 번호가 **경로 안**에 있다."""
     stamp = _static_stamps.get(path)
     # 개발에서는 매번 다시 잰다. 운영에서는 켤 때 한 번이면 된다 —
     # 고친 것을 반영하려면 어차피 서버를 다시 켜야 한다 (11-2).
@@ -69,7 +82,11 @@ def static(path: str) -> str:
             # 없는 파일이라도 화면을 죽이지 않는다 — 그건 404 로 드러난다
             stamp = "0"
         _static_stamps[path] = stamp
-    return f"/static/{path}?v={stamp}"
+
+    for suffix in HASHED_SUFFIXES:
+        if path.endswith(suffix):
+            return f"/static/{path[: -len(suffix)]}.{stamp}{suffix}"
+    return f"/static/{path}"
 
 
 templates.env.globals["static"] = static
