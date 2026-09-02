@@ -92,7 +92,11 @@ def test_03_사이드바는_접힌_채로_시작하고_토글과_가장자리_�
     js = (ROOT / "app" / "static" / "js" / "sidenav.js").read_text(encoding="utf-8")
     assert "mouseenter" in js and "sidepin" in js
     # 한 번도 켠 적 없으면 접힘이다
-    assert 'saved === "1"' in js
+    # 저장된 고정 여부는 **첫 그림 전에** 읽는다. 그린 뒤에 붙이면 화면을
+    # 옮길 때마다 사이드바와 본문이 밀려 들어온다.
+    shell = (ROOT / "app" / "templates" / "retreat_base.html").read_text(encoding="utf-8")
+    assert "localStorage.getItem('dcb.sidepin')" in shell
+    assert 'saved === "1"' not in js, "아직 그린 뒤에 붙인다"
 
 
 # ---------------------------------------------------------------- 4. 가로 격자선

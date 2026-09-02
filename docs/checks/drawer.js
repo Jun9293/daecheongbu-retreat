@@ -346,20 +346,39 @@
       const parts = m[1].split(',').map(v => parseFloat(v));
       return parts.length < 4 || parts[3] >= 1;   // 알파가 없거나 1 이면 불투명
     };
-    const lc = [...sheet.querySelectorAll('.row.main .lc, .row.sub .lc')].filter(shown)[0];
-    if (lc) {
-      const 평소 = 불투명(lc);
-      lc.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
-      // :hover 는 스크립트로 못 켜므로 같은 색을 쓰는 상태로 대신 본다
-      const row = lc.closest('.row');
-      row.classList.add('hl');
-      await sleep(60);
-      const 강조 = 불투명(lc);
+    // `:hover` 는 스크립트로 켤 수 없다. 그래서 CSS 의 호버 규칙에 `.is-hover`
+    // 를 함께 달아 두고(retreat.css), **실제 요소에 그 클래스를 붙여** 실제
+    // 트리에서 계산된 배경을 읽는다. 선언만 떠서 탐침에 얹으면 캐스케이드가
+    // 없어서, 뒤엣것이 앞엣것을 이기는 그 버그가 다시 나도 초록이 된다.
+    const 잰다 = async (el, cls) => {
+      el.classList.add(cls);
+      await sleep(40);
+      const ok = 불투명(el);
+      el.classList.remove(cls);
+      await sleep(20);
+      return ok;
+    };
+    const main = [...sheet.querySelectorAll('.row.main .lc, .row.sub .lc')].filter(shown)[0];
+    const team = [...sheet.querySelectorAll('.row.team .lc')].filter(shown)[0];
+    if (main && team) {
+      const 잰값 = {
+        평소: 불투명(main),
+        호버: await 잰다(main, 'is-hover'),
+        부서호버: await 잰다(team, 'is-hover'),
+        연결: await 잰다(main.closest('.row'), 'hl') && true,
+      };
+      // `.hl`·`.anchorrow` 는 줄에 붙으므로 줄에 붙였다 뗀 뒤 칸을 다시 잰다
+      const row = main.closest('.row');
+      row.classList.add('hl'); await sleep(40);
+      잰값.연결 = 불투명(main);
       row.classList.remove('hl');
-      await sleep(60);
-      const ok = 평소 && 강조;
-      results.push((ok ? '✓' : '✗')
-        + ` 왼쪽 라벨 열이 불투명 (평소 ${평소 ? 'O' : 'X'} · 강조 ${강조 ? 'O' : 'X'})`);
+      row.classList.add('anchorrow'); await sleep(40);
+      잰값.선택 = 불투명(main);
+      row.classList.remove('anchorrow'); await sleep(20);
+
+      const ok = Object.values(잰값).every(Boolean);
+      results.push((ok ? '✓' : '✗') + ' 왼쪽 라벨 열이 불투명 ('
+        + Object.entries(잰값).map(([k, v]) => `${k} ${v ? 'O' : 'X'}`).join(' · ') + ')');
       if (!ok) errors.push('왼쪽 라벨 열 배경이 반투명 — 뒤의 바가 비친다');
     }
   } else {

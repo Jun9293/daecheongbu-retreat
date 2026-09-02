@@ -672,10 +672,17 @@ CSS = ROOT / "app" / "static" / "css" / "retreat.css"
 
 
 def _rule(css: str, selector: str) -> str:
-    """그 선택자의 선언 부분. 주석은 걷어낸다."""
+    """그 선택자가 든 규칙의 선언 부분. 주석은 걷어낸다.
+
+    한 규칙에 선택자가 여럿 붙어 있을 수 있으므로(`a:hover, a.is-hover{…}`)
+    **그 선택자를 포함하는 규칙**을 찾는다.
+    """
     body = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
-    at = body.index(selector + "{")
-    return body[at + len(selector) + 1 : body.index("}", at)]
+    for m in _re.finditer(r"([^{}]+)\{([^}]*)\}", body):
+        heads = [h.strip() for h in m.group(1).split(",")]
+        if selector in heads:
+            return m.group(2)
+    raise AssertionError(f"{selector} 규칙을 찾지 못했다")
 
 
 def test_왼쪽_목록에_마우스를_올려도_뒤의_바가_비치지_않는다():
@@ -690,8 +697,8 @@ def test_왼쪽_목록에_마우스를_올려도_뒤의_바가_비치지_않는�
     assert "background:var(--paper)" in _rule(css, ".lc")
 
     for selector, floor in (
-        (".row.main .lc:hover,.row.sub .lc:hover", "var(--paper)"),
-        (".row.team .lc:hover", "var(--side)"),
+        (".row.main .lc.is-hover", "var(--paper)"),
+        (".row.team .lc.is-hover", "var(--side)"),
         (".row.hl>.lc", "var(--paper)"),
         (".row.anchorrow>.lc", "var(--paper)"),
     ):

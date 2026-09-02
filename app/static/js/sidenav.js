@@ -63,7 +63,8 @@
     nav.classList.remove("peek");
   });
 
-  var saved = null;
-  try { saved = localStorage.getItem(KEY); } catch (e) { /* 무시 */ }
-  if (saved === "1") setPinned(true);
+  // 저장된 고정 여부는 **첫 그림 전에** retreat_base.html 의 짧은 스크립트가
+  // 이미 붙였다. 여기서 다시 붙이면 그린 뒤에 붙는 셈이라, 화면을 옮길 때마다
+  // 사이드바와 본문이 밀려 들어온다. 버튼 상태만 맞춰 둔다.
+  if (toggle) toggle.setAttribute("aria-pressed", pinned() ? "true" : "false");
 })();
