@@ -935,12 +935,15 @@ def test_r2_03_달력_코드에_날짜_비교가_없다():
     assert "< today" not in js and "dataset.today" not in js, "날짜를 견주고 있다"
     # 서버가 준 것을 그대로 쓴다
     assert "p.overdue" in js and "p.dot_background" in js
-    # 칠하는 곳이 하나다 — applyStatus 와 applyDates 가 같은 함수를 부른다
+    # 칠하는 곳이 하나다. 그리고 그것을 감싼 `reload()` 가 **점이 들고 있는
+    # 것 전부**(색·기간·title)를 한 자리에서 갈아 끼운다 — 옮길 때 하나라도
+    # 빠뜨리면 옛 값이 따라온다. 실제로 세 번 그랬다.
     assert js.count("function paint(") == 1
+    assert js.count("function reload(") == 1
     for caller in ("applyStatus", "applyDates"):
         block = js[js.index(f"function {caller}("):]
         block = block[: block.index("\n}")]
-        assert "paint(" in block, f"{caller} 가 paint 를 안 쓴다"
+        assert "reload(" in block, f"{caller} 가 reload 를 안 쓴다"
 
     page_src = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
     assert "data-today" not in page_src, "안 쓰는 값을 아직 실어 보낸다"
@@ -1210,25 +1213,45 @@ def test_t_01_준비_단계_묶음에_보드와_달력이_있다(admin_client, c
     (4-13). 나란히 놓으면 별개 기능으로 읽힌다."""
     page = admin_client.get("/calendar?scope=all").text
 
-    label = '<div class="navlabel">준비 단계</div>'
-    assert label in page, "묶음 제목이 없다"
+    label = '<div class="navgroup">준비 단계</div>'
+    assert label in page, "묶음이 없다"
     after = page[page.index(label):]
-    # 제목 바로 아래에 둘이 붙어 있다 — 다음 묶음 제목이 나오기 전에
-    upto = after[: after.index('class="navlabel"', len(label))]
-    assert 'href="/board"' in upto and 'href="/calendar"' in upto
+    # 바로 아래에 둘이 **한 단계 들어가** 붙어 있다
+    upto = after[: after.index('class="navlabel"')]
+    assert 'class="sub" href="/board"' in upto
+    assert 'class="sub" href="/calendar"' in upto
     assert ">보드" in upto and ">달력" in upto
 
 
-def test_t_02_묶음_제목이_다른_것과_같은_모양이다(admin_client, cal_data):
-    """새 스타일을 만들지 않는다 — 같은 뜻이면 같게 생겨야 한다."""
+def test_t_02_준비_단계가_회색_묶음_제목과_구별된다(admin_client, cal_data):
+    """`준비 단계` 는 `수련회 진행` 과 **같은 수준의 항목**이다.
+    `실무`·`회차 준비` 의 회색 묶음 제목과 달라야 한다."""
     page = admin_client.get("/calendar?scope=all").text
-    labels = page.count('<div class="navlabel">')
-    assert labels >= 3, "묶음 제목이 셋(준비 단계·실무·회차 준비) 이상이어야 한다"
-    for name in ("준비 단계", "실무", "회차 준비"):
-        assert f'<div class="navlabel">{name}</div>' in page, f"{name} 이 다른 모양이다"
+
+    # 회색 묶음 제목은 그대로 둘이다
+    for name in ("실무", "회차 준비"):
+        assert f'<div class="navlabel">{name}</div>' in page
+    assert '<div class="navlabel">준비 단계</div>' not in page, "아직 회색 묶음 제목이다"
 
     css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
-    assert css.count(".sidenav .navlabel{") == 1, "묶음 제목 스타일이 두 벌이다"
+    import re as _r
+
+    def decl(sel):
+        body = _r.sub(r"/\*.*?\*/", "", css, flags=_r.S)
+        at = body.index(sel + "{")
+        return body[at + len(sel) + 1 : body.index("}", at)]
+
+    item = decl(".sidenav nav a")
+    group = decl(".sidenav .navgroup")
+    label = decl(".sidenav .navlabel")
+
+    # 항목과 같은 글자 크기·색
+    assert "font-size:13.5px" in item and "font-size:13.5px" in group
+    assert "var(--ink-2)" in item and "var(--ink-2)" in group
+    # 회색 묶음 제목은 더 작고 더 흐리다 — 구별된다
+    assert "font-size:11px" in label and "var(--ink-3)" in label
+    # 하위는 한 단계 들어간다
+    assert "padding-left" in decl(".sidenav nav a.sub")
 
 
 def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data):
@@ -1239,10 +1262,12 @@ def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data
 
     assert current(admin_client.get("/calendar?scope=all").text) == {"/calendar"}
     assert current(admin_client.get("/board").text) == {"/board"}
-    # 묶음 제목 자체에는 붙지 않는다 — 링크가 아니다
+    # 묶음 자체에는 붙지 않는다 — 링크가 아니다
     page = admin_client.get("/calendar?scope=all").text
-    assert '<div class="navlabel">준비 단계</div>' in page
-    assert 'navlabel" aria-current' not in page
+    assert '<div class="navgroup">준비 단계</div>' in page
+    assert "navgroup\" aria-current" not in page
+    # 표시는 **하위 항목**에 붙는다
+    assert 'class="sub" href="/calendar" aria-current="page"' in page
 
 
 # ── 4 · 8. 점이 기간을 들고 간다 ────────────────────────────────────
@@ -1366,3 +1391,231 @@ def test_t_04c_비침은_무채색이다():
     assert "--team" not in span and "owner" not in span
     for bad in ("#", "rgb("):
         assert bad not in span, f"새 색을 만들었다: {bad}"
+
+
+# ════════════════════════════════════════════════════════════════════
+#  캐시 번호 · 전환 · 1일 표시 · 옮긴 뒤의 값 (수용기준 1~2 · 7~8 · 9~16 · 18)
+# ════════════════════════════════════════════════════════════════════
+#
+# **기간 비침이 배포됐는데 화면에 안 나타났다.** 원점은 Cache-Control 을
+# 보내지 않지만 Cloudflare 가 `/static` 에 `max-age=14400` 을 붙인다. 그동안
+# 브라우저는 서버에 물어보지도 않고 갖고 있던 파일을 쓴다. HTML 은 캐시되지
+# 않으므로(`cf-cache-status: DYNAMIC`) **새 화면 + 옛 코드**가 된다.
+# `calendar.js?v=1` 이 여러 라운드 동안 1 이었던 것이 그 위에 겹쳤다.
+
+
+# ── 1 · 2. 정적 파일 주소가 저절로 바뀐다 ───────────────────────────
+
+
+def test_u_01_정적_주소가_내용에서_나온다():
+    """번호를 손으로 올리면 **또 빠뜨린다.** 실제로 달력 쪽만 계속 1 이었다."""
+    from app.templating import static
+
+    css = ROOT / "app" / "static" / "css" / "retreat.css"
+    first = static("css/retreat.css")
+    assert first.startswith("/static/css/retreat.css?v=")
+    stamp = first.split("=", 1)[1]
+    assert len(stamp) >= 8 and stamp != "1", "번호가 내용에서 나오지 않는다"
+
+    # 같은 내용이면 같은 주소 — 안 바뀐 파일을 쓸데없이 다시 받지 않는다
+    assert static("css/retreat.css") == first
+
+    # 내용이 바뀌면 주소가 바뀐다
+    import app.templating as t
+
+    keep = css.read_bytes()
+    try:
+        css.write_bytes(keep + b"\n/* temp */\n")
+        t._static_stamps.clear()          # 운영은 켤 때 한 번 잰다 (11-2)
+        assert static("css/retreat.css") != first, "내용이 바뀌었는데 주소가 그대로다"
+    finally:
+        css.write_bytes(keep)
+        t._static_stamps.clear()
+
+    # 없는 파일이라도 화면을 죽이지 않는다
+    assert static("js/없는파일.js").endswith("?v=0")
+
+
+def test_u_02_화면_어디에도_손으로_박은_번호가_없다(admin_client, cal_data):
+    """한 곳이라도 남으면 그 파일이 또 낡는다."""
+    import re
+
+    for tpl in sorted((ROOT / "app" / "templates").rglob("*.html")):
+        text = tpl.read_text(encoding="utf-8")
+        stuck = re.findall(r'/static/[^"\']*\?v=\d', text)
+        assert stuck == [], f"{tpl.name} 에 손으로 박은 번호가 남았다: {stuck}"
+
+    # 달력 화면의 스크립트에도 걸려 있다 — 이번에 문제가 된 자리다
+    page = admin_client.get("/calendar?scope=all").text
+    for asset in ("js/calendar.js", "js/drawer.js", "css/retreat.css"):
+        found = re.search(r'/static/' + re.escape(asset) + r'\?v=([0-9a-f]{8})', page)
+        assert found, f"{asset} 에 내용 번호가 안 붙었다"
+
+
+# ── 7 · 8. 전환 ─────────────────────────────────────────────────────
+
+
+def test_u_07_화면을_옮길_때_밀려_들어오지_않는다(admin_client, cal_data):
+    """sidenav.js 가 **그린 뒤에** sidepin 을 붙여서, 화면을 옮길 때마다
+    사이드바와 본문이 260px 밀려 들어왔다. 매일 여러 번 오가는 자리다."""
+    page = admin_client.get("/calendar?scope=all").text
+    # 첫 그림 전에 정한다
+    assert 'class="booting' in page
+    assert "localStorage.getItem('dcb.sidepin')" in page
+    assert page.index("localStorage.getItem('dcb.sidepin')") < page.index("</body>")
+
+    js = (ROOT / "app" / "static" / "js" / "sidenav.js").read_text(encoding="utf-8")
+    assert "if (saved === \"1\") setPinned(true);" not in js, "아직 그린 뒤에 붙인다"
+
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    assert "body.booting" in css and "transition:none!important" in css
+    # 대신 아주 짧은 불투명도만 — 밀거나 키우지 않는다
+    assert "@keyframes dcb-in{from{opacity:0}to{opacity:1}}" in css
+    assert "animation:dcb-in .12s" in css
+    for moving in ("translate", "scale"):
+        assert moving not in css[css.index("@keyframes dcb-in"):css.index("@keyframes dcb-in") + 200]
+
+
+def test_u_08_움직임을_줄이라고_하면_전환이_없다():
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    at = css.index("@media (prefers-reduced-motion:reduce)")
+    block = css[at : css.index("}", css.index("}", at) + 1) + 1]
+    assert "transition:none!important" in block
+    assert "animation:none!important" in block, "애니메이션은 안 꺼진다"
+
+
+# ── 9 · 10. 1일에 달을 함께 ─────────────────────────────────────────
+
+
+def test_u_09_격자의_1일에_달이_함께_나온다(admin_client, cal_data):
+    """`1` 만 있으면 어느 달의 1일인지 알기 어렵다. 앞뒤 달 칸이 섞여 있어
+    더 그렇다 — **옆 달 칸이 오히려 더 헷갈리는 자리다.**"""
+    with app_session() as db:
+        view = cal_domain.build(db, retreat_of_cal(db), today=dt.date(2026, 8, 10),
+                                scope="all", month="2026-08-01")
+    cells = [c for week in view["weeks"] for c in week]
+    firsts = [c for c in cells if c["day"] == 1]
+    assert firsts, "1일이 없다 — 시험이 헛돈다"
+    for c in firsts:
+        assert "/" in c["day_label"], f"{c['date']} 의 1일에 달이 없다"
+    # 옆 달 칸의 1일도 같다
+    outs = [c for c in firsts if not c["in_month"]]
+    assert outs, "이 달 격자에 옆 달 1일이 없다"
+    for c in outs:
+        assert c["day_label"] == f"{int(c['date'][5:7])}/1"
+    # 나머지 날은 숫자만
+    for c in cells:
+        if c["day"] != 1:
+            assert c["day_label"] == str(c["day"])
+
+    page = admin_client.get("/calendar?scope=all&month=2026-08-01").text
+    assert ">9/1<" in page or ">8/1<" in page
+
+
+def test_u_10_주_목록의_1일도_같다(admin_client, cal_data):
+    page = admin_client.get("/calendar?scope=all&month=2026-08-01").text
+    view = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
+    assert "{{ cell.day_label }}<i>" in view, "주 목록이 아직 숫자만 쓴다"
+    assert "{{ cell.day_label }}</span>" in view, "격자가 아직 숫자만 쓴다"
+
+
+# ── 11~14. 옮긴 뒤의 값 ─────────────────────────────────────────────
+
+
+def test_u_13_점이_들고_있는_것을_한_자리에서_갈아_끼운다():
+    """**같은 모양으로 세 번 당했다** — 점은 옮겼는데 onDates 를 안 걸었고,
+    걸었더니 색이 안 따라왔고, 그 다음엔 기간이 안 따라왔다."""
+    js = code_only(read_js("calendar.js"))
+    assert js.count("function reload(") == 1
+    body = js[js.index("function reload("):]
+    body = body[: body.index("\n}")]
+    # 색·기간·title 이 한 자리에 있다
+    assert "paint(dot, p)" in body
+    assert "dataset.start" in body and "dataset.end" in body
+    assert "retitle(dot, p)" in body
+
+
+def test_u_11_옮기면_기간도_함께_바뀐다(admin_client, cal_data):
+    """옮긴 뒤 마우스를 올리면 **새 기간**이 비쳐야 한다. 복제한 점이 옛
+    data-start 를 물고 오면 옛 기간이 비친다."""
+    run_id = cal_data["runs"]["오늘 업무"]
+    saved = admin_client.post(f"/board/task/{run_id}/dates",
+                              json={"start": "2026-08-03", "end": "2026-08-07"}).json()
+    # 서버가 새 기간을 함께 돌려준다 — 화면이 그걸로 갈아 끼운다
+    assert saved["start"] == "2026-08-03" and saved["end"] == "2026-08-07"
+
+    js = code_only(read_js("calendar.js"))
+    body = js[js.index("function applyDates("):]
+    body = body[: body.index("\n}")]
+    assert "reload(model, saved)" in body, "옮길 때 값을 갈아 끼우지 않는다"
+    assert "paint(model, saved)" not in body, "색만 갈아 끼운다 — 기간이 남는다"
+
+
+def test_u_12_옮기면_title_의_기간도_새_값이다():
+    """`title` 은 이제 판단에 쓰인다 — 최근.md 가 "정확한 날짜는 툴팁에
+    있다" 고 적은 그 툴팁이다. 옛 값이 남으면 그 문장이 거짓이 된다."""
+    js = code_only(read_js("calendar.js"))
+    assert "function retitle(" in js
+    body = js[js.index("function retitle("):]
+    body = body[: body.index("\n}")]
+    assert "기간 ${p.start}" in body
+    assert "dot.title =" in body
+
+    # title 을 다시 만들 재료가 점에 실려 있다
+    view = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
+    assert "data-department=" in view and "data-assignee=" in view
+
+
+def test_u_14_시험이_옮긴_뒤의_값을_본다():
+    """옮기기 전만 보면 이 버그가 다시 지나간다."""
+    src = (ROOT / "tests" / "test_calendar.py").read_text(encoding="utf-8")
+    assert "def test_u_11_옮기면_기간도_함께_바뀐다" in src
+    assert "reload(model, saved)" in src
+
+
+# ── 15 · 16. 패널이 열리면 비침을 지운다 ────────────────────────────
+
+
+def test_u_15_패널이_열리면_비침이_사라진다():
+    """점을 클릭하면 마우스가 움직이지 않아 `mouseout` 이 뜨지 않는다."""
+    js = code_only(read_js("calendar.js"))
+    init = js[js.index("Drawer.init({"):]
+    init = init[: init.index("});")]
+    assert "onOpen: clearSpan" in init, "열릴 때 지우지 않는다"
+
+
+def test_u_16_안_쓰는_목록과_주석이_지금_코드와_맞는다():
+    """`__unused.onOpen` 의 이유가 지난 커밋에서 거짓이 됐다 —
+    "패널이 열릴 때 달력이 따로 할 일이 없다"."""
+    js = read_js("calendar.js")
+    keys, excuses = registered("calendar.js")
+    assert "onOpen" in keys, "등록했는데 목록에 남아 있으면 안 된다"
+    assert "onOpen" not in excuses, "안 쓴다고 적어 두고 쓰고 있다"
+
+    # 주석과 코드가 맞는가 — 실제로 걸린 것은 resize 뿐이었다
+    assert "패널이 열리거나 화면이 바뀌면 남아 있던 비침을 지운다" not in js
+    assert "화면 폭이 바뀌면 남아 있던 비침을 지운다" in js
+
+
+# ── 18. .out 규칙이 기준 문서에 적혔다 ──────────────────────────────
+
+
+def test_u_18_CLAUDE_md_에_비침과_out_이_적혔다():
+    """점은 이 달만, 비침은 격자에 보이는 칸까지 — 두 곳이 다르다."""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("#### 점의 생김새는 보드의 규칙을 그대로 씁니다")
+    section = text[at : text.index("#### 범위 칩")]
+    assert "비칩니다" in section
+    assert ":not(.out)" in section, "점을 놓는 범위가 안 적혔다"
+    assert "격자에 보이는 칸까지" in section, "비추는 범위가 안 적혔다"
+    assert "무채색" in section
+
+
+def test_u_08b_화면_폭이_두_곳에_있다는_것을_적었다():
+    """CSS 는 max-width:820px, JS 는 min-width:821px. 한 곳에서 읽을 수
+    없으므로 **같이 움직여야 한다**고 양쪽에 적는다."""
+    js = read_js("calendar.js")
+    assert "820px" in js and "같이 바꿔야" in js
+    # **양쪽에** 적어야 한다. 한쪽에만 적으면 다른 쪽을 고치는 사람은 못 본다
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    assert "821px" in css and "같이 바꿔야" in css

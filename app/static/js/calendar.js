@@ -61,8 +61,39 @@ function paint(dot, p) {
   dot.classList.toggle('filtered', onlyOpen() && p.status === '완료');
 }
 
+/* ── 점이 들고 있는 것을 한 자리에서 갈아 끼운다 ──────────────────────
+   **같은 모양으로 세 번 당했다.** 점은 옮겼는데 `onDates` 를 안 걸었고,
+   걸었더니 색이 안 따라왔고, 그 다음엔 기간이 안 따라왔다 — 옮길 때
+   복제한 점이 옛 `data-start`/`data-end`/`title` 을 그대로 물고 왔다.
+
+   그래서 "점 하나가 무엇을 들고 있는가" 를 여기 한 자리에 모은다.
+   새로 무언가를 실을 때 여기만 고치면 된다.
+
+   `title` 은 **여기가 기준**이다. 처음 그릴 때는 템플릿 매크로가 같은
+   문장을 만들지만, 날짜가 바뀐 뒤에도 맞아야 하는 것은 이쪽이다 —
+   최근.md 가 "정확한 날짜는 툴팁에 있다" 고 적은 그 툴팁이라, 옛 값이
+   남으면 그 문장이 거짓이 된다. 템플릿 쪽 문구를 고치면 여기도 고친다. */
+function retitle(dot, p) {
+  const 조각 = [dot.dataset.department || '', p.status];
+  if (dot.dataset.assignee) 조각.push(dot.dataset.assignee);
+  if (p.start) 조각.push(`기간 ${p.start} → ${p.end}`);
+  if (p.overdue && p.overdue_days) 조각.push(`마감에서 ${p.overdue_days}일 경과`);
+  dot.title = 조각.filter(Boolean).join(' · ');
+}
+
+function reload(dot, p) {
+  paint(dot, p);
+  // **기간도 따라온다.** 이것이 빠져서 옮긴 뒤 옛 기간이 비쳤다.
+  if (p.start) { dot.dataset.start = p.start; dot.dataset.end = p.end || p.start; }
+  else { delete dot.dataset.start; delete dot.dataset.end; }
+  retitle(dot, p);
+}
+
 function applyStatus(runId, view) {
-  dots(runId).forEach(dot => paint(dot, view));
+  // 상태만 바뀌어도 기간은 그대로이므로 점이 들고 있는 값을 함께 맞춘다 —
+  // `title` 의 상태 낱말이 옛것으로 남으면 안 된다.
+  dots(runId).forEach(dot => reload(dot, {
+    ...view, start: dot.dataset.start, end: dot.dataset.end}));
 }
 
 /* ── 마감일이 바뀌면 점이 그 날로 옮겨간다 ───────────────────────────
@@ -80,7 +111,7 @@ function applyDates(runId, saved) {
   // 못한다 — 패널과 안내문이 서로 다른 날짜를 말하게 된다.
   // 숨긴 자리(`#calstash`)에 두면 `dots()` 가 계속 찾는다.
   existing.forEach(el => el.remove());
-  paint(model, saved);
+  reload(model, saved);
 
   const cell = document.querySelector(`.cal-cell[data-date="${iso}"]:not(.out)`);
   if (cell) {
@@ -200,6 +231,9 @@ Drawer.init({
   onStatus: applyStatus,
   onDates: applyDates,
   isTaskClick: el => el.closest('.cal-dot'),
+  // 점을 누르면 마우스가 움직이지 않아 `mouseout` 이 뜨지 않는다 —
+  // 비침이 켜진 채로 패널이 열린다. 열릴 때 지운다.
+  onOpen: clearSpan,
 
   /* ── 일부러 등록하지 않은 것 ──────────────────────────────────────
      빠뜨린 것과 구별되도록 여기 적는다. `call()` 은 없는 핸들러를 조용히
@@ -209,7 +243,6 @@ Drawer.init({
     goTo: '달력에는 스크롤해서 갈 자리가 없다. canGoTo:false 라 불리지도 않는다',
     link: '연결 강조는 보드의 바 사이에 선을 긋는 것이다. 점에는 그을 선이 없다',
     afterLayout: '다시 그릴 것이 없다. 달력은 서버가 그린 표 그대로다',
-    onOpen: '패널이 열릴 때 달력이 따로 할 일이 없다',
     onClose: '닫을 때도 마찬가지다. 보드는 연결 강조를 지우지만 달력엔 없다',
     onAssignee: '담당자는 점에 적히지 않는다. 마우스를 올렸을 때 뜨는 설명뿐이라 그대로 둔다',
     onDepartment: '담당팀을 옮기면 부서 색이 바뀌는데, 그건 통째로 다시 그리는 것이 맞다. 기본값(새로고침)을 쓴다',
@@ -228,6 +261,10 @@ Drawer.init({
 
    **좁은 화면에서는 하지 않는다.** 주 목록에는 날짜 격자가 없고 마우스도
    없다 — 탭으로 흉내 내면 점을 누르려다 띠가 뜬다. */
+/* **폭이 두 곳에 있다.** CSS 는 `max-width:820px` 로 좁은 화면을 가르고
+   여기는 `min-width:821px` 로 넓은 화면을 가른다. 미디어 쿼리를 CSS 에서
+   읽어올 방법이 없으므로 값을 한 곳에 두지 못했다 —
+   **한쪽을 바꾸면 다른 쪽도 같이 바꿔야 한다.** (retreat.css 의 820px) */
 const 넓은화면 = () => matchMedia('(min-width: 821px)').matches;
 
 function clearSpan() {
@@ -241,8 +278,9 @@ function showSpan(dot) {
   const from = dot.dataset.start, to = dot.dataset.end;
   if (!from || !to || !넓은화면()) return;
 
-  // 이 달의 격자에 실제로 있는 칸만 칠한다. 달을 걸친 기간은 안쪽만 —
-  // 없는 칸을 만들어 낼 수는 없다.
+  // **격자에 보이는 칸까지 칠한다.** 점을 놓는 것은 이 달(`:not(.out)`)만이지만
+  // 비침은 옆 달 칸도 포함한다 — 눈에 보이는 칸을 비워 두면 고장난 것처럼
+  // 읽힌다. 이 차이는 CLAUDE.md 4-13 에 적어 두었다.
   const cells = [...document.querySelectorAll('.cal-grid .cal-cell[data-date]')]
     .filter(td => from <= td.dataset.date && td.dataset.date <= to);
   if (!cells.length) return;
@@ -269,7 +307,8 @@ document.addEventListener('mouseout', e => {
   if (e.relatedTarget && dot.contains(e.relatedTarget)) return;
   clearSpan();
 });
-// 패널이 열리거나 화면이 바뀌면 남아 있던 비침을 지운다
+// 화면 폭이 바뀌면 남아 있던 비침을 지운다.
+// (패널이 열릴 때는 `Drawer.init` 의 `onOpen` 이 지운다 — 여기가 아니다)
 addEventListener('resize', clearSpan);
 
 /* 점을 누르면 패널이 열린다. `href` 는 그대로 두었다 —

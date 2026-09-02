@@ -154,6 +154,10 @@ def build(
             row.append({
                 "date": iso,
                 "day": day.day,
+                # **1일에는 달을 함께 적는다.** `1` 만 있으면 어느 달의 1일인지
+                # 알기 어렵고, 앞뒤 달 칸이 섞여 있어 더 그렇다 — 오히려
+                # 옆 달(`.out`) 쪽이 더 헷갈리므로 거기도 같게 적는다.
+                "day_label": f"{day.month}/{day.day}" if day.day == 1 else str(day.day),
                 "in_month": day.month == first.month,
                 "is_today": day == today,
                 "weekday": (day.weekday() + 1) % 7,
