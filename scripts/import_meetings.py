@@ -70,15 +70,14 @@ def read_pages(folder: pathlib.Path) -> list[tuple[str, str]]:
     return [(p.stem, p.read_text(encoding="utf-8")) for p in pages]
 
 
-def collect(folder: pathlib.Path) -> tuple[list[회의], dict[str, list[str]]]:
+def collect(folder: pathlib.Path) -> tuple[list[회의], list[tuple[str, object]]]:
     """모든 페이지를 잘라 시간순으로 모은다."""
     모두: list[회의] = []
-    안본것: dict[str, list[str]] = {}
+    안본것: list[tuple[str, object]] = []
     for name, text in read_pages(folder):
-        회의들, 못 = cut(text, source=name)
+        회의들, 걸린 = cut(text, source=name)
         모두.extend(회의들)
-        if 못:
-            안본것[name] = 못
+        안본것 += [(name, g) for g in 걸린]
     # 날짜 있는 것이 먼저, 그 안에서 시간순. 날짜 없는 것은 뒤로.
     모두.sort(key=lambda m: (m.date is None, m.date or dt.date.max, m.source))
     return 모두, 안본것
@@ -133,19 +132,36 @@ def preview(회의들: list[회의], 안본것: dict[str, list[str]], *,
     for m in 고른것:
         print("  " + 표시(m))
 
+    빈자리 = [m for m in 고른것 if getattr(m, "empty_slot", False)]
+    if 빈자리:
+        print(f"\n[템플릿의 빈 칸 {len(빈자리)}건]  `26.00.00` — 회의가 아닙니다.")
+        print("  날짜 없는 덩어리와 다릅니다(그쪽은 진짜 내용이 들어 있습니다).")
+        for m in 빈자리:
+            print(f"    {표시(m)}")
+
     형광 = [m for m in 고른것 if m.highlights]
     if 형광:
-        print(f"\n[형광펜 {sum(len(m.highlights) for m in 형광)}곳]")
-        print("  **뜻은 추측입니다.** 노션에 규칙이 적혀 있지 않고, 같은 문장이")
-        print("  7/25 와 7/26 에 같은 색으로 두 번 나온 것에서 '안 끝난 것' 으로")
-        print("  읽었습니다. 본문에 ⟨미완료?⟩ 로 붙습니다 — 물음표를 뗄지는 사람이 정합니다.")
-        for m in 형광[:6]:
-            print(f"    {표시(m)}")
-            for h in m.highlights[:3]:
-                print(f"        ⟨미완료?⟩{h[:60]}")
+        import re as _re
+        전부 = [h for m in 형광 for h in m.highlights]
+        씨 = lambda t: _re.sub(r"[\s·,.()\-~]", "", t)
+        셈: dict[str, int] = {}
+        for h in 전부:
+            셈[씨(h)] = 셈.get(씨(h), 0) + 1
+        반복 = {k: v for k, v in 셈.items() if v >= 2}
+        print(f"\n[형광펜 {len(전부)}곳 · 서로 다른 문장 {len(셈)}개"
+              f" · 두 번 이상 나온 것 {len(반복)}개]")
+        print("  **뜻은 추측이고 근거가 약합니다.** 노션에 규칙이 적혀 있지 않고,")
+        print("  '안 끝나서 넘어온 것' 이라는 읽기는 두 번 나온 것들에 기대고 있습니다.")
+        print(f"  나머지 {len(셈) - len(반복)}개는 한 번씩만 나옵니다 —"
+              " 그냥 눈에 띄게 칠한 것일 수도 있습니다.")
+        print("  본문에 ⟨미완료?⟩ 로 붙습니다. **물음표를 뗄지는 사람이 정합니다.**")
+        for k, v in sorted(반복.items(), key=lambda x: -x[1]):
+            원문 = next(h for h in 전부 if 씨(h) == k)
+            print(f"    {v}번  {원문[:56]}")
 
-    평가 = [m for m in 고른것 if m.people_notes]
-    if 평가:
+    확실 = [m for m in 고른것 if m.people_sure]
+    볼만 = [m for m in 고른것 if m.people_maybe]
+    if 확실 or 볼만:
         print("\n" + "!" * 74)
         print("[사람 평가로 읽히는 대목]  **자동으로 빼지 않았습니다. 사람이 정합니다.**")
         print("  CLAUDE.md 9장 — 사람에 대한 평가는 이 시스템에 넣지 않습니다.")
@@ -153,18 +169,41 @@ def preview(회의들: list[회의], 안본것: dict[str, list[str]], *,
         print("  것이지 사람 품평이 아닙니다. 기계는 둘을 가릴 수 없습니다 —")
         print("  `재정에 익숙` 은 평가이고 `재정 담당 …` 은 업무입니다.")
         print("!" * 74)
-        for m in 평가:
-            print(f"  {표시(m)}   — {len(m.people_notes)}줄")
-            for line in m.people_notes[:10]:
-                print(f"      · {line[:70]}")
+        if 확실:
+            print(f"  ▸ 거의 확실 (MBTI) — {sum(len(m.people_sure) for m in 확실)}줄")
+            for m in 확실:
+                print(f"    {표시(m)}")
+                for line in m.people_sure[:10]:
+                    print(f"        · {line[:70]}")
+        if 볼만:
+            print(f"  ▸ 볼 만함 (잘함·못함 류) —"
+                  f" {sum(len(m.people_maybe) for m in 볼만)}줄."
+                  " **업무 메모도 걸립니다**(`사용못함` 등)")
+            for m in 볼만:
+                print(f"    {표시(m)}")
+                for line in m.people_maybe[:10]:
+                    print(f"        · {line[:70]}")
         print("  → 넣지 않으려면 그 회의를 --skip 으로 빼세요"
               " (예: --skip 04-총무팀:26.06.21)")
 
     if 안본것:
-        print("\n[회의로 보지 않은 빨간 줄]  버린 것이 아니라 앞 회의의 내용으로 들어갑니다")
-        for name, items in 안본것.items():
-            for x in items:
-                print(f"  {name} · {x[:60]}")
+        묶음: dict[str, list] = {}
+        for name, g in 안본것:
+            묶음.setdefault(g.kind, []).append((name, g))
+        말 = {
+            "안본제목": "[회의로 보지 않은 빨간 줄]  버린 것이 아니라 아래 회의의 내용으로 들어갑니다",
+            "날짜같은줄": "[본문 안에 날짜처럼 보이는 줄]  **자르지 않았습니다. 말만 합니다** —"
+                       " 색이 다르거나 자릿수가 달라 제목으로 못 알아본 것일 수 있습니다",
+            "머리말": "[첫 회의 앞의 글]  회의로 넣지 않았습니다. 필요하면 손으로 옮기세요",
+        }
+        for kind in ("날짜같은줄", "안본제목", "머리말"):
+            것들 = 묶음.get(kind)
+            if not 것들:
+                continue
+            print(f"\n{말[kind]}")
+            for name, g in 것들:
+                붙 = f"   → 「{g.붙은곳}」 에 붙음" if g.붙은곳 else ""
+                print(f"  {name} · {g.text[:56]}{붙}")
 
     print("\n[옮기지 않는 것]")
     print("  · 첨부 파일 — 있었다는 사실만 남깁니다 (본체는 안 옮깁니다)")
