@@ -596,6 +596,17 @@ class Meeting(Base):
     )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
+    # ── 어디서 왔는가 (회의록 1·2단계) ────────────────────────────────
+    # **옮긴 것과 사람이 적은 것이 같은 표에 들어간다.** 나누면 "그 얘기 어디
+    # 있더라" 를 두 번 찾게 되는데, 읽는 사람에게 둘은 그냥 회의록이다.
+    # 다만 **같아 보이면 안 된다** — 옮긴 것은 노션에서 온 것이라 형광펜 같은
+    # 표시가 추측으로 붙어 있고, 사람이 적은 것은 그렇지 않다.
+    origin: Mapped[str] = mapped_column(String(20), default="사람")   # '사람'|'노션'
+    source_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 옮기기 한 번에 붙는 이름. **이것으로 통째로 되돌린다** —
+    # 26년은 끝난 실제 회차라, 개발 중 넣은 것을 나중에 골라 낼 수 있어야 한다.
+    import_batch: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
     items: Mapped[list[MeetingItem]] = relationship(
         back_populates="meeting",
         cascade="all, delete-orphan",

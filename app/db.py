@@ -59,6 +59,10 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "retired_phone", "VARCHAR(20)"),
     # 링크 첨부 (4-9). 기존 행은 NULL — 값이 없으면 파일이다.
     ("task_attachments", "url", "VARCHAR(2000)"),
+    # 회의록의 출처와 옮기기 묶음. 기존 행은 NULL — 읽는 쪽이 '사람' 으로 본다.
+    ("meetings", "origin", "VARCHAR(20)"),
+    ("meetings", "source_ref", "VARCHAR(200)"),
+    ("meetings", "import_batch", "VARCHAR(40)"),
 )
 
 
