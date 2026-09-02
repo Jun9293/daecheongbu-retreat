@@ -914,7 +914,14 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     assert "def paint_of(" in board_src
     assert "board_domain.paint_of(" in cal_src, "달력이 따로 칠하고 있다"
     assert "board_domain.bar_style(" not in cal_src, "달력에 두 번째 계산이 남아 있다"
-    assert router_src.count("paint_of(") == 2, "/status 와 /dates 둘 다 써야 한다"
+    # `/status` · `/dates` · `/assignee` 셋 다 생김새를 함께 낸다.
+    # 담당자는 점에 안 적히지만 **툴팁에는 들어가서**, 안 실어 보내면 화면이
+    # 옛 이름으로 문장을 다시 쓴다 — 실제로 그랬다.
+    assert router_src.count("paint_of(") == 3, "세 곳 모두 써야 한다"
+    for path in ("/status", "/dates", "/assignee"):
+        at = router_src.index('@router.post("/board/task/{run_id}' + path + '")')
+        block = router_src[at : router_src.index("@router.", at + 10)]
+        assert "paint_of(" in block, f"{path} 가 생김새를 안 낸다"
     assert "board_view.bar_style(" not in router_src
 
     # **보드 첫 렌더도 지나야 한다.** 여기서 bar_style 을 직접 부르면
@@ -1343,7 +1350,7 @@ def test_t_06_오늘_테두리와_지연_점이_덮이지_않는다():
     assert "box-shadow" not in span and "border-color" not in span
 
 
-def test_t_07_달을_걸치면_이_달_안쪽만_칠한다():
+def test_t_07_달을_걸치면_격자_안쪽만_칠한다():
     js = code_only(read_js("calendar.js"))
     body = js[js.index("function showSpan("):]
     body = body[: body.index("\n}")]
@@ -1529,10 +1536,10 @@ def test_u_13_점이_들고_있는_것을_한_자리에서_갈아_끼운다():
     assert js.count("function reload(") == 1
     body = js[js.index("function reload("):]
     body = body[: body.index("\n}")]
-    # 색·기간·title 이 한 자리에 있다
+    # 색·기간·말이 한 자리에 있다
     assert "paint(dot, p)" in body
     assert "dataset.start" in body and "dataset.end" in body
-    assert "retitle(dot, p)" in body
+    assert "dot.title = p.tooltip" in body
 
 
 def test_u_11_옮기면_기간도_함께_바뀐다(admin_client, cal_data):
@@ -1551,19 +1558,75 @@ def test_u_11_옮기면_기간도_함께_바뀐다(admin_client, cal_data):
     assert "paint(model, saved)" not in body, "색만 갈아 끼운다 — 기간이 남는다"
 
 
-def test_u_12_옮기면_title_의_기간도_새_값이다():
-    """`title` 은 이제 판단에 쓰인다 — 최근.md 가 "정확한 날짜는 툴팁에
-    있다" 고 적은 그 툴팁이다. 옛 값이 남으면 그 문장이 거짓이 된다."""
-    js = code_only(read_js("calendar.js"))
-    assert "function retitle(" in js
-    body = js[js.index("function retitle("):]
-    body = body[: body.index("\n}")]
-    assert "기간 ${p.start}" in body
-    assert "dot.title =" in body
+def test_u_12_툴팁을_조립하는_곳이_하나다():
+    """전에는 템플릿 매크로와 `retitle()` 이 각각 조립하고, 시험이 **두 곳의
+    모양이 같은지**를 봤다. 그 구조로 이미 세 번 실패했다(색·기간·툴팁) —
+    색을 서버가 정하도록 고쳐서 해결한 것과 같은 길로 간다.
 
-    # title 을 다시 만들 재료가 점에 실려 있다
+    이제 **조립하는 곳은 `board.tooltip_of` 하나**이고, 매크로도 화면도
+    거기서 나온 값을 그대로 쓴다."""
+    js = code_only(read_js("calendar.js"))
+    # 화면은 조립하지 않는다
+    assert "function retitle(" not in js, "화면이 아직 문장을 만든다"
+    assert "dataset.department" not in js and "dataset.assignee" not in js
+    assert "dot.title = p.tooltip" in js
+
+    # 매크로도 조립하지 않는다
     view = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
-    assert "data-department=" in view and "data-assignee=" in view
+    assert 'title="{{ dot.tooltip }}"' in view, "매크로가 아직 조각을 잇는다"
+    assert "data-department=" not in view and "data-assignee=" not in view
+
+    # 조립하는 곳은 하나뿐이다
+    board_py = (ROOT / "app" / "domain" / "board.py").read_text(encoding="utf-8")
+    assert board_py.count("def tooltip_of(") == 1
+    assert board_py.count("마감에서 ") == 1, "기한 문구가 두 곳에 있다"
+    assert board_py.count("기간 ") >= 1
+    for other in ("app/static/js/calendar.js", "app/templates/calendar.html"):
+        text = (ROOT / other).read_text(encoding="utf-8")
+        assert "마감에서 " not in text, f"{other} 가 아직 문장을 만든다"
+
+
+def test_u_12b_담당자를_바꾸면_툴팁도_바뀐다(admin_client, cal_data):
+    """**실제로 있던 버그다.** `retitle` 이 `dot.dataset.assignee` 로 문장을
+    다시 썼는데 그 값을 갱신하는 사람이 아무도 없어서, 담당자를 바꿔도
+    옛 사람이 툴팁에 계속 남았다."""
+    run_id = cal_data["runs"]["오늘 업무"]
+    with app_session() as db:
+        who = db.get(models.User, cal_data["admin_id"])
+        who_name, who_id = who.name, who.id
+
+    saved = admin_client.post(f"/board/task/{run_id}/assignee",
+                              json={"user_id": who_id}).json()
+    assert saved["assignee"] == who_name
+    # **생김새와 함께 새 문장이 온다** — 화면은 받아서 넣기만 한다
+    assert who_name in saved["tooltip"], "새 담당자가 문장에 없다"
+
+    saved = admin_client.post(f"/board/task/{run_id}/assignee",
+                              json={"user_id": None}).json()
+    assert who_name not in saved["tooltip"], "옛 담당자가 남았다"
+
+    # 화면이 그것을 실제로 쓴다
+    js = code_only(read_js("calendar.js"))
+    init = js[js.index("Drawer.init({"):]
+    init = init[: init.index("});")]
+    assert "onAssignee: applyAssignee" in init
+
+
+def test_u_12c_상태를_바꿔도_기간과_지연_문구가_남는다(admin_client, cal_data):
+    """`/status` 응답에는 날짜가 없다. 그것을 "비었다" 로 읽으면 멀쩡한
+    기간이 지워지고, 문장에서 `· 기간 …` 이 조용히 빠진다."""
+    run_id = cal_data["runs"]["지각한 업무"]
+    view = admin_client.post(f"/board/task/{run_id}/status",
+                             json={"status": "진행중"}).json()
+    assert "기간 " in view["tooltip"], "상태를 바꾸니 기간이 사라졌다"
+    assert view["overdue"] and view["overdue_days"] > 0
+    assert f"마감에서 {view['overdue_days']}일 경과" in view["tooltip"]
+
+    # 화면 쪽 — 날짜를 **말해 줬을 때만** data-start 를 건드린다
+    js = code_only(read_js("calendar.js"))
+    body = js[js.index("function reload("):]
+    body = body[: body.index("\n}")]
+    assert "'start' in p" in body, "없는 날짜를 빈 값으로 읽는다"
 
 
 def test_u_14_시험이_옮긴_뒤의_값을_본다():
@@ -1571,6 +1634,9 @@ def test_u_14_시험이_옮긴_뒤의_값을_본다():
     src = (ROOT / "tests" / "test_calendar.py").read_text(encoding="utf-8")
     assert "def test_u_11_옮기면_기간도_함께_바뀐다" in src
     assert "reload(model, saved)" in src
+    # 담당자·상태도 **바꾼 뒤의 응답**을 본다
+    assert "def test_u_12b_담당자를_바꾸면_툴팁도_바뀐다" in src
+    assert "def test_u_12c_상태를_바꿔도_기간과_지연_문구가_남는다" in src
 
 
 # ── 15 · 16. 패널이 열리면 비침을 지운다 ────────────────────────────
@@ -1596,6 +1662,56 @@ def test_u_16_안_쓰는_목록과_주석이_지금_코드와_맞는다():
     assert "패널이 열리거나 화면이 바뀌면 남아 있던 비침을 지운다" not in js
     assert "화면 폭이 바뀌면 남아 있던 비침을 지운다" in js
 
+    # `onAssignee` 도 같은 일을 겪었다 — 등록했으므로 목록에서 빠져야 한다
+    assert "onAssignee" in keys and "onAssignee" not in excuses
+
+    # 남은 이유는 **혼자 서야 한다.** "닫을 때도 마찬가지다" 는 바로 위의
+    # `onOpen` 을 가리키고 있었는데, 그것이 목록에서 빠지면서 가리킬 곳을
+    # 잃었다 — 낡은 이유는 이렇게 조용히 생긴다.
+    for name, why in excuses.items():
+        assert "마찬가지" not in why, f"{name} 의 이유가 없어진 항목을 가리킨다"
+        assert len(why) > 15, f"{name} 의 이유가 너무 짧다"
+
+
+def test_u_16b_안_쓴다고_적어_두고_그_일을_하고_있지_않은가():
+    """**이유가 낡은 것을 잡는 방법**을 여기까지 찾았다.
+
+    두 번 다 같은 모양이었다 — 정말로 안 쓰던 훅이, 화면이 그 일을 **직접
+    하기 시작하면서** 필요해졌는데 목록은 그대로였다. `onAssignee` 가 그랬다:
+    `retitle` 이 `dot.dataset.assignee` 를 읽기 시작한 순간부터 "그대로 둔다"
+    는 거짓이었다.
+
+    처음에는 "그 주어를 코드에서 만지면 잡는다" 로 넓게 걸었는데 **헛짚었다** —
+    `board.js` 는 `m.department_key` 로 줄을 찾지만 그건 서버에서 방금 받은
+    값이고, `onDepartment` 를 안 걸고 통째로 다시 그리기로 한 판단은 지금도
+    맞다.
+
+    그래서 **실제로 당한 모양**으로 좁힌다. 화면이 그 주어를 `data-*` 에
+    **캐시해 두고** 나중에 다시 읽으면, 바뀌었을 때 갱신해 줄 사람이 필요하다 —
+    그것이 바로 그 훅이다. 서버가 방금 준 값을 쓰는 것은 낡을 수가 없다.
+
+    **`onOpen`·`onClose`·`afterLayout`·`goTo`·`link`·`openFromUrl` 은 못
+    잡는다.** 찾을 주어가 없다 — `onOpen` 의 'open' 은 `onlyOpen` 에도 걸린다.
+    이 절반은 방법을 찾지 못했고, **없는 것을 있다고 적지 않는다.**
+    """
+    주어들 = ("assignee", "department", "status", "dates")
+    for name in ("calendar.js", "board.js"):
+        keys, excuses = registered(name)
+        code = code_only(read_js(name))
+        # 목록 자체는 **선언**이지 사용이 아니다. `onDepartment:` 라는
+        # 열쇠말이 그 안에 있으므로, 걷어내지 않으면 자기 자신에 걸린다.
+        if "__unused" in code:
+            at = code.index("__unused")
+            code = code[:at] + code[code.index("}", at) + 1 :]
+        for 주어 in 주어들:
+            hook = "on" + 주어[:1].upper() + 주어[1:]
+            if hook not in excuses:
+                continue
+            for 캐시 in (f"dataset.{주어}", f'data-{주어}'):
+                assert 캐시 not in code, (
+                    f"{name}: {hook} 을 안 쓴다고 적어 두고 `{캐시}` 에 캐시해 "
+                    "두고 다시 읽는다 — 바뀌면 갱신해 줄 사람이 없다")
+
 
 # ── 18. .out 규칙이 기준 문서에 적혔다 ──────────────────────────────
 
@@ -1619,3 +1735,74 @@ def test_u_08b_화면_폭이_두_곳에_있다는_것을_적었다():
     # **양쪽에** 적어야 한다. 한쪽에만 적으면 다른 쪽을 고치는 사람은 못 본다
     css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
     assert "821px" in css and "같이 바꿔야" in css
+
+
+# ── 5 · 6. /static 에 우리가 정한 캐시 기간이 붙는다 ─────────────────
+
+
+def test_v_05_static_응답에_우리가_정한_캐시가_붙는다(admin_client):
+    """지금까지 원점은 아무 캐시 헤더도 보내지 않았고, 4시간은 **Cloudflare
+    가 알아서 정한 값**이었다. 우리가 말한 적이 없으므로 언제 달라져도 알
+    수 없다. 주소가 내용에 따라 바뀌므로 1년 + immutable 이 안전하다."""
+    res = admin_client.get("/static/js/calendar.js")
+    assert res.status_code == 200
+    cc = res.headers.get("cache-control", "")
+    assert "max-age=31536000" in cc and "immutable" in cc and "public" in cc
+
+
+def test_v_07_서비스워커와_매니페스트는_해시_주소가_아니다(admin_client):
+    """배포마다 주소가 바뀌면 **매번 새로 등록되고 옛 등록이 남는다.**
+    매니페스트 주소가 바뀌면 홈 화면에 추가한 앱이 다른 앱으로 읽힌다."""
+    for tpl in ("base.html", "retreat_base.html"):
+        view = (ROOT / "app" / "templates" / tpl).read_text(encoding="utf-8")
+        assert 'href="/manifest.webmanifest"' in view, f"{tpl} 의 매니페스트가 바뀌었다"
+        assert "static('manifest" not in view
+
+    app_js = read_js("app.js")
+    assert 'register("/sw.js")' in app_js, "서비스워커 주소가 바뀌었다"
+
+    # 둘 다 `/static` 밖의 고정 주소이므로 immutable 도 붙지 않는다
+    for path in ("/sw.js", "/manifest.webmanifest"):
+        res = admin_client.get(path)
+        assert res.status_code == 200
+        assert "immutable" not in res.headers.get("cache-control", ""), path
+
+    main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    assert "으로 옮기지 않는다" in main, "옮기지 말라는 말이 없다"
+    assert "매번 새로 등록되고 옛 등록이 남는다" in main, "왜인지가 없다"
+
+
+# ── 8. localStorage 가 막혀도 booting 이 벗겨진다 ───────────────────
+
+
+def test_v_08_저장소가_막혀도_전환이_영영_꺼지지_않는다():
+    """`localStorage` 는 사생활 모드나 사이트 데이터 차단에서 **접근 자체가
+    던진다.** 그 예외가 새면 그 뒤 줄이 안 돌고 `booting` 이 안 벗겨져
+    전환이 영영 꺼진다."""
+    view = (ROOT / "app" / "templates" / "retreat_base.html").read_text(encoding="utf-8")
+    at = view.index("<body class=\"booting")
+    boot = view[at : view.index("</script>", at)]
+
+    assert "localStorage.getItem('dcb.sidepin')" in boot
+    # 읽는 줄만 try 안에 있고
+    try_at = boot.index("try {")
+    catch_at = boot.index("catch (e)")
+    assert try_at < boot.index("localStorage") < catch_at
+    # 벗기는 줄은 그 **밖**에 있다 — 안에 있으면 예외 때 함께 건너뛴다
+    assert boot.index("classList.remove('booting')") > catch_at
+
+
+# ── 9. 시험 이름이 실제 동작과 맞는다 ───────────────────────────────
+
+
+def test_v_09_시험_이름이_실제_동작과_맞는다():
+    """이름이 사람이 시험을 찾는 방법이다. `.out` 칸까지 칠하므로
+    '이 달 안쪽' 이 아니라 '격자 안쪽' 이다."""
+    src = (ROOT / "tests" / "test_calendar.py").read_text(encoding="utf-8")
+    # **실제 함수 이름만 모아서 본다.** 그냥 문자열로 찾으면 이 단언문
+    # 자체에 걸려서 영원히 빨갛다.
+    import re as _re
+
+    names = set(_re.findall(r"^def (test_\w+)", src, _re.M))
+    assert "test_t_07_달을_걸치면_격자_안쪽만_칠한다" in names
+    assert not [n for n in names if "이_달_안쪽만" in n], "옛 이름이 남았다"

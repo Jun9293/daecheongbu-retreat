@@ -96,7 +96,37 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="대청부 수련회 관리 시스템", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+class ImmutableStatic(StaticFiles):
+    """`/static` 응답에 **우리가 정한** 캐시 기간을 붙인다.
+
+    지금까지 원점은 아무 캐시 헤더도 보내지 않았고, 4시간(`max-age=14400`)은
+    **Cloudflare 가 알아서 정한 값**이었다. 우리가 말한 적이 없으므로 언제
+    달라져도 알 수 없고, 실제로 그 4시간 때문에 고친 코드가 사용자에게
+    가지 않았다.
+
+    이제 주소가 **내용에 따라 바뀌므로**(`templating.static`) 같은 주소는
+    영원히 같은 내용이다. 그래서 1년 + `immutable` 이 안전하고, 재확인
+    요청조차 없어진다.
+
+    **다만 이것이 통하려면 주소가 정말 내용에 따라 달라져야 한다.**
+    `?v=` 를 손으로 박거나 빼면 그 순간 사람들이 1년짜리 옛 파일을 물고
+    있게 된다 — 지난번(4시간)보다 훨씬 나쁘다.
+
+    > 캐시 키에 쿼리가 들어가는지는 Cloudflare 대시보드의 캐싱 수준
+    > 설정에 달려 있고 **그 스위치는 이 저장소에 없다.** `Ignore Query
+    > String` 으로 바뀌면 해시가 붙어도 소용이 없다. 그때는 주소를
+    > `/static/js/calendar.<해시>.js` 처럼 **경로**로 바꿔야 한다.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+
+
+app.mount("/static", ImmutableStatic(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(invite.router)
 # 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
@@ -137,7 +167,13 @@ def favicon():
 
 @app.get("/sw.js", include_in_schema=False)
 def service_worker():
-    """서비스워커는 루트 경로에서 서빙되어야 앱 전체를 제어할 수 있다."""
+    """서비스워커는 루트 경로에서 서빙되어야 앱 전체를 제어할 수 있다.
+
+    **여기를 `static()` 으로 옮기지 않는다.** 주소에 내용 해시가 붙으면
+    배포할 때마다 등록 주소가 달라져 **매번 새로 등록되고 옛 등록이 남는다.**
+    `/manifest.webmanifest` 도 같은 이유로 고정 주소다 — 매니페스트 주소가
+    바뀌면 홈 화면에 추가한 앱이 다른 앱으로 읽힌다.
+    """
     return FileResponse(STATIC_DIR / "js" / "sw.js", media_type="application/javascript")
 
 
