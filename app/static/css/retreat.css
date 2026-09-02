@@ -1445,3 +1445,6 @@ button.btn:disabled{opacity:.4;cursor:default}
 /* 새 업무 제안은 붙일 곳이 없다 — 단추 대신 **어디서 만드는지**를 말한다 */
 .mt-sug-row.is-new{box-shadow:inset 2px 0 0 var(--rule-2)}
 .mt-sug-where{font-size:12px;color:var(--ink-3);flex:none}
+/* 잘렸다는 한 줄. 누를 것이 없으므로 더 조용하게 */
+.mt-sug-row.is-more{color:var(--ink-2)}
+.mt-sug-row.is-more b{font-weight:400}

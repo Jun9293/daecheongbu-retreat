@@ -88,16 +88,19 @@ def 표시(m: 회의) -> str:
 
 
 def mark_highlights(body: str) -> str:
-    """형광펜 자리에 `⟨미완료?⟩` 를 붙인다.
+    """형광펜 자리에 `⟨형광펜⟩` 을 붙인다.
 
-    **물음표가 붙어 있는 것이 중요하다.** 형광펜의 뜻은 노션에 적혀 있지 않고
-    쓰인 모양에서 읽은 **추측**이다 (`meeting_import` 의 머리말).
+    **뜻을 붙이지 않는다.** 처음에는 `⟨미완료?⟩` 였는데, 물음표가 있어도
+    뜻을 주장한다 — 나중에 읽는 사람은 물음표를 안 읽고 "미완료" 만 읽는다.
+    근거는 2/20 이다(`meeting_import` 의 머리말).
+
+    칠해져 있었다는 것은 **사실**이고 뜻은 모른다. 사실만 남긴다 (6-9).
     """
     import re
 
     return re.sub(
         r'<span color="yellow_bg">(.*?)</span>',
-        lambda mm: f"⟨미완료?⟩{mm.group(1).strip()}",
+        lambda mm: f"⟨형광펜⟩{mm.group(1).strip()}",
         body,
         flags=re.S,
     )
@@ -154,7 +157,8 @@ def preview(회의들: list[회의], 안본것: dict[str, list[str]], *,
         print("  '안 끝나서 넘어온 것' 이라는 읽기는 두 번 나온 것들에 기대고 있습니다.")
         print(f"  나머지 {len(셈) - len(반복)}개는 한 번씩만 나옵니다 —"
               " 그냥 눈에 띄게 칠한 것일 수도 있습니다.")
-        print("  본문에 ⟨미완료?⟩ 로 붙습니다. **물음표를 뗄지는 사람이 정합니다.**")
+        print("  본문에는 **뜻을 붙이지 않고** ⟨형광펜⟩ 으로만 넣습니다 —")
+        print("  칠해져 있었다는 것은 사실이고 뜻은 모릅니다. 밝혀지면 그때 붙입니다.")
         for k, v in sorted(반복.items(), key=lambda x: -x[1]):
             원문 = next(h for h in 전부 if 씨(h) == k)
             print(f"    {v}번  {원문[:56]}")

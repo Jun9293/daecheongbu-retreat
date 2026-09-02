@@ -29,7 +29,13 @@ function 그린다(items) {
   //   새 업무 — 붙일 곳이 없다. **단추를 두지 않는다** — 누를 곳이 없는
   //            단추를 보여 주느니 어디서 만드는지를 말한다 (보드의 `+ 업무 추가`).
   //            없는 기능을 있는 것처럼 보이게 하지 않는다
-  list.innerHTML = items.map(x => x.kind === 'new' ? `
+  list.innerHTML = items.map(x => x.kind === '더있음' ? `
+    <div class="mt-sug-row is-more">
+      <div class="mt-sug-main">
+        <b>${esc(x.text)}</b>
+        <span class="mt-sug-why">${esc(x.why)}</span>
+      </div>
+    </div>` : x.kind === 'new' ? `
     <div class="mt-sug-row is-new">
       <div class="mt-sug-main">
         <b>${esc(x.text)}</b>
