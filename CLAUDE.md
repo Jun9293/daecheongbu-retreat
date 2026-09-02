@@ -2025,6 +2025,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 회의록 화면 | `app/routers/meetings.py` · `templates/meetings.html` · `meeting_detail.html` |
 | 회의록을 읽고 제안하기 | `app/domain/suggest.py` — **읽고 제안하는 창구는 여기 하나다** (화면이든 채팅이든) |
 | 제안을 골라 반영하기 | `routers/meetings.py` 의 `/suggestions` · `/suggestions/apply` · `static/js/meeting.js` — **고른 것만** 들어가고 출처가 남는다 |
+| 논의로 남을 문장 만들기 | `routers/meetings.py` 의 `discussion_body` — **여기 하나다.** 누르기 전 미리보기와 실제 저장이 같은 함수를 쓴다. 두 벌이면 보여준 것과 남는 것이 갈리고, 갈린 쪽을 아무도 눈치채지 못한다 |
 | 노션처럼 쓰는 입력칸 | `app/static/js/listinput.js` — **여기 한 벌**. 논의 입력칸과 회의록 본문이 함께 쓴다 |
 | 정적 주소에 내용 해시 (11-2) | `app/templating.py` 의 `static` · `app/main.py` 의 `HashedStatic` |
 | 달력 보기 (4-13) | `app/domain/calendar.py` · `routers/calendar.py` · `templates/calendar.html` · `static/js/calendar.js` |
