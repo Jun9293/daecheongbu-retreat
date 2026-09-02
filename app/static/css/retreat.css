@@ -1439,3 +1439,9 @@ button.btn:disabled{opacity:.4;cursor:default}
   .mt-sug{margin-left:12px;margin-right:12px}
   .mt-sug-row{flex-wrap:wrap;gap:8px}
 }
+/* **무엇으로 고른 것인지** 제안 목록 위에 적는다 (6-3). 기대를 먼저 맞춘다 */
+.mt-sug-how{font-size:12.5px;color:var(--ink);line-height:1.6;margin:2px 0 6px;
+  border-left:2px solid var(--rule-2);padding:2px 0 2px 10px}
+/* 새 업무 제안은 붙일 곳이 없다 — 단추 대신 **어디서 만드는지**를 말한다 */
+.mt-sug-row.is-new{box-shadow:inset 2px 0 0 var(--rule-2)}
+.mt-sug-where{font-size:12px;color:var(--ink-3);flex:none}

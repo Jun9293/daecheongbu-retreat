@@ -24,7 +24,19 @@ function 그린다(items) {
     list.innerHTML = '<p class="mt-sug-none">붙일 만한 업무를 찾지 못했습니다.</p>';
     return;
   }
-  list.innerHTML = items.map(x => `
+  // **두 가지는 다르게 그린다.**
+  //   논의 — 붙일 업무가 있다. 눌러서 그 업무의 논의로 남긴다
+  //   새 업무 — 붙일 곳이 없다. **단추를 두지 않는다** — 누를 곳이 없는
+  //            단추를 보여 주느니 어디서 만드는지를 말한다 (보드의 `+ 업무 추가`).
+  //            없는 기능을 있는 것처럼 보이게 하지 않는다
+  list.innerHTML = items.map(x => x.kind === 'new' ? `
+    <div class="mt-sug-row is-new">
+      <div class="mt-sug-main">
+        <b>${esc(x.text)}</b>
+        <span class="mt-sug-why">${esc(x.why)}</span>
+      </div>
+      <span class="mt-sug-where">보드의 <b>+ 업무 추가</b> 에서</span>
+    </div>` : `
     <div class="mt-sug-row" data-run="${x.run_id}">
       <div class="mt-sug-main">
         <b>${esc(x.run_title)}</b>
