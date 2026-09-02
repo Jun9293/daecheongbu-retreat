@@ -49,9 +49,28 @@
   </div>
   {% endif %}
 </form>
+
+{#
+  제안 (회의록 4단계). **아무것도 자동으로 반영되지 않는다** — 사람이 하나씩
+  고른다. 고른 것에는 출처 회의록이 남고 ActivityLog 에 claude 로 기록된다.
+
+  **제안마다 왜 그 업무인지가 붙는다** (6-3). 논의를 250건 중 어디에 붙일지가
+  새 업무를 제안하는 것보다 어렵고, 틀리면 남의 회의 내용이 엉뚱한 곳에 남는다.
+
+  **실패해도 이 화면은 살아 있다** (4-10 조건 8) — 제안이 비는 것으로 끝난다.
+#}
+<section class="mt-sug" data-meeting="{{ meeting.id }}"
+         data-can-edit="{{ 1 if can_edit else 0 }}">
+  <h2>이 회의록에서 제안</h2>
+  <p class="mt-sug-note">
+    고른 것만 반영됩니다. 반영하면 그 업무의 <b>논의</b>로 남고 출처가 함께 적힙니다.
+  </p>
+  <div class="mt-sug-list" aria-live="polite">읽는 중…</div>
+</section>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ static('js/listinput.js') }}" defer></script>
+<script src="{{ static('js/meeting.js') }}" defer></script>
 {% endblock %}

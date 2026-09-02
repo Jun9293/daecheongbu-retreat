@@ -15,13 +15,17 @@ from sqlalchemy.orm import Session
 from app import notifications as notify_service
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
+from pydantic import BaseModel
+
 from app.models import (
     MEETING_ITEM_KINDS,
     Department,
+    DiscussionEntry,
     Meeting,
     MeetingItem,
     Retreat,
     Task,
+    TaskRun,
     User,
 )
 from app.domain import permissions as perm
@@ -310,3 +314,97 @@ def delete_meeting(
         summary=title,
     )
     return redirect(f"/meetings?retreat_id={retreat.id}", message="회의록을 삭제했습니다.")
+
+
+# ==========================================================================
+# 회의록을 읽고 제안하기 (CLAUDE.md 회의록 4단계)
+#
+# **읽고 제안하는 곳은 `domain/suggest.py` 하나다.** 여기는 그것을 화면에
+# 실어 보내고, 사람이 고른 것만 반영하는 창구일 뿐이다.
+#
+# **아무것도 자동으로 반영되지 않는다.** 사람이 하나씩 고른다.
+# 고른 것에는 **출처 회의록**이 남고 `ActivityLog` 에 `actor_type='claude'`
+# 로 기록된다 — 나중에 "이건 누가 넣었지" 를 물을 수 있어야 한다.
+
+
+@router.get("/{meeting_id}/suggestions")
+def meeting_suggestions(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """제안 목록. **실패해도 화면은 살아 있어야 한다** (4-10 조건 8) —
+    여기서 터지면 회의록 본문까지 못 읽게 된다. 빈 목록으로 답한다."""
+    meeting = _owned(db, meeting_id, retreat)
+    try:
+        from app.domain.suggest import suggest
+
+        것들 = suggest(db, retreat=retreat, meeting=meeting,
+                      as_of=meeting.meeting_date)
+    except Exception:                       # noqa: BLE001 — 화면을 죽이지 않는다
+        return {"items": [], "failed": True}
+    return {
+        "items": [
+            {
+                "kind": x.kind,
+                "text": x.text,
+                "why": x.why,
+                "run_id": x.run_id,
+                "run_title": x.run_title,
+                "evidence": x.evidence,
+            }
+            for x in 것들
+        ],
+        "failed": False,
+    }
+
+
+class SuggestionPick(BaseModel):
+    run_id: int
+
+
+@router.post("/{meeting_id}/suggestions/apply")
+def apply_suggestion(
+    meeting_id: int,
+    payload: SuggestionPick,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """고른 제안 하나를 그 업무의 논의로 남긴다.
+
+    **출처가 남는다.** 논의 본문 첫 줄에 어느 회의록에서 온 것인지 적고,
+    `ActivityLog` 에 `actor_type='claude'` 로 기록한다 — 나중에 골라 낼 수
+    있어야 한다 (옮기기의 `--undo` 와 같은 이유).
+    """
+    meeting = _owned(db, meeting_id, retreat)
+    run = db.get(TaskRun, payload.run_id)
+    if run is None or run.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+
+    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
+    본문 = (meeting.body or "").strip()
+    출처 = f"[회의록 {날} · {meeting.title}] 에서 옮김"
+    entry = DiscussionEntry(
+        run_id=run.id,
+        authored_at=meeting.meeting_date or dt.date.today(),
+        body=f"{출처}\n{본문}",
+        author_id=user.id,
+        author_name=user.name,
+    )
+    db.add(entry)
+    db.flush()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="회의록_제안_반영",
+        target_type="discussion_entry",
+        target_id=entry.id,
+        summary=f"{meeting.title} → {run.library.title}",
+        after_value={"meeting_id": meeting.id, "run_id": run.id},
+        actor_type="claude",
+    )
+    db.commit()
+    return {"ok": True, "entry_id": entry.id, "run_title": run.library.title}

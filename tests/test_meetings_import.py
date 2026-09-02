@@ -338,3 +338,72 @@ def test_x_21_시험_자료에_실명이_없다():
     # 원본 폴더는 무시 목록에 있다
     ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     assert "data/notion-meetings/" in ignore
+
+
+# ── 19. 고른 것만 반영되고 출처가 남는다 ─────────────────────────────
+
+
+def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회차와업무):
+    """**아무것도 자동으로 반영되지 않는다.** 사람이 하나씩 고른다.
+
+    고른 것에는 **출처 회의록**이 남고 `ActivityLog` 에 `actor_type='claude'`
+    로 기록된다 — 나중에 "이건 누가 넣었지" 를 물을 수 있어야 하고,
+    개발 중 넣은 것을 골라 낼 수 있어야 한다.
+    """
+    run_id = 회차와업무["run_id"]
+    with app_session() as db:
+        m = models.Meeting(retreat_id=회차와업무["retreat_id"],
+                           title="6월 회의", meeting_date=dt.date(2026, 6, 1),
+                           body=회차와업무["title"] + " 일정 논의")
+        db.add(m)
+        db.commit()
+        meeting_id = m.id
+        # 아직 아무것도 안 골랐으므로 논의가 없다
+        assert db.scalars(select(models.DiscussionEntry)
+                          .where(models.DiscussionEntry.run_id == run_id)).all() == []
+
+    보임 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    assert not 보임["failed"]
+    assert 보임["items"], "제안이 없으면 고를 것도 없다"
+    for x in 보임["items"]:
+        assert x["why"], "왜 그 업무인지가 없다"
+
+    # **고른 것 하나만** 반영한다
+    res = admin_client.post(f"/meetings/{meeting_id}/suggestions/apply",
+                            json={"run_id": run_id})
+    assert res.status_code == 200
+
+    with app_session() as db:
+        논의 = db.scalars(select(models.DiscussionEntry)
+                        .where(models.DiscussionEntry.run_id == run_id)).all()
+        assert len(논의) == 1, "고른 하나만 들어가야 한다"
+        # 출처가 남는다
+        assert "회의록" in 논의[0].body and "6월 회의" in 논의[0].body
+        assert "2026-06-01" in 논의[0].body
+
+        기록 = db.scalars(select(models.ActivityLog)
+                        .where(models.ActivityLog.action == "회의록_제안_반영")).all()
+        assert len(기록) == 1
+        assert 기록[0].actor_type == "claude", "누가 넣었는지가 남아야 한다"
+
+
+def test_x_19b_실패해도_회의록_화면은_살아_있다():
+    """4-10 조건 8 — 제안이 비는 것으로 끝나야 한다. 여기서 터져서
+    회의록 본문을 못 보게 되면 안 된다."""
+    본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")
+    at = 본문.index("def meeting_suggestions(")
+    블록 = 본문[at : 본문.index("\n@router", at)]
+    assert "except Exception" in 블록 and '"items": []' in 블록
+
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    assert "catch" in js
+    assert "회의록은 그대로 보실 수 있습니다" in js
+
+
+def test_x_19c_아무것도_자동으로_반영되지_않는다():
+    """`GET` 은 보여만 주고, 넣는 것은 사람이 누르는 `POST` 뿐이다."""
+    본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")
+    at = 본문.index("def meeting_suggestions(")
+    보여주는곳 = 본문[at : 본문.index("\n@router", at)]
+    for 쓰는말 in ("db.add(", "db.commit()"):
+        assert 쓰는말 not in 보여주는곳, f"보여주기만 해야 하는데 {쓰는말} 가 있다"

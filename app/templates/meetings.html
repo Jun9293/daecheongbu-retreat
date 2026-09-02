@@ -42,7 +42,7 @@
 {% if meetings %}
 <div class="mt-list">
   {% for m in meetings %}
-  <a class="mrow{{ ' mt-notion' if m.origin == '노션' }}" href="/meetings/{{ m.id }}">
+  <a class="mt-row{{ ' mt-notion' if m.origin == '노션' }}" href="/meetings/{{ m.id }}">
     <span class="mt-date">{{ m.meeting_date.isoformat() if m.meeting_date else '날짜 없음' }}</span>
     <span class="mt-title">{{ m.title }}</span>
     <span class="mt-tags">
