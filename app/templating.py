@@ -34,6 +34,47 @@ templates.env.auto_reload = bool(os.environ.get("DCB_DEV"))
 FLASH_COOKIE = "dcb_flash"
 
 
+# ── 정적 파일 주소 ────────────────────────────────────────────────────
+#
+# **번호를 손으로 올리지 않습니다.** `?v=1` 을 화면마다 박아 두고 고칠 때마다
+# 사람이 올리는 방식이었는데, 달력 쪽이 계속 1 이었습니다. 그래서 기간 비침을
+# 만들어 배포했는데도 화면에 나타나지 않았습니다 — 사람에게는 "기능이 안
+# 만들어진 것" 으로 보였습니다.
+#
+# **왜 그렇게까지 되는가** — 원점은 `Cache-Control` 을 보내지 않지만
+# Cloudflare 가 `/static` 에 `max-age=14400`(4시간)을 붙입니다. 그 동안
+# 브라우저는 **서버에 물어보지도 않고** 갖고 있던 파일을 씁니다. HTML 은
+# 캐시되지 않으므로(`cf-cache-status: DYNAMIC`) 화면만 새것이 되고 코드는
+# 옛것이 됩니다 — 새 화면 + 옛 코드, 11-2 가 적어 둔 그 조합입니다.
+#
+# 그래서 **파일 내용에서 번호를 만듭니다.** 파일이 바뀌면 주소가 바뀌고,
+# 안 바뀌면 그대로라 쓸데없이 다시 받지도 않습니다.
+# 되돌리지 마세요 — `?v=1` 로 돌아가면 같은 일이 또 납니다.
+_STATIC_DIR = BASE_DIR / "app" / "static"
+_static_stamps: dict[str, str] = {}
+
+
+def static(path: str) -> str:
+    """`/static/<path>` + 내용에서 뽑은 번호."""
+    stamp = _static_stamps.get(path)
+    # 개발에서는 매번 다시 잰다. 운영에서는 켤 때 한 번이면 된다 —
+    # 고친 것을 반영하려면 어차피 서버를 다시 켜야 한다 (11-2).
+    if stamp is None or templates.env.auto_reload:
+        import hashlib
+
+        try:
+            data = (_STATIC_DIR / path).read_bytes()
+            stamp = hashlib.md5(data).hexdigest()[:8]
+        except OSError:
+            # 없는 파일이라도 화면을 죽이지 않는다 — 그건 404 로 드러난다
+            stamp = "0"
+        _static_stamps[path] = stamp
+    return f"/static/{path}?v={stamp}"
+
+
+templates.env.globals["static"] = static
+
+
 def won(value: int | float | None) -> str:
     if value is None:
         return "-"

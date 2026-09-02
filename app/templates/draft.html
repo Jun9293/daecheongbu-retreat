@@ -93,5 +93,5 @@
 
 {% block scripts %}
 <script id="draft-meta" type="application/json">{{ {'department': department_key, 'canEdit': can_edit}|tojson }}</script>
-<script src="/static/js/draft.js?v=30" defer></script>
+<script src="{{ static('js/draft.js') }}" defer></script>
 {% endblock %}

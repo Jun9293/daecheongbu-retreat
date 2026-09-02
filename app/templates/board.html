@@ -118,6 +118,6 @@
 
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
-<script src="/static/js/drawer.js?v=1" defer></script>
-<script src="/static/js/board.js?v=31" defer></script>
+<script src="{{ static('js/drawer.js') }}" defer></script>
+<script src="{{ static('js/board.js') }}" defer></script>
 {% endblock %}

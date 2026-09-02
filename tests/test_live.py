@@ -1197,6 +1197,10 @@ def template_reads(name: str, root: str) -> dict[str, set[str]]:
     """
     text = open(f"app/templates/{name}", encoding="utf-8").read()
     inside = " ".join(a or b for a, b in JINJA.findall(text))
+    # **식 안의 따옴표 친 것도 걷어냅니다.** `{{ static('js/live.js') }}` 처럼
+    # 파일 이름이 식 안에 들어오면서, `live.js` 가 `live` 의 `js` 를 읽는 것으로
+    # 잡혔습니다. 문자열 안의 점은 값이 아니라 파일 이름입니다.
+    inside = re.sub(r"'[^']*'|\"[^\"]*\"", " ", inside)
     chain = re.compile(
         rf"\b{root}\.([A-Za-z_][A-Za-z0-9_]*)"
         rf"(?:\.([A-Za-z_][A-Za-z0-9_]*))?")
