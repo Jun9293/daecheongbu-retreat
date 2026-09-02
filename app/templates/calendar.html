@@ -133,6 +133,7 @@
 
 {% block scripts %}
 <script id="cal-data" type="application/json">{{ cal|tojson }}</script>
+<script src="{{ static('js/listinput.js') }}" defer></script>
 <script src="{{ static('js/drawer.js') }}" defer></script>
 <script src="{{ static('js/calendar.js') }}" defer></script>
 {% endblock %}
