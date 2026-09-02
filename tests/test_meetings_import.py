@@ -855,3 +855,205 @@ def test_z_12_10장에_두_번_이상_당한_것이_적혔다():
     assert "pytest 는 화면을 못 봅니다" in section
     assert "세 번" in section
     assert ".mlist" in section
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 화면 — 제안이 무엇을 하자는 것인지 말한다 (세 번째 리뷰)
+# ══════════════════════════════════════════════════════════════════════
+
+
+# ── 1 ~ 4. 하려는 일이 먼저, 크게 ────────────────────────────────────
+
+
+def _회의하나(회차와업무):
+    """시험용 회의 하나 + 그 업무 id. **`test_` 로 시작하면 안 된다** —
+    pytest 가 시험으로 수집해서 반환값을 두고 경고한다."""
+    run_id = 회차와업무["run_id"]
+    with app_session() as db:
+        retreat = db.get(models.Retreat, 회차와업무["retreat_id"])
+        m = models.Meeting(retreat_id=retreat.id, title="6월 회의",
+                           meeting_date=dt.date(2026, 6, 1),
+                           body=회차와업무["title"] + " 일정 논의")
+        db.add(m)
+        db.commit()
+        meeting_id = m.id
+    return meeting_id, run_id
+
+
+def test_w2_01b_화면이_하려는_일을_먼저_크게_그린다():
+    """순서가 뒤집혀 있었다 — 하려는 일이 먼저, 근거는 그 아래 작게."""
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    # 하려는 일이 먼저 그려진다
+    at머리 = js.index("const 머리 =")
+    at근거 = js.index("const 근거 =")
+    assert at머리 < at근거, "근거를 먼저 만든다"
+    assert 'class="mt-do"' in js
+    assert "${머리}${근거}" in js or "${머리}${이미}${근거}" in js
+
+    css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    import re as _r
+
+    def decl(sel):
+        body = _r.sub(r"/\*.*?\*/", "", css, flags=_r.S)
+        at = body.index(sel + "{")
+        return body[at + len(sel) + 1 : body.index("}", at)]
+
+    큰 = float(_r.search(r"font-size:([\d.]+)px", decl(".mt-do")).group(1))
+    작은 = float(_r.search(r"font-size:([\d.]+)px", decl(".mt-sug-why")).group(1))
+    assert 큰 > 작은, "하려는 일이 근거보다 작다"
+    # 4-0 — 조용하게. 느낌표도 권유도 없다
+    assert "!" not in js[js.index("function 줄("): js.index("function 그린다(")]
+
+
+def test_w2_03_어느_회의에서_온_것인지가_제안마다_보인다(회차와업무, admin_client):
+    meeting_id, run_id = _회의하나(회차와업무)
+    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    assert data["items"], "제안이 없으면 이 시험이 아무것도 안 지킨다"
+    for x in data["items"]:
+        assert x["action"], "무엇을 하자는 것인지가 없다"
+        assert x["from"], "어느 회의에서 온 것인지가 없다"
+        assert "2026-06-01" in x["from"]
+        if x["kind"] == "discussion":
+            # 하려는 일이 **문장**이다 — 업무 이름만 있는 것이 아니다
+            assert "논의로 남깁니다" in x["action"]
+            assert "「" in x["action"]
+
+
+def test_w2_04_새_업무_제안도_같은_모양이다(짧은업무, admin_client):
+    with app_session() as db:
+        retreat = db.get(models.Retreat, 짧은업무)
+        m = models.Meeting(retreat_id=retreat.id, title="6월 회의",
+                           meeting_date=dt.date(2026, 6, 1),
+                           body="- 세미나실 셀프조작 가능여부 확인 필요\n")
+        db.add(m)
+        db.commit()
+        meeting_id = m.id
+    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    새것 = [x for x in data["items"] if x["kind"] == "new"]
+    if not 새것:
+        pytest.skip("이 회의에서는 새 업무 제안이 안 나온다")
+    for x in 새것:
+        assert x["action"] and "새 업무로 만듭니다" not in x["action"], \
+            "하려는 일에 우리 말머리가 섞였다 — 화면이 라벨로 붙인다"
+        assert x["from"]
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    assert "새 업무로 만들기" in js, "무엇을 만들자는 것인지 라벨이 없다"
+
+
+# ── 5 · 6. 누르기 전에 무엇이 적히는지 ───────────────────────────────
+
+
+def test_w2_05_누르기_전에_남을_문장을_볼_수_있다(회차와업무, admin_client):
+    """4-10 이 "무엇을 보고 그렇게 말하는지 함께 보인다" 고 한 자리와 같다."""
+    meeting_id, run_id = _회의하나(회차와업무)
+    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    논의 = [x for x in data["items"] if x["kind"] == "discussion"]
+    assert 논의
+    for x in 논의:
+        assert x["preview"], "남을 문장이 없다"
+        assert "회의록" in x["preview"] and "에서 옮김" in x["preview"]
+
+    # **미리보기와 실제 저장이 같은 함수를 쓴다** — 두 벌이면 갈린다
+    본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")
+    assert 본문.count("def discussion_body(") == 1
+    assert 본문.count("discussion_body(meeting)") == 2
+
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    assert "남을 내용 보기" in js
+
+
+def test_w2_05b_보여준_것과_남는_것이_같다(회차와업무, admin_client):
+    meeting_id, run_id = _회의하나(회차와업무)
+    보여준것 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    미리 = next(x["preview"] for x in 보여준것["items"] if x["kind"] == "discussion")
+    admin_client.post(f"/meetings/{meeting_id}/suggestions/apply",
+                      json={"run_id": run_id})
+    with app_session() as db:
+        남은것 = db.scalars(select(models.DiscussionEntry)
+                          .where(models.DiscussionEntry.run_id == run_id)).all()
+    assert len(남은것) == 1
+    assert 남은것[0].body == 미리, "보여준 것과 남는 것이 다르다"
+
+
+def test_w2_06_이미_있으면_말한다(회차와업무, admin_client):
+    """같은 것을 두 번 남기게 두지 않는다 — 두 번 남으면 어느 것이 맞는지
+    알 수 없고, 지우는 길은 그 업무의 논의 탭뿐이다."""
+    meeting_id, run_id = _회의하나(회차와업무)
+    처음 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    assert not any(x["already"] for x in 처음["items"])
+
+    admin_client.post(f"/meetings/{meeting_id}/suggestions/apply",
+                      json={"run_id": run_id})
+    다음 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    걸린것 = [x for x in 다음["items"] if x["run_id"] == run_id]
+    assert 걸린것 and 걸린것[0]["already"], "이미 있는데 말하지 않는다"
+
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    assert "이미 있습니다" in js and "그래도 남기기" in js
+
+
+# ── 7 ~ 9. 본문에 태그가 안 샌다 ─────────────────────────────────────
+
+
+def test_w2_07_본문에_태그가_남지_않는다():
+    from scripts.import_meetings import mark_highlights
+
+    글 = ('- <span color="red_bg">수련회 간략광고 6/7 </span>\n'
+          '<details>\n<summary>접힌 것</summary>\n'
+          '\t- <span color="red">오티 - 순서 등 전달</span>\n'
+          '</details>\n')
+    나온것 = mark_highlights(글)
+    for 태그 in ("<span", "</span>", "{color=", "<details", "<summary"):
+        assert 태그 not in 나온것, f"{태그} 가 남았다"
+    assert "오티 - 순서 등 전달" in 나온것, "내용까지 지웠다"
+    assert "접힌 것" in 나온것
+
+
+def test_w2_08_노란_형광펜이_두_모양_다_바뀐다():
+    """노션에 두 가지 모양으로 적혀 있다. 하나만 처리해서 **안내문은
+    ⟨형광펜⟩ 을 설명하는데 본문에는 `{color="yellow_bg"}` 가 남았다.**"""
+    from scripts.import_meetings import mark_highlights
+
+    assert "⟨형광펜⟩대걸레 문의" in mark_highlights(
+        '<span color="yellow_bg">대걸레 문의</span>')
+    # 뒤에 붙는 모양
+    나온것 = mark_highlights('\t- 만들어보겠다 (박민준) {color="yellow_bg"}')
+    assert "⟨형광펜⟩" in 나온것 and "{color=" not in 나온것
+    assert "만들어보겠다 (박민준)" in 나온것
+
+
+def test_w2_09_빨간_형광펜을_따로_적고_이유가_있다():
+    """**모르면 합치지 않는다.** 합치면 두 색이 같은 뜻이었다는 주장이 되고,
+    그 주장은 아무도 한 적이 없다 (6-9)."""
+    from scripts.import_meetings import mark_highlights
+
+    나온것 = mark_highlights('<span color="red_bg">면장갑</span>')
+    assert "⟨빨간형광펜⟩면장갑" in 나온것
+    assert "⟨형광펜⟩면장갑" not in 나온것, "노란 것과 합쳤다"
+
+    import inspect
+
+    from scripts import import_meetings
+
+    doc = inspect.getdoc(import_meetings.mark_highlights) or ""
+    assert "뜻이 같은지 다른지 모른다" in doc
+    assert "모르면 합치지 않는다" in doc
+    assert "6-9" in doc
+
+
+# ── 11. 고르는 방식은 안 건드렸다 ────────────────────────────────────
+
+
+def test_w2_11_고르는_방식은_안_건드렸다():
+    """**지금 성적표를 채우려는 참이다.** 제안이 달라지면 표본을 다시
+    잡아야 한다."""
+    import inspect
+
+    from app.domain import suggest as mod
+
+    src = inspect.getsource(mod)
+    # 하한 · 흔한 낱말 · 그물의 숫자가 그대로다
+    assert "if n >= 2 and any(w not in 흔함 for w in 낱말)" in src
+    assert "def 흔한낱말(rows: list[BoardRow], 넘으면: int = 3)" in src
+    assert "if 가까움 >= 2:" in src
+    assert "if not (6 <= len(말) <= 40):" in src

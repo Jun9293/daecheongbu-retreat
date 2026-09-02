@@ -327,6 +327,19 @@ def delete_meeting(
 # 로 기록된다 — 나중에 "이건 누가 넣었지" 를 물을 수 있어야 한다.
 
 
+def discussion_body(meeting: Meeting) -> str:
+    """그 업무의 논의로 **정확히 무엇이 적히는가.**
+
+    **누르기 전에 볼 수 있어야 한다** — 4-10 이 "무엇을 보고 그렇게 말하는지
+    함께 보인다" 고 한 자리와 같다. 그래서 만드는 곳을 하나로 두고, 미리보기와
+    실제 저장이 **같은 함수**를 쓴다. 두 벌이 되면 보여준 것과 남는 것이
+    갈리고, 갈린 쪽을 아무도 눈치채지 못한다.
+    """
+    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
+    출처 = f"[회의록 {날} · {meeting.title}] 에서 옮김"
+    return f"{출처}\n{(meeting.body or '').strip()}"
+
+
 @router.get("/{meeting_id}/suggestions")
 def meeting_suggestions(
     meeting_id: int,
@@ -344,15 +357,49 @@ def meeting_suggestions(
                       as_of=meeting.meeting_date)
     except Exception:                       # noqa: BLE001 — 화면을 죽이지 않는다
         return {"items": [], "failed": True}
+    # **이미 그 회의록에서 온 논의가 있으면 말한다.** 같은 것을 두 번 남기게
+    # 두지 않는다 — 두 번 남으면 어느 것이 맞는지 알 수 없고, 지우는 길은
+    # 그 업무의 논의 탭뿐이라 되돌리는 값이 비싸다.
+    표 = f"[회의록 {meeting.meeting_date.isoformat() if meeting.meeting_date else '날짜 없음'}"
+    이미 = {
+        e.run_id
+        for e in db.scalars(
+            select(DiscussionEntry).where(DiscussionEntry.body.like(표 + "%")))
+        if f"· {meeting.title}]" in (e.body or "")
+    }
+    남을것 = discussion_body(meeting)
+    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
+    어디 = f"{날} 회의록"
+
+    def 하자는말(x) -> str:
+        """**무엇을 하자는 것인지.** 왜 골랐는지가 아니라."""
+        if x.kind == "discussion":
+            return f"이 회의 내용을 「{x.run_title}」 의 논의로 남깁니다"
+        if x.kind == "new":
+            말 = x.text.split("— ", 1)[-1]
+            # **화면에서만** 형광펜 표시를 뗀다. 본문에는 그대로 남고
+            # 고르는 것도 그대로다 — 하려는 일을 읽는 데 방해만 된다
+            for 표 in ("⟨형광펜⟩", "⟨빨간형광펜⟩"):
+                말 = 말.replace(표, "")
+            return 말.strip()
+        return x.text
+
     return {
+        "meeting": 어디,
         "items": [
             {
                 "kind": x.kind,
+                # 하려는 일이 먼저다. 화면이 이것을 크게 그린다
+                "action": 하자는말(x),
                 "text": x.text,
                 "why": x.why,
                 "run_id": x.run_id,
                 "run_title": x.run_title,
                 "evidence": x.evidence,
+                "from": 어디,
+                # 누르기 전에 볼 수 있어야 한다 (2단계)
+                "preview": 남을것 if x.kind == "discussion" else None,
+                "already": bool(x.run_id and x.run_id in 이미),
             }
             for x in 것들
         ],
@@ -383,13 +430,11 @@ def apply_suggestion(
     if run is None or run.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
 
-    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
-    본문 = (meeting.body or "").strip()
-    출처 = f"[회의록 {날} · {meeting.title}] 에서 옮김"
     entry = DiscussionEntry(
         run_id=run.id,
         authored_at=meeting.meeting_date or dt.date.today(),
-        body=f"{출처}\n{본문}",
+        # **미리보기와 같은 함수**를 쓴다. 두 벌이면 보여준 것과 남는 것이 갈린다
+        body=discussion_body(meeting),
         author_id=user.id,
         author_name=user.name,
     )
