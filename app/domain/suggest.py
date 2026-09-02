@@ -115,6 +115,23 @@ def _낱말(text: str) -> set[str]:
     return {w for w in re.findall(r"[가-힣A-Za-z]{2,}", text)}
 
 
+def 흔한낱말(rows: list[BoardRow], 넘으면: int = 3) -> set[str]:
+    """보드에서 **여러 업무 이름에 두루 나오는 낱말**.
+
+    `제작` 은 업무 이름 11개에, `준비`·`확정`·`완료` 는 6개에 나온다. 이런
+    낱말만으로 겹친 것은 관계를 말해 주지 않는다 — `확인, 조정` 이 겹쳤다고
+    그 회의가 그 업무 이야기인 것은 아니다.
+
+    잰 결과 이 조건은 논의 제안을 104개에서 95개로 줄인다. 크지 않지만
+    **줄어드는 아홉 개가 정확히 가장 약한 것들**이라 남긴다.
+    """
+    셈: dict[str, int] = {}
+    for x in rows:
+        for w in _낱말(x.title):
+            셈[w] = 셈.get(w, 0) + 1
+    return {w for w, c in 셈.items() if c > 넘으면}
+
+
 def 겹침(a: str, b: str) -> tuple[int, list[str]]:
     """두 글의 겹치는 낱말 수와 그 낱말들. **왜 그 업무인지의 근거**가 된다."""
     공통 = sorted(_낱말(a) & _낱말(b), key=len, reverse=True)
@@ -146,11 +163,16 @@ def 할일줄(본문: str) -> list[str]:
     """
     나온것 = []
     for line in 본문.splitlines():
-        말 = re.sub(r"<[^>]+>", "", line).strip(" \t-•◦▪*")
+        말 = re.sub(r"<[^>]+>", "", line)
+        말 = 말.replace("**", "").replace("~~", "")   # 마크업이 새어 나왔다
+        말 = 말.strip(" \t-•◦▪*→⇒")
         말 = re.sub(r"^\d+[.)]\s*", "", 말).strip()
-        if not (6 <= len(말) <= 60):
+        if not (6 <= len(말) <= 40):
             continue
-        if not any(x in 말 for x in _할일말):
+        # **꼬리에 있어야 한다.** 가운데 있으면 그냥 서술문이다 —
+        # `외부강사 섭외의 경우 진행해보면서 대안 설정이 계속 필요할 것으로 예상됨`
+        # 은 할 일이 아니라 의견이다
+        if not any(말.endswith(x) or 말.endswith(x + "기") for x in _할일말):
             continue
         if len(_낱말(말)) < 2:
             continue
@@ -172,12 +194,16 @@ def suggest(db: Session, *, retreat: Retreat, meeting: Meeting,
     나온것: list[제안] = []
 
     # ── ① 논의 — 이미 있는 업무에 붙일 것 ────────────────────────────
+    흔함 = 흔한낱말(rows)
     점수 = []
     for row in rows:
         n, 낱말 = 겹침(본문, row.title)
-        if n >= 2:                     # 한 낱말만 겹친 것은 우연이 너무 많다
+        # 두 낱말 이상 겹치되, **그중 하나는 흔하지 않아야** 한다.
+        # `확인, 조정` 처럼 아무 업무에나 있는 낱말만으로는 관계가 아니다
+        if n >= 2 and any(w not in 흔함 for w in 낱말):
             점수.append((n, 낱말, row))
     점수.sort(key=lambda x: (-x[0], x[2].title))
+    잘린수 = max(0, len(점수) - limit)
     for n, 낱말, row in 점수[:limit]:
         나온것.append(제안(
             kind="discussion",
@@ -190,21 +216,57 @@ def suggest(db: Session, *, retreat: Retreat, meeting: Meeting,
             meeting_id=meeting.id,
             evidence=낱말,
         ))
+    if 잘린수:
+        # **조용히 자르지 않는다.** 걸린 것이 더 있다는 사실을 말한다
+        나온것.append(제안(
+            kind="더있음",
+            text=f"이름이 겹치는 업무가 {잘린수}건 더 있습니다",
+            why="가장 많이 겹친 것부터 보여 주고 나머지는 접었습니다"
+                " — 다 보여 주면 어느 것이 가까운지 알 수 없습니다",
+            meeting_id=meeting.id,
+        ))
 
     # ── ② 새 업무 — 보드의 어느 이름과도 안 겹치는 할 일 ──────────────
-    보드낱말 = [_낱말(r.title) for r in rows]
-    for 말 in 할일줄(본문)[: limit * 4]:
+    #
+    # **그물이 반대로 기울어 있었다.** 업무 이름은 짧고(`선발대 운영`) 회의록
+    # 줄은 길어서(`선발대 점심 주문 준비`) 겹치는 낱말이 하나뿐이었고, 그래서
+    # **보드에 있는데 이름이 짧을수록 새 업무로 잘못 나왔다.**
+    #
+    # 그래서 셋을 더한다 —
+    #   · 가장 가까운 기존 업무를 **근거로 함께 낸다.** 전에는 그 줄 자신의
+    #     낱말을 근거라고 냈는데 그건 아무것도 증명하지 않는다
+    #   · 줄의 낱말이 **전부 보드 어딘가에 이미 있으면** 새 업무가 아니다
+    #   · 가장 가까운 것과 한 낱말이라도 겹치면 **사람이 그것을 보고 판단한다**
+    보드전체 = set()
+    보드낱말 = []
+    for x in rows:
+        w = _낱말(x.title)
+        보드낱말.append((w, x.title))
+        보드전체 |= w
+    본것: set[str] = set()
+    for 말 in 할일줄(본문)[: limit * 6]:
+        if 말 in 본것:
+            continue          # 같은 줄이 두 번 적힌 회의가 있다
+        본것.add(말)
         말낱말 = _낱말(말)
-        if any(len(말낱말 & t) >= 2 for t in 보드낱말):
+        if not 말낱말:
+            continue
+        가까움, 가까운제목 = max(((len(말낱말 & w), t) for w, t in 보드낱말),
+                             key=lambda z: z[0])
+        if 가까움 >= 2:
             continue                   # 이미 있는 업무 이야기다
+        if 말낱말 <= 보드전체:
+            continue                   # 낱말이 전부 보드에 이미 있다
+        근거 = (f"가장 가까운 것: 「{가까운제목}」 (겹친 낱말 {가까움}개)"
+              if 가까움 else "보드의 어느 업무 이름과도 한 낱말도 겹치지 않습니다")
         나온것.append(제안(
             kind="new",
             # 회의록의 문장은 **사람의 원문**이라 그대로 붙인다
             text=판정단어_뺀다("새 업무로 만듭니다 — ") + 말,
-            why="회의록에 할 일처럼 적혔는데 보드의 어느 업무 이름과도"
-                f" 두 낱말 이상 겹치지 않습니다 (보드 {len(rows)}건과 견줬습니다)",
+            why=f"회의록에 할 일처럼 적혔습니다. {근거}"
+                f" — 보드 {len(rows)}건과 견줬습니다",
             meeting_id=meeting.id,
-            evidence=sorted(말낱말)[:5],
+            evidence=[가까운제목] if 가까움 else [],
         ))
         if sum(1 for x in 나온것 if x.kind == "new") >= limit:
             break
