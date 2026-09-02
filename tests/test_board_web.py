@@ -464,7 +464,7 @@ def test_바를_끌어_옮기면_색도_함께_온다(admin_client, board_data):
     assert set(status) <= set(saved) | {"start", "end", "d_week", "label"}
 
     # 보드 화면이 그 값을 실제로 쓰는가
-    js = admin_client.get("/static/js/board.js").text
+    js = _js("board.js")
     block = js[js.index("function applySavedDates("):]
     block = block[: block.index("\n}")]
     assert "saved.bar_background" in block, "받은 색을 쓰지 않는다"
@@ -666,6 +666,19 @@ def test_남의_부서_업무의_규칙은_못_고친다(lead_client, board_data
 
 import pathlib as _pathlib
 import re as _re
+
+
+def _js(name: str) -> str:
+    """정적 JS 를 **디스크에서** 읽는다. 주소에 내용 해시가 들어가 있어서
+    (`/static/js/drawer.<8자리>.js`) 이름만으로는 HTTP 로 못 받는다 —
+    해시 없는 주소는 404 다. 파일 내용을 보려던 시험이므로 서버를 거칠
+    이유가 애초에 없었다."""
+    import pathlib as _p
+
+    return (_p.Path(__file__).resolve().parent.parent
+            / "app" / "static" / "js" / name).read_text(encoding="utf-8")
+
+
 
 ROOT = _pathlib.Path(__file__).resolve().parent.parent
 CSS = ROOT / "app" / "static" / "css" / "retreat.css"

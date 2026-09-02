@@ -282,7 +282,7 @@ def test_08_점을_누르면_그_자리에서_패널이_열린다(admin_client, 
     # 점이 자기가 어느 업무인지 들고 있다 — 눌러서 그 자리에서 연다
     assert f'data-run="{run_id}"' in page
     assert 'id="drawer"' in page, "달력에 상세 패널이 없다"
-    assert "calendar.js" in page and "drawer.js" in page
+    assert _script(page, "calendar") and _script(page, "drawer")
 
     # 자바스크립트가 죽었을 때를 위한 길은 남겨 둔다 (가운데 버튼 · 새 탭)
     assert f'href="/board?task={run_id}"' in page
@@ -290,7 +290,8 @@ def test_08_점을_누르면_그_자리에서_패널이_열린다(admin_client, 
 
     # `/calendar?task=123` 으로 열린 채 시작한다 (수용기준 9)
     assert admin_client.get(f"/calendar?task={run_id}&scope=all").status_code == 200
-    js = admin_client.get("/static/js/drawer.js").text
+    # 주소에 내용 해시가 들어 있다 — 파일에서 바로 읽는다
+    js = read_js("drawer.js")
     assert "get('task')" in js
 
 
@@ -325,8 +326,8 @@ def test_08b_패널이_한_벌이다(admin_client, cal_data):
         assert kept in drawer_js
 
     # 두 화면이 같은 파일을 싣는다
-    assert "drawer.js" in admin_client.get("/board").text
-    assert "drawer.js" in admin_client.get("/calendar?scope=all").text
+    assert _script(admin_client.get("/board").text, "drawer")
+    assert _script(admin_client.get("/calendar?scope=all").text, "drawer")
 
 
 def test_08c_상태를_바꾸면_점이_따라_바뀐다(admin_client, cal_data):
@@ -572,6 +573,83 @@ def test_17_업무가_하나도_없는_달에서도_죽지_않는다(admin_clien
 import re
 
 JS_DIR = ROOT / "app" / "static" / "js"
+
+
+# ── 색을 재는 것들 ────────────────────────────────────────────────────
+# **눈으로만 보면 "흐리다" 를 고칠 수 없다.** 9장이 숫자로 기준을 적어 두었으니
+# 시험도 숫자로 본다. ΔE 는 두 색이 얼마나 다르게 **보이는가** 이고(사람이 겨우
+# 알아보는 거리가 2.3), 대비비는 위에 얹은 글자가 읽히는가이다.
+
+
+def _rgb(h: str) -> tuple[int, int, int]:
+    h = h.lstrip("#")
+    return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
+
+
+def _lin(c: float) -> float:
+    c /= 255
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _lum(h: str) -> float:
+    r, g, b = _rgb(h)
+    return 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+
+
+def _ratio(a: str, b: str) -> float:
+    la, lb = _lum(a), _lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _lab(h: str) -> tuple[float, float, float]:
+    import math
+
+    r, g, b = (_lin(c) for c in _rgb(h))
+    x = (r * .4124 + g * .3576 + b * .1805) / .95047
+    y = r * .2126 + g * .7152 + b * .0722
+    z = (r * .0193 + g * .1192 + b * .9505) / 1.08883
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 216 / 24389 else (841 / 108) * t + 4 / 29
+
+    fx, fy, fz = f(x), f(y), f(z)
+    return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+
+
+def _de(a: str, b: str) -> float:
+    import math
+
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(_lab(a), _lab(b))))
+
+
+def _script(page: str, name: str) -> bool:
+    """그 화면이 `<name>` 스크립트를 부르는가. 주소에는 내용 해시가 들어 있다
+    (`/static/js/drawer.<8자리>.js`) — 이름만으로 찾으면 안 잡힌다."""
+    return bool(re.search(rf"/static/js/{re.escape(name)}\.[0-9a-f]{{8}}\.js", page))
+
+
+def _css() -> str:
+    return (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+
+
+def _token(name: str) -> str:
+    """`:root` 의 색 토큰 값. **CSS 를 사실대로 읽는다** — 시험에 값을 다시
+    적어 두면 그 둘이 갈리고, 갈린 쪽을 아무도 눈치채지 못한다."""
+    # **주석을 걷어내고 본다.** 안 그러면 "전에는 `--ink-2:#787774` 였다" 는
+    # 설명글을 집어서, 값을 고쳐도 시험이 옛 값을 보고 판단한다.
+    body = re.sub(r"/\*.*?\*/", "", _css(), flags=re.S)
+    m = re.search(rf"{re.escape(name)}\s*:\s*(#[0-9A-Fa-f]{{6}})", body)
+    assert m, f"{name} 토큰을 못 찾았다"
+    return m.group(1)
+
+
+def _rule_css(css: str, selector: str) -> str:
+    """그 선택자가 든 규칙의 선언 부분. 주석은 걷어낸다."""
+    body = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    for m in re.finditer(r"([^{}]+)\{([^}]*)\}", body):
+        if selector in [h.strip() for h in m.group(1).split(",")]:
+            return m.group(2)
+    raise AssertionError(f"{selector} 규칙을 찾지 못했다")
 
 
 def read_js(name: str) -> str:
@@ -1387,17 +1465,284 @@ def test_t_10_좁은_화면에서는_비추지_않는다():
     assert ".cal-cell.inspan{background:none}" in narrow[:2000]
 
 
-def test_t_04c_비침은_무채색이다():
-    """**부서 색으로 면을 채우지 않는다** (4-0). 화면이 색으로 덮이면 정작
-    눈에 띄어야 할 선택 테두리와 지연 배지가 묻힌다."""
+def test_t_04c_비침이_지연_선택_이_달_밖과_갈린다():
+    """전에는 `..._비침은_무채색이다` 였다. **그 시험이 지키던 것이 틀렸다** —
+    무채색으로 두었더니 `.out`(이 달 밖) 칸의 회색과 갈리지 않아 '이 달 밖'
+    으로 읽혔고, 사용자에게는 아무것도 안 보였다. 안 보이는 표시는 없는 것과
+    같다.
+
+    그래서 지켜야 할 것을 다시 정했다 — **뜻이 다른 것들과 갈리는가.**
+    비침은 배경일 뿐이므로 위에 얹히는 것이 전부 그대로 읽혀야 한다.
+    """
     css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
-    span = css[css.index(".cal-cell.inspan{"):]
-    span = span[: span.index("/* 오늘 칸의")]
-    assert "var(--hover)" in span, "4-0 의 호버 색을 쓰지 않는다"
-    # 부서 색이 끼어들지 않았는지
-    assert "--team" not in span and "owner" not in span
-    for bad in ("#", "rgb("):
-        assert bad not in span, f"새 색을 만들었다: {bad}"
+
+    # 값은 **이름 있는 토큰 하나**다. 반투명을 겹쳐 두면 실제 색이 CSS
+    # 어디에도 없어서 다음 사람이 계산해야 한다.
+    assert "--span:#FAF1D2" in css.replace(" ", "")
+    span = _rule_css(css, ".cal-cell.inspan")
+    assert "background:var(--span)" in span.replace(" ", "")
+    assert "linear-gradient" not in span, "아직 겹쳐서 만든다"
+
+    # 유채색이다 — 회색이면 `.out` 과 다시 갈리지 않는다
+    r, g, b = _rgb("#FAF1D2")
+    assert max(r, g, b) - min(r, g, b) >= 20, "무채색에 가깝다"
+
+    # 뜻이 다른 것들과 갈린다 (ΔE 는 사람이 겨우 알아보는 거리가 2.3)
+    assert _de("#FAF1D2", "#FFFFFF") > 12, "흰 칸과 안 갈린다"
+    assert _de("#FAF1D2", "#F6F6F6") > 12, "'이 달 밖' 회색과 안 갈린다"
+    assert _de("#FAF1D2", "#FBF1F0") > 12, "지연 틴트와 안 갈린다"
+    # 붉은 계열·파란 계열이 아니다 — 지연(--now)·선택(--link)과 뜻이 섞이면 안 된다
+    assert r > b and g > b, "앰버가 아니다"
+
+    # 위에 얹히는 것이 그대로 읽힌다
+    assert _ratio("#37352F", "#FAF1D2") >= 4.5, "점의 글자가 안 읽힌다"
+    assert _ratio("#2383E2", "#FAF1D2") >= 3.0, "오늘 칸 테두리가 묻힌다"
+    assert _ratio("#C4554D", "#FAF1D2") >= 3.0, "지연 테두리가 묻힌다"
+
+
+# ── 1 · 2 · 3. 글자 대비 ────────────────────────────────────────────
+
+
+def test_w_01_보조_글자가_흰_바탕에서_4_5_를_넘는다():
+    """9장이 4.5:1 을 요구해 놓고, `--ink-2` 가 **4.48:1 로 못 넘기면서
+    기준으로 쓰이고** 있었다. 문서가 자기 기준을 어기고 있었다."""
+    ink2 = _token("--ink-2")
+    assert _ratio(ink2, "#FFFFFF") >= 4.5, f"{ink2} 가 흰 바탕에서 모자란다"
+
+
+def test_w_02_보조_글자가_사이드바_면에서도_넘는다():
+    """사이드바가 `#F7F7F5` 다. 흰 바탕만 보면 정작 가장 흐린 자리를 놓친다."""
+    ink2 = _token("--ink-2")
+    assert _ratio(ink2, "#F7F7F5") >= 4.5, f"{ink2} 가 #F7F7F5 위에서 모자란다"
+
+
+def test_w_02b_흐림은_장식_자리에_남되_덜_옅다():
+    """`--ink-3` 은 **일부러 4.5 를 넘기지 않는다** — 넘기면 보조와 구별되지
+    않아 위계가 무너진다. 다만 2.8:1 은 장식 자리에도 너무 옅었다."""
+    ink3, ink2 = _token("--ink-3"), _token("--ink-2")
+    assert _ratio(ink3, "#FFFFFF") >= 3.4, f"{ink3} 가 너무 옅다"
+    assert _ratio(ink3, "#F7F7F5") >= 3.4
+    assert _ratio(ink3, "#FFFFFF") < _ratio(ink2, "#FFFFFF"), "보조와 구별이 안 된다"
+    assert _ratio(_token("--ink"), "#FFFFFF") > 10, "본문은 건드리지 않는다"
+
+
+def test_w_03_9장의_대비_문단이_새_값과_맞는다():
+    """**옛 값이 기준선이었다는 기록은 남긴다.** 무엇에 당했는지가 지워지면
+    다음 사람이 같은 값으로 되돌린다."""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("**대비** — 혼자 뜻을 지는 글자는")
+    section = text[at : text.index("**바 라벨**", at)]
+    for now in (_token("--ink-2"), _token("--ink-3")):
+        assert now in section, f"{now} 가 9장에 없다"
+    assert "#787774" in section and "4.48" in section, "옛 값의 기록이 없다"
+    assert "#F7F7F5" in section, "사이드바 면에서의 값이 없다"
+
+    # 4-0 의 표도 같은 값을 말한다 — 두 곳이 갈리면 안 된다
+    at = text.index("| 값 | 쓰는 곳 |")
+    표 = text[at : text.index("**부서 색은", at)]
+    assert _token("--ink-2") in 표 and _token("--ink-3") in 표
+
+
+# ── 4 · 5 · 6 · 7. 비침 ─────────────────────────────────────────────
+
+
+def test_w_07_4_0_의_뜻있는_색이_셋이_됐다():
+    """규칙을 깼으면 **규칙 쪽을 고친다.** 안 고치면 문서가 거짓이 되고,
+    다음 사람은 "둘뿐" 을 읽고 이 색을 지운다."""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "뜻이 있는 색은 이 둘뿐" not in text, "아직 둘뿐이라고 한다"
+    assert "뜻이 있는 색은 이 셋뿐" in text
+    at = text.index("### 4-0.")
+    section = text[at : text.index("### 4-1.", at)]
+    assert "#FAF1D2" in section, "새 색이 무엇인지 안 적혀 있다"
+    for 왜 in ("이 달 밖", "지연", "선택"):
+        assert 왜 in section, f"왜 그 색인지에 '{왜}' 가 없다"
+
+
+# ── 9 · 10 · 11. 정적 주소를 경로에 ─────────────────────────────────
+
+
+def test_w_09_정적_주소가_경로에_해시를_담는다():
+    """`?v=` 가 통하려면 Cloudflare 캐시 키에 쿼리가 들어가야 하는데
+    **그 스위치는 이 저장소에 없다.**"""
+    from app.templating import static
+
+    url = static("js/calendar.js")
+    assert re.fullmatch(r"/static/js/calendar\.[0-9a-f]{8}\.js", url), url
+    assert "?" not in url, "아직 쿼리에 붙인다"
+    # 해시를 붙이지 않는 것 — 서비스워커·매니페스트가 고정 주소로 가리킨다
+    assert static("icons/icon-192.png") == "/static/icons/icon-192.png"
+
+    for tpl in (ROOT / "app" / "templates").glob("*.html"):
+        text = tpl.read_text(encoding="utf-8")
+        assert "?v=" not in text, f"{tpl.name} 에 손으로 박은 번호가 남았다"
+
+
+def test_w_10_손으로_박은_주소는_파일이_안_나온다(admin_client):
+    """**이것이 경로에 넣는 값어치다.** `?v=` 는 빠뜨려도 아무 일이 없어서
+    한 화면이 몇 달 동안 `?v=1` 이었다. 경로면 그 자리에서 드러난다."""
+    from app.templating import static
+
+    assert admin_client.get("/static/js/calendar.js").status_code == 404
+    assert admin_client.get("/static/css/retreat.css").status_code == 404
+    # **틀린 해시는 막지 않는다.** 요청마다 파일을 다시 뜰 값을 치를 만한
+    # 이득이 없다 — 막으려던 것은 해시를 아예 안 붙이는 것이고, 덤으로
+    # 열어 둔 옛 탭이 계속 돈다 (main.HashedStatic 에 적혀 있다)
+    assert admin_client.get("/static/js/calendar.00000000.js").status_code == 200
+    # 제대로 된 주소는 나온다
+    assert admin_client.get(static("js/calendar.js")).status_code == 200
+    # 해시가 안 붙는 종류는 그대로 나온다
+    assert admin_client.get("/static/icons/icon-192.png").status_code == 200
+
+
+def test_w_11_immutable_이_그대로_붙는다(admin_client):
+    from app.templating import static
+
+    res = admin_client.get(static("js/calendar.js"))
+    cc = res.headers.get("cache-control", "")
+    assert "max-age=31536000" in cc and "immutable" in cc and "public" in cc
+
+
+def test_w_11b_서비스워커가_해시_붙는_것을_미리_받지_않는다():
+    """틀린 주소가 하나라도 있으면 `addAll` 이 통째로 실패하고 **서비스워커가
+    설치되지 않는다** — 그러면 푸시도 함께 죽는다."""
+    sw = read_js("sw.js")
+    at = sw.index("const ASSETS")
+    line = sw[at : sw.index("\n", at)]
+    for suffix in (".js", ".css"):
+        assert suffix + '"' not in line, f"미리 받는 목록에 {suffix} 가 있다"
+    assert "/static/icons/" in line, "아이콘까지 뺄 이유는 없다"
+
+
+# ── 12 · 14 · 16 · 19 · 21. 문서가 자기 자신과 맞는다 ───────────────
+
+
+def test_w_12_12장이_4_13_과_같은_말을_한다():
+    """**"매번 먼저 읽어야 하는 유일한 기준 문서" 가 자기 자신과 어긋났다.**
+    4-13 을 "그 자리에서 열린다" 로 고치고 12장을 안 고쳤다 — `__unused` 의
+    이유가 낡는 것과 정확히 같은 모양이다."""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 12. 로드맵")
+    로드맵 = text[at : text.index("## 13.", at)]
+    assert "/board?task=" not in 로드맵, "12장이 아직 보드로 넘긴다고 한다"
+    assert "그 자리에서" in 로드맵, "지금 동작이 안 적혀 있다"
+
+
+def test_w_14_10장의_항목_수가_실제와_맞는다():
+    """전에는 **한 숫자(45)** 로 적혀 있었다. 화면이 둘이고 보는 것이 달라
+    수도 다르다 — 한 숫자로 적으면 반드시 한쪽이 틀린다.
+
+    **정확한 수는 돌려 봐야 나온다**(조건에 걸려 건너뛰는 항목이 있다).
+    그래서 여기서는 **적어 둔 수가 대본에 있는 자리 수를 넘지 않는지**만
+    본다. 옛 45 는 두 화면을 한 숫자로 뭉갠 것이라 이 시험에 걸린다.
+    """
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 10. 화면 변경을 끝냈다고")
+    section = text[at : text.index("## 11.", at)]
+    m = re.search(r"보드 (\d+)항목 · 달력 (\d+)항목", section)
+    assert m, "보드·달력을 나눠 적지 않았다"
+    보드, 달력 = int(m.group(1)), int(m.group(2))
+
+    check = (ROOT / "docs" / "checks" / "drawer.js").read_text(encoding="utf-8")
+    자리 = check.count("await check(") + check.count("results.push(")
+    assert 보드 <= 자리 and 달력 <= 자리, f"대본에 자리가 {자리} 개뿐이다"
+    assert 보드 != 달력, "두 화면이 같은 수일 리 없다 (보는 것이 다르다)"
+    assert min(보드, 달력) > 자리 // 2, "대부분의 항목은 두 화면에서 다 돈다"
+
+
+def test_w_16_11_3_에_문서를_되짚는_단계가_있다():
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 11-3. 작업을 마칠 때")
+    section = text[at : text.index("## 12. 로드맵", at)]
+    assert "옛말이 남아 있지 않은지" in section
+    assert "/board?task=" in section, "무엇을 놓쳤었는지가 없다"
+    assert "12장" in section, "어디가 잘 낡는지가 없다"
+
+
+def test_w_19_data_이름_규약이_적혔다():
+    """`test_u_16b` 는 **`data-` 이름이 훅의 주어와 같다**는 데 기대고 있다.
+    `onAssignee` 가 잡힌 것은 마침 `data-assignee` 였기 때문이고, 누가
+    `data-owner` 로 쓰면 그냥 지나간다 — 지금은 우연이다."""
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 9. UI 공통 규칙")
+    section = text[at : text.index("## 10.", at)]
+    assert "훅의 주어와 같은 이름" in section
+    assert "data-assignee" in section and "onAssignee" in section
+    # 시험이 그 규약을 가리킨다
+    src = (ROOT / "tests" / "test_calendar.py").read_text(encoding="utf-8")
+    at = src.index("def test_u_16b_")
+    본문 = src[at : src.index(chr(10) + "def ", at + 10)]
+    assert "9장" in 본문, "시험이 그 규약을 가리키지 않는다"
+
+
+def test_w_21_14장에_tooltip_of_가_있다():
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    at = text.index("## 14. 구현 현황")
+    section = text[at:]
+    assert "tooltip_of" in section, "툴팁을 만드는 곳이 표에 없다"
+    assert "여기 하나다" in section
+
+
+# ── 17 · 18. 계약이 바뀌면 도장이 안 맞는다 ─────────────────────────
+
+
+def contract_hash(js: str | None = None) -> str:
+    """`drawer.js` 의 **훅 계약**만 해시로 뜬다 — 머리말 주석 블록과
+    `call('...')` 이름 목록. **파일 전체가 아니다.**
+
+    무관한 수정에 걸리면 사람이 읽지 않고 도장만 찍게 되고, 그러면 이
+    장치는 없는 것과 같다. 줄바꿈은 맞춰서 뜬다 — 체크아웃 설정에 따라
+    CRLF/LF 가 갈리면 새 클론에서 이유 없이 빨개진다.
+    
+    이름을 견주는 것이므로 **화면이 `data-*` 에 캐시하는 이름은 훅의 주어와
+    같아야 합니다** — 그 규약은 CLAUDE.md **9장**에 적혀 있습니다. `data-owner`
+    처럼 다른 이름을 쓰면 이 시험이 조용히 지나갑니다.
+"""
+    import hashlib
+
+    js = (js if js is not None else read_js("drawer.js")).replace("\r\n", "\n")
+    head = js[: js.index("*/") + 2]
+    names = sorted(set(re.findall(r"call\('([A-Za-z]+)'", js)))
+    재료 = head + "\n" + "\n".join(names)
+    return hashlib.md5(재료.encode("utf-8")).hexdigest()[:8]
+
+
+def test_w_17_계약이_바뀌면_도장이_안_맞는다():
+    """**낡음은 아무 때나 생기지 않는다. 계약이 바뀌는 순간에 생긴다** —
+    두 번의 사고가 둘 다 `drawer.js` 가 새 일을 시작한 그 커밋에서 났다
+    (`onOpen` · `onAssignee`).
+
+    3단계의 정적 주소 해시와 같은 수법이다 — **내용이 바뀌면 이름도 바뀌게
+    해서, 옛것을 조용히 쓰지 못하게 한다.**
+    """
+    want = contract_hash()
+    for name in ("calendar.js", "board.js"):
+        js = code_only(read_js(name))
+        m = re.search(r"__unusedFor:\s*'([0-9a-f]{8})'", js)
+        assert m, f"{name}: `__unusedFor` 도장이 없다"
+        assert m.group(1) == want, (
+            f"{name}: drawer.js 의 훅 계약이 바뀌었다 (도장 {m.group(1)} → {want}).\n"
+            "  `__unused` 목록을 **처음부터 다시 읽는다** — 새로 생긴 훅을 걸어야\n"
+            "  하는지, 적어 둔 이유가 아직 사실인지. 그러고 나서 이 값을 찍는다.\n"
+            "  도장만 바꾸고 넘어가면 이 장치는 없는 것과 같다."
+        )
+
+
+def test_w_18_무관한_수정에는_안_걸린다():
+    """계약이 아닌 곳을 고치면 도장은 그대로여야 한다. 아무 수정에나 걸리면
+    사람이 읽지 않고 찍기만 한다."""
+    js = read_js("drawer.js")
+    같아야 = contract_hash(js + "\n// 무관한 주석\n")
+    assert 같아야 == contract_hash(js), "끝에 주석 하나 붙였다고 걸린다"
+    본문 = js.replace("const WD = ", "const WD2 = ")
+    assert contract_hash(본문) == contract_hash(js), "머리말 밖 수정에 걸린다"
+
+    # 반대로 계약이 바뀌면 반드시 걸린다
+    바뀜 = js.replace("call('onStatus'", "call('onStatus2'")
+    assert contract_hash(바뀜) != contract_hash(js), "이름이 바뀌었는데 안 걸린다"
+    머리 = js.replace("__unusedFor: '<이 계약의 도장>',", "__unusedFor: '<도장>',")
+    assert contract_hash(머리) != contract_hash(js), "머리말이 바뀌었는데 안 걸린다"
+
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1415,51 +1760,43 @@ def test_t_04c_비침은_무채색이다():
 
 
 def test_u_01_정적_주소가_내용에서_나온다():
-    """번호를 손으로 올리면 **또 빠뜨린다.** 실제로 달력 쪽만 계속 1 이었다."""
-    from app.templating import static
+    """**파일이 바뀌면 주소가 바뀌어야 한다.** 손으로 올리는 방식은 화면이
+    늘 때마다 빠뜨렸고(`board.js?v=30` 인데 `calendar.js?v=1`), 그래서 고친
+    코드가 사용자에게 영영 가지 않았다. 실제로 바꿔 보고 확인한다."""
+    from app import templating
 
     css = ROOT / "app" / "static" / "css" / "retreat.css"
-    first = static("css/retreat.css")
-    assert first.startswith("/static/css/retreat.css?v=")
-    stamp = first.split("=", 1)[1]
-    assert len(stamp) >= 8 and stamp != "1", "번호가 내용에서 나오지 않는다"
-
-    # 같은 내용이면 같은 주소 — 안 바뀐 파일을 쓸데없이 다시 받지 않는다
-    assert static("css/retreat.css") == first
-
-    # 내용이 바뀌면 주소가 바뀐다
-    import app.templating as t
-
     keep = css.read_bytes()
     try:
-        css.write_bytes(keep + b"\n/* temp */\n")
-        t._static_stamps.clear()          # 운영은 켤 때 한 번 잰다 (11-2)
-        assert static("css/retreat.css") != first, "내용이 바뀌었는데 주소가 그대로다"
+        전 = templating.static("css/retreat.css")
+        css.write_bytes(keep + b"//temp")
+        templating._static_stamps.clear()
+        후 = templating.static("css/retreat.css")
+        assert 전 != 후, "내용이 바뀌었는데 주소가 그대로다"
     finally:
         css.write_bytes(keep)
-        t._static_stamps.clear()
+        templating._static_stamps.clear()
 
-    # 없는 파일이라도 화면을 죽이지 않는다
-    assert static("js/없는파일.js").endswith("?v=0")
+    # 안 바뀌면 그대로다 — 쓸데없이 다시 받게 하지 않는다
+    assert templating.static("css/retreat.css") == templating.static("css/retreat.css")
 
 
 def test_u_02_화면_어디에도_손으로_박은_번호가_없다(admin_client, cal_data):
-    """한 곳이라도 남으면 그 파일이 또 낡는다."""
-    import re
-
-    for tpl in sorted((ROOT / "app" / "templates").rglob("*.html")):
+    """`?v=` 는 **빠뜨려도 아무 일이 없어서** 한 화면이 몇 달 동안 1이었다.
+    이제 주소가 경로라 빠뜨리면 404 로 드러나지만, 템플릿에 옛 모양이 남아
+    있지 않은지도 함께 본다."""
+    for tpl in (ROOT / "app" / "templates").glob("*.html"):
         text = tpl.read_text(encoding="utf-8")
-        stuck = re.findall(r'/static/[^"\']*\?v=\d', text)
-        assert stuck == [], f"{tpl.name} 에 손으로 박은 번호가 남았다: {stuck}"
+        assert "?v=" not in text, f"{tpl.name} 에 손으로 박은 번호가 남았다"
+        for m in re.finditer(r'"(/static/[^"]+\.(?:js|css))"', text):
+            raise AssertionError(f"{tpl.name}: {m.group(1)} 이 static() 을 안 지난다")
 
-    # 달력 화면의 스크립트에도 걸려 있다 — 이번에 문제가 된 자리다
+    # 실제로 그려 본다 — 화면이 부르는 js·css 에 전부 해시가 있다
     page = admin_client.get("/calendar?scope=all").text
-    for asset in ("js/calendar.js", "js/drawer.js", "css/retreat.css"):
-        found = re.search(r'/static/' + re.escape(asset) + r'\?v=([0-9a-f]{8})', page)
-        assert found, f"{asset} 에 내용 번호가 안 붙었다"
-
-
-# ── 7 · 8. 전환 ─────────────────────────────────────────────────────
+    주소 = re.findall(r"/static/\S+?[.](?:js|css)", page)
+    assert 주소, "스크립트를 하나도 안 부른다"
+    for u in 주소:
+        assert re.search(r"\.[0-9a-f]{8}\.(js|css)$", u), f"{u} 에 내용 해시가 없다"
 
 
 def test_u_07_화면을_옮길_때_밀려_들어오지_않는다(admin_client, cal_data):
@@ -1744,7 +2081,9 @@ def test_v_05_static_응답에_우리가_정한_캐시가_붙는다(admin_client
     """지금까지 원점은 아무 캐시 헤더도 보내지 않았고, 4시간은 **Cloudflare
     가 알아서 정한 값**이었다. 우리가 말한 적이 없으므로 언제 달라져도 알
     수 없다. 주소가 내용에 따라 바뀌므로 1년 + immutable 이 안전하다."""
-    res = admin_client.get("/static/js/calendar.js")
+    from app.templating import static
+
+    res = admin_client.get(static("js/calendar.js"))
     assert res.status_code == 200
     cc = res.headers.get("cache-control", "")
     assert "max-age=31536000" in cc and "immutable" in cc and "public" in cc

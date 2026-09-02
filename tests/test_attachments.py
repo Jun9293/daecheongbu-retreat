@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import pathlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -566,7 +567,7 @@ def test_c19_올리는_중_진행률과_취소가_목록_맨_위에_있다(admin
     # 진행 칸이 목록보다 위에 있다
     assert page.index('id="dupnow"') < page.index('id="dfiles"'), "진행 칸이 목록 아래에 있다"
 
-    js = admin_client.get("/static/js/drawer.js").text
+    js = _js("drawer.js")
     assert "XMLHttpRequest" in js, "fetch 는 올리는 진행률을 주지 않는다"
     assert "xhr.upload.onprogress" in js
     assert "dupcancel" in js and "abort()" in js
@@ -602,11 +603,12 @@ def test_c21_링크가_파일과_한_목록에_섞인다(admin_client, task_data
 def test_c22_링크가_점선과_화살표로_구분된다(admin_client, task_data):
     """같아 보이면 안 된다 — 링크는 우리 서버에 없어서 지워지거나 권한이
     막히면 안 열리는데, 그건 우리가 어쩔 수 없다."""
-    js = admin_client.get("/static/js/drawer.js").text
+    js = _js("drawer.js")
     assert "fitem link" in js or "' link'" in js
     assert "↗" in js
 
-    css = admin_client.get("/static/css/retreat.css").text
+    css = (pathlib.Path(__file__).resolve().parent.parent
+           / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
     assert ".fitem.link .ext" in css
     assert "border-style:dashed" in css
 
@@ -922,6 +924,19 @@ def test_c17b_자가진단_목록에_들어가_있다():
 # ════════════════════════════════════════════════════════════════════
 
 import pathlib as _pathlib
+
+
+def _js(name: str) -> str:
+    """정적 JS 를 **디스크에서** 읽는다. 주소에 내용 해시가 들어가 있어서
+    (`/static/js/drawer.<8자리>.js`) 이름만으로는 HTTP 로 못 받는다 —
+    해시 없는 주소는 404 다. 파일 내용을 보려던 시험이므로 서버를 거칠
+    이유가 애초에 없었다."""
+    import pathlib as _p
+
+    return (_p.Path(__file__).resolve().parent.parent
+            / "app" / "static" / "js" / name).read_text(encoding="utf-8")
+
+
 
 DRAWER_JS = (_pathlib.Path(__file__).resolve().parent.parent
              / "app" / "static" / "js" / "drawer.js")

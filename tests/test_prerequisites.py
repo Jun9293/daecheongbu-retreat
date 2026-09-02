@@ -233,7 +233,7 @@ def test_04e_사유가_화면에_보인다(libs, admin_client):
     page = admin_client.get("/library")
     assert page.status_code == 200
     assert 'id="prewarn"' in page.text          # 사유를 적는 자리
-    js = admin_client.get("/static/js/library.js")
+    js = _JsResponse(_js("library.js"))
     assert "out.detail" in js.text              # 서버가 준 사유를 그대로 쓴다
 
 
@@ -330,7 +330,7 @@ def test_06_선행이_빠지면_마법사에_경고로_뜬다(libs, admin_client
     assert row["prereqs"][0]["prerequisite_title"] == "장비 확인"
     assert row["prereqs"][0]["owner_id"] == str(gear)
 
-    js = admin_client.get("/static/js/setup.js").text
+    js = _js("setup.js")
     assert "선행 업무" in js and "unmet" in js
 
 
@@ -448,7 +448,7 @@ def test_09_상세_패널에서_선행_후속_관련이_구분된다(libs, admin
 
     # 연결된 업무 목록은 **상세 패널** 안에 있다. 패널은 보드와 달력이
     # 같이 쓰는 한 벌이라 board.js 가 아니라 drawer.js 에 있다 (4-13).
-    js = admin_client.get("/static/js/drawer.js").text
+    js = _js("drawer.js")
     assert "선행 — 끝나야 시작할 수 있다" in js
     assert "후속 — 나를 기다린다" in js
     assert "관련 — 방향 없음" in js
@@ -516,6 +516,26 @@ def test_11_catalog_은_그대로다(libs):
 # '진행 불가' 가 남았다. 패널 이름이 판정 결과인 화면이라 더 그렇다.
 
 import pathlib as _pathlib
+
+
+def _js(name: str) -> str:
+    """정적 JS 를 **디스크에서** 읽는다. 주소에 내용 해시가 들어가 있어서
+    (`/static/js/drawer.<8자리>.js`) 이름만으로는 HTTP 로 못 받는다 —
+    해시 없는 주소는 404 다. 파일 내용을 보려던 시험이므로 서버를 거칠
+    이유가 애초에 없었다."""
+    import pathlib as _p
+
+    return (_p.Path(__file__).resolve().parent.parent
+            / "app" / "static" / "js" / name).read_text(encoding="utf-8")
+
+
+class _JsResponse:
+    """`.status_code` · `.text` 만 흉내 낸다 — 이 시험이 쓰는 것이 그 둘뿐이다."""
+
+    def __init__(self, text: str):
+        self.status_code, self.text = 200, text
+
+
 
 DRAWER_JS = _pathlib.Path(__file__).resolve().parent.parent / "app" / "static" / "js" / "drawer.js"
 
