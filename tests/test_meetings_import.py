@@ -87,12 +87,19 @@ def 제안받기(client, meeting_id, 최대=4):
     """제안을 **끝날 때까지** 물어본다 — 화면이 하는 것과 같다.
 
     회의록을 저장하거나 처음 열면 분석은 **뒤에서 돈다**(회의록 5단계).
-    첫 응답은 `state='도는중'` 에 빈 목록이라, 한 번만 물어보고 "제안이
-    없다" 고 하면 **틀린 것을 잰다.** 화면도 3초마다 다시 묻는다.
+    첫 응답은 빈 목록이라, 한 번만 물어보고 "제안이 없다" 고 하면 **틀린
+    것을 잰다.**
+
+    **이제 첫 상태는 `기다림` 이다** — 적는 동안에는 안 부르고 3분쯤
+    잠잠해지면 돈다. 시험이 3분을 기다릴 수는 없으므로 화면의 `지금 읽기`
+    와 같은 길(`/suggestions/rerun`)로 당겨 온다.
     """
+    data = client.get(f"/meetings/{meeting_id}/suggestions").json()
+    if data.get("state") == "기다림":
+        client.post(f"/meetings/{meeting_id}/suggestions/rerun")
     for _ in range(최대):
         data = client.get(f"/meetings/{meeting_id}/suggestions").json()
-        if data.get("state") != "도는중":
+        if data.get("state") not in ("도는중", "기다림"):
             return data
     return data
 

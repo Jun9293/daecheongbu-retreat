@@ -185,7 +185,10 @@ def test_llm_05_그_회의_시점의_상태만_쓴다(회차):
     assert 저장된 == {"완료"}
     assert 그날["포스터 시안"] == "진행중", "그날엔 아직 안 끝났다"
     assert 나중["포스터 시안"] == "완료"
-    assert 그날["명찰 제작"] == "대기"
+    # **날짜가 하나도 없으면 '대기' 가 아니라 `None`(모름)이다** (6-9).
+    # 옮겨 온 자료가 그래서 96건 전부 '대기' 로 나갔고, 8월에 끝난 일도
+    # '대기' 로 보였다 — 모델은 그것을 "아직 안 한 일" 로 읽는다
+    assert 그날["명찰 제작"] is None, "모르는데 '대기' 라고 한다"
 
 
 def test_llm_06_목록_크기를_재고_그_값이_실제와_같다(회차):
@@ -427,8 +430,10 @@ def test_llm_17_본문이_안_바뀌면_다시_부르지_않는다(회차):
         db.commit()
         bg2 = 가짜백그라운드()
         분석_걸어둔다(bg2, m, db)
-        assert len(bg2.걸린것) == 1, "본문이 바뀌었는데 안 걸었다"
-        assert m.suggest_state == "도는중"
+        # **적는 동안에는 안 부른다** — 걸어 두기만 하고 잠잠해지면 돈다
+        assert bg2.걸린것 == [], "저장하자마자 불렀다"
+        assert m.suggest_state == "기다림"
+        assert m.suggest_due_at is not None
     finally:
         db.close()
 
@@ -532,9 +537,13 @@ def test_llm_21_표본_네_회의를_다시_내는_길이_있다():
     # **키가 없으면 아무것도 안 쓴다.** 낱말로 물러선 것을 2판이라 적으면
     # 견주는 두 숫자가 같은 방식의 것이 되어 아무것도 재지 못한다
     assert "raise SystemExit(2)" in src
+    # **네트워크가 끊겨 낱말로 물러선 것도 2판이라고 적으면 안 된다.**
+    # 키만 보던 것으로는 부족했다 — 실제로 그렇게 적힌 적이 있다
+    assert 'r.방식 != "문장"' in src and "raise SystemExit(3)" in src
+
     문서 = (ROOT / "docs" / "review" / "제안-2판.md").read_text(encoding="utf-8")
-    assert "suggest_sample.py" in 문서
     assert "비율" in 문서
+    assert "마땅히 나왔어야 하는데" in 문서, "놓친 것을 묻는 칸이 없다"
 
 
 def test_llm_22_성적표에_놓친_것_칸이_생겼다():
