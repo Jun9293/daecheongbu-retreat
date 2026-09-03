@@ -1471,3 +1471,17 @@ button.btn:disabled{opacity:.4;cursor:default}
 .mt-peek pre{margin-top:6px;padding:8px 10px;max-height:220px;overflow:auto;
   background:var(--sunk);border-radius:4px;font-family:var(--mono);
   font-size:11.5px;line-height:1.6;white-space:pre-wrap;color:var(--ink-2)}
+
+/* 회의록 제안 — 결정사항 인용 · 새 업무의 자리 · 사람 평가 표시 (회의록 5단계) */
+.mt-quote{margin:4px 0 2px;padding:6px 10px;border-left:2px solid var(--rule-2);
+  background:var(--sunk);border-radius:0 4px 4px 0;
+  font-size:13px;line-height:1.6;color:var(--ink-2);white-space:pre-wrap}
+.mt-where-to{font-size:12px;color:var(--ink-2);margin:1px 0 2px}
+/* 사람 평가 표시 (6단계). **글자는 잉크, 색은 왼쪽 마개에만** —
+   `--warn` 을 글자에 쓰면 `--span` 위에서 4.14:1 이라 9장의 4.5:1 을
+   못 넘긴다(혼자 뜻을 지는 글자다). 잉크는 같은 바탕에서 11:1 이 넘는다.
+   색을 아껴 쓰는 4-0 과도 같은 방향이다. */
+.mt-people{font-size:12.5px;color:var(--ink);background:var(--span);
+  border-left:2px solid var(--warn);border-radius:0 4px 4px 0;
+  padding:6px 9px;margin:6px 0 0}
+.mt-retry{margin-left:8px}

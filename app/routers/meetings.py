@@ -6,14 +6,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import re
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import notifications as notify_service
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
 from pydantic import BaseModel
 
@@ -275,6 +277,7 @@ def delete_item(
 @router.post("/{meeting_id}/update")
 def update_meeting(
     meeting_id: int,
+    background: BackgroundTasks,
     title: str = Form(...),
     meeting_date: str = Form(""),
     attendees: str = Form(""),
@@ -289,6 +292,8 @@ def update_meeting(
     meeting.attendee_names = parse_attendees(attendees)
     meeting.body = body.strip() or None
     db.commit()
+    # **저장은 여기서 끝난다.** 분석은 뒤에서 돈다 (5단계)
+    분석_걸어둔다(background, meeting, db)
     return redirect(f"/meetings/{meeting.id}?retreat_id={retreat.id}", message="회의록을 저장했습니다.")
 
 
@@ -340,27 +345,176 @@ def discussion_body(meeting: Meeting) -> str:
     return f"{출처}\n{(meeting.body or '').strip()}"
 
 
+# ══════════════════════════════════════════════════════════════════
+# 회의록을 문장으로 읽는다 (회의록 5단계)
+# ══════════════════════════════════════════════════════════════════
+#
+# **저장은 분석을 기다리지 않는다.** 회의록을 저장하면 바로 화면이 돌아오고,
+# 분석은 뒤에서 돈다. 기다리게 하면 사람은 저장이 고장난 줄 안다 —
+# API 왕복이 몇 초에서 몇십 초다.
+#
+# **본문이 안 바뀌면 다시 부르지 않는다.** 오타 하나 고칠 때마다 돈이 나가면
+# 아무도 안 고친다. 본문의 해시를 남기고 같으면 앞의 결과를 그대로 쓴다.
+
+
+def body_hash(meeting: Meeting) -> str:
+    """이 회의록의 지문. **본문만 본다** — 제목이나 참석자가 바뀌었다고
+    다시 부를 이유가 없다."""
+    return hashlib.sha256(((meeting.body or "").strip()).encode("utf-8")).hexdigest()
+
+
+def _제안을_json(것들) -> str:
+    return json.dumps([{
+        "kind": x.kind, "text": x.text, "why": x.why,
+        "run_id": x.run_id, "run_title": x.run_title,
+        "quote": x.quote, "title": x.title,
+        "parent_run_id": x.parent_run_id, "parent_title": x.parent_title,
+        "department": x.department, "evidence": x.evidence,
+    } for x in 것들], ensure_ascii=False)
+
+
+def 분석_한번(meeting_id: int) -> None:
+    """뒤에서 도는 분석. **제 세션을 연다** — 요청이 끝나면 그쪽 세션은 닫힌다.
+
+    **여기서 터져도 화면은 살아 있어야 한다** (4-10 조건 8). 무엇이 터지든
+    상태를 '실패' 로 적고 왜인지를 남긴다. 조용히 끝나면 화면은 영원히
+    '읽는 중' 이다.
+    """
+    from app.domain.suggest import suggest_full
+
+    db = SessionLocal()
+    try:
+        meeting = db.get(Meeting, meeting_id)
+        if meeting is None or meeting.retreat_id is None:
+            return
+        retreat = db.get(Retreat, meeting.retreat_id)
+        if retreat is None:
+            return
+        지문 = body_hash(meeting)
+        try:
+            r = suggest_full(db, retreat=retreat, meeting=meeting,
+                             as_of=meeting.meeting_date)
+        except Exception as exc:                    # noqa: BLE001
+            meeting.suggest_state = "실패"
+            meeting.suggest_note = f"분석하지 못했습니다 — {exc.__class__.__name__}"
+            meeting.suggest_hash = None             # 다음에 다시 시도한다
+            meeting.suggest_at = dt.datetime.now()
+            db.commit()
+            return
+        meeting.suggest_state = "됨"
+        meeting.suggest_json = _제안을_json(r.제안들)
+        meeting.suggest_note = f"{r.방식}|{r.말}"
+        meeting.suggest_cost = r.원
+        meeting.suggest_at = dt.datetime.now()
+        # **지문은 언제나 남긴다.** 안 남기면 볼 때마다 "본문이 바뀐 것" 으로
+        # 읽혀 다시 돌고, 화면이 영원히 '읽는 중' 이다 (실제로 그랬다).
+        # 낱말로 물러선 것을 다시 읽게 하는 일은 `분석_걸어둔다` 가 맡는다 —
+        # **키가 생겼을 때만** 다시 돈다.
+        meeting.suggest_hash = 지문
+        db.commit()
+    finally:
+        db.close()
+
+
+def 낱말로_물러섰나(meeting: Meeting) -> bool:
+    """지난번 결과가 낱말 겹침이었나. `suggest_note` 는 `방식|말` 이다."""
+    return (meeting.suggest_note or "").startswith("낱말|")
+
+
+def 다시_읽어야_하나(meeting: Meeting) -> bool:
+    """다시 부를 이유가 있는가.
+
+    둘뿐이다 — **본문이 바뀌었거나**, 지난번에 낱말로 물러섰는데 **그 사이
+    키가 생겼거나.** 둘째가 없으면 키를 넣어도 옛 결과가 그대로 남아
+    영영 문장으로 안 읽는다. 반대로 지문을 아예 안 남기면 볼 때마다 다시
+    돌아서 화면이 영원히 '읽는 중' 이다 — 둘 다 겪었다.
+    """
+    if not meeting.suggest_hash or meeting.suggest_hash != body_hash(meeting):
+        return True
+    if 낱말로_물러섰나(meeting):
+        from app.domain import llm as llm_mod
+
+        return bool(llm_mod.read_key())
+    return False
+
+
+def 분석_걸어둔다(background: BackgroundTasks, meeting: Meeting, db: Session) -> None:
+    """저장한 뒤 부른다. **다시 부를 이유가 없으면 안 부른다** — 오타 하나
+    고칠 때마다 돈이 나가면 아무도 안 고친다."""
+    if meeting.retreat_id is None:
+        return
+    if not 다시_읽어야_하나(meeting):
+        return
+    meeting.suggest_state = "도는중"
+    db.commit()
+    background.add_task(분석_한번, meeting.id)
+
+
+@router.post("/{meeting_id}/suggestions/rerun")
+def rerun_suggestions(
+    meeting_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """**다시 시도.** 실패했을 때 사람이 누를 자리가 화면에 있어야 한다 —
+    없으면 본문을 억지로 고쳐 저장하는 수밖에 없다."""
+    meeting = _owned(db, meeting_id, retreat)
+    meeting.suggest_hash = None
+    분석_걸어둔다(background, meeting, db)
+    return {"ok": True}
+
+
 @router.get("/{meeting_id}/suggestions")
 def meeting_suggestions(
     meeting_id: int,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    """제안 목록. **실패해도 화면은 살아 있어야 한다** (4-10 조건 8) —
-    여기서 터지면 회의록 본문까지 못 읽게 된다. 빈 목록으로 답한다."""
-    meeting = _owned(db, meeting_id, retreat)
-    try:
-        from app.domain.suggest import suggest
+    """쌓아 둔 제안을 낸다. 아직 없으면 그 자리에서 걸어 두고 '도는 중' 을 답한다.
 
-        것들 = suggest(db, retreat=retreat, meeting=meeting,
-                      as_of=meeting.meeting_date)
-    except Exception:                       # noqa: BLE001 — 화면을 죽이지 않는다
-        return {"items": [], "failed": True}
+    **실패해도 화면은 살아 있어야 한다** (4-10 조건 8) — 여기서 터지면
+    회의록 본문까지 못 읽게 된다.
+
+    **비어 있는 것이 세 가지 뜻을 갖지 않게 한다.** '아직 안 끝났다' ·
+    '낼 것이 없다'(조건 4의 정상) · '실패했다' 는 사람이 할 일이 전부
+    다르다. `state` 로 나눠 보낸다.
+    """
+    meeting = _owned(db, meeting_id, retreat)
+
+    # 사람 평가가 든 회의록인가 (6단계). **계산이라 API 와 무관하다** —
+    # 키가 없어도, 분석이 실패해도 이 표시는 뜬다
+    try:
+        from app.domain.meeting_import import people_notes
+
+        평가줄 = people_notes(meeting.body or "")
+    except Exception:                       # noqa: BLE001
+        평가줄 = []
+
+    # **실패는 저절로 다시 돌리지 않는다.** 죽은 API 를 3초마다 두드리면
+    # 값만 나가고 화면은 그대로다. 다시 시도는 사람이 누른다 (18번).
+    if (meeting.suggest_state or "없음") != "실패" and 다시_읽어야_하나(meeting):
+        분석_걸어둔다(background, meeting, db)
+
+    방식, _, 말 = (meeting.suggest_note or "").partition("|")
+    if not 말:
+        방식, 말 = "", 방식
+
+    것들 = []
+    if meeting.suggest_state == "됨" and meeting.suggest_json:
+        try:
+            것들 = json.loads(meeting.suggest_json) or []
+        except Exception:                   # noqa: BLE001
+            것들 = []
+
     # **이미 그 회의록에서 온 논의가 있으면 말한다.** 같은 것을 두 번 남기게
     # 두지 않는다 — 두 번 남으면 어느 것이 맞는지 알 수 없고, 지우는 길은
     # 그 업무의 논의 탭뿐이라 되돌리는 값이 비싸다.
-    표 = f"[회의록 {meeting.meeting_date.isoformat() if meeting.meeting_date else '날짜 없음'}"
+    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
+    표 = f"[회의록 {날}"
     이미 = {
         e.run_id
         for e in db.scalars(
@@ -368,42 +522,53 @@ def meeting_suggestions(
         if f"· {meeting.title}]" in (e.body or "")
     }
     남을것 = discussion_body(meeting)
-    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
     어디 = f"{날} 회의록"
 
-    def 하자는말(x) -> str:
+    def 하자는말(x: dict) -> str:
         """**무엇을 하자는 것인지.** 왜 골랐는지가 아니라."""
-        if x.kind == "discussion":
-            return f"이 회의 내용을 「{x.run_title}」 의 논의로 남깁니다"
-        if x.kind == "new":
-            말 = x.text.split("— ", 1)[-1]
+        if x.get("kind") == "discussion":
+            return f"이 회의 내용을 「{x.get('run_title')}」 의 논의로 남깁니다"
+        if x.get("kind") == "new":
+            말 = (x.get("title") or x.get("text") or "").split("— ", 1)[-1]
             # **화면에서만** 형광펜 표시를 뗀다. 본문에는 그대로 남고
             # 고르는 것도 그대로다 — 하려는 일을 읽는 데 방해만 된다
-            for 표 in ("⟨형광펜⟩", "⟨빨간형광펜⟩"):
-                말 = 말.replace(표, "")
+            for 표시 in ("⟨형광펜⟩", "⟨빨간형광펜⟩"):
+                말 = 말.replace(표시, "")
             return 말.strip()
-        return x.text
+        return x.get("text") or ""
+
+    항목 = []
+    for x in 것들:
+        run_id = x.get("run_id")
+        항목.append({
+            "kind": x.get("kind"),
+            # 하려는 일이 먼저다. 화면이 이것을 크게 그린다
+            "action": 하자는말(x),
+            "text": x.get("text"),
+            "why": x.get("why"),
+            "run_id": run_id,
+            "run_title": x.get("run_title"),
+            "evidence": x.get("evidence") or [],
+            "from": 어디,
+            # 결정사항은 **회의록의 줄 그대로** 보여준다 (4단계)
+            "quote": x.get("quote"),
+            "parent_title": x.get("parent_title"),
+            "department": x.get("department"),
+            # 누르기 전에 볼 수 있어야 한다
+            "preview": 남을것 if x.get("kind") == "discussion" else None,
+            "already": bool(run_id and run_id in 이미),
+        })
 
     return {
         "meeting": 어디,
-        "items": [
-            {
-                "kind": x.kind,
-                # 하려는 일이 먼저다. 화면이 이것을 크게 그린다
-                "action": 하자는말(x),
-                "text": x.text,
-                "why": x.why,
-                "run_id": x.run_id,
-                "run_title": x.run_title,
-                "evidence": x.evidence,
-                "from": 어디,
-                # 누르기 전에 볼 수 있어야 한다 (2단계)
-                "preview": 남을것 if x.kind == "discussion" else None,
-                "already": bool(x.run_id and x.run_id in 이미),
-            }
-            for x in 것들
-        ],
-        "failed": False,
+        "state": meeting.suggest_state or "도는중",
+        "how": 방식,                        # '문장' | '낱말' | ''
+        "note": 말,
+        "cost": meeting.suggest_cost or 0.0,
+        "people_notes": 평가줄[:8],
+        "can_edit": not perm.is_readonly(user.role),
+        "items": 항목,
+        "failed": (meeting.suggest_state == "실패"),
     }
 
 
