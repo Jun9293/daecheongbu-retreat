@@ -96,7 +96,9 @@ class BoardRow:
     end: dt.date | None
     kind: str = "main"                  # 'main' | 'sub' | 'schedule' (4-2)
     parent_title: str | None = None
-    status: str = "대기"                # **그 회의 날 기준** (위 설명)
+    # **그 회의 날 기준.** `None` 은 *모른다* 는 뜻이다 — 기본값을 '대기' 로
+    # 두면 모르는 것을 주장하게 된다 (6-9). 아래 `_상태` 를 보라.
+    status: str | None = None
 
 
 @dataclass
@@ -150,12 +152,18 @@ def board_as_of(db: Session, retreat: Retreat, as_of: dt.date) -> list[BoardRow]
     ]
 
 
-def _상태(run, as_of: dt.date) -> str:
-    """**그날의 상태.** 저장된 `status` 를 읽지 않는다.
+def _상태(run, as_of: dt.date) -> str | None:
+    """**그날의 상태.** 저장된 `status` 를 읽지 않는다. 모르면 `None`.
 
     저장된 값은 오늘의 상태다. 6월 회의를 분석하면서 8월에 끝난 것을 알고
     고르면 잘 맞히는 것처럼 보이는데, 그건 잰 것이 아니라 답을 본 것이다.
     날짜 둘만 본다 — `completed_at` · `started_at` (8장).
+
+    **날짜가 둘 다 없으면 '대기' 라고 하지 않는다.** 옮겨 온 자료는 그 둘이
+    비어 있어서 96건이 **전부 '대기'** 로 나갔다. 구별에 기여하지 않으면서
+    토큰만 먹고, **8월에 끝난 일도 '대기' 로 보인다** — 모델은 그것을
+    "아직 안 한 일" 로 읽는다. **'대기' 는 주장이다. 모르는 것을 주장하지
+    않는다** (6-9).
     """
     끝 = getattr(run, "completed_at", None)
     시작 = getattr(run, "started_at", None)
@@ -163,7 +171,10 @@ def _상태(run, as_of: dt.date) -> str:
         return "완료"
     if 시작 and 시작 <= as_of:
         return "진행중"
-    return "대기"
+    if 끝 or 시작:
+        # 날짜가 있는데 아직 그날이 안 됐다 — 그건 **아는 것**이다
+        return "대기"
+    return None
 
 
 def catalog(rows: list[BoardRow]) -> str:
@@ -185,9 +196,19 @@ def catalog(rows: list[BoardRow]) -> str:
         속성 = 분류.get(x.kind, x.kind)
         if x.parent_title:
             속성 += f"(상위: {x.parent_title})"
-        줄.append(f"[{x.run_id}] {x.title} · {x.department or '담당팀 없음'}"
-                  f" · {속성} · {기간} · {x.status}")
-    return "\n".join(줄)
+        칸 = [f"[{x.run_id}] {x.title}", x.department or "담당팀 없음", 속성, 기간]
+        # **모르면 칸을 아예 뺀다.** `상태 모름` 을 96줄에 96번 쓰는 것보다
+        # 빼는 것이 싸고, 빠진 것이 곧 "모름" 이라는 뜻은 아래 머리말 한 줄이
+        # 말해 준다. 있는 것만 적으면 **있다는 사실 자체가 정보**가 된다.
+        if x.status:
+            칸.append(x.status)
+        줄.append(" · ".join(칸))
+    아는것 = sum(1 for x in rows if x.status)
+    머리 = ("(맨 끝의 상태는 그 회의 날 기준입니다. "
+           f"{len(rows)}건 중 {아는것}건만 적혀 있고, "
+           "**적히지 않은 것은 시작·완료 기록이 없어 모르는 것**입니다 — "
+           "아직 안 한 일이라는 뜻이 아닙니다.)")
+    return 머리 + "\n" + "\n".join(줄)
 
 
 def _낱말(text: str) -> set[str]:
@@ -452,6 +473,14 @@ class 결과:
     원: float = 0.0                 # 이 회의 하나에 든 값 (3단계)
     부른횟수: int = 0
     실패: bool = False
+    # **잰 것을 적는다.** 어림한 값(회의당 37~43원)이 실제로는 113원이었다 —
+    # 세 배다. `usage` 를 그대로 받아 둔다
+    입력토큰: int = 0
+    출력토큰: int = 0
+    생각토큰: int = 0
+    # **걸러서 빈 것도 그렇다고 말한다.** 조용히 사라지면 "할 말이 없다" 와
+    # 구별되지 않는다 (기준 5)
+    걸러낸것: list[str] = field(default_factory=list)
 
 
 def 평가조각(평가줄: list[str]) -> list[str]:
@@ -474,6 +503,28 @@ def 평가조각(평가줄: list[str]) -> list[str]:
             if len(짧) >= 4 and any(w in 부분 for w in 말들):
                 조각.append(짧)
     return 조각
+
+
+def 못읽었나(답: object, 읽은것: dict) -> str:
+    """답이 왔는데 **읽지 못했는가.** 못 읽었으면 그 까닭을 한 줄로.
+
+    2026-09-03 에 `26.08.09` 가 이랬다 —
+
+        stop_reason: max_tokens · output_tokens 4000 (생각 3042)
+        JSON 이 `"왜": "홍보영상의 8/9, 8/16 …` 에서 **문장 한가운데 잘림**
+
+    잘린 JSON 은 `json_만` 이 `{}` 로 돌려주고, 화면에는 **"낼 것을 찾지
+    못했습니다"** 가 떴다. 모델이 판단해서 없는 것과 우리가 못 읽은 것이
+    **같은 모양**이었던 것이다 — 이 프로젝트가 가장 비싸다고 적어 둔 실패다.
+    """
+    # **`잘렸나` 속성이 아니라 값을 본다.** 속성으로 물으면 시험이 넣는
+    # 가짜 대답에는 그 속성이 없어 조용히 다른 가지로 빠진다
+    if getattr(답, "stop_reason", "") == "max_tokens":
+        return ("답이 길어서 중간에 잘렸습니다"
+                f" (생각에 {getattr(답, 'thinking_tokens', 0):,}토큰을 썼습니다)")
+    if (getattr(답, "text", "") or "").strip() and not 읽은것:
+        return "답이 왔는데 읽지 못했습니다 (JSON 이 아닙니다)"
+    return ""
 
 
 def 사람평가_섞였나(글: str, 평가줄: list[str]) -> bool:
@@ -530,7 +581,8 @@ def _논의이력(db: Session, run_ids: list[int], 줄당: int = 400) -> str:
 
 
 def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
-           meeting: Meeting, 평가줄: list[str], limit: int) -> list[제안]:
+           meeting: Meeting, 평가줄: list[str], limit: int,
+           걸러낸것: list[str] | None = None) -> list[제안]:
     """대답을 화면이 아는 모양으로 옮긴다.
 
     여기서 **두 가지를 거른다** — 판정 단어(4-10 조건 7)와 사람 평가(6단계).
@@ -549,6 +601,8 @@ def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
         # **사람 평가가 섞이면 통째로 뺀다.** 결정사항은 인용이 본체라
         # 인용을 지우면 남는 것이 없다
         if 사람평가_섞였나(인용, 평가줄) or 사람평가_섞였나(무엇, 평가줄):
+            if 걸러낸것 is not None:
+                걸러낸것.append("사람 평가가 섞여 결정사항 1건을 뺐습니다")
             continue
         나온것.append(제안(
             kind="decision",
@@ -561,7 +615,11 @@ def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
     for x in 논의[:limit]:
         row = 맵.get(x.get("run_id"))
         if row is None:
-            continue                          # 없는 번호는 조용히 버린다
+            # **조용히 버리지 않는다.** 모델이 없는 번호를 대면 그만큼 제안이
+            # 줄어드는데, 줄어든 이유가 화면 어디에도 안 남는다
+            if 걸러낸것 is not None:
+                걸러낸것.append(f"목록에 없는 번호({x.get('run_id')})라 논의 1건을 뺐습니다")
+            continue
         왜 = 판정단어_뺀다((x.get("왜") or "").strip())
         if 사람평가_섞였나(왜, 평가줄):
             왜 = "회의 내용이 이 업무의 사정으로 읽힙니다"
@@ -582,6 +640,8 @@ def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
             continue
         왜 = 판정단어_뺀다((x.get("왜") or "").strip())
         if 사람평가_섞였나(제목, 평가줄) or 사람평가_섞였나(왜, 평가줄):
+            if 걸러낸것 is not None:
+                걸러낸것.append("사람 평가가 섞여 새 업무 1건을 뺐습니다")
             continue
         상위 = 맵.get(x.get("상위_run_id"))
         나온것.append(제안(
@@ -641,6 +701,15 @@ def 분석(db: Session, *, retreat: Retreat, meeting: Meeting,
     묶음.append(일차)
     답 = llm_mod.json_만(일차.text)
 
+    # **답은 왔는데 읽지 못한 경우를 `실패` 로 나눈다** (기준 4).
+    # 여기서 안 나누면 "모델이 낼 것이 없다고 했다" 와 같은 모양이 된다
+    if 못읽음 := 못읽었나(일차, 답):
+        r = 물러선다(f"{못읽음} — 낱말이 겹치는 정도로만 골랐습니다.", True)
+        r.원, r.글자수, r.부른횟수 = 일차.원, len(목록), 1
+        r.입력토큰, r.출력토큰 = 일차.in_tokens, 일차.out_tokens
+        r.생각토큰 = getattr(일차, "thinking_tokens", 0)
+        return r
+
     후보 = [x for x in (답.get("논의후보") or []) if isinstance(x, dict)]
     번호들 = [x.get("run_id") for x in 후보 if isinstance(x.get("run_id"), int)]
     이력있는 = set()
@@ -671,14 +740,23 @@ def 분석(db: Session, *, retreat: Retreat, meeting: Meeting,
             if isinstance(둘, list):
                 논의 = [x for x in 둘 if isinstance(x, dict)]
 
-    나온것 = _제안으로(답, 논의, rows, meeting, 평가줄, limit)
+    걸러낸것: list[str] = []
+    나온것 = _제안으로(답, 논의, rows, meeting, 평가줄, limit, 걸러낸것)
     원 = sum(getattr(x, "원", 0.0) for x in 묶음)
+    입력 = sum(getattr(x, "in_tokens", 0) for x in 묶음)
+    출력 = sum(getattr(x, "out_tokens", 0) for x in 묶음)
+    생각 = sum(getattr(x, "thinking_tokens", 0) for x in 묶음)
     모델 = getattr(묶음[0], "model", llm_mod.MODEL)
     # **"읽고 골랐습니다" 는 화면이 말한다.** 여기서 또 쓰면 한 줄에 같은
     # 말이 두 번 뜬다 — 여기는 **사실만** 적는다 (모델·횟수·값·2차 여부)
-    말 = (f"{모델} 에 {len(묶음)}번 물었고 약 {원:,.0f}원 들었습니다."
-          f" 2차: {왜2}.")
-    return 결과(나온것, "문장", 말, 평가줄, len(목록), 원, len(묶음))
+    말 = (f"{모델} 에 {len(묶음)}번 물었고 약 {원:,.0f}원 들었습니다"
+          f" (토큰 {입력:,}/{출력:,}). 2차: {왜2}.")
+    if 걸러낸것:
+        # **걸러서 빈 것도 그렇다고 말한다** (기준 5). 조용히 사라지면
+        # "할 말이 없다" 와 구별되지 않는다
+        말 += " " + " ".join(dict.fromkeys(걸러낸것))
+    return 결과(나온것, "문장", 말, 평가줄, len(목록), 원, len(묶음),
+              입력토큰=입력, 출력토큰=출력, 생각토큰=생각, 걸러낸것=걸러낸것)
 
 
 def suggest_full(db: Session, *, retreat: Retreat, meeting: Meeting,
