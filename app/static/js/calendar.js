@@ -24,6 +24,24 @@ const note = document.getElementById('calnote');
 const onlyOpen = () => bar?.dataset.onlyOpen === '1';
 const perDay = () => Number(bar?.dataset.perDay) || 3;
 
+/* 범위를 고르면 **서버에 다시 물어본다.** 보드는 그 자리에서 흐리게 하면
+   되지만(같은 행이 계속 있다), 달력은 `외 N건`·위쪽 건수·날짜 없는 업무 수를
+   **다시 세어야** 한다 — 화면에서 감추기만 하면 그 숫자들이 옛것으로 남는다.
+
+   **보던 달과 `미완료만` 을 함께 들고 간다** (4-13). 주소에 남겨야
+   새로고침해도, 달을 넘겼다 와도, 링크를 복사해 줘도 같은 화면이 열린다. */
+const scopePick = document.getElementById('calscope');
+if (scopePick && bar) {
+  scopePick.addEventListener('change', () => {
+    const q = new URLSearchParams({
+      month: bar.dataset.month || '',
+      scope: scopePick.value,
+      only_open: onlyOpen() ? '1' : '0',
+    });
+    location.href = '/calendar?' + q.toString();
+  });
+}
+
 const dots = runId => [...document.querySelectorAll(`.cal-dot[data-run="${runId}"]`)];
 
 /* 같은 업무가 여러 곳에 있다 — 월 격자, 좁은 화면의 주 목록, 그리고

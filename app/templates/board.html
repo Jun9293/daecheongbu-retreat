@@ -1,17 +1,10 @@
 {% extends "retreat_base.html" %}
+{% from "partials/deptpick.html" import deptpick %}
 {% block title %}준비 단계 · {{ retreat.name }}{% endblock %}
 
 {% block body %}
 <div class="toolbar">
-  <div class="ctl">
-    <label for="me">내 소속</label>
-    <select id="me">
-      <option value="all">전체</option>
-      {% for dept in board.departments %}
-      <option value="{{ dept.key }}" {% if dept.key == my_department_key %}selected{% endif %}>{{ dept.name }}</option>
-      {% endfor %}
-    </select>
-  </div>
+  {{ deptpick(board.departments, my_department_key or 'all') }}
   <label class="tog"><input type="checkbox" id="opT"> 미완료만</label>
   <button class="fchip" id="fchip" hidden></button>
   <span class="mono" style="font-size:12.5px;color:var(--ink-3)">

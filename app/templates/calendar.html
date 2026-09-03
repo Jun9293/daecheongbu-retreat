@@ -1,4 +1,5 @@
 {% extends "retreat_base.html" %}
+{% from "partials/deptpick.html" import deptpick %}
 {% block title %}달력 · {{ retreat.name }}{% endblock %}
 
 {% block body %}
@@ -26,8 +27,10 @@
 {#
   달력 보기 (CLAUDE.md 4-13).
   **마감일에 점 하나**입니다 — 기간 띠가 아닙니다.
-  점을 누르면 `/board?task=` 로 가서 **보드의 상세 패널**이 열립니다.
-  여기서 패널을 새로 만들지 않습니다.
+  점을 누르면 **그 자리에서** 상세 패널이 열립니다 — 달력은 그대로 있고
+  오른쪽에 겹쳐 뜹니다. 보드로 넘겨 보내지 않습니다(그러면 보던 달을 잃습니다).
+  그래도 패널은 **한 벌**입니다 — 화면은 `partials/drawer.html`,
+  코드는 `static/js/drawer.js` 하나입니다 (4-13).
 #}
 {# 달을 넘겨도 칩이 유지되도록 **링크마다 지금 값을 달고 다닌다.**
    쿠키에도 남기지만, 주소에 없으면 링크를 복사해 준 사람이 다른 화면을 본다. #}
@@ -42,13 +45,10 @@
     <a class="btn ghost sm" href="/calendar?month={{ cal.today_month }}&{{ keep }}">오늘</a>
   </div>
 
-  {# 달을 넘길 때 칩이 유지되도록 링크마다 지금 값을 달고 다닌다 #}
+  {# **보드와 같은 것을 쓴다** — 부서를 고를 수 있어야 한다 (partials/deptpick.html).
+     `미완료만` 은 고르는 축이 달라 칩으로 남긴다. #}
   <div class="calchips" role="group" aria-label="범위">
-    {% for s in cal.scopes %}
-    <a class="chip{{ ' on' if s.value == cal.scope }}"
-       href="/calendar?month={{ cal.month }}&scope={{ s.value }}&only_open={{ 1 if cal.only_open else 0 }}"
-       aria-pressed="{{ 'true' if s.value == cal.scope else 'false' }}">{{ s.label }}</a>
-    {% endfor %}
+    {{ deptpick(cal.departments, cal.scope, id='calscope', label='범위', mine=true) }}
     <a class="chip{{ ' on' if cal.only_open }}"
        href="/calendar?month={{ cal.month }}&scope={{ cal.scope }}&only_open={{ 0 if cal.only_open else 1 }}"
        aria-pressed="{{ 'true' if cal.only_open else 'false' }}">미완료만</a>

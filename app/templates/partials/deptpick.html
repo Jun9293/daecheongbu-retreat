@@ -1,0 +1,35 @@
+{#
+  부서 고르기 — **보드와 달력이 같은 것을 쓴다** (CLAUDE.md 4-13 의 드로어와
+  같은 자리).
+
+  달력에는 원래 `내 것 / 우리 부서 / 전체` 세 칩뿐이라 **어느 부서를 고를
+  수가 없었다.** 총무팀장이 스케치팀 것만 보려 해도 방법이 없었다.
+  보드는 이미 드롭다운으로 어느 부서든 골랐으므로, **새로 만들지 않고 그것을
+  여기로 꺼내 둘이 함께 쓴다.** 두 벌이 되면 한쪽만 고쳐지는데, 그것이 이
+  프로젝트가 여섯 번 고쳐 온 모양이다.
+
+  **부서는 키로 값을 삼는다** (2장). `Department.id` 로 삼으면 새 회차가
+  열리는 순간 고른 것이 엉뚱한 부서를 가리킨다.
+
+  화면마다 다른 것은 **고른 뒤에 무엇을 하는가** 뿐이다 —
+  보드는 그 자리에서 흐리게 하고(`board.js`), 달력은 서버에 다시 물어본다
+  (`calendar.js`). 개수를 다시 세어야 하기 때문이다.
+
+  `mine` 은 달력만 쓴다. 담당자가 나인 것을 고르는 것은 부서와 **다른 축**
+  이지만, 고르는 자리가 둘이면 사람이 어디를 봐야 할지 모른다 — 4-9 에서
+  버튼을 두 자리에 두지 않기로 한 것과 같다.
+#}
+{% macro deptpick(departments, selected, id='me', label='내 소속', mine=false) %}
+<div class="ctl">
+  <label for="{{ id }}">{{ label }}</label>
+  <select id="{{ id }}" name="{{ id }}" data-deptpick>
+    {% if mine %}
+    <option value="mine"{{ ' selected' if selected == 'mine' }}>내 것</option>
+    {% endif %}
+    <option value="all"{{ ' selected' if selected == 'all' }}>전체</option>
+    {% for d in departments %}
+    <option value="{{ d.key }}"{{ ' selected' if d.key == selected }}>{{ d.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endmacro %}

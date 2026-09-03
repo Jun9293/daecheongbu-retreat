@@ -21,8 +21,18 @@ from sqlalchemy.orm import Session
 from app.domain import board as board_domain
 from app.models import Retreat, TaskRun, User
 
-SCOPES = ("mine", "dept", "all")
-SCOPE_LABELS = {"mine": "내 것", "dept": "우리 부서", "all": "전체"}
+# 고를 수 있는 범위. **부서 키가 그대로 값이 된다** — 여기 셋만 특별하다.
+#
+# 전에는 `내 것 / 우리 부서 / 전체` 셋뿐이라 **어느 부서를 고를 수가 없었다.**
+# 총무팀장이 스케치팀 것만 보려 해도 방법이 없었다. 보드는 이미 드롭다운으로
+# 어느 부서든 골랐으므로 **그것을 그대로 쓴다** (`partials/deptpick.html`).
+#
+# `dept` 는 옛 값이다. 쿠키에 남아 있을 수 있어 **내 부서 키로 옮겨 준다** —
+# 모르는 값이라고 `mine` 으로 떨어뜨리면, 어제까지 우리 부서를 보던 사람이
+# 오늘 갑자기 자기 것만 보게 되고 왜인지 알 수 없다.
+FIXED_SCOPES = ("mine", "all")
+SCOPE_LABELS = {"mine": "내 것", "all": "전체"}
+LEGACY_DEPT = "dept"
 
 # 한 칸에 이만큼까지 펼쳐 두고 나머지는 접는다. 다 펼치면 칸이 세로로
 # 길어져 주 높이가 들쭉날쭉해지고, 그러면 달력으로 읽히지 않는다.
@@ -59,16 +69,18 @@ def shift_month(first: dt.date, step: int) -> dt.date:
     return dt.date(year, (month - 1) % 12 + 1, 1)
 
 
-def _in_scope(run: TaskRun, *, scope: str, user: User | None,
-              my_dept_key: str | None) -> bool:
+def _in_scope(run: TaskRun, *, scope: str, user: User | None) -> bool:
+    """`mine` · `all` · **부서 키**.
+
+    **부서는 키로 비교합니다** (2장). `Department` 행은 회차마다 새로
+    만들어지므로 id 로 보면 새 회차가 열리는 순간 그 부서 업무가 통째로
+    사라집니다 — 값 자체를 키로 두면 그 실수를 할 자리가 없어집니다.
+    """
     if scope == "all":
         return True
     if scope == "mine":
         return user is not None and run.assignee_id == user.id
-    # **부서는 키로 비교합니다** (2장). Department 행은 회차마다 새로 만들어지므로
-    # id 로 보면 새 회차가 열리는 순간 자기 부서 업무가 통째로 사라집니다.
-    return bool(my_dept_key) and (
-        run.department.key if run.department else None) == my_dept_key
+    return (run.department.key if run.department else None) == scope
 
 
 def dot_of(run: TaskRun, *, today: dt.date) -> dict:
@@ -115,18 +127,21 @@ def build(
     only_open: bool = False,
 ) -> dict:
     """달력 한 장. **`today` 를 받습니다** — 실행 날짜에 따라 갈리면 안 됩니다."""
-    if scope not in SCOPES:
-        scope = "mine"
-    # 부서가 없는 사람에게는 '우리 부서' 를 내지 않는다. 고를 수 없는 칩이
-    # 보이면 눌러 보고 빈 화면을 만난다
-    if scope == "dept" and not my_dept_key:
+    depts = [{"key": d.key, "name": d.name}
+             for d in sorted(retreat.departments, key=lambda d: (d.sort_order, d.id))
+             if d.key]
+    쓸수있는 = set(FIXED_SCOPES) | {d["key"] for d in depts}
+    # 옛 값(`dept`)은 **내 부서 키로 옮긴다** — 쿠키에 남아 있을 수 있다
+    if scope == LEGACY_DEPT:
+        scope = my_dept_key or "mine"
+    if scope not in 쓸수있는:
         scope = "mine"
 
     first = month_of(month, today=today, retreat=retreat)
     runs = [
         run for run in board_domain.load_runs(db, retreat)
         if run.included
-        and _in_scope(run, scope=scope, user=user, my_dept_key=my_dept_key)
+        and _in_scope(run, scope=scope, user=user)
         and not (only_open and run.status == "완료")
     ]
 
@@ -184,12 +199,8 @@ def build(
         "weeks": weeks,
         "undated": undated,
         "scope": scope,
-        "scopes": [
-            {"value": v, "label": SCOPE_LABELS[v]}
-            for v in SCOPES
-            # 부서가 없으면 '우리 부서' 칩 자체를 내지 않는다
-            if v != "dept" or my_dept_key
-        ],
+        # 고르는 자리는 보드와 같은 것을 쓴다 (`partials/deptpick.html`)
+        "departments": depts,
         "only_open": only_open,
         "count": shown,
         "total": len(runs),
