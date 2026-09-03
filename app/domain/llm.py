@@ -26,6 +26,12 @@
 **단가는 바뀐다.** 그래서 숫자를 코드에 박되 **한 곳에** 두고, 환경변수로
 덮을 수 있게 한다. 바뀐 것을 모르고 쓰면 "회의당 30원" 이 몇 배가 돼도
 화면은 30원이라고 말한다.
+
+**토큰은 추정하지 않는다.** 처음에 "한글 글자당 0.6~0.75 토큰" 으로 어림해
+회의당 37~43원이라고 적었는데 실제로는 **113원**이었다 — 세 배다. 어림이
+틀린 자리가 둘이다: 한글은 글자당 1 토큰에 가깝고, **생각(thinking)이
+출력 토큰의 대부분을 먹는다**(4,000 중 3,042). 그래서 `usage` 를 그대로
+받아 적는다.
 """
 
 from __future__ import annotations
@@ -63,6 +69,20 @@ PRICE_OUT = float(os.environ.get("DCB_LLM_PRICE_OUT", "15.0"))
 USD_KRW = float(os.environ.get("DCB_USD_KRW", "1400"))
 
 TIMEOUT = float(os.environ.get("DCB_LLM_TIMEOUT", "120"))
+
+# 한 번에 받을 수 있는 출력 토큰. **생각(thinking)도 여기서 나간다.**
+#
+# 4000 이었을 때 실제로 이렇게 끊겼다 (2026-09-03, `26.08.09`) —
+#
+#     stop_reason: max_tokens
+#     output_tokens: 4000  (그중 thinking_tokens: 3042)
+#     text: 1,068자 — JSON 이 `"왜": "홍보영상의 8/9, 8/16 공개 일정과 쇼츠…`
+#           에서 **문장 한가운데 잘렸다**
+#
+# 생각에 3,042 를 쓰고 남은 958 로 답을 쓰다 만 것이다. 잘린 JSON 은 읽히지
+# 않아 `{}` 가 되고, 화면에는 **"낼 것을 찾지 못했습니다"** 가 떴다 —
+# 모델이 판단해서 없는 것과 우리가 못 읽은 것이 **같은 모양**이었다.
+MAX_TOKENS = int(os.environ.get("DCB_LLM_MAX_TOKENS", "12000"))
 
 
 class LlmUnavailable(RuntimeError):
@@ -117,6 +137,14 @@ class 대답:
     in_tokens: int
     out_tokens: int
     model: str
+    # **왜 멈췄는가.** `max_tokens` 면 답이 잘린 것이고, 잘린 답은 읽히지
+    # 않아 빈 것과 구별되지 않는다 — 그 구별이 이 값 하나에 달려 있다.
+    stop_reason: str = ""
+    thinking_tokens: int = 0
+
+    @property
+    def 잘렸나(self) -> bool:
+        return self.stop_reason == "max_tokens"
 
     @property
     def 달러(self) -> float:
@@ -127,7 +155,7 @@ class 대답:
         return self.달러 * USD_KRW
 
 
-def ask(system: str, user: str, *, max_tokens: int = 4000,
+def ask(system: str, user: str, *, max_tokens: int | None = None,
         model: str | None = None) -> 대답:
     """한 번 부른다. **키가 없으면 부르지 않고 왜인지 말한다.**"""
     key = read_key()
@@ -135,7 +163,7 @@ def ask(system: str, user: str, *, max_tokens: int = 4000,
         raise LlmUnavailable(상태().말)
     body = {
         "model": model or MODEL,
-        "max_tokens": max_tokens,
+        "max_tokens": max_tokens or MAX_TOKENS,
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
@@ -165,11 +193,14 @@ def ask(system: str, user: str, *, max_tokens: int = 4000,
     data = r.json()
     조각 = [c.get("text", "") for c in data.get("content", []) if c.get("type") == "text"]
     사용 = data.get("usage") or {}
+    자세히 = 사용.get("output_tokens_details") or {}
     return 대답(
         text="".join(조각),
         in_tokens=int(사용.get("input_tokens") or 0),
         out_tokens=int(사용.get("output_tokens") or 0),
         model=data.get("model") or (model or MODEL),
+        stop_reason=data.get("stop_reason") or "",
+        thinking_tokens=int(자세히.get("thinking_tokens") or 0),
     )
 
 
