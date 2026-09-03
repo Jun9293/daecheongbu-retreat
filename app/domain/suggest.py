@@ -4,25 +4,32 @@
 하나**다. 두 벌이 되면 이 프로젝트가 다섯 번 고쳐 온 그 모양이 다시 난다
 (색·기간·툴팁·`onOpen`·`onAssignee`).
 
-## 두 가지를 낸다
+## 세 가지를 낸다
 
-1. **논의** — 그 회의 내용이 어느 업무의 사정인지 (`kind='discussion'`)
-2. **새 업무** — 회의에 할 일처럼 적혔는데 보드의 **어느 이름과도 겹치지
-   않는 것** (`kind='new'`)
+1. **결정사항** — 이 회의에서 정해진 것 (`kind='decision'`).
+   **회의록의 그 줄을 그대로 인용한다** — 사람이 인용을 보면 3초 만에 맞는지 안다
+2. **논의** — 그 회의 내용이 어느 업무의 사정인지 (`kind='discussion'`)
+3. **새 업무** — 회의에 할 일로 나왔는데 목록에 없는 것 (`kind='new'`)
 
-**첫째가 더 어렵다.** 250건 중 하나를 고르는 일이고, 틀리면 남의 회의 내용이
+**둘째가 가장 어렵다.** 250건 중 하나를 고르는 일이고, 틀리면 남의 회의 내용이
 엉뚱한 업무에 남는다. 그래서 제안마다 **왜 그 업무인지**를 함께 낸다 (6-3).
 
-## 아직 문장을 읽지 않는다
+## 이제 문장을 읽는다 — 못 읽으면 낱말로 물러선다
 
-**지금 고르는 방법은 낱말 겹침뿐이다.** 회의록과 업무 이름에 같은 낱말이
-둘 이상 나오면 논의 후보로 내고, 할 일처럼 생긴 줄인데 어느 업무 이름과도
-안 겹치면 새 업무 후보로 낸다.
+2026-09-03 에 사람이 표본 20개를 채점했다. 낱말 겹침은 **14/20** 이었고,
+틀린 여섯 중 넷이 *"낱말은 겹쳤는데 그 얘기를 한 적이 없다"*, 하나가
+*"결정과 단순 의견을 못 가린다"* 였다 (`docs/review/제안-성적표.md`).
+**둘 다 이름만 봐서는 못 넘는다.** 그래서 Claude API 로 회의록과 업무 목록을
+함께 읽는다 (`분석()`).
 
-**그 사실을 화면이 사람에게 말한다.** 감추면 실제로 어떤지 영영 모르지만,
-감추지 않는 것만으로는 부족하다 — 위험한 것은 틀린 제안이 아니라 **사람이
-처음에 세우는 기대**다. "읽고 제안했다" 로 읽히면 몇 번 엉뚱한 것을 보고
-다시 안 쓴다. 한 번 잃으면 안 돌아온다 (6-3).
+**낱말 겹침을 지우지 않았다.** 키가 없거나 API 가 죽었을 때 갈 자리가
+필요하다. 그때 빈 목록을 내면 "할 말이 없다"(조건 4의 정상)와 구별되지
+않는데, **구별되지 않는 실패가 이 프로젝트에서 가장 비싼 실패다.**
+그래서 물러서되 **물러섰다고 화면에 적는다** (`결과.방식` · `결과.말`).
+
+**어느 쪽이든 화면이 무엇으로 골랐는지 말한다.** 감추면 실제로 어떤지 영영
+모르지만, 감추지 않는 것만으로는 부족하다 — 위험한 것은 틀린 제안이 아니라
+**사람이 처음에 세우는 기대**다. 한 번 잃으면 안 돌아온다 (6-3).
 
 ## 지키는 것 (4-10 의 조건들)
 
@@ -38,8 +45,13 @@
 **가리는 것은 존재가 아니라 상태다.** 처음에는 "시작일이 지난 것만" 으로
 걸렀다가 6월 회의에 제안이 하나도 안 나와서 틀렸다는 것을 알았다 — 6월
 회의가 8월 업무를 얘기하는 것은 자연스럽고, 업무 목록은 회차를 열 때 이미
-다 정해져 있다 (6-6). 가리면 안 되는 것은 `status`·`completed_at` 처럼
-**나중에 알게 된 것**이다.
+다 정해져 있다 (6-6).
+
+**대신 상태를 그날로 되돌린다.** 저장된 `status` 는 **오늘의 값**이라 그대로
+보여주면 8월에 끝난 것을 알고 6월 회의를 고르게 된다 — 잰 것이 아니라 답을
+본 것이 된다. 그래서 `started_at`·`completed_at` **날짜에서 그날의 상태를
+다시 계산한다** (`_상태`). 4-10 이 기한 초과를 저장된 '지연' 이 아니라
+날짜로 계산하기로 한 것과 같은 자리다.
 """
 
 from __future__ import annotations
@@ -65,39 +77,64 @@ _할일말 = ("필요", "요청", "확인", "정하기", "만들기", "준비", 
 
 @dataclass
 class BoardRow:
-    """그 시점에 **알 수 있었던 것만.** 상태는 담지 않는다 — 담으면 본다."""
+    """그 시점에 **알 수 있었던 것만.**
+
+    처음에는 상태를 아예 안 담았다 — 담으면 본다는 이유였다. 문장으로 읽는
+    판(회의록 5단계)에서는 상태가 필요해졌는데, **저장된 `status` 를 담으면
+    안 된다.** 그건 오늘의 상태이지 그 회의 날의 상태가 아니고, 6월 회의를
+    분석하면서 8월에 끝난 것을 알고 고르면 **잘 맞히는 것처럼 보인다.**
+
+    그래서 `started_at` · `completed_at` **날짜에서 그날의 상태를 다시
+    계산한다** (`_상태`). 4-10 이 기한 초과를 저장된 '지연' 이 아니라 날짜로
+    계산하기로 한 것과 같은 자리다.
+    """
 
     run_id: int
     title: str
     department: str | None
     start: dt.date | None
     end: dt.date | None
+    kind: str = "main"                  # 'main' | 'sub' | 'schedule' (4-2)
+    parent_title: str | None = None
+    status: str = "대기"                # **그 회의 날 기준** (위 설명)
 
 
 @dataclass
 class 제안:
-    kind: str                       # 'discussion' | 'new'
+    kind: str                       # 'decision' | 'discussion' | 'new' | '더있음'
     text: str                       # 사람이 읽을 제안 내용
     why: str                        # **왜 그 업무인지** (6-3)
     run_id: int | None = None       # discussion 일 때 붙일 업무
     run_title: str | None = None
     meeting_id: int | None = None   # 어느 회의록에서 왔는가 (출처)
     evidence: list[str] = field(default_factory=list)
+    # ── 문장으로 읽는 판에서 붙었다 (회의록 5단계) ────────────────────
+    quote: str | None = None        # 결정사항 — **회의록의 그 줄 그대로**
+    title: str | None = None        # 새 업무 — 다듬은 제목
+    parent_run_id: int | None = None
+    parent_title: str | None = None
+    department: str | None = None
 
 
 def board_as_of(db: Session, retreat: Retreat, as_of: dt.date) -> list[BoardRow]:
     """그 시점의 보드.
 
-    **`as_of` 를 받아 두고 쓰지 않는다.** 존재를 가리지 않기로 했기 때문이다
-    (머리말). 그래도 인자를 남기는 이유는 부르는 쪽이 "언제 기준인가" 를
-    **의식하고 넘기게** 하기 위해서다 — 빼 버리면 시뮬레이션에서 날짜를 안
-    넘겨도 아무 일이 없고, 나중에 기간으로 거를 일이 생겼을 때 그 자리가 없다.
-    지금 실제로 하는 일은 **상태를 안 담는 것** 하나다.
+    **`as_of` 는 존재를 가리는 데 쓰지 않는다.** 6월 회의가 8월 업무를
+    얘기하는 것은 자연스럽고, 업무 목록은 회차를 열 때 이미 다 정해져 있다
+    (6-6). 처음에 "시작일이 지난 것만" 으로 걸렀다가 6월 회의에 제안이 하나도
+    안 나와서 틀렸다는 것을 알았다.
+
+    **`as_of` 가 실제로 하는 일은 상태를 그날로 되돌리는 것이다** (`_상태`).
+    저장된 `status` 는 오늘의 값이라, 그것을 보여주면 8월에 끝난 것을 알고
+    6월 회의를 고르게 된다 — 잰 것이 아니라 답을 본 것이 된다.
 
     **`board.load_runs` 를 쓴다.** 직접 `select(TaskRun)` 을 하면 `library` ·
     `department` 를 건건이 읽어 N+1 이 난다 — 실제로 그랬다(업무 96건에
     107쿼리). `load_runs` 는 셋을 미리 붙여 온다.
     """
+    runs = list(board_domain.load_runs(db, retreat))
+    # 상위 이름 — 라이브러리 id 로 이어져 있다 (8장 `parentLibraryId`)
+    이름 = {r.library_id: (r.library.title or "") for r in runs if r.library}
     return [
         BoardRow(
             run_id=r.id,
@@ -105,9 +142,52 @@ def board_as_of(db: Session, retreat: Retreat, as_of: dt.date) -> list[BoardRow]
             department=r.department.name if r.department else None,
             start=r.start_date,
             end=r.end_date,
+            kind=(r.library.kind if r.library else None) or "main",
+            parent_title=이름.get(getattr(r.library, "parent_library_id", None)),
+            status=_상태(r, as_of),
         )
-        for r in board_domain.load_runs(db, retreat)
+        for r in runs
     ]
+
+
+def _상태(run, as_of: dt.date) -> str:
+    """**그날의 상태.** 저장된 `status` 를 읽지 않는다.
+
+    저장된 값은 오늘의 상태다. 6월 회의를 분석하면서 8월에 끝난 것을 알고
+    고르면 잘 맞히는 것처럼 보이는데, 그건 잰 것이 아니라 답을 본 것이다.
+    날짜 둘만 본다 — `completed_at` · `started_at` (8장).
+    """
+    끝 = getattr(run, "completed_at", None)
+    시작 = getattr(run, "started_at", None)
+    if 끝 and 끝 <= as_of:
+        return "완료"
+    if 시작 and 시작 <= as_of:
+        return "진행중"
+    return "대기"
+
+
+def catalog(rows: list[BoardRow]) -> str:
+    """보드를 **글로** 펼친다. 문장으로 읽는 판이 이것을 앞에 놓고 판단한다.
+
+    낱말 겹침은 이름만 봤다. 이름만 보면 `프로그램 자료 헤브론 전달` 이
+    무엇의 하위인지, 어느 부서 것인지, 언제 하는 것인지 알 수 없다 —
+    성적표에서 틀린 여섯 중 넷이 정확히 그 자리였다.
+
+    한 줄에 하나씩, **run_id 를 앞에 붙인다.** 대답이 이 번호로 돌아오므로
+    이름을 되짚어 찾을 필요가 없다 — 이름으로 받으면 같은 이름이 둘일 때
+    엉뚱한 업무에 논의가 남는다.
+    """
+    분류 = {"main": "Main", "sub": "하위", "schedule": "일정"}
+    줄 = []
+    for x in rows:
+        기간 = (f"{x.start.isoformat()}~{x.end.isoformat()}"
+                if x.start and x.end else "기간 미정")
+        속성 = 분류.get(x.kind, x.kind)
+        if x.parent_title:
+            속성 += f"(상위: {x.parent_title})"
+        줄.append(f"[{x.run_id}] {x.title} · {x.department or '담당팀 없음'}"
+                  f" · {속성} · {기간} · {x.status}")
+    return "\n".join(줄)
 
 
 def _낱말(text: str) -> set[str]:
@@ -180,9 +260,15 @@ def 할일줄(본문: str) -> list[str]:
     return 나온것
 
 
-def suggest(db: Session, *, retreat: Retreat, meeting: Meeting,
-            as_of: dt.date | None = None, limit: int = 5) -> list[제안]:
-    """한 회의록을 읽고 제안한다. **여기가 유일한 창구다.**"""
+def 낱말제안(db: Session, *, retreat: Retreat, meeting: Meeting,
+           as_of: dt.date | None = None, limit: int = 5) -> list[제안]:
+    """**낱말 겹침으로만** 고른다 — 문장을 읽지 않는다.
+
+    2026-09-03 에 사람이 표본 20개를 채점했고 14/20 이었다
+    (`docs/review/제안-성적표.md`). 그래서 지금은 이것이 **첫째 길이 아니라
+    물러설 자리**다 — Claude 를 못 부를 때 여기로 온다. 지우지 않은 이유는
+    아래 `분석()` 의 머리말에 적혀 있다.
+    """
     본문 = (meeting.body or "").strip()
     if not 본문:
         return []                                   # 할 말이 없으면 빈 목록
@@ -287,3 +373,329 @@ def simulate(db: Session, *, retreat: Retreat, until: dt.date,
     ).all()
     return [(m, suggest(db, retreat=retreat, meeting=m,
                         as_of=m.meeting_date, limit=limit)) for m in 회의들]
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 문장으로 읽는다 (회의록 5단계)
+# ══════════════════════════════════════════════════════════════════════
+#
+# **왜 바꿨나.** 낱말 겹침은 표본 20개에서 14개였다. 틀린 여섯 중 넷이
+# "낱말은 겹쳤는데 그 얘기를 한 적이 없다" 이고 하나가 "결정과 단순 의견을
+# 못 가린다" 였다 — 둘 다 이름만 봐서는 못 넘는다
+# (`docs/review/제안-성적표.md` 의 '판단').
+#
+# **낱말 겹침을 지우지 않았다.** 키가 없거나 API 가 죽었을 때 갈 곳이
+# 필요하기 때문이다. 그때 빈 목록을 내면 "할 말이 없다"(조건 4의 정상)와
+# 구별되지 않는데, **구별되지 않는 실패가 이 프로젝트에서 가장 비싼
+# 실패다.** 그래서 물러서되 **물러섰다고 화면에 적는다.**
+
+import json                                                # noqa: E402
+
+from app.models import DiscussionEntry                     # noqa: E402
+from app.domain import llm as llm_mod                      # noqa: E402
+from app.domain import meeting_import                      # noqa: E402
+
+_시스템 = """당신은 교회 대학청년부 수련회 준비 시스템의 보조입니다.
+회의록 한 편과 그 회차의 준비 업무 목록을 받아, 사람이 골라 쓸 제안을 만듭니다.
+
+내는 것은 세 가지입니다.
+
+1. 결정사항 — 이 회의에서 **정해진 것**. 의견·제안·검토 중인 것은 아닙니다.
+   반드시 회의록의 그 줄을 **글자 그대로** 인용하세요. 고치거나 다듬지 마세요.
+2. 논의 — 이 회의 내용이 **어느 업무의 사정인지**. 목록의 run_id 로 답하세요.
+3. 새 업무 — 회의에 할 일로 나왔는데 목록에 없는 것.
+
+지킬 것
+
+- **확신이 없으면 넣지 마세요.** 빈 배열이 정상이고 흔한 답입니다.
+  회의록 절반쯤은 아무것도 낼 것이 없습니다.
+- 논의의 근거는 **왜 그 업무인지를 문장으로** 적으세요.
+  "낱말이 겹칩니다" 는 근거가 아닙니다. 회의에서 무슨 얘기를 했고 그것이
+  그 업무의 무엇에 해당하는지를 쓰세요.
+- 회의록에 그 업무 얘기가 **실제로 나오지 않으면 넣지 마세요.** 이름이
+  비슷하다는 이유로 넣으면 안 됩니다.
+- 새 업무 제목은 **업무 이름답게** 짧은 명사구로 다듬으세요
+  (예: "큐시트 제작", "명찰 스트랩 발주"). 회의록 문장을 그대로 쓰지 마세요.
+  가능하면 어느 업무의 하위인지(상위_run_id)와 어느 부서인지를 함께 적으세요.
+- 다음 낱말을 당신의 문장에 쓰지 마세요: 진행 불가, 진행 가능, 일부 진행,
+  완료, 지연. (이 시스템에서 판정을 뜻하는 말이라 사람이 판정으로 읽습니다.)
+- **사람에 대한 평가는 인용하지도 요약하지도 마세요.** 성격·MBTI·능력 품평이
+  회의록에 있어도 제안에 담지 마세요. 업무 내용만 다룹니다.
+- 사람 이름은 업무 담당을 말할 때만 쓰세요.
+
+JSON 만 출력하세요. 설명을 붙이지 마세요."""
+
+_1차틀 = """{
+  "결정사항": [{"인용": "회의록의 줄 그대로", "무엇": "무엇이 정해졌는지 한 문장"}],
+  "논의후보": [{"run_id": 12, "왜": "왜 그 업무인지 문장으로"}],
+  "새업무": [{"제목": "다듬은 이름", "왜": "문장", "상위_run_id": null, "부서": null}]
+}"""
+
+_2차틀 = """{
+  "논의": [{"run_id": 12, "왜": "문장", "이미있음": false}]
+}"""
+
+
+@dataclass
+class 결과:
+    """제안과 **그것을 어떻게 얻었는지.**
+
+    방식을 함께 내는 이유는 하나다 — 낱말로 물러섰을 때 화면이 그렇게 말해야
+    하기 때문이다. 값만 내면 물러선 것을 아무도 모른다.
+    """
+
+    제안들: list[제안]
+    방식: str                       # '문장' | '낱말'
+    말: str                         # 화면에 그대로 뜨는 한 줄
+    사람평가: list[str] = field(default_factory=list)
+    글자수: int = 0                 # 보낸 업무 목록 크기 (2단계)
+    원: float = 0.0                 # 이 회의 하나에 든 값 (3단계)
+    부른횟수: int = 0
+    실패: bool = False
+
+
+def 평가조각(평가줄: list[str]) -> list[str]:
+    """평가 줄을 **막을 만한 조각**으로 쪼갠다.
+
+    줄 통째로 견주면 못 잡는다 — 실제로 걸린 것은
+    `정하윤은 체력 약함이라 스트랩 발주를 맡깁니다` 처럼 **한 조각만 옮겨
+    붙은 것**이었다. 그렇다고 아무 조각이나 막으면 `정하윤` 같은 이름까지
+    막혀서, **담당을 적는 정상적인 문장이 함께 지워진다.**
+
+    그래서 조건을 둘 다 건다 — 네 글자 이상이고, **평가로 읽히게 만든 그
+    말(`약함`·`잘함`·MBTI …)을 실제로 품고 있을 것.** 그 말이 없으면 그
+    조각은 평가가 아니라 그냥 사실이다.
+    """
+    말들 = tuple(meeting_import._평가말)
+    조각: list[str] = []
+    for 줄 in 평가줄:
+        for 부분 in re.split(r"[,/·:;]| - ", 줄):
+            짧 = re.sub(r"\s+", "", 부분)
+            if len(짧) >= 4 and any(w in 부분 for w in 말들):
+                조각.append(짧)
+    return 조각
+
+
+def 사람평가_섞였나(글: str, 평가줄: list[str]) -> bool:
+    """그 글에 사람 평가 대목이 들어 있는가 (6단계).
+
+    **보내는 것과 남기는 것은 다르다.** 회의록을 보내는 것은 막지 않되,
+    제안에 그 대목이 인용돼 들어가면 논의로 남고 그러면 **회차를 볼 수 있는
+    누구나 보게 된다** (4-9). 그래서 나온 제안 쪽에서 한 번 더 거른다 —
+    프롬프트로만 막으면 안 지켜졌을 때 아무 표시가 없다.
+    """
+    납작 = re.sub(r"\s+", "", 글 or "")
+    if not 납작:
+        return False
+    return any(x in 납작 for x in 평가조각(평가줄))
+
+
+def _번호맵(rows: list[BoardRow]) -> dict[int, BoardRow]:
+    return {x.run_id: x for x in rows}
+
+
+def _2차를_부르나(후보: list[dict], 이력있는: set[int]) -> tuple[bool, str]:
+    """**언제 2차를 부르는가** (3단계).
+
+    조건은 하나다 — *1차가 논의 후보를 냈고, 그중 논의 이력이 있는 업무가
+    하나라도 있을 때.* 이력이 없으면 2차가 볼 것이 없어서 같은 것을 한 번 더
+    묻는 것이 되고, 값만 두 배가 된다.
+
+    돌려주는 둘째 값은 **왜 안 불렀는지**다. 안 부른 것이 조용하면 나중에
+    "2차가 도는 게 맞나" 를 코드를 읽어야 알 수 있다.
+    """
+    if not 후보:
+        return False, "1차가 논의 후보를 내지 않았습니다"
+    걸린것 = [x for x in 후보 if x.get("run_id") in 이력있는]
+    if not 걸린것:
+        return False, "후보 업무에 지난 논의가 없어 볼 것이 없습니다"
+    return True, f"후보 {len(걸린것)}건에 지난 논의가 있습니다"
+
+
+def _논의이력(db: Session, run_ids: list[int], 줄당: int = 400) -> str:
+    """후보 업무들의 지난 논의만. **전체를 보내지 않는다** — 250건이면
+    목록만으로 몇십 배가 된다 (2단계)."""
+    번호 = [r for r in run_ids if isinstance(r, int)]
+    if not 번호:
+        return "(없음)"
+    행 = db.scalars(
+        select(DiscussionEntry)
+        .where(DiscussionEntry.run_id.in_(번호))
+        .order_by(DiscussionEntry.run_id, DiscussionEntry.authored_at)
+    ).all()
+    if not 행:
+        return "(없음)"
+    return "\n".join(f"[{e.run_id}] {e.authored_at} — {(e.body or '')[:줄당]}"
+                     for e in 행)
+
+
+def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
+           meeting: Meeting, 평가줄: list[str], limit: int) -> list[제안]:
+    """대답을 화면이 아는 모양으로 옮긴다.
+
+    여기서 **두 가지를 거른다** — 판정 단어(4-10 조건 7)와 사람 평가(6단계).
+    프롬프트로만 막으면 안 지켜졌을 때 아무 표시가 없다.
+    """
+    맵 = _번호맵(rows)
+    나온것: list[제안] = []
+
+    for x in (답.get("결정사항") or [])[:limit]:
+        if not isinstance(x, dict):
+            continue
+        인용 = (x.get("인용") or "").strip()
+        무엇 = (x.get("무엇") or "").strip()
+        if not 인용:
+            continue
+        # **사람 평가가 섞이면 통째로 뺀다.** 결정사항은 인용이 본체라
+        # 인용을 지우면 남는 것이 없다
+        if 사람평가_섞였나(인용, 평가줄) or 사람평가_섞였나(무엇, 평가줄):
+            continue
+        나온것.append(제안(
+            kind="decision",
+            text=판정단어_뺀다(무엇) if 무엇 else "회의에서 정해진 것으로 읽었습니다",
+            why=판정단어_뺀다(무엇) if 무엇 else "회의에서 정해진 것으로 읽었습니다",
+            quote=인용,                       # **회의록의 줄 그대로** (9번)
+            meeting_id=meeting.id,
+        ))
+
+    for x in 논의[:limit]:
+        row = 맵.get(x.get("run_id"))
+        if row is None:
+            continue                          # 없는 번호는 조용히 버린다
+        왜 = 판정단어_뺀다((x.get("왜") or "").strip())
+        if 사람평가_섞였나(왜, 평가줄):
+            왜 = "회의 내용이 이 업무의 사정으로 읽힙니다"
+        나온것.append(제안(
+            kind="discussion",
+            text=f"{meeting.title} 의 내용을 이 업무의 논의로 남깁니다",
+            why=왜 or "회의 내용이 이 업무의 사정으로 읽힙니다",
+            run_id=row.run_id,
+            run_title=row.title,
+            meeting_id=meeting.id,
+        ))
+
+    for x in (답.get("새업무") or [])[:limit]:
+        if not isinstance(x, dict):
+            continue
+        제목 = 판정단어_뺀다((x.get("제목") or "").strip())
+        if not 제목:
+            continue
+        왜 = 판정단어_뺀다((x.get("왜") or "").strip())
+        if 사람평가_섞였나(제목, 평가줄) or 사람평가_섞였나(왜, 평가줄):
+            continue
+        상위 = 맵.get(x.get("상위_run_id"))
+        나온것.append(제안(
+            kind="new",
+            text=f"새 업무로 만듭니다 — {제목}",
+            why=왜 or "회의에 할 일로 나왔는데 목록에 없습니다",
+            title=제목,
+            parent_run_id=상위.run_id if 상위 else None,
+            parent_title=상위.title if 상위 else None,
+            department=(x.get("부서") or (상위.department if 상위 else None)),
+            meeting_id=meeting.id,
+        ))
+    return 나온것
+
+
+def 분석(db: Session, *, retreat: Retreat, meeting: Meeting,
+        as_of: dt.date | None = None, limit: int = 5,
+        부르기=None) -> 결과:
+    """한 회의록을 **문장으로** 읽는다. 못 읽으면 낱말로 물러선다.
+
+    `부르기` 는 시험이 넣는 자리다 — 실제 API 를 안 부르고도 이 함수의
+    판단(2차 규칙·사람 평가 거르기·판정 단어)을 그대로 시험할 수 있어야 한다.
+    """
+    본문 = (meeting.body or "").strip()
+    기준일 = as_of or meeting.meeting_date or dt.date.today()
+    평가줄 = meeting_import.people_notes(본문) if 본문 else []
+
+    def 물러선다(말: str, 실패: bool) -> 결과:
+        return 결과(
+            제안들=낱말제안(db, retreat=retreat, meeting=meeting,
+                        as_of=기준일, limit=limit),
+            방식="낱말", 말=말, 사람평가=평가줄, 실패=실패,
+        )
+
+    쓸것 = 부르기 or llm_mod.ask
+    if 부르기 is None and not llm_mod.read_key():
+        return 물러선다(llm_mod.상태().말, False)
+    if not 본문:
+        return 결과([], "문장", "회의 내용이 비어 있습니다.", 평가줄)
+
+    rows = board_as_of(db, retreat, 기준일)
+    if not rows:
+        return 결과([], "문장", "이 회차에 업무가 없습니다.", 평가줄)
+    목록 = catalog(rows)
+
+    묶음: list = []
+    try:
+        일차 = 쓸것(
+            _시스템,
+            f"# 준비 업무 목록 ({len(rows)}건)\n{목록}\n\n"
+            f"# 회의록\n제목: {meeting.title}\n"
+            f"날짜: {기준일.isoformat()}\n\n{본문}\n\n"
+            f"# 이 틀로 답하세요\n{_1차틀}",
+        )
+    except llm_mod.LlmUnavailable as exc:                        # noqa: BLE001
+        return 물러선다(f"{exc} — 낱말이 겹치는 정도로만 골랐습니다.", True)
+    묶음.append(일차)
+    답 = llm_mod.json_만(일차.text)
+
+    후보 = [x for x in (답.get("논의후보") or []) if isinstance(x, dict)]
+    번호들 = [x.get("run_id") for x in 후보 if isinstance(x.get("run_id"), int)]
+    이력있는 = set()
+    if 번호들:
+        이력있는 = {
+            r for (r,) in db.execute(
+                select(DiscussionEntry.run_id)
+                .where(DiscussionEntry.run_id.in_(번호들)).distinct())
+        }
+    부를까, 왜2 = _2차를_부르나(후보, 이력있는)
+    논의 = [{"run_id": x.get("run_id"), "왜": x.get("왜") or ""} for x in 후보]
+    if 부를까:
+        try:
+            이차 = 쓸것(
+                _시스템,
+                f"# 후보 업무의 지난 논의\n{_논의이력(db, 번호들)}\n\n"
+                f"# 회의록\n제목: {meeting.title}\n\n{본문}\n\n"
+                f"# 1차에서 고른 후보\n{json.dumps(후보, ensure_ascii=False)}\n\n"
+                "지난 논의를 보고 **정말 이 업무의 사정인지** 다시 판단하세요.\n"
+                "이미 같은 얘기가 남아 있으면 이미있음=true 로 표시하세요.\n"
+                f"# 이 틀로 답하세요\n{_2차틀}",
+            )
+        except llm_mod.LlmUnavailable:                           # noqa: BLE001
+            pass            # 1차 결과를 그대로 쓴다 — 있는 것을 버리지 않는다
+        else:
+            묶음.append(이차)
+            둘 = llm_mod.json_만(이차.text).get("논의")
+            if isinstance(둘, list):
+                논의 = [x for x in 둘 if isinstance(x, dict)]
+
+    나온것 = _제안으로(답, 논의, rows, meeting, 평가줄, limit)
+    원 = sum(getattr(x, "원", 0.0) for x in 묶음)
+    모델 = getattr(묶음[0], "model", llm_mod.MODEL)
+    # **"읽고 골랐습니다" 는 화면이 말한다.** 여기서 또 쓰면 한 줄에 같은
+    # 말이 두 번 뜬다 — 여기는 **사실만** 적는다 (모델·횟수·값·2차 여부)
+    말 = (f"{모델} 에 {len(묶음)}번 물었고 약 {원:,.0f}원 들었습니다."
+          f" 2차: {왜2}.")
+    return 결과(나온것, "문장", 말, 평가줄, len(목록), 원, len(묶음))
+
+
+def suggest_full(db: Session, *, retreat: Retreat, meeting: Meeting,
+                 as_of: dt.date | None = None, limit: int = 5,
+                 부르기=None) -> 결과:
+    """화면이 쓰는 창구. `suggest()` 는 목록만 필요한 자리(시뮬레이션)가 쓴다."""
+    return 분석(db, retreat=retreat, meeting=meeting, as_of=as_of,
+              limit=limit, 부르기=부르기)
+
+
+def suggest(db: Session, *, retreat: Retreat, meeting: Meeting,
+            as_of: dt.date | None = None, limit: int = 5) -> list[제안]:
+    """한 회의록을 읽고 제안한다. **여기가 유일한 창구다.**
+
+    키가 있으면 문장으로 읽고, 없거나 못 부르면 낱말 겹침으로 물러선다.
+    물러선 것을 아는 것이 중요하면 `suggest_full()` 을 쓴다 — 그쪽이
+    방식과 값을 함께 낸다.
+    """
+    return 분석(db, retreat=retreat, meeting=meeting, as_of=as_of,
+              limit=limit).제안들

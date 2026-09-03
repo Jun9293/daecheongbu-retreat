@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -606,6 +607,21 @@ class Meeting(Base):
     # 옮기기 한 번에 붙는 이름. **이것으로 통째로 되돌린다** —
     # 26년은 끝난 실제 회차라, 개발 중 넣은 것을 나중에 골라 낼 수 있어야 한다.
     import_batch: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+    # ── 문장으로 읽은 결과 (회의록 5단계) ─────────────────────────────
+    # **본문이 안 바뀌면 다시 부르지 않는다.** 저장할 때마다 자동으로 부르는데
+    # (5단계) 오타 하나 고칠 때마다 돈이 나가면 아무도 안 고친다.
+    # 그래서 본문의 해시를 함께 남기고, 같으면 앞의 결과를 그대로 쓴다.
+    #
+    # 상태를 따로 두는 이유는 **도는 중을 화면이 알아야** 하기 때문이다.
+    # 결과가 비어 있는 것이 "아직 안 끝났다" 인지 "낼 것이 없다"(조건 4의
+    # 정상)인지 구별되지 않으면, 사람은 기다려야 할 때 포기한다.
+    suggest_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    suggest_state: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    suggest_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggest_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggest_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    suggest_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     items: Mapped[list[MeetingItem]] = relationship(
         back_populates="meeting",

@@ -41,6 +41,14 @@ def get_db() -> Iterator[Session]:
 # 나중에 추가된 컬럼. 이미 쓰고 있는 DB 를 버리지 않고 따라잡기 위한 목록이다.
 # (테이블, 컬럼, DDL) — 추가만 한다. 이름 변경·삭제는 여기서 하지 않는다.
 _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # 회의록을 문장으로 읽은 결과 (회의록 5단계). 본문이 안 바뀌면 다시
+    # 부르지 않으려고 해시를 함께 남긴다 — 저장할 때마다 부르기 때문이다.
+    ("meetings", "suggest_hash", "VARCHAR(64)"),
+    ("meetings", "suggest_state", "VARCHAR(10)"),
+    ("meetings", "suggest_json", "TEXT"),
+    ("meetings", "suggest_note", "TEXT"),
+    ("meetings", "suggest_at", "DATETIME"),
+    ("meetings", "suggest_cost", "FLOAT"),
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
     ("task_library", "rules", "TEXT"),
