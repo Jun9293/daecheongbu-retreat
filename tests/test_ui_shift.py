@@ -187,7 +187,9 @@ def test_07_상세_패널의_속성_값이_평소엔_글자_호버시_배경이�
 
     # 제목 25px/600
     title = re.search(r"\.dtitle\{([^}]*)\}", CSS).group(1)
-    assert "font-size:25px" in title and "font-weight:600" in title
+    # 크기는 눈금에서 끌어온다 (`--fz-4xl` = 26px). 숫자로 박아 두면
+    # 다음에 전체를 키울 때 여기만 남는다
+    assert "font-size:var(--fz-4xl)" in title and "font-weight:600" in title
 
     # 탭은 밑줄 없는 글자, 활성만 아래 선
     assert re.search(r"\.dtabs button\{[^}]*border-bottom:2px solid transparent", CSS)

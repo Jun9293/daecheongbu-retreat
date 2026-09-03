@@ -1273,5 +1273,7 @@ def test_p33d_달력_화면이_읽는_값을_구조가_다_가지고_있다(live
             scope="all")
 
     reads = template_reads("calendar.html", "cal")
-    assert "weeks" in reads and "undated" in reads and "scopes" in reads
+    # `scopes`(칩 셋) 가 `departments`(부서 드롭다운) 로 바뀌었다 —
+    # 어느 부서든 고를 수 있어야 하기 때문이다
+    assert "weeks" in reads and "undated" in reads and "departments" in reads
     assert missing_names(view, reads) == []

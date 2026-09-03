@@ -970,9 +970,14 @@ def test_w2_01b_화면이_하려는_일을_먼저_크게_그린다():
         at = body.index(sel + "{")
         return body[at + len(sel) + 1 : body.index("}", at)]
 
-    큰 = float(_r.search(r"font-size:([\d.]+)px", decl(".mt-do")).group(1))
-    작은 = float(_r.search(r"font-size:([\d.]+)px", decl(".mt-sug-why")).group(1))
-    assert 큰 > 작은, "하려는 일이 근거보다 작다"
+    # 크기는 이제 **눈금**에서 끌어온다 — 숫자가 아니라 단으로 견준다.
+    # 숫자로 재던 시험은 눈금을 도입하는 순간 못 재게 되는데, 그때
+    # "위계가 지켜지는가" 라는 물음 자체는 그대로다
+    단 = ["--fz-xs", "--fz-sm", "--fz-md", "--fz-base",
+         "--fz-lg", "--fz-xl", "--fz-2xl", "--fz-3xl", "--fz-4xl"]
+    번호 = lambda sel: 단.index(
+        _r.search(r"font-size:var\((--fz[\w-]*)\)", decl(sel)).group(1))
+    assert 번호(".mt-do") > 번호(".mt-sug-why"), "하려는 일이 근거보다 작다"
     # 4-0 — 조용하게. 느낌표도 권유도 없다
     assert "!" not in js[js.index("function 줄("): js.index("function 그린다(")]
 

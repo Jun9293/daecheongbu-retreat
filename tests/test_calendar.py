@@ -357,15 +357,22 @@ def test_08d_닫으면_보던_달과_칩이_그대로다(admin_client, cal_data)
     assert 'data-scope="all"' in page
     # 달 값은 화면이 내보내는 그대로다 (`2026-08-01`) — 4-13 의 그 함정
     assert 'data-month="2026-08-01"' in page
-    # 패널을 여닫는 것은 주소를 바꾸지 않는다
+    # **패널을 여닫는 것**은 주소를 바꾸지 않는다. 범위를 고르는 것은 바꾼다 —
+    # `외 N건`·위쪽 건수·날짜 없는 업무 수를 다시 세어야 하기 때문이다
     js = open("app/static/js/calendar.js", encoding="utf-8").read()
-    assert "location.href" not in js and "location.search =" not in js
+    고르는곳 = js[js.index("scopePick.addEventListener"):js.index("const dots =")]
+    나머지 = js.replace(고르는곳, "")
+    assert "location.href" not in 나머지 and "location.search =" not in 나머지
+    # 고를 때도 **보던 달과 `미완료만` 을 들고 간다** (4-13)
+    assert "month: bar.dataset.month" in 고르는곳 and "only_open" in 고르는곳
 
 
 # ---------------------------------------------------------------- 9~13. 칩
 
 
-def test_09_범위_칩_셋이_동작하고_기본이_내_것이다(admin_client, cal_data):
+def test_09_어느_부서든_골라_볼_수_있고_기본이_내_것이다(admin_client, cal_data):
+    """**전에는 `내 것 / 우리 부서 / 전체` 셋뿐이었다.** 총무팀장이 스케치팀
+    것만 보려 해도 방법이 없었다. 이제 부서 키가 그대로 범위 값이다."""
     with app_session() as db:
         person = me(db, cal_data)
         mine = build(db, cal_data, user=person, my_dept_key="chongmuM")
@@ -374,9 +381,10 @@ def test_09_범위_칩_셋이_동작하고_기본이_내_것이다(admin_client,
         assert "헤브론 업무" not in all_titles(mine)
         assert "오늘 업무" in all_titles(mine)
 
-        dept = build(db, cal_data, user=person, my_dept_key="hebron",
-                     scope="dept")
-        assert [t for t in all_titles(dept)] == ["헤브론 업무"]
+        # **내 부서가 아니어도 고를 수 있다** — 이것이 이번에 없던 것이다
+        남의부서 = build(db, cal_data, user=person, my_dept_key="chongmuM",
+                     scope="hebron")
+        assert all_titles(남의부서) == ["헤브론 업무"]
 
         every = build(db, cal_data, user=person, my_dept_key="chongmuM",
                       scope="all")
@@ -385,7 +393,8 @@ def test_09_범위_칩_셋이_동작하고_기본이_내_것이다(admin_client,
 
     # 주소를 안 주면 기본이 '내 것'
     page = admin_client.get("/calendar?scope=mine").text
-    assert 'aria-pressed="true"' in page
+    assert 'id="calscope"' in page
+    assert '<option value="mine" selected>' in page
 
 
 def test_10_부서를_키로_비교한다(admin_client, cal_data):
@@ -419,18 +428,32 @@ def test_10_부서를_키로_비교한다(admin_client, cal_data):
             "새 회차가 열리자 자기 부서 업무가 사라졌다 — id 로 비교하고 있다"
 
 
-def test_11_부서가_없으면_우리_부서_칩이_안_나온다(admin_client, cal_data):
+def test_11_옛_값과_모르는_값을_다르게_다룬다(admin_client, cal_data):
+    """`우리 부서` 칩은 없어졌다 — 이제 부서를 직접 고른다.
+
+    다만 **쿠키에 옛 값(`dept`)이 남아 있을 수 있다.** 모르는 값이라고
+    `내 것` 으로 떨어뜨리면, 어제까지 우리 부서를 보던 사람이 오늘 갑자기
+    자기 것만 보게 되고 왜인지 알 수 없다. 그래서 **내 부서 키로 옮겨 준다.**
+    """
     with app_session() as db:
         person = me(db, cal_data)
-        without = build(db, cal_data, user=person, my_dept_key=None)
-        assert [s["value"] for s in without["scopes"]] == ["mine", "all"]
+        옛것 = build(db, cal_data, user=person, my_dept_key="hebron", scope="dept")
+        assert 옛것["scope"] == "hebron", "옛 값을 내 부서로 안 옮겼다"
+        assert all_titles(옛것) == ["헤브론 업무"]
 
-        # 굳이 dept 로 불러도 '내 것' 으로 떨어진다 — 빈 화면을 만나지 않게
-        fallen = build(db, cal_data, user=person, my_dept_key=None, scope="dept")
-        assert fallen["scope"] == "mine"
+        # 부서가 없는 사람이 옛 값으로 오면 갈 곳이 없다 — '내 것' 으로
+        없는사람 = build(db, cal_data, user=person, my_dept_key=None, scope="dept")
+        assert 없는사람["scope"] == "mine"
 
-        withdept = build(db, cal_data, user=person, my_dept_key="hebron")
-        assert [s["value"] for s in withdept["scopes"]] == ["mine", "dept", "all"]
+        # 아예 모르는 값도 마찬가지다 (없는 부서 키)
+        모르는값 = build(db, cal_data, user=person, my_dept_key="hebron",
+                     scope="없는부서")
+        assert 모르는값["scope"] == "mine"
+
+        # 고를 수 있는 부서는 그 회차의 부서 전부다
+        보임 = build(db, cal_data, user=person, my_dept_key="hebron")
+        키들 = [d["key"] for d in 보임["departments"]]
+        assert "hebron" in 키들 and "chongmuM" in 키들
 
 
 def test_12_고른_범위가_다음에_열_때_유지된다(admin_client, cal_data):
@@ -866,7 +889,10 @@ def test_r03_기간을_바꿔도_다시_불러오지_않는다():
     """수용기준 3 — 보던 달·범위 칩·`미완료만` 을 잃으면 안 된다 (4-13)."""
     js = read_js("calendar.js")
     assert "location.reload" not in js
-    assert "location.href" not in js
+    # **범위를 고를 때만** 다시 물어본다 (개수를 다시 세어야 한다).
+    # 상태·기간을 바꾸는 것으로는 화면을 갈아치우지 않는다
+    assert js.count("location.href") == 1
+    assert "scopePick" in js[js.index("location.href") - 400:js.index("location.href")]
     # 숫자도 함께 맞춘다 — 외 N건 · 날짜 없는 업무 N건 · 위쪽 건수
     assert "recount" in js
     assert "cal-more" in js and "calundated" in js and "calcount" in js
@@ -1334,11 +1360,15 @@ def test_t_02_준비_단계가_회색_묶음_제목과_구별된다(admin_client
     group = decl(".sidenav .navgroup")
     label = decl(".sidenav .navlabel")
 
-    # 항목과 같은 글자 크기·색
-    assert "font-size:13.5px" in item and "font-size:13.5px" in group
+    # 항목과 같은 글자 크기·색. **크기는 이제 눈금에서 끌어온다** —
+    # 숫자로 박아 두면 다음에 키울 때 여기만 남는다
+    assert "font-size:var(--fz-base)" in item and "font-size:var(--fz-base)" in group
     assert "var(--ink-2)" in item and "var(--ink-2)" in group
-    # 회색 묶음 제목은 더 작고 더 흐리다 — 구별된다
-    assert "font-size:11px" in label and "var(--ink-3)" in label
+    # 묶음 제목은 **더 작지만 읽힌다.** 전에는 11px `--ink-3`(3.84:1) 이라
+    # 혼자 뜻을 지는 글자가 기준에 못 미쳤다 (9장) — 옆에 값이 없다
+    assert "font-size:var(--fz-md)" in label, "묶음 제목이 목록 하한보다 작다"
+    assert "var(--ink-2)" in label, "혼자 뜻을 지는데 흐림이다"
+    assert "var(--ink-3)" not in label
     # 하위는 한 단계 들어간다
     assert "padding-left" in decl(".sidenav nav a.sub")
 
@@ -2061,7 +2091,9 @@ def test_u_18_CLAUDE_md_에_비침과_out_이_적혔다():
     """점은 이 달만, 비침은 격자에 보이는 칸까지 — 두 곳이 다르다."""
     text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     at = text.index("#### 점의 생김새는 보드의 규칙을 그대로 씁니다")
-    section = text[at : text.index("#### 범위 칩")]
+    # 다음 절의 제목. **칩 셋이 부서 드롭다운으로 바뀌면서 이름도 바뀌었다** —
+    # 자르는 표시가 제목이면 제목이 바뀔 때 함께 고쳐야 한다
+    section = text[at : text.index("#### 범위 — ")]
     assert "비칩니다" in section
     assert ":not(.out)" in section, "점을 놓는 범위가 안 적혔다"
     assert "격자에 보이는 칸까지" in section, "비추는 범위가 안 적혔다"
