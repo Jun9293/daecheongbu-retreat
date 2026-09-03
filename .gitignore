@@ -39,3 +39,7 @@ testdata/
 # 노션에서 받아 온 회의록 원본. 실명이 그대로 들어 있다 (회의록 1단계).
 # 옮기기는 일회성이라 스크립트만 저장소에 두고 원본은 두지 않는다.
 data/notion-meetings/
+
+# Claude API 키. **저장소에 한 번 올라가면 지우고 커밋해도 히스토리에 남는다.**
+# 넣는 방법은 docs/배포-안내.md 14장.
+data/anthropic_key.txt
