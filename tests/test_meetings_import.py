@@ -82,6 +82,21 @@ def 회차와업무(admin_client):
         return {"retreat_id": retreat.id, "run_id": run.id, "title": lib.title}
 
 
+
+def 제안받기(client, meeting_id, 최대=4):
+    """제안을 **끝날 때까지** 물어본다 — 화면이 하는 것과 같다.
+
+    회의록을 저장하거나 처음 열면 분석은 **뒤에서 돈다**(회의록 5단계).
+    첫 응답은 `state='도는중'` 에 빈 목록이라, 한 번만 물어보고 "제안이
+    없다" 고 하면 **틀린 것을 잰다.** 화면도 3초마다 다시 묻는다.
+    """
+    for _ in range(최대):
+        data = client.get(f"/meetings/{meeting_id}/suggestions").json()
+        if data.get("state") != "도는중":
+            return data
+    return data
+
+
 # ── 3. 회의가 날짜별로 잘린다 ────────────────────────────────────────
 
 
@@ -215,21 +230,35 @@ def test_x_13_until_로_그_날짜까지만_고른다():
     assert len(pick(것들, until=None, include_undated=False)) == 3
 
 
-def test_x_14_그_시점의_보드는_상태를_담지_않는다(회차와업무):
+def test_x_14_그_시점의_보드는_그날의_상태만_담는다(회차와업무):
     """**가리는 것은 존재가 아니라 상태다.** 8월의 완료 여부를 6월 제안에
     쓰면 이미 끝난 일을 알고 제안하는 것이고, 그러면 잘 맞히는 것처럼 보인다.
 
-    `TaskRun` 을 그대로 넘기지 않는 것이 요점이다 — 넘기면 부르는 쪽이
+    처음에는 상태를 **아예 안 담았다**("담으면 본다"). 문장으로 읽는 판
+    (회의록 5단계)에서 상태가 필요해졌는데, **저장된 `status` 를 담으면
+    안 된다** — 그건 오늘의 값이다. 그래서 `started_at`·`completed_at`
+    날짜에서 **그날의 상태를 다시 계산한다**. 규칙이 "안 담는다" 에서
+    "그날 것만 담는다" 로 바뀌었고, 이 시험도 그렇게 바뀌었다.
+
+    `TaskRun` 을 그대로 넘기지 않는 것은 그대로다 — 넘기면 부르는 쪽이
     `.status` 를 볼 수 있고, 볼 수 있으면 언젠가 본다.
     """
     with app_session() as db:
         retreat = db.get(models.Retreat, 회차와업무["retreat_id"])
-        rows = board_as_of(db, retreat, dt.date(2026, 6, 30))
-    assert rows, "그때도 보드에는 업무가 있다 — 아직 시작 안 했을 뿐이다"
-    for r in rows:
-        assert not hasattr(r, "status")
+        run = db.get(models.TaskRun, 회차와업무["run_id"])
+        run.status = "완료"                 # 오늘의 값 — 이것을 보면 안 된다
+        run.completed_at = dt.date(2026, 8, 10)
+        run.started_at = dt.date(2026, 8, 1)
+        db.commit()
+        그날 = board_as_of(db, retreat, dt.date(2026, 6, 30))
+        나중 = board_as_of(db, retreat, dt.date(2026, 8, 15))
+    assert 그날, "그때도 보드에는 업무가 있다 — 아직 시작 안 했을 뿐이다"
+    for r in 그날:
+        # 날짜 자체는 넘기지 않는다 — 넘기면 부르는 쪽이 다시 계산한다
         assert not hasattr(r, "completed_at")
         assert not hasattr(r, "started_at")
+    assert 그날[0].status == "대기", "8월에 끝난 것을 6월에 알고 있다"
+    assert 나중[0].status == "완료"
 
 
 # ── 15 ~ 18. 제안 ────────────────────────────────────────────────────
@@ -366,7 +395,7 @@ def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회�
         assert db.scalars(select(models.DiscussionEntry)
                           .where(models.DiscussionEntry.run_id == run_id)).all() == []
 
-    보임 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    보임 = 제안받기(admin_client, meeting_id)
     assert not 보임["failed"]
     assert 보임["items"], "제안이 없으면 고를 것도 없다"
     for x in 보임["items"]:
@@ -393,24 +422,52 @@ def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회�
 
 def test_x_19b_실패해도_회의록_화면은_살아_있다():
     """4-10 조건 8 — 제안이 비는 것으로 끝나야 한다. 여기서 터져서
-    회의록 본문을 못 보게 되면 안 된다."""
+    회의록 본문을 못 보게 되면 안 된다.
+
+    **막는 자리가 옮겨졌다** (회의록 5단계). 전에는 화면이 부를 때 그 자리에서
+    제안을 만들었으므로 `GET` 이 감쌌다. 이제는 **뒤에서 도는 분석**이 만들고
+    `GET` 은 쌓인 것을 낼 뿐이라, 터질 수 있는 자리가 그쪽이다 —
+    거기서 조용히 끝나면 화면은 **영원히 '읽는 중'** 이다.
+    """
     본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")
+    at = 본문.index("def 분석_한번(")
+    도는곳 = 본문[at : 본문.index("\ndef ", at + 5)]
+    assert "except Exception" in 도는곳, "터지면 아무 표시도 안 남는다"
+    assert '"실패"' in 도는곳, "실패를 상태로 남기지 않는다"
+
     at = 본문.index("def meeting_suggestions(")
-    블록 = 본문[at : 본문.index("\n@router", at)]
-    assert "except Exception" in 블록 and '"items": []' in 블록
+    내는곳 = 본문[at : 본문.index("\n@router", at)]
+    assert "except Exception" in 내는곳, "쌓인 것을 읽다가 터지면 화면이 빈다"
 
     js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
     assert "catch" in js
     assert "회의록은 그대로 보실 수 있습니다" in js
 
 
-def test_x_19c_아무것도_자동으로_반영되지_않는다():
-    """`GET` 은 보여만 주고, 넣는 것은 사람이 누르는 `POST` 뿐이다."""
-    본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")
-    at = 본문.index("def meeting_suggestions(")
-    보여주는곳 = 본문[at : 본문.index("\n@router", at)]
-    for 쓰는말 in ("db.add(", "db.commit()"):
-        assert 쓰는말 not in 보여주는곳, f"보여주기만 해야 하는데 {쓰는말} 가 있다"
+def test_x_19c_아무것도_자동으로_반영되지_않는다(admin_client, 회차와업무):
+    """**보는 것만으로는 아무것도 남지 않는다.** 넣는 것은 사람이 누르는
+    `POST` 뿐이다.
+
+    글자로 세는 대신 **실제로 열어 보고 논의가 생겼는지** 본다 — `GET` 이
+    이제 분석을 걸어 두느라 상태를 쓰기 때문에, "쓰는 말이 있나" 로는
+    이 규칙을 못 지킨다. 지켜야 할 것은 *논의가 안 생기는 것*이다.
+    """
+    run_id = 회차와업무["run_id"]
+    with app_session() as db:
+        m = models.Meeting(retreat_id=회차와업무["retreat_id"],
+                           title="6월 회의", meeting_date=dt.date(2026, 6, 1),
+                           body=회차와업무["title"] + " 일정 논의")
+        db.add(m)
+        db.commit()
+        meeting_id = m.id
+
+    제안받기(admin_client, meeting_id)          # 몇 번을 봐도
+    제안받기(admin_client, meeting_id)
+
+    with app_session() as db:
+        남은것 = db.scalars(select(models.DiscussionEntry)
+                          .where(models.DiscussionEntry.run_id == run_id)).all()
+    assert 남은것 == [], "보기만 했는데 논의가 남았다"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -614,9 +671,17 @@ def test_y_11_무엇으로_골랐는지_화면이_말한다():
     """감추지 않는다. 위험한 것은 틀린 제안이 아니라 **사람이 처음에 세우는
     기대**다 — "읽고 제안했다" 로 읽히면 몇 번 엉뚱한 것을 보고 다시 안 쓴다.
     한 번 잃으면 안 돌아온다 (6-3)."""
+    js = (ROOT / "app" / "static" / "js" / "meeting.js").read_text(encoding="utf-8")
+    assert "회의록과 이름이 겹치는 업무입니다. 내용을 읽지는 않았습니다." in js
+    assert "회의 내용을 읽고 골랐습니다." in js, "문장으로 읽었을 때의 말이 없다"
+
+    # **문구를 화면(템플릿)에 박아 두지 않는다** (회의록 5단계).
+    # 문장으로 읽었는지 낱말로 물러섰는지는 그때그때 다르다 — 박아 두면
+    # **물러섰는데도 "읽었습니다" 라고 적히거나** 그 반대가 된다
     view = (ROOT / "app" / "templates" / "meeting_detail.html").read_text(encoding="utf-8")
-    assert "회의록과 이름이 겹치는 업무입니다" in view
-    assert "아직 내용을 읽지는 않습니다" in view
+    for 박힌말 in ("아직 내용을 읽지는 않습니다", "낱말이 겹치는 정도로 골랐고"):
+        assert 박힌말 not in view, "옛 문구가 화면에 박혀 있다"
+
     css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
     assert ".mt-sug-how{" in css, "그 문장이 화면에 안 보인다"
 
@@ -634,25 +699,31 @@ def test_y_12_22대27_이_무엇을_잰_것인지_적혔다():
 
 def test_y_13_사람이_채울_성적표가_있다():
     표 = (ROOT / "docs" / "review" / "제안-성적표.md").read_text(encoding="utf-8")
-    assert "사람이 채웁니다" in 표
-    assert "O / X / ?" in 표 or "**O**" in 표
+    # **채웠다.** 2026-09-03 에 사람이 표본 20개를 눈으로 봤다
+    assert "14/20" in 표 or "14 / 20" in 표 or "20개 중 14개" in 표
+    assert "**O**" in 표, "판정 표기가 없다"
     assert "--undo" in 표, "채운 뒤 지우는 법이 없다"
-    # 다음에 견줄 기준이라는 것이 적혀 있다
-    assert "다시 채웁니다" in 표
+    # 다음 판과 견줄 기준이라는 것이 적혀 있다
+    assert "같은 20개" in 표 or "같은 네 회의" in 표
+    assert "놓친 것" in 표, "적게 내는 쪽으로 점수를 올릴 수 있다"
 
 
 # ── 14. as_of 를 왜 받아만 두는지 ────────────────────────────────────
 
 
-def test_y_14_as_of_를_왜_받아만_두는지_적혔다():
-    """머리말이 길게 설명하는 것과 코드가 하는 일이 달랐다."""
+def test_y_14_as_of_가_무엇을_하는지_적혔다():
+    """머리말이 길게 설명하는 것과 코드가 하는 일이 달랐다.
+
+    전에는 `as_of` 를 **받아만 두고** 아무 데도 안 썼다. 지금은 쓴다 —
+    **상태를 그날로 되돌린다.** 설명도 그렇게 바뀌어야 한다."""
     import inspect
 
     from app.domain import suggest as mod
 
     doc = inspect.getdoc(mod.board_as_of) or ""
-    assert "받아 두고 쓰지 않는다" in doc
-    assert "의식하고 넘기게" in doc, "왜 남겨 두는지가 없다"
+    assert "존재를 가리는 데 쓰지 않는다" in doc
+    assert "상태를 그날로 되돌리는 것" in doc, "as_of 가 무엇을 하는지 없다"
+    assert "받아 두고 쓰지 않는다" not in doc, "옛말이 남아 있다"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -721,7 +792,8 @@ def test_z_02_보드_전체_낱말과도_견준다(짧은업무):
 
     from app.domain import suggest as mod
 
-    src = inspect.getsource(mod.suggest)
+    # 낱말 겹침은 이제 **물러설 자리**라 `낱말제안` 으로 옮겼다 (5단계)
+    src = inspect.getsource(mod.낱말제안)
     assert "말낱말 <= 보드전체" in src
 
 
@@ -907,7 +979,7 @@ def test_w2_01b_화면이_하려는_일을_먼저_크게_그린다():
 
 def test_w2_03_어느_회의에서_온_것인지가_제안마다_보인다(회차와업무, admin_client):
     meeting_id, run_id = _회의하나(회차와업무)
-    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    data = 제안받기(admin_client, meeting_id)
     assert data["items"], "제안이 없으면 이 시험이 아무것도 안 지킨다"
     for x in data["items"]:
         assert x["action"], "무엇을 하자는 것인지가 없다"
@@ -928,7 +1000,7 @@ def test_w2_04_새_업무_제안도_같은_모양이다(짧은업무, admin_clie
         db.add(m)
         db.commit()
         meeting_id = m.id
-    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    data = 제안받기(admin_client, meeting_id)
     새것 = [x for x in data["items"] if x["kind"] == "new"]
     if not 새것:
         pytest.skip("이 회의에서는 새 업무 제안이 안 나온다")
@@ -946,7 +1018,7 @@ def test_w2_04_새_업무_제안도_같은_모양이다(짧은업무, admin_clie
 def test_w2_05_누르기_전에_남을_문장을_볼_수_있다(회차와업무, admin_client):
     """4-10 이 "무엇을 보고 그렇게 말하는지 함께 보인다" 고 한 자리와 같다."""
     meeting_id, run_id = _회의하나(회차와업무)
-    data = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    data = 제안받기(admin_client, meeting_id)
     논의 = [x for x in data["items"] if x["kind"] == "discussion"]
     assert 논의
     for x in 논의:
@@ -964,7 +1036,7 @@ def test_w2_05_누르기_전에_남을_문장을_볼_수_있다(회차와업무,
 
 def test_w2_05b_보여준_것과_남는_것이_같다(회차와업무, admin_client):
     meeting_id, run_id = _회의하나(회차와업무)
-    보여준것 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    보여준것 = 제안받기(admin_client, meeting_id)
     미리 = next(x["preview"] for x in 보여준것["items"] if x["kind"] == "discussion")
     admin_client.post(f"/meetings/{meeting_id}/suggestions/apply",
                       json={"run_id": run_id})
@@ -979,12 +1051,12 @@ def test_w2_06_이미_있으면_말한다(회차와업무, admin_client):
     """같은 것을 두 번 남기게 두지 않는다 — 두 번 남으면 어느 것이 맞는지
     알 수 없고, 지우는 길은 그 업무의 논의 탭뿐이다."""
     meeting_id, run_id = _회의하나(회차와업무)
-    처음 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    처음 = 제안받기(admin_client, meeting_id)
     assert not any(x["already"] for x in 처음["items"])
 
     admin_client.post(f"/meetings/{meeting_id}/suggestions/apply",
                       json={"run_id": run_id})
-    다음 = admin_client.get(f"/meetings/{meeting_id}/suggestions").json()
+    다음 = 제안받기(admin_client, meeting_id)
     걸린것 = [x for x in 다음["items"] if x["run_id"] == run_id]
     assert 걸린것 and 걸린것[0]["already"], "이미 있는데 말하지 않는다"
 
