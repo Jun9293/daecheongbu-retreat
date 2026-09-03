@@ -49,6 +49,8 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("meetings", "suggest_note", "TEXT"),
     ("meetings", "suggest_at", "DATETIME"),
     ("meetings", "suggest_cost", "FLOAT"),
+    ("meetings", "suggest_tokens", "VARCHAR(40)"),
+    ("meetings", "suggest_due_at", "DATETIME"),
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
     ("task_library", "rules", "TEXT"),

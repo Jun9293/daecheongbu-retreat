@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
@@ -405,6 +406,7 @@ def 분석_한번(meeting_id: int) -> None:
         meeting.suggest_json = _제안을_json(r.제안들)
         meeting.suggest_note = f"{r.방식}|{r.말}"
         meeting.suggest_cost = r.원
+        meeting.suggest_tokens = f"{r.입력토큰}/{r.출력토큰}"
         meeting.suggest_at = dt.datetime.now()
         # **지문은 언제나 남긴다.** 안 남기면 볼 때마다 "본문이 바뀐 것" 으로
         # 읽혀 다시 돌고, 화면이 영원히 '읽는 중' 이다 (실제로 그랬다).
@@ -438,16 +440,45 @@ def 다시_읽어야_하나(meeting: Meeting) -> bool:
     return False
 
 
-def 분석_걸어둔다(background: BackgroundTasks, meeting: Meeting, db: Session) -> None:
-    """저장한 뒤 부른다. **다시 부를 이유가 없으면 안 부른다** — 오타 하나
-    고칠 때마다 돈이 나가면 아무도 안 고친다."""
+# **적는 동안은 부르지 않는다.** 회의록을 쓰면서 중간중간 저장하는 것이
+# 자연스러운데, 본문이 한 글자만 바뀌어도 지문이 달라져 다시 부른다 —
+# 오타 세 번 고치면 그만큼 값이 나간다. 저장하면 시각만 찍어 두고
+# **잠잠해진 뒤에** 부른다.
+#
+# **앱 안에 스케줄러를 넣지 않는다** (4-11). 시간을 재는 것은 화면이다 —
+# 열려 있는 화면이 3초마다 물어보므로, 그때 "이제 됐나" 를 함께 본다.
+# 아무도 안 보고 있으면 다음에 그 회의록을 여는 사람이 굴린다.
+조용해질때까지 = dt.timedelta(
+    minutes=float(os.environ.get("DCB_SUGGEST_QUIET_MIN", "3")))
+
+
+def 분석_걸어둔다(background: BackgroundTasks, meeting: Meeting, db: Session,
+             *, 지금: bool = False) -> None:
+    """다시 부를 이유가 있으면 **기다렸다가** 부른다.
+
+    `지금=True` 는 사람이 `지금 읽기` 를 눌렀을 때다 — 기다리지 않는다.
+    기다리는 길만 있으면 "당장 보고 싶은데 3분을 기다려야" 한다.
+    """
     if meeting.retreat_id is None:
         return
     if not 다시_읽어야_하나(meeting):
         return
+    if not 지금:
+        meeting.suggest_state = "기다림"
+        meeting.suggest_due_at = dt.datetime.now() + 조용해질때까지
+        db.commit()
+        return
     meeting.suggest_state = "도는중"
+    meeting.suggest_due_at = None
     db.commit()
     background.add_task(분석_한번, meeting.id)
+
+
+def 때가_됐나(meeting: Meeting) -> bool:
+    """기다리던 것이 이제 돌 때가 됐는가."""
+    return (meeting.suggest_state == "기다림"
+            and meeting.suggest_due_at is not None
+            and dt.datetime.now() >= meeting.suggest_due_at)
 
 
 @router.post("/{meeting_id}/suggestions/rerun")
@@ -462,7 +493,8 @@ def rerun_suggestions(
     없으면 본문을 억지로 고쳐 저장하는 수밖에 없다."""
     meeting = _owned(db, meeting_id, retreat)
     meeting.suggest_hash = None
-    분석_걸어둔다(background, meeting, db)
+    # **누른 사람은 기다리려고 누른 것이 아니다** — 바로 돌린다
+    분석_걸어둔다(background, meeting, db, 지금=True)
     return {"ok": True}
 
 
@@ -496,7 +528,17 @@ def meeting_suggestions(
 
     # **실패는 저절로 다시 돌리지 않는다.** 죽은 API 를 3초마다 두드리면
     # 값만 나가고 화면은 그대로다. 다시 시도는 사람이 누른다 (18번).
-    if (meeting.suggest_state or "없음") != "실패" and 다시_읽어야_하나(meeting):
+    if 때가_됐나(meeting):
+        # 잠잠해졌다 — 이제 돈다. **시간을 재는 것은 화면이다** (위 설명)
+        meeting.suggest_state = "도는중"
+        meeting.suggest_due_at = None
+        db.commit()
+        background.add_task(분석_한번, meeting.id)
+    # **이미 돌고 있으면 또 걸지 않는다.** 도는 동안에는 지문이 아직 없어서
+    # "다시 읽어야 한다" 가 참인데, 그때 거는 순간 `도는중` 이 `기다림` 으로
+    # 덮여 **지금 읽기를 누른 사람이 3분을 더 기다린다** (브라우저에서 그랬다).
+    elif (meeting.suggest_state or "없음") not in ("실패", "기다림", "도는중") \
+            and 다시_읽어야_하나(meeting):
         분석_걸어둔다(background, meeting, db)
 
     방식, _, 말 = (meeting.suggest_note or "").partition("|")
@@ -565,6 +607,12 @@ def meeting_suggestions(
         "how": 방식,                        # '문장' | '낱말' | ''
         "note": 말,
         "cost": meeting.suggest_cost or 0.0,
+        "tokens": meeting.suggest_tokens or "",
+        # 언제쯤 도는지 화면이 말해 준다 — 기다리는 줄 모르면 고장으로 읽힌다
+        "wait_sec": (max(0, int((meeting.suggest_due_at - dt.datetime.now())
+                                .total_seconds()))
+                     if meeting.suggest_state == "기다림" and meeting.suggest_due_at
+                     else 0),
         "people_notes": 평가줄[:8],
         "can_edit": not perm.is_readonly(user.role),
         "items": 항목,
@@ -595,6 +643,9 @@ def apply_suggestion(
     if run is None or run.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
 
+    방식, _, _말 = (meeting.suggest_note or "").partition("|")
+    if not _말:
+        방식 = ""
     entry = DiscussionEntry(
         run_id=run.id,
         authored_at=meeting.meeting_date or dt.date.today(),
@@ -612,8 +663,12 @@ def apply_suggestion(
         action="회의록_제안_반영",
         target_type="discussion_entry",
         target_id=entry.id,
-        summary=f"{meeting.title} → {run.library.title}",
-        after_value={"meeting_id": meeting.id, "run_id": run.id},
+        # **어떤 방식으로 고른 제안이었는지 남긴다.** 낱말로 물러선 것과
+        # 문장을 읽고 고른 것이 둘 다 `actor_type='claude'` 라, 이것이
+        # 없으면 나중에 구별되지 않는다 — 성적을 견줄 때 그 구별이 전부다
+        summary=f"{meeting.title} → {run.library.title} ({방식 or '알 수 없음'})",
+        after_value={"meeting_id": meeting.id, "run_id": run.id,
+                     "고른방식": 방식 or "알 수 없음"},
         actor_type="claude",
     )
     db.commit()

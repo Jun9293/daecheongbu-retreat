@@ -88,8 +88,24 @@ function 줄(x) {
     ${머리}${이미}${근거}${출처}${미리보기(x)}</div>${단추}</div>`;
 }
 
+function 지금읽기() {
+  // **기다리는 길만 있으면 안 된다.** 당장 보고 싶은 사람이 3분을 기다린다
+  return canEdit
+    ? ' <button type="button" class="mt-retry">지금 읽기</button>'
+    : '';
+}
+
 function 그린다(data) {
   const items = data.items || [];
+  if (data.state === '기다림') {
+    // **적는 동안은 안 부른다.** 저장할 때마다 부르면 오타를 고칠 때마다
+    // 값이 나간다 — 다 적고 잠잠해지면 저절로 돈다
+    const 분 = Math.ceil((data.wait_sec || 0) / 60);
+    list.innerHTML = '<p class="mt-sug-none">다 적으신 뒤 읽습니다 — '
+      + (분 > 0 ? `약 ${분}분 뒤` : '곧') + ' 저절로 시작합니다.'
+      + ' 그동안 더 고치셔도 됩니다.' + 지금읽기() + '</p>';
+    return;
+  }
   if (data.state === '도는중') {
     list.innerHTML = '<p class="mt-sug-none">회의 내용을 읽는 중입니다…</p>';
     return;
@@ -122,6 +138,8 @@ function 머리말(data) {
     조각.push('<b>회의록과 이름이 겹치는 업무입니다. 내용을 읽지는 않았습니다.</b>');
   } else if (data.state === '도는중') {
     조각.push('<b>회의 내용을 읽고 있습니다.</b>');
+  } else if (data.state === '기다림') {
+    조각.push('<b>아직 안 읽었습니다.</b>');
   } else if (data.state === '실패') {
     조각.push('<b>이번에는 읽지 못했습니다.</b>');
   }
@@ -162,9 +180,10 @@ async function 불러온다() {
     그린다(data);
     // 도는 중이면 다시 물어본다. **끝나면 저절로 나타나야 한다** —
     // 사람이 새로고침해야 보이면 아무도 안 기다린다
-    if (data.state === '도는중') {
+    if (data.state === '도는중' || data.state === '기다림') {
+      // 기다리는 동안에도 물어본다 — 때가 되면 서버가 그때 돌린다
       clearTimeout(기다림);
-      기다림 = setTimeout(불러온다, 3000);
+      기다림 = setTimeout(불러온다, data.state === '기다림' ? 15000 : 3000);
     }
   } catch (e) {
     // 조건 8 — 여기서 죽어도 회의록 본문은 살아 있다

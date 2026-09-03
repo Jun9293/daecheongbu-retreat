@@ -622,6 +622,14 @@ class Meeting(Base):
     suggest_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     suggest_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     suggest_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # **잰 토큰.** 어림한 값(회의당 37~43원)이 실제로는 113원이었다 — 세 배다.
+    # 한글은 글자당 1 토큰에 가깝고, **생각(thinking)이 출력의 대부분을 먹는다.**
+    # 어림이 남아 있으면 다음 사람이 그 숫자로 판단한다 (`입력/출력` 로 적는다)
+    suggest_tokens: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # **적는 동안은 부르지 않는다.** 본문이 한 글자만 바뀌어도 지문이 달라져
+    # 다시 부르는데, 오타 세 번 고치면 그만큼 값이 나간다. 저장하면 이 시각을
+    # 찍어 두고 **잠잠해진 뒤에** 부른다 (`기다림` 상태)
+    suggest_due_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     items: Mapped[list[MeetingItem]] = relationship(
         back_populates="meeting",
