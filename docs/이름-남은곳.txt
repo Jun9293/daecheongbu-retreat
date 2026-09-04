@@ -14,17 +14,8 @@
 # `check_names.py` 는 이 자리를 넘기되 **몇 곳이 남았는지 끝에 말합니다.**
 # 조용히 넘기면 이 목록이 있다는 것조차 잊힙니다.
 
-CLAUDE.md | 1475 | 민◯◯
 CLAUDE.md | 1475 | 홍◯◯
+CLAUDE.md | 1475 | 민◯◯
 CLAUDE.md | 1672 | 이◯◯
 app/templates/expenses.html | 74 | 홍◯◯
 app/templates/expenses.html | 74 | 민◯◯
-tests/test_phase2_flows.py | 572 | 홍◯◯
-tests/test_phase2_flows.py | 572 | 민◯◯
-tests/test_phase2_flows.py | 586 | 홍◯◯
-tests/test_phase2_flows.py | 586 | 민◯◯
-tests/test_web_flows.py | 302 | 민◯◯
-tests/test_web_flows.py | 302 | 홍◯◯
-tests/test_web_flows.py | 316 | 민◯◯
-tests/test_web_flows.py | 316 | 홍◯◯
-tests/test_web_flows.py | 412 | 홍◯◯
