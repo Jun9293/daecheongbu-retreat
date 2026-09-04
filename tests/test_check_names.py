@@ -36,10 +36,8 @@ def _실명하나() -> str:
     """대응표에서 **두 글자 이상**인 실명 하나. 한 글자짜리는 낱말 안에
     늘 들어가 넘긴 목록에 있으므로 시험에 쓰지 않는다."""
     C = _검사()
-    names, _ = C._anon.load_map()
-    넘김 = C.넘긴것()
-    for 실명, _가명 in names:
-        if len(실명) >= 2 and ("*", 실명) not in 넘김:
+    for 실명 in C._anon.표기들():
+        if len(실명) >= 2:
             return 실명
     pytest.skip("두 글자 이상인 실명이 대응표에 없다")
 
@@ -111,8 +109,7 @@ def test_검사_05_넘긴_낱말은_안_걸리고_홀로_선_이름은_걸린다
     C = _검사()
     넘김 = C.넘긴것()
     assert 넘김, "넘긴 목록이 비어 있다"
-    names, _ = C._anon.load_map()
-    실명집합 = {a for a, _ in names}
+    실명집합 = set(C._anon.표기들())
 
     # 넘긴 낱말 하나를 골라, 그 낱말 안에 든 이름이 안 걸리는지
     골랐다 = None
@@ -135,8 +132,7 @@ def test_검사_05_넘긴_낱말은_안_걸리고_홀로_선_이름은_걸린다
 def test_검사_06_넘긴_목록이_낱말이고_이유가_있다():
     """이름만 적힌 줄이 있으면 그 이름은 어디서든 안 걸린다."""
     C = _검사()
-    names, _ = C._anon.load_map()
-    실명집합 = {a for a, _ in names}
+    실명집합 = set(C._anon.표기들())
     글 = (ROOT / "docs" / "이름-확인됨.txt").read_text(encoding="utf-8")
     줄들 = [x for x in 글.splitlines()
            if x.strip() and not x.strip().startswith("#")]
@@ -175,11 +171,28 @@ def test_검사_07_gitignore_된_것은_안_본다():
     assert C.무시되나(ROOT / "data" / "제안-1판.real.md")
 
 
-def test_검사_08_대응표를_anonymize_와_같은_코드로_읽는다():
-    """두 곳에서 읽으면 한쪽만 구조를 잘못 읽는다 — 이번에 정확히 그랬다."""
-    글 = (ROOT / "scripts" / "check_names.py").read_text(encoding="utf-8")
-    assert "_anon.load_map()" in 글, "대응표를 따로 읽고 있다"
-    assert "json.loads" not in 글, "대응표를 직접 파싱하고 있다"
+def test_검사_08_대응표를_읽는_곳이_하나다():
+    """**글자로 찾지 않고 센다.**
+
+    전에는 `json.loads` 가 없는지를 봤는데, 그건 10장이 네 번 당했다고
+    적은 그 함정이다 — 코드와 설명을 못 가린다. 대신 **대응표 파일 이름이
+    코드에 몇 번 나오는지** 센다. 주석에 나와도 세면 되므로 오탐이 없고,
+    새로 읽는 곳을 만들면 반드시 걸린다.
+
+    이 작업에서만 "같은 것을 두 곳에서 읽는" 문제가 **네 번** 나왔다.
+    """
+    셈 = {}
+    for p in ROOT.rglob("*.py"):
+        if ".venv" in p.parts or "__pycache__" in p.parts:
+            continue
+        n = p.read_text(encoding="utf-8", errors="ignore").count(
+            "anonymize-map" + ".json")
+        if n:
+            셈[str(p.relative_to(ROOT)).replace(chr(92), "/")] = n
+    assert 셈, "대응표 파일 이름이 코드 어디에도 없다 — 읽는 곳이 사라졌다"
+    assert sum(셈.values()) == 1, (
+        f"대응표를 읽는 곳이 하나가 아니다: {셈}. "
+        "scripts/anonymize.py 의 표기들()·가명()·사람수() 를 부르세요.")
 
 
 def test_검사_09_한_글자_이름은_홀로_섰을_때만_본다(tmp_path):
@@ -191,8 +204,7 @@ def test_검사_09_한_글자_이름은_홀로_섰을_때만_본다(tmp_path):
     막는다 — 목록이 133줄에서 10줄로 줄었다.
     """
     C = _검사()
-    names, _ = C._anon.load_map()
-    한글자 = [a for a, _ in names if len(a) == 1]
+    한글자 = [a for a in C._anon.표기들() if len(a) == 1]
     if not 한글자:
         pytest.skip("한 글자 이름이 대응표에 없다")
     이름 = 한글자[0]

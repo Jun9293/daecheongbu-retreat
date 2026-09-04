@@ -19,7 +19,7 @@
 그래서 **앞뒤가 한글·영문·숫자가 아닐 때만** 바꾼다. 바꾼 뒤에는 테스트
 전체를 돌려 확인한다.
 
-**대응표(`data/anonymize-map.json`)는 저장소에 올리지 않는다.** 실명과 가명을
+**대응표(`MAP_PATH`)는 저장소에 올리지 않는다.** 실명과 가명을
 나란히 적어 둔 것만으로 원래 이름이 드러나기 때문이다.
 
     .venv\\Scripts\\python.exe scripts/anonymize.py          # 무엇이 바뀔지만 보여준다
@@ -83,6 +83,39 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     # 표기가 `성 + 가명` 이 되어 **두 사람이 다시 섞인다.**
     names.sort(key=lambda pair: -len(pair[0]))
     return names, [(a, b) for a, b in data.get("phones", [])]
+
+
+# ── 물어보는 창구 ────────────────────────────────────────────────
+#
+# **부르는 쪽이 대응표의 구조를 몰라야 한다.** 원본 모양(dict 인지
+# 두 칸짜리 목록인지)을 그대로 돌려주면, 구조가 바뀔 때 부르는 쪽이
+# 깨진다 — 2026-09-04 에 한 줄에 표기를 여럿 두는 모양으로 바꾸자
+# `test_x_21` 이 `p[0]` 에서 깨졌다. 그래서 **물음 단위로만** 낸다.
+
+
+def 표기들() -> list[str]:
+    """찾아야 할 표기 전부 (이름 + 번호). **긴 것부터.**"""
+    names, phones = load_map()
+    return [a for a, _ in names] + [a for a, _ in phones]
+
+
+def 가명(표기: str) -> str | None:
+    """그 표기가 무엇으로 바뀌는가. 모르는 표기면 None."""
+    names, phones = load_map()
+    return dict(names + phones).get(표기)
+
+
+def 사람수() -> int:
+    """대응표에 든 **사람 수**. 표기 수가 아니다 —
+    한 사람이 표기를 여럿 가질 수 있다."""
+    names, _ = load_map()
+    return len({b for _, b in names})
+
+
+def 표기수() -> int:
+    """이름 표기 수. `사람수()` 보다 크면 표기를 여럿 둔 사람이 있다."""
+    names, _ = load_map()
+    return len(names)
 
 
 # 사람 이름처럼 생겼지만 아닌 것. 절대 바꾸지 않는다.
