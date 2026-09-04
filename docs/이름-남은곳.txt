@@ -1,0 +1,30 @@
+# 아직 안 고친 자리
+#
+#   파일 | 줄번호 | 낱말(가림)
+#
+# 이 목록은 **아직 안 고친 것**입니다. 새로 생긴 것이 아니라 예전에 손으로
+# 적힌 것이고, 새 대응표 구조(한 줄에 표기 여럿)로 성 붙은 형태를 더하면
+# 고칠 수 있습니다. 브랜치를 main 에 합친 뒤 별건으로 합니다.
+# **이 목록이 곧 그때의 할 일입니다.**
+#
+# 이번 작업과 나눈 이유 — 여기 시험 파일이 다섯 곳 걸려 있어서, 한 diff 에
+# "실명 막기" 와 "시험 자료 손보기" 가 섞이면 무엇 때문에 빨개졌는지
+# 안 읽힙니다.
+#
+# `check_names.py` 는 이 자리를 넘기되 **몇 곳이 남았는지 끝에 말합니다.**
+# 조용히 넘기면 이 목록이 있다는 것조차 잊힙니다.
+
+CLAUDE.md | 1475 | 민◯◯
+CLAUDE.md | 1475 | 홍◯◯
+CLAUDE.md | 1672 | 이◯◯
+app/templates/expenses.html | 74 | 홍◯◯
+app/templates/expenses.html | 74 | 민◯◯
+tests/test_phase2_flows.py | 572 | 홍◯◯
+tests/test_phase2_flows.py | 572 | 민◯◯
+tests/test_phase2_flows.py | 586 | 홍◯◯
+tests/test_phase2_flows.py | 586 | 민◯◯
+tests/test_web_flows.py | 302 | 민◯◯
+tests/test_web_flows.py | 302 | 홍◯◯
+tests/test_web_flows.py | 316 | 민◯◯
+tests/test_web_flows.py | 316 | 홍◯◯
+tests/test_web_flows.py | 412 | 홍◯◯

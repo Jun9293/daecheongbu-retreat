@@ -53,6 +53,7 @@ _anon = importlib.util.module_from_spec(_스펙)
 _스펙.loader.exec_module(_anon)
 
 넘긴목록 = ROOT / "docs" / "이름-확인됨.txt"
+남은목록 = ROOT / "docs" / "이름-남은곳.txt"
 
 # 글자만 있는 파일을 본다. 이미지·zip 안의 실명은 이 검사의 몫이 아니다.
 글파일 = {".py", ".md", ".txt", ".html", ".js", ".css", ".json", ".bat",
@@ -67,8 +68,16 @@ def 가린다(이름: str) -> str:
     return 이름[0] + "◯" * (len(이름) - 1)
 
 
-def 넘긴것() -> set[tuple[str, str]]:
-    """(파일, 낱말) 짝. 이 짝은 걸려도 넘긴다."""
+def 넘긴것() -> set:
+    """**넘기는 것은 이름이 아니라 낱말이다.**
+
+    전에는 **이름을 통째로** 넘겼다. 그러면 회의록에서 홀로 선 그 이름도
+    안 걸린다 — 지키려던 바로 그것이 빠진다. 넘겨야 할 것은 이름이
+    아니라 **그 이름을 품은 낱말**(`진행`·`사진`·`필요한` 같은)이다.
+
+    4-0 의 `흐려도_되는곳` 과 같은 방식이다 — 규칙을 끄는 것이 아니라
+    넘길 자리를 이름으로 적어 두는 것이다.
+    """
     if not 넘긴목록.exists():
         return set()
     나온것 = set()
@@ -77,25 +86,55 @@ def 넘긴것() -> set[tuple[str, str]]:
         if not 줄 or 줄.startswith("#"):
             continue
         칸 = [x.strip() for x in 줄.split("|")]
-        if len(칸) >= 2:
-            나온것.add((칸[0], 칸[1]))
+        if len(칸) >= 2 and 칸[0] and 칸[1]:
+            나온것.add(칸[0])
     return 나온것
 
 
-def 넘기나(넘김: set, 상대: str, 이름: str) -> bool:
-    """`*` 는 **어느 파일에서든** 넘긴다.
+def 남은곳() -> set:
+    """**아직 안 고친 자리** (파일, 줄번호).
 
-    한두 글자 이름은 낱말 안에 늘 들어간다 — `진` 은 진행·사진·추진에,
-    `요한` 은 필요한·중요한에. 파일마다 적으면 목록이 끝없이 길어지고,
-    특히 `docs/review/최근.md` 는 매 작업마다 새로 써서 **매번 빨개진다.**
-    그러면 사람이 이 검사를 무시하기 시작하고, 한 번 무시하면 돌아오지
-    않는다 (4-11 과 같은 자리).
-
-    **그 이름들은 이 검사가 못 지킨다.** `anonymize.py` 의 경계 규칙에
-    맡긴다 — 그쪽은 낱말 안에 든 것을 건너뛰므로 홀로 선 `진` 만 바꾼다.
-    넘긴 목록에 **왜 넘기는지**를 적어 그 사실이 보이게 한다.
+    이미 있던 것이라 이번 diff 와 섞으면 무엇 때문에 빨개졌는지
+    안 읽힌다. 그래서 넘기되 **몇 곳인지 끝에 말한다** — 조용히
+    넘기면 이 목록이 있다는 것조차 잊힌다.
     """
-    return (상대, 이름) in 넘김 or ("*", 이름) in 넘김
+    if not 남은목록.exists():
+        return set()
+    나온것 = set()
+    for 줄 in 남은목록.read_text(encoding="utf-8").splitlines():
+        줄 = 줄.strip()
+        if not 줄 or 줄.startswith("#"):
+            continue
+        칸 = [x.strip() for x in 줄.split("|")]
+        if len(칸) >= 2 and 칸[1].isdigit():
+            나온것.add((칸[0], int(칸[1])))
+    return 나온것
+
+
+def 예외파일() -> set:
+    """이 셋만 스스로를 담아도 된다 — 자기 코드 · 자기 시험 · 넘길 목록."""
+    return {
+        (ROOT / "scripts" / "check_names.py").resolve(),
+        (ROOT / "tests" / "test_check_names.py").resolve(),
+        넘긴목록.resolve(),
+        남은목록.resolve(),
+    }
+
+
+def 낱말(줄: str, 자리: int, 길이: int) -> str:
+    """걸린 자리를 품은 **한글 덩어리**를 잘라 낸다.
+
+    `필요한 것들` 에서 두 글자가 걸리면 `필요한` 을 돌려준다.
+    성이 붙은 이름에서 걸리면 **성까지 붙은 세 글자**를 돌려준다 —
+    그래서 **낱말이 오탐인지 실명인지 사람이 보고 가를 수 있다.**
+    (여기에 실명을 예로 적지 않는다. 적으면 이 검사에 스스로 걸린다.)
+    """
+    ㄱ, ㄴ = 자리, 자리 + 길이
+    while ㄱ > 0 and "가" <= 줄[ㄱ - 1] <= "힣":
+        ㄱ -= 1
+    while ㄴ < len(줄) and "가" <= 줄[ㄴ] <= "힣":
+        ㄴ += 1
+    return 줄[ㄱ:ㄴ]
 
 
 def 볼파일(args) -> list[pathlib.Path]:
@@ -111,8 +150,12 @@ def 볼파일(args) -> list[pathlib.Path]:
                 나온것.append(p)
         # 경로를 줘도 gitignore 된 것은 뺀다
         return [x for x in 나온것 if not 무시되나(x)]
-    명령 = (["git", "-c", "core.quotepath=false", "ls-files"] if args.all else
-          ["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only"])
+    # **기본은 저장소 전체다.** 스테이징된 것만 보면, 이미 커밋된
+    # 자리에 남아 있는 것을 영영 못 본다 — 새는 구멍을 막은 뒤에는
+    # 보는 범위를 넓혀야 한다.
+    명령 = (["git", "-c", "core.quotepath=false", "diff", "--cached",
+           "--name-only"] if args.staged else
+          ["git", "-c", "core.quotepath=false", "ls-files"])
     줄들 = subprocess.run(명령, capture_output=True, cwd=ROOT).stdout.decode("utf-8")
     return [ROOT / x for x in (y.strip() for y in 줄들.split("\n")) if x
             and (ROOT / x).exists()]
@@ -132,16 +175,27 @@ def 상대경로(p: pathlib.Path) -> str:
         return str(p).replace("\\", "/")
 
 
-def 찾는다(실명: list[str], 파일들: list[pathlib.Path]) -> list[tuple]:
-    """**경계를 보지 않는다.** 글자가 들어 있으면 전부 짚는다."""
+def 찾는다(실명: list[str], 파일들: list[pathlib.Path],
+        남은것: list | None = None) -> list[tuple]:
+    """**경계를 보지 않는다.** 글자가 들어 있으면 전부 짚는다.
+
+    `남은것` 을 주면 «아직 안 고친 자리»(`이름-남은곳.txt`)에 든 것을
+    그쪽으로 옮겨 담는다 — 결과에서는 빠지되 **세어서 말하기 위해서**다.
+    """
     넘김 = 넘긴것()
+    남은자리 = 남은곳() if 남은것 is not None else set()
     나온것 = []
     for p in 파일들:
         if p.suffix.lower() not in 글파일:
             continue
-        # **넘긴 목록 자신은 보지 않는다.** 넘길 낱말을 적어 두는
-        # 파일이라 거기 그 낱말이 있는 것이 당연하다
-        if p.resolve() == 넘긴목록.resolve():
+        # **예외는 셋뿐이다.** 어떤 것을 금지하는 도구는 그것을
+        # 설명하려고 스스로 담게 된다 (10장). 자기 코드·자기 시험·
+        # 넘길 목록이 그것이다.
+        #
+        # **검토 보고(`docs/review/최근.md`)는 예외가 아니다.** 운영
+        # 자료에서 온 것을 계속 담을 파일이라, 빼면 정확히 새는 자리를
+        # 안 보게 된다. 거기서는 가려서 적는다(`홍성◯`).
+        if p.resolve() in 예외파일():
             continue
         try:
             글 = p.read_text(encoding="utf-8")
@@ -150,8 +204,28 @@ def 찾는다(실명: list[str], 파일들: list[pathlib.Path]) -> list[tuple]:
         상대 = 상대경로(p)
         for 번호, 줄 in enumerate(글.split("\n"), 1):
             for 이름 in 실명:
-                if 이름 in 줄 and not 넘기나(넘김, 상대, 이름):
-                    나온것.append((상대, 번호, 이름, 줄.strip()))
+                자리 = 줄.find(이름)
+                while 자리 >= 0:
+                    덩어리 = 낱말(줄, 자리, len(이름))
+                    # **한 글자 이름은 홀로 섰을 때만 본다.**
+                    # 낱말 안에 들면 `진행`·`사진`·`추진력` 처럼
+                    # 끝없이 나와, 넘김 목록이 낱말 수만큼 늘어난다.
+                    # **늘어난 목록은 아무도 읽지 않는다** (4-11).
+                    # 그 자리는 `anonymize.py` 의 경계 규칙에 맡긴다.
+                    #
+                    # **이름의 위치로 가르지 않는다.** 이 자료에서
+                    # 이름은 낱말 한가운데 오는 것이 정상이다
+                    # (`◯◯M으로` · `9명 ◯◯◯ ◯◯◯`). 위치로 가르면
+                    # 잡던 것을 놓친다. 가르는 축은 **길이**다.
+                    짧은데붙었나 = len(이름) == 1 and 덩어리 != 이름
+                    if not 짧은데붙었나 and 덩어리 not in 넘김:
+                        한줄 = (상대, 번호, 이름, 줄.strip(), 덩어리)
+                        if (상대, 번호) in 남은자리:
+                            남은것.append(한줄)
+                        else:
+                            나온것.append(한줄)
+                        break
+                    자리 = 줄.find(이름, 자리 + 1)
     return 나온것
 
 
@@ -159,7 +233,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="커밋될 파일에 실명이 들어 있는지 찾는다 (바꾸지는 않는다)")
     ap.add_argument("경로", nargs="*", help="볼 파일이나 폴더 (없으면 커밋될 것)")
-    ap.add_argument("--all", action="store_true", help="추적 중인 파일 전부")
+    ap.add_argument("--staged", action="store_true",
+                    help="커밋될 것만 (기본은 저장소 전체)")
+    ap.add_argument("--all", action="store_true",
+                    help="기본과 같다 (옛 이름)")
     args = ap.parse_args()
 
     names, phones = _anon.load_map()
@@ -175,24 +252,33 @@ def main() -> int:
         return 2
 
     파일들 = 볼파일(args)
-    나온것 = 찾는다(실명, 파일들)
+    남은것: list = []
+    나온것 = 찾는다(실명, 파일들, 남은것)
+
+    def 남은말():
+        if 남은것:
+            print(f"아직 안 고친 곳 {len(남은것)}곳"
+                  f" (docs/{남은목록.name})")
 
     print(f"실명 {len(실명)}개로 파일 {len(파일들)}개를 봤습니다.")
     if not 나온것:
         print("걸린 것이 없습니다.")
+        남은말()
         return 0
 
     print()
     print(f"!! {len(나온것)}곳에서 실명이 보입니다 (이름은 가려 찍습니다).")
-    print("   오탐이면 docs/이름-확인됨.txt 에 `파일 | 낱말 | 왜 넘기는가` 로 적으세요.")
+    print("   오탐이면 docs/이름-확인됨.txt 에 `낱말 | 왜 넘기는가` 로 적으세요.")
     print()
     앞선파일 = None
-    for 상대, 번호, 이름, 줄 in 나온것:
+    for 상대, 번호, 이름, 줄, 덩어리 in 나온것:
         if 상대 != 앞선파일:
             print(f"  {상대}")
             앞선파일 = 상대
         미리 = 줄.replace(이름, 가린다(이름))
-        print(f"    {번호:>5}줄  {가린다(이름)}  {미리[:78]}")
+        print(f"    {번호:>5}줄  {가린다(덩어리)}  {미리[:74]}")
+    print()
+    남은말()
     return 1
 
 

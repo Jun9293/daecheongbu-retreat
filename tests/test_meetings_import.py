@@ -363,12 +363,20 @@ def test_x_20_옮긴_것을_묶음으로_되돌릴_수_있다():
 def test_x_21_시험_자료에_실명이_없다():
     """저장소는 공개다 (11-2). 실제 회의록에는 실명이 그대로 들어 있어서
     `data/notion-meetings/` 는 저장소에 두지 않는다."""
-    import json
+    # **대응표를 여기서 직접 파싱하지 않는다.** 두 곳에서 읽으면 한쪽만
+    # 구조를 잘못 읽는다 — 2026-09-04 에 대응표가 한 줄에 표기를 여럿
+    # 두는 모양으로 바뀌자 이 시험이 `p[0]` 에서 깨졌다.
+    import importlib.util
 
     표 = ROOT / "data" / "anonymize-map.json"
     if not 표.exists():
         pytest.skip("대응표가 없다")
-    실명 = [p[0] for p in json.loads(표.read_text(encoding="utf-8"))["names"]]
+    스펙 = importlib.util.spec_from_file_location(
+        "_anon_x21", ROOT / "scripts" / "anonymize.py")
+    A = importlib.util.module_from_spec(스펙)
+    스펙.loader.exec_module(A)
+    실명 = [a for a, _ in A.load_map()[0]]
+    assert 실명, "대응표에서 읽은 실명이 0개다 — 검사가 아무것도 안 본다"
     나 = pathlib.Path(__file__).read_text(encoding="utf-8")
     import re
 
