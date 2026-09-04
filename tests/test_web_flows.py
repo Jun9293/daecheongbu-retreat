@@ -299,7 +299,7 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
             "amount": "130600",
             "is_meal_expense": "1",
             "meal_headcount": "12",
-            "meal_attendees": "박민준 홍성헌 민주아",
+            "meal_attendees": "이름1 이름2 이름3",
             "level3b": "모임 식사비-1",
             "payer_name": "박민준",
             "payer_account": "국민 123-456",
@@ -313,7 +313,7 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
 
     assert entry.subsidy_amount == 96_000  # min(130,600, 12 × 8,000)
     assert entry.personal_burden_amount == 34_600
-    assert entry.meal_attendee_names == ["박민준", "홍성헌", "민주아"]
+    assert entry.meal_attendee_names == ["이름1", "이름2", "이름3"]
     assert entry.receipt_number == 1
 
     page = admin_client.get("/expenses")
@@ -409,7 +409,7 @@ def test_지출_내역을_엑셀로_내려받을_수_있다(admin_client):
             "amount": "130600",
             "is_meal_expense": "1",
             "meal_headcount": "12",
-            "meal_attendees": "박민준 홍성헌",
+            "meal_attendees": "이름1 이름2",
             "payer_name": "박민준",
         },
         follow_redirects=True,

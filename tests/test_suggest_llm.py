@@ -567,3 +567,97 @@ def test_llm_23_API_로_나가는_문이_하나다():
         for p in (ROOT / d).rglob("*.py")
         if "api.anthropic.com" in p.read_text(encoding="utf-8", errors="ignore"))
     assert 나온것 == ["app/domain/llm.py"], f"주소가 여러 곳에 있다: {나온것}"
+
+
+# ── 채점을 덮어쓰지 못하게 막는가 (2026-09-04) ────────────────────────
+#
+# **가드는 통과하는 쪽만 시험돼 있었다.** 실제로 채워 넣고 돌려 보니 셋 중
+# 둘만 잡았다 — 마크다운 3열 행은 `split("|")` 이 4개가 아니라 **5개**인데
+# 4로 세어 「놓친 것」 표를 놓쳤다. **조용히 절반만 지키는 가드가 가장
+# 위험하다**: 있는 줄 알고 안심한다. 그래서 막히는 쪽을 시험한다.
+
+def _스크립트():
+    import importlib.util
+    스펙 = importlib.util.spec_from_file_location(
+        "_ss", ROOT / "scripts" / "suggest_sample.py")
+    모듈 = importlib.util.module_from_spec(스펙)
+    스펙.loader.exec_module(모듈)
+    return 모듈
+
+
+# 사람이 채울 수 있는 자리마다 하나씩. **자리가 늘면 여기 한 줄 더한다.**
+채운자리 = [
+    ("판정 칸",     "| 논의 | 「가」 (run 1) | 왜 | O | |"),
+    ("X 이유 칸",   "| 논의 | 「가」 (run 1) | 왜 | | 다른업무 |"),
+    ("놓친 것 줄",  "**마땅히 나왔어야 하는데 안 나온 것이 있나요?**  O / X  → O"),
+    ("놓친 것 표",  "| 26.05.24 | O | 톡방광고 담당자 |"),
+    ("X 이유 표",   "| `할일아님` | 2 |"),
+]
+
+
+@pytest.mark.parametrize("이름,줄", 채운자리, ids=[x[0] for x in 채운자리])
+def test_가드_01_채운_자리를_저마다_잡는다(이름, 줄):
+    """자리마다 **실제로 거부되는지** 본다. 한 자리라도 새면 그 자리의
+    판정이 조용히 지워진다."""
+    찾음 = _스크립트().채운곳(줄)
+    assert 찾음, f"{이름} 이 채워졌는데 못 잡았다: {줄!r}"
+
+
+def test_가드_02_안_채운_파일은_덮인다(tmp_path):
+    """**과하게 걸려 정작 다시 못 내면 그것도 고장이다.**"""
+    ss = _스크립트()
+    빈것 = "\n".join([
+        "| 종류 | 무엇을 하자는 것 | 근거 / 인용 | 판정 | X 이유 |",
+        "|---|---|---|---|---|",
+        "| 논의 | 「가」 (run 1) | 왜 | | |",
+        "**마땅히 나왔어야 하는데 안 나온 것이 있나요?**  O / X  → ",
+        "| 26.05.24 | | |",
+        "| `할일아님` | |",
+    ])
+    assert ss.채운곳(빈것) == [], "안 채운 파일을 채웠다고 본다"
+    p = tmp_path / "빈것.md"
+    p.write_text(빈것, encoding="utf-8")
+    ss.막는다(p, replace=True)              # 안 막아야 한다
+    with pytest.raises(SystemExit) as e:
+        ss.막는다(p, replace=False)         # --replace 없으면 막아야 한다
+    assert e.value.code == 5
+
+
+def test_가드_03_자리마다_빠짐없이_걸린다(tmp_path):
+    """**"적어도 한 곳" 이 아니라 "자리마다" 를 본다.**
+
+    한 덩어리로 넣고 "뭔가 잡혔다" 로만 보면, 새 표를 더하고 가드에 안
+    넣어도 앞의 자리가 잡혀서 통과한다. 자리를 **줄 번호로** 견주므로
+    빠뜨린 표의 줄이 안 잡히고, 그 이름이 그대로 실패 문구에 나온다.
+    """
+    ss = _스크립트()
+    글 = "\n".join(줄 for _, 줄 in 채운자리)
+    찾음 = ss.채운곳(글)
+    잡힌줄 = {int(x.split("줄")[0]) for x in 찾음}
+    안잡힌것 = [이름 for i, (이름, _) in enumerate(채운자리, 1)
+              if i not in 잡힌줄]
+    assert not 안잡힌것, f"가드가 이 자리를 안 지킨다: {안잡힌것}"
+    assert len(찾음) == len(채운자리), (
+        f"{len(채운자리)}자리를 채웠는데 {len(찾음)}곳만 잡았다: {찾음}")
+    p = tmp_path / "채운것.md"
+    p.write_text(글, encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        ss.막는다(p, replace=True)          # --replace 로도 막아야 한다
+    assert e.value.code == 4
+
+
+def test_가드_04_모르는_종류를_표에_찍지_않는다():
+    """모르는 종류를 제안처럼 찍으면 `제안줄인가()` 가 못 알아보고,
+    그러면 **덮어쓰기 가드가 그 줄의 판정을 지키지 않는다.**"""
+    ss = _스크립트()
+    class 가짜:
+        kind, text, why = "더있음", "이름이 겹치는 업무가 7건 더 있습니다", ""
+    with pytest.raises(ValueError) as e:
+        ss.한줄(가짜())
+    assert "더있음" in str(e.value)
+    # 그리고 **세는 곳도 같은 목록을 본다**
+    assert ss.센다([가짜()]) == 0
+    assert set(ss.제안종류.values()) == {"결정사항", "논의", "새 업무"}
+    for 이름 in ss.제안종류.values():
+        assert ss.제안줄인가(f"| {이름} | 가 | 나 | | |"), 이름
+    assert not ss.제안줄인가("| 더있음 | 가 | 나 | | |")

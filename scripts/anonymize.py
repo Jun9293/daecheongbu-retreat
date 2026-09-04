@@ -19,7 +19,7 @@
 그래서 **앞뒤가 한글·영문·숫자가 아닐 때만** 바꾼다. 바꾼 뒤에는 테스트
 전체를 돌려 확인한다.
 
-**대응표(`data/anonymize-map.json`)는 저장소에 올리지 않는다.** 실명과 가명을
+**대응표(`MAP_PATH`)는 저장소에 올리지 않는다.** 실명과 가명을
 나란히 적어 둔 것만으로 원래 이름이 드러나기 때문이다.
 
     .venv\\Scripts\\python.exe scripts/anonymize.py          # 무엇이 바뀔지만 보여준다
@@ -53,9 +53,69 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
             '     "phones": [["01000000000", "01011112222"]]}'
         )
     data = json.loads(MAP_PATH.read_text(encoding="utf-8"))
-    names = [(a, b) for a, b in data.get("names", [])]
+    names: list[tuple[str, str]] = []
+    임자: dict[str, str] = {}          # 표기 -> 가명
+    for 줄 in data.get("names", []):
+        # **한 줄 = 한 사람.** 새 모양은 표기를 여럿 둔다 —
+        #   {"가명": "가명이름", "표기": ["성이 붙은 표기", "이름만 적은 표기"]}
+        # 성이 붙은 표기를 같은 사람 아래 둘 수 있고, 한 사람이
+        # 두 줄이 되지 않는다. **옛 모양 `[실명, 가명]` 도 그대로
+        # 읽는다** — 표기가 하나뿐인 사람은 옮길 이유가 없다.
+        if isinstance(줄, dict):
+            가명 = 줄["가명"]
+            표기들 = 줄["표기"]
+        else:
+            표기들, 가명 = [줄[0]], 줄[1]
+        for 표기 in 표기들:
+            # **한 표기가 두 사람에게 있으면 거절한다.** 그냥 두면
+            # 뒤엣것이 이기면서 **두 사람이 조용히 한 사람이 되고** 
+            # 아무 오류도 나지 않는다. 2026-09-04 에 이름 하나가
+            # 성이 다른 **두 사람**을 가리키고 있었다.
+            if 표기 in 임자 and 임자[표기] != 가명:
+                raise SystemExit(
+                    f"대응표에서 한 표기가 두 사람에게 있습니다: "
+                    f"{표기[0]}◯… → {임자[표기]} / {가명}. "
+                    "한 줄 = 한 사람입니다. 표기를 한쪽으로 모으거나 "
+                    "성을 붙여 갈라 주세요.")
+            임자[표기] = 가명
+            names.append((표기, 가명))
+    # **긴 표기부터 바꾼다.** 이름만 적은 표기를 먼저 바꾸면 성이 붙은
+    # 표기가 `성 + 가명` 이 되어 **두 사람이 다시 섞인다.**
     names.sort(key=lambda pair: -len(pair[0]))
     return names, [(a, b) for a, b in data.get("phones", [])]
+
+
+# ── 물어보는 창구 ────────────────────────────────────────────────
+#
+# **부르는 쪽이 대응표의 구조를 몰라야 한다.** 원본 모양(dict 인지
+# 두 칸짜리 목록인지)을 그대로 돌려주면, 구조가 바뀔 때 부르는 쪽이
+# 깨진다 — 2026-09-04 에 한 줄에 표기를 여럿 두는 모양으로 바꾸자
+# `test_x_21` 이 `p[0]` 에서 깨졌다. 그래서 **물음 단위로만** 낸다.
+
+
+def 표기들() -> list[str]:
+    """찾아야 할 표기 전부 (이름 + 번호). **긴 것부터.**"""
+    names, phones = load_map()
+    return [a for a, _ in names] + [a for a, _ in phones]
+
+
+def 가명(표기: str) -> str | None:
+    """그 표기가 무엇으로 바뀌는가. 모르는 표기면 None."""
+    names, phones = load_map()
+    return dict(names + phones).get(표기)
+
+
+def 사람수() -> int:
+    """대응표에 든 **사람 수**. 표기 수가 아니다 —
+    한 사람이 표기를 여럿 가질 수 있다."""
+    names, _ = load_map()
+    return len({b for _, b in names})
+
+
+def 표기수() -> int:
+    """이름 표기 수. `사람수()` 보다 크면 표기를 여럿 둔 사람이 있다."""
+    names, _ = load_map()
+    return len(names)
 
 
 # 사람 이름처럼 생겼지만 아닌 것. 절대 바꾸지 않는다.
@@ -101,15 +161,26 @@ def swap(text: str, *, doc: bool = False, names=None, phones=None) -> tuple[str,
 
     for real, fake in names:
         # `M` 접미사는 이름의 일부로 함께 넘어간다 (이름M → 가명M)
+        #
+        # **`M` 이 붙었으면 뒤가 한글이어도 바꾼다** — `◯◯M으로`,
+        # `◯◯M이` 처럼 조사가 붙는다. 2026-09-04 에 이 틈으로
+        # 이름 하나가 공개 커밋에 남았다.
+        #
+        # **이건 느슨하게 하는 것이 아니라 좁게 더하는 것이다.**
+        # `필요한`·`진행`·`중요한` 은 `M` 이 없으므로 영향이 0이고,
+        # 앞의 lookbehind 는 그대로라 낱말 안에 든 것은 여전히
+        # 안 바뀐다. 늘어난 자리는 "이름 + M + 한글" 하나뿐이고,
+        # 그건 5-3 이 정한 담당자 표기다.
         pattern = re.compile(
-            f"(?<!{WORDISH})({re.escape(real)})(M?)(?!{WORDISH})")
+            f"(?<!{WORDISH})({re.escape(real)})"
+            f"(?:(M)|()(?!{WORDISH}))")
 
         def hit(m: re.Match) -> str:
             nonlocal changed
             if m.group(0) in KEEP:
                 return m.group(0)
             changed += 1
-            return fake + m.group(2)
+            return fake + (m.group(2) or "")
 
         # 앞뒤로 겹치는 자리가 있어 두 번 훑는다
         for _ in range(2):

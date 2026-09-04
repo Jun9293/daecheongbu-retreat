@@ -569,7 +569,7 @@ def _make_meeting(admin_client, title="3차 총무팀 회의"):
         data={
             "title": title,
             "meeting_date": TODAY.isoformat(),
-            "attendees": "박민준 홍성헌, 민주아",
+            "attendees": "이름1 이름2, 이름3",
             "body": "예산 진행 상황 공유",
             "link_retreat": "retreat",
         },
@@ -583,7 +583,7 @@ def test_회의록을_만들면_참석자가_배열로_저장된다(admin_client
     _setup(admin_client)
     meeting = _make_meeting(admin_client)
 
-    assert meeting.attendee_names == ["박민준", "홍성헌", "민주아"]
+    assert meeting.attendee_names == ["이름1", "이름2", "이름3"]
     assert meeting.meeting_date == TODAY
 
 
