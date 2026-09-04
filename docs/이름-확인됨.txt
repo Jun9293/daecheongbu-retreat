@@ -1,0 +1,21 @@
+# 실명 검사(scripts/check_names.py)에서 넘길 것
+#
+#   파일 | 낱말 | 왜 넘기는가
+#
+# 파일 자리에 `*` 를 쓰면 어느 파일에서든 넘깁니다.
+#
+# **넘긴다는 것은 "이 검사가 못 지킨다" 는 뜻입니다.** 안전하다는 뜻이
+# 아닙니다. 아래 두 이름은 `anonymize.py` 의 경계 규칙에만 맡깁니다 —
+# 그쪽은 낱말 안에 든 것을 건너뛰므로 홀로 선 것만 바꿉니다.
+
+* | 진 | 한 글자라 낱말 안에 늘 들어간다 — 진행·사진·추진·나아진·사라진. 파일마다 적으면 목록이 끝없이 길어지고 최근.md 는 매 작업마다 새로 써서 매번 빨개진다
+* | 요한 | 필요한·중요한·부여한에 들어간다. 위와 같다
+
+# 아래는 낱말 안에 들어간 오탐입니다 (사람 이름이 아닙니다).
+CLAUDE.md | 동은 | `화면 이동은`·`이동은 명시적으로` — 이동 + 조사 `은`. 사람 이름이 아닙니다
+docs/checks/drawer.js | 동은 | 같음 (이동 + 은)
+app/static/css/retreat.css | 동은 | 같음
+app/static/js/sidenav.js | 동은 | 같음
+docs/mockups/retreat-board-v4.html | 동은 | 같음
+docs/mockups/retreat-live.html | 동은 | 같음
+docs/mockups/retreat-setup.html | 동은 | 같음
