@@ -247,7 +247,12 @@ def 흔한낱말(rows: list[BoardRow], 넘으면: int = 3) -> set[str]:
 
 def 겹침(a: str, b: str) -> tuple[int, list[str]]:
     """두 글의 겹치는 낱말 수와 그 낱말들. **왜 그 업무인지의 근거**가 된다."""
-    공통 = sorted(_낱말(a) & _낱말(b), key=len, reverse=True)
+    # **결정적이어야 한다.** `key=len` 만 주면 길이가 같은 낱말끼리는
+    # set 의 순서를 따라가 **실행마다 갈린다**(PYTHONHASHSEED).
+    # 낱말 겹침은 Claude 를 부르지 않으므로 "보드와 회의록이 그대로면
+    # 같은 것이 나온다" 가 1판 목록을 다시 낼 수 있는 근거인데, 그
+    # 근거가 깨져 있었다 — 돌릴 때마다 뜻 없는 diff 가 났다.
+    공통 = sorted(_낱말(a) & _낱말(b), key=lambda w: (-len(w), w))
     return len(공통), 공통[:5]
 
 

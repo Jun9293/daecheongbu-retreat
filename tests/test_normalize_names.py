@@ -59,7 +59,7 @@ def data(client):
             ("교역자", "하윤M", "강사 안내"),
             ("교역자", "예솔M", "차량 안내"),
             ("현장관리", "서윤·나윤", "다과 세팅"),            # 여럿 — 둘 다 짝 없음
-            ("비품", "수영,미르/도현", "짐 정리"),             # 다른 구분자
+            ("비품", "라온,미르/도현", "짐 정리"),             # 다른 구분자
             ("비품", "도현M", "침례짐"),
             ("행정", "전체", "의자 정렬"),                    # 묶음 이름
             ("행정", "담당M", "안내 방송"),                   # 사람 이름이 아닌 M
@@ -119,7 +119,7 @@ def test_02_M_쪽으로_통일된다(data):
     assert "민준M" in names and "민준" not in names
     # 여럿 든 칸 안에서도
     assert "하윤M·예솔M·소율" in names
-    assert "수영,미르/도현M" in names
+    assert "라온,미르/도현M" in names
 
 
 # ---------------------------------------------------------------- 3. 짝 없는 이름
@@ -144,7 +144,7 @@ def test_03b_짝_찾기가_M_있는_것만_고른다(data):
         mapping = preview(db)["mapping"]
 
     assert set(mapping) == {"하윤", "예솔", "도현", "민준"}
-    for absent in ("하람", "나윤", "온", "서윤", "소율", "미르", "수영", "전체"):
+    for absent in ("하람", "나윤", "온", "서윤", "소율", "미르", "라온", "전체"):
         assert absent not in mapping
 
 
@@ -160,7 +160,7 @@ def test_04_여럿이_든_칸에서도_각_이름이_따로_바뀐다(data):
     # 한 칸에서 둘이 함께 바뀐다
     assert changed["하윤·예솔·소율"] == "하윤M·예솔M·소율"
     # 셋 중 하나만
-    assert changed["수영,미르/도현"] == "수영,미르/도현M"
+    assert changed["라온,미르/도현"] == "라온,미르/도현M"
     # 아무도 안 바뀌는 칸은 목록에 없다
     assert "서윤·나윤" not in changed
 
@@ -183,7 +183,7 @@ def test_05_구분자가_원래_쓰던_것으로_유지된다(data):
     with app_session() as db:
         changed = {c["before"]: c["after"] for c in preview(db)["changes"]}
 
-    assert changed["수영,미르/도현"] == "수영,미르/도현M"      # 쉼표와 빗금 그대로
+    assert changed["라온,미르/도현"] == "라온,미르/도현M"      # 쉼표와 빗금 그대로
     assert changed["하윤·예솔·소율"] == "하윤M·예솔M·소율"     # 가운뎃점 그대로
 
     mapping = {"민준": "민준M"}

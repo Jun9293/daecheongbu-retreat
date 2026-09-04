@@ -728,7 +728,9 @@ def test_y_13_사람이_채울_성적표의_틀이_있다():
     """
     표 = _성적표()
     assert "**O**" in 표, "판정 표기가 없다"
-    assert "X" in 표 and "?" in 표, "O·X·? 셋을 설명하지 않는다"
+    # **한 글자로 찾으면 거의 아무 문서나 통과한다** — `X` 와 `?` 는
+    # 어디에든 있다. 채점 표기 설명을 통째로 지워도 초록이었다.
+    assert "**X**" in 표 and "**?**" in 표, "O·X·? 셋을 설명하지 않는다"
     assert "--undo" in 표, "채운 뒤 지우는 법이 없다"
     assert "놓친 것" in 표, "적게 내는 쪽으로 점수를 올릴 수 있다"
     # **표본은 박는다.** 표본이 바뀌면 판끼리 견줄 수 없다 (성적표의 「표본」)
@@ -782,7 +784,11 @@ def test_y_13b_성적표의_숫자끼리_맞는다():
     assert 적힌수 == 줄수, f"「틀린 것 {제목[1]}개」 인데 표에는 {줄수}줄이다"
 
     # ④ 「읽은 것」 의 분모가 틀린 것의 수와 같은가
-    읽은것 = re.search(r"\*\*(\S+) 중 넷이 같은 모양입니다\*\*", 표)
+    #
+    # **"같은 모양" 의 수를 박지 않는다.** 전에는 `중 넷이` 로 박아
+    # 두었는데, 10장이 "자리를 세어 두지 않는다" 로 정리된 것과
+    # 같은 자리다 — 그 수는 바뀔 수 있고, 여기서 재는 것은 **분모**다.
+    읽은것 = re.search(r"\*\*(\S+) 중 \S+ 같은 모양입니다\*\*", 표)
     assert 읽은것, "「읽은 것」 첫 문장을 못 읽었다"
     assert 한글수.get(읽은것[1]) == 줄수, (
         f"「읽은 것」 은 {읽은것[1]} 인데 틀린 것은 {줄수}개다")
@@ -1321,3 +1327,93 @@ def test_w2_09_빨간_형광펜을_따로_적고_이유가_있다():
 #
 # 다음 판(문장을 읽는 방식)은 **같은 네 회의**로 다시 내서 견준다 —
 # 개수가 아니라 회의가 축이다. 2판은 27개라 개수로는 견줄 수 없다.
+
+
+def test_y_13e_일판X_의_번호가_성적표와_맞는다():
+    """**개수가 아니라 번호를 견준다.**
+
+    `test_y_13d` 가 보는 것은 도출된 O 의 **개수**라, 번호를 잘못 옮겨도
+    (05.24 를 3·5·8 로) 개수는 그대로여서 초록이다 — 엉뚱한 줄에 X 가
+    붙고 아무 표시도 안 난다. 성적표의 「틀린 것」 표가 정본이다.
+    """
+    import importlib.util
+    스펙 = importlib.util.spec_from_file_location(
+        "_ss_y13e", ROOT / "scripts" / "suggest_sample.py")
+    ss = importlib.util.module_from_spec(스펙)
+    스펙.loader.exec_module(ss)
+    표 = _성적표()
+
+    # 「틀린 것」 표 : | 03.29 | 1 | 논의 | … |
+    적힌것: dict = {}
+    for 짧은, 번호 in re.findall(r"^\| (\d\d\.\d\d) \| (\d+) \| ", 표, re.M):
+        적힌것.setdefault(짧은, []).append(int(번호))
+    assert 적힌것, "성적표의 「틀린 것」 표를 못 읽었다"
+
+    # 성적표는 `03.29`, 스크립트는 `26.03.29 (1차)` 로 적는다 —
+    # 견주는 것은 **번호**이므로 열쇠 표기를 맞춰 준다
+    사본 = {제목.split(" (")[0].removeprefix("26."): sorted(번호들)
+          for 제목, 번호들 in ss.일판X.items()}
+    정본 = {짧은: sorted(번호들) for 짧은, 번호들 in 적힌것.items()}
+    assert 사본 == 정본, (
+        f"**성적표가 정본입니다. 스크립트의 사본을 맞추세요** — "
+        f"일판X {사본} · 성적표 {정본}")
+
+
+def test_y_13f_정렬이_통과여부를_바꿀_수_없다():
+    """**07.05 가 4→3 이 된 이유를 「정렬 탓」 으로 배제한 근거.**
+
+    `겹침()` 은 상위 5개만 근거로 돌려주고 `낱말제안()` 의 통과 조건이
+    **그 슬라이스만** 본다. 그러므로 겹침 2 이상인 후보 중 **겹친 낱말이
+    5개를 넘는 것이 없으면** 슬라이스가 곧 전부이고, 정렬 순서는 통과
+    여부를 바꿀 수 없다.
+
+    **빨개지면 그 배제가 더는 성립하지 않는다는 뜻이다** — 그때는 07.05 가
+    4에서 3이 된 이유를 다시 봐야 한다. 산문에만 적어 두면 다시 잴 수
+    없고, 그때 보드는 이미 달라져 있다.
+
+    **이 시험은 `data/app.db` 에 기댄다.** 시험용 DB 에는 표본 회차가
+    없어서다 — gitignore 라 새로 받은 사본에서는 건너뛴다.
+    `test_표밖_04` 와 같은 상태다.
+    """
+    import sqlalchemy as sa
+
+    운영 = ROOT / "data" / "app.db"
+    if not 운영.exists():
+        pytest.skip("운영 DB 가 없다 — 표본을 잴 수 없다")
+
+    from app import models
+    from app.domain import suggest as S
+
+    엔진 = sa.create_engine(f"sqlite:///{운영}")
+    # **엔진을 닫는다.** 서버가 같은 파일을 쥔 채 돌고 있다
+    try:
+        with sa.orm.Session(엔진) as db:
+            r = db.scalars(select(models.Retreat).where(
+                models.Retreat.name == "2026 여름수련회 Belong")).first()
+            if r is None:
+                pytest.skip("표본 회차가 운영 DB 에 없다")
+            본것, 넘는것 = 0, {}
+            for 제목 in ("26.03.29 (1차)", "26.05.24", "26.07.05", "26.08.09"):
+                m = db.scalars(select(models.Meeting).where(
+                    models.Meeting.retreat_id == r.id,
+                    models.Meeting.title == 제목)).first()
+                if m is None:
+                    continue
+                본문 = (m.body or "").strip()
+                for row in S.board_as_of(db, r, m.meeting_date):
+                    n, _ = S.겹침(본문, row.title)
+                    if n >= 2:
+                        본것 += 1
+                        if n > 5:
+                            넘는것.setdefault(제목.split(" (")[0], []).append(n)
+
+    finally:
+        엔진.dispose()
+
+    # **센 것이 0이면 성공이 아니라 실패다** (11-3 「마치기 전에」)
+    assert 본것 > 0, "겹침 2 이상인 후보를 하나도 못 봤다 — 재지 못했다"
+    assert not 넘는것, (
+        f"겹친 낱말이 5개를 넘는 후보가 생겼다: {넘는것}. "
+        "이제 정렬 순서가 통과 여부를 바꿀 수 있으므로, 07.05 가 4에서 "
+        "3이 된 이유를 「정렬 탓이 아니다」 로 배제한 판단을 다시 봐야 "
+        "한다 (docs/review/최근.md)")
