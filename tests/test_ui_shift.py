@@ -255,10 +255,13 @@ def test_17_배포_안내에_cloudflared_서비스_등록_실제_절차가_들�
     assert "1067" in section
     assert "LocalSystem" in section
     assert r"C:\Windows\System32\config\systemprofile\.cloudflared" in section
-    assert "sc config Cloudflared binPath=" in section
+    # **`.exe` 까지 본다** (11-2) — PowerShell 에서 `sc` 는 `Set-Content`
+    # 별칭이라, `.exe` 가 빠지면 화면에 아무것도 안 나오고 `config` 라는
+    # 파일이 생긴다. 8-3 의 핵심 줄이라 조용히 틀리면 서비스가 1067 로 죽는다.
+    assert "sc.exe config Cloudflared binPath=" in section
     assert "--config" in section
     assert "net stop Cloudflared" in section and "net start Cloudflared" in section
-    assert "sc query Cloudflared" in section
+    assert "sc.exe query Cloudflared" in section
     assert "CONNECTOR ID" in section
 
     # 막혔을 때에도 1067 항목이 있다
