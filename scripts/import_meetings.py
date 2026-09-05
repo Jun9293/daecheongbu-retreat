@@ -3,9 +3,9 @@
 앞으로 회의록은 이 프로그램에 적고 노션에는 더 쓰지 않는다. 그래서 이 옮기기는
 **일회성 이사**다 — 화면을 만들 일이 아니라 스크립트다.
 
-    .venv\\Scripts\\python.exe scripts/import_meetings.py data/notion-meetings ^
+    .venv\\Scripts\\python.exe scripts/import_meetings.py data/notion-meetings `
         --retreat "2026 여름수련회 Belong"
-    .venv\\Scripts\\python.exe scripts/import_meetings.py data/notion-meetings ^
+    .venv\\Scripts\\python.exe scripts/import_meetings.py data/notion-meetings `
         --retreat "..." --until 2026-06-30 --apply
 
 `import_programs.py`(5-5) 와 **같은 규칙**을 따른다.

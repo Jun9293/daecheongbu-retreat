@@ -6,7 +6,7 @@
 **같은 네 회의**로 다시 내서 견줘야 한다. 다른 회의로 채우면 두 숫자가
 무엇을 견준 것인지 알 수 없어진다.
 
-    .venv\\Scripts\\python.exe scripts/suggest_sample.py ^
+    .venv\\Scripts\\python.exe scripts/suggest_sample.py `
         --retreat "2026 여름수련회 Belong"
 
 **채점은 사람이 한다.** 이 스크립트는 낸 것과 근거를 표로 적어 둘 뿐이다.

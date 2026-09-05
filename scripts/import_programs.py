@@ -2,8 +2,8 @@
 
 구글시트의 일자별 시트를 옮긴 JSON 을 `Program` · `ProgramItem` 으로 넣는다.
 
-    .venv\\Scripts\\python.exe scripts/import_programs.py data/2026여름_프로그램표.json ^
-        --retreat "2026 여름수련회"
+    .venv\\Scripts\\python.exe scripts/import_programs.py data/2026여름_프로그램표.json `
+        --retreat "2026 여름수련회 Belong"
 
 **이 파일은 무엇을 했는지의 기록이 아니라 무엇을 하기로 했는지의 표다.**
 그래서 `done_at` · `done_by_id` 를 넣지 않는다 — 지어낸 체크는 "누가 놓쳐도

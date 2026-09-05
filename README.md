@@ -36,7 +36,7 @@
 
 ### 직접 명령어로
 
-```bash
+```powershell
 py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe seed.py     # 업무 라이브러리와 첫 회차 (처음 한 번)
@@ -47,8 +47,8 @@ py -3 -m venv .venv
 별도 폴더**에서 8001 포트로 뜹니다. 8001 이 이미 쓰이고 있으면(다른 창에서
 띄워 둔 경우) `--port` 만 바꿔 직접 부르면 됩니다 — 데이터 폴더는 그대로입니다:
 
-```bash
-set DCB_DATA_DIR=%TEMP%\dcb-dev
+```powershell
+$env:DCB_DATA_DIR = "$env:TEMP\dcb-dev"
 .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8002
 ```
 
@@ -64,7 +64,7 @@ set DCB_DATA_DIR=%TEMP%\dcb-dev
 
 맨 처음 한 사람은 화면이 없으므로 명령어로 만듭니다.
 
-```bash
+```powershell
 .venv\Scripts\python.exe scripts\create_admin.py "이름" 01012341234
 ```
 
@@ -72,7 +72,7 @@ set DCB_DATA_DIR=%TEMP%\dcb-dev
 **링크를 잃어버렸으면 계정을 다시 만들지 말고** 링크만 다시 받으세요 —
 계정이 중복되면 알림이 그 수만큼 갑니다.
 
-```bash
+```powershell
 .venv\Scripts\python.exe scripts\create_admin.py --reissue 01012341234
 ```
 
@@ -126,7 +126,7 @@ PC 와 휴대폰이 같은 와이파이에 있으면 PC 의 IP 로 접속됩니�
 
 ## 고쳤을 때 확인하는 법
 
-```bash
+```powershell
 .venv\Scripts\python.exe -m pytest              # 전부
 .venv\Scripts\python.exe scripts\healthcheck.py # 자가진단 (DB·푸시·키·디스크·접속)
 ```
