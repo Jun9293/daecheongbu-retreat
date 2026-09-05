@@ -988,18 +988,19 @@ const grip = $('grip');
 grip.addEventListener('mousedown', e => {
   e.preventDefault();
   const sx = e.clientX, sw = dw.offsetWidth;
-  let moved = false;
   dw.classList.add('sizing');
   document.body.classList.add('sizing');
   const move = ev => {
-    if (Math.abs(ev.clientX - sx) > 2) moved = true;
     const w = Math.min(Math.min(900, innerWidth * .7), Math.max(320, sw + (sx - ev.clientX)));
     document.documentElement.style.setProperty('--dw', w + 'px');
   };
   const up = () => {
     dw.classList.remove('sizing');
     document.body.classList.remove('sizing');
-    if (moved) dragEnd = Date.now();     // 드래그 끝의 클릭을 '빈 영역 클릭'으로 오해하지 않게
+    // **여기서 `dragEnd` 를 찍어 두던 것(과 그것만 쓰던 `moved`)을 걷었다.**
+    // `#grip` 이 `#drawer` 안이라 이제 아래의 down.drawer 가 구조로 막는다 —
+    // 같은 일을 두 곳이 하면 한쪽만 고쳐진다. `dragEnd` 자체는 남는다:
+    // 보드가 바 드래그 끝의 클릭을 거를 때 쓴다(noteDrag/recentDrag).
     call('afterLayout');
     removeEventListener('mousemove', move);
     removeEventListener('mouseup', up);
@@ -1008,33 +1009,79 @@ grip.addEventListener('mousedown', e => {
   addEventListener('mouseup', up);
 });
 
-/* 클릭이 어디서 일어났는지는 '누른 순간'에 정해 둔다.
-   중간 핸들러가 innerHTML 을 갈아끼우면 눌린 요소가 DOM 에서 떨어져 나가고,
-   그 뒤에 closest() 로 물으면 전부 null 이라 '바깥 클릭'으로 오판한다. */
-let clickOrigin = null;
-addEventListener('click', e => {
-  const at = sel => !!(e.target instanceof Element) && !!e.target.closest(sel);
-  clickOrigin = {
+/* 어디서 일어난 클릭인가.
+
+   **누른 곳과 뗀 곳을 따로 기억한다.** 브라우저는 누른 곳과 뗀 곳이 달라도
+   둘의 공통 조상에 click 을 내므로, click 하나만 보면 **드로어 안에서 눌러
+   보드 여백에서 뗀 드래그가 '바깥 클릭'이 된다** — 폭을 조절하다가도,
+   글자를 끌어 선택하다가도 패널이 닫힌다.
+
+   전에는 그 입구를 하나씩 막았다(폭 조절 핸들에 400ms 창, 보드의 바 드래그에
+   noteDrag). 입구는 계속 늘어난다. **시작이 안쪽이면 드래그다** 라는 한 가지
+   조건으로 바꾸면 핸들이든 본문이든 글자 선택이든 한꺼번에 걸러진다.
+
+   pointer 로 듣는 이유는 마우스·터치·펜이 한 벌이기 때문이다 —
+   **글자를 끌어 선택하는 것은 터치·펜에서도 일어난다.**
+   (폭 조절은 아니다. `#grip` 은 820px 아래에서 숨고 mousedown 만 듣는다.)
+
+   캡처 단계로 듣는 것은 다른 이유다: 중간 핸들러가 innerHTML 을 갈아끼우면
+   눌린 요소가 DOM 에서 떨어져 나가고, 그 뒤에 closest() 로 물으면 전부
+   null 이라 '바깥 클릭'으로 오판한다. */
+function originOf(target) {
+  const at = sel => !!(target instanceof Element) && !!target.closest(sel);
+  return {
     drawer: at('#drawer'),
     statmenu: at('#statmenu'),
     statchip: at('#statchip'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
-    task: !!(e.target instanceof Element) && !!call('isTaskClick', e.target),
+    task: !!(target instanceof Element) && !!call('isTaskClick', target),
     chrome: at('header') || at('.toolbar') || at('.calbar') || at('.sidenav'),
   };
+}
+
+let downAt = null, upAt = null, clickOrigin = null;
+
+// **click 없이 끝나는 포인터가 있다** — 오른쪽 버튼(contextmenu), 터치
+// 스크롤로 인한 pointercancel, 창 밖에서 뗀 드래그. 그때 기록이 남아
+// 있으면, 뒤이어 **pointerdown 이 없는 클릭**(키보드: 포커스 + 엔터)이
+// 옛 값을 써서 **닫혀야 할 때 안 닫힌다.**
+//
+// **시간으로 가르지 않는다.** 한 번 `pointerdown 부터 1.5초` 로 재 봤는데,
+// 그건 「기록이 남아 있는 시간」 이 아니라 **드래그 길이의 상한**이 되어서
+// 1.5초를 넘는 드래그에 이 고장이 그대로 났다 — 글자를 끌어 선택하는 것은
+// 흔히 그보다 길다. 걷어낸 400ms 창은 mouseup 부터 재던 것이라 드래그가
+// 아무리 길어도 걸리지 않았으니, **그 자리에서는 옛것보다 나빠지는 셈**이었다.
+//
+// 대신 **결정적인 신호**를 쓴다: 포인터가 낸 클릭은 `detail >= 1` 이고,
+// 키보드로 낸 클릭(포커스 + 엔터)과 스크립트의 `.click()` 은 `detail === 0`
+// 이다. 포인터가 낸 클릭이면 바로 앞의 pointerdown 이 그 클릭의 것이므로
+// 기록이 낡을 수가 없고, 아니면 애초에 기록을 안 본다.
+addEventListener('pointerdown', e => { downAt = originOf(e.target); upAt = null; }, true);
+addEventListener('pointerup', e => { upAt = originOf(e.target); }, true);
+addEventListener('click', e => {
+  // 키보드로 누른 클릭에는 pointerdown 이 없다 — 그때는 클릭 자신이
+  // 누른 곳이자 뗀 곳이다.
+  const self = originOf(e.target);
+  const 포인터가낸것 = e.detail > 0;
+  clickOrigin = 포인터가낸것 ? { down: downAt || self, up: upAt || self }
+                            : { down: self, up: self };
+  downAt = upAt = null;
 }, true);
 
 addEventListener('click', () => {
-  const from = clickOrigin || {};
+  const { down, up } = clickOrigin || {};
   clickOrigin = null;
-  if (Date.now() - dragEnd < 400) return;
-  if (!from.relitem && !from.statmenu && !from.statchip) closeMenus();
+  if (!down || !up) return;
+  // **한쪽 끝이라도 안이면 닫지 않는다.** 안에서 시작한 드래그(폭 조절·글자
+  // 선택)도, 밖에서 시작해 안에서 끝난 드래그도 '바깥 클릭'이 아니다.
+  const 어느쪽이든 = k => down[k] || up[k];
+  if (!어느쪽이든('relitem') && !어느쪽이든('statmenu') && !어느쪽이든('statchip')) closeMenus();
   if (!dw.classList.contains('open')) return;
-  if (from.drawer || from.statmenu) return;
-  if (from.task) return;                  // 다른 업무를 여는 동작이다
-  if (from.chrome) return;                // 소속 선택·필터를 만질 때 닫히면 불편하다
+  if (어느쪽이든('drawer') || 어느쪽이든('statmenu')) return;
+  if (어느쪽이든('task')) return;         // 다른 업무를 여는 동작이다
+  if (어느쪽이든('chrome')) return;       // 소속 선택·필터를 만질 때 닫히면 불편하다
   closeDrawer();
 });
 
@@ -1055,8 +1102,11 @@ window.Drawer = {
   close: closeDrawer,
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,
-  /* 드래그 직후인가. 보드가 바를 끌 때도 같은 값을 쓴다 —
-     두 벌로 두면 한쪽만 초기화돼 클릭이 새어 나간다. */
+  /* 드래그 직후인가. **쓰는 곳은 board.js 하나다** — 바를 끌어 옮긴 뒤의
+     클릭을 "바를 눌렀다"로 오해하지 않으려는 것이고, 그건 **열까**를
+     정하는 판단이라 아래의 down/up(닫을까)으로는 못 막는다: 바 안에서
+     조금 끌면 누른 곳과 뗀 곳이 둘 다 그 바여서 클릭이 바에 난다.
+     드로어 쪽에도 같은 창이 있었는데 2026-09-05 에 걷었다. */
   recentDrag: () => Date.now() - dragEnd < 400,
   noteDrag: () => { dragEnd = Date.now(); },
   /* 보드가 바를 끌어 날짜를 옮긴 뒤, 열려 있는 패널도 맞춘다 */
