@@ -247,12 +247,176 @@
     await check('빈 영역 클릭', () => {
       const el = document.elementFromPoint(x, y);
       ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(t =>
-        el.dispatchEvent(new MouseEvent(t, {bubbles:true, cancelable:true, clientX:x, clientY:y, view:window})));
+        el.dispatchEvent(new MouseEvent(t, {bubbles:true, cancelable:true, detail:1,
+                                            clientX:x, clientY:y, view:window})));
     }, {mayClose: true});
     const closed = !dw.classList.contains('open');
     results.push((closed ? '✓' : '✗') + ' 빈 영역 클릭으로는 닫힌다');
     if (!closed) errors.push('빈 영역 클릭으로 닫히지 않음');
   } else results.push('· 화면 안에 빈 칸이 없어 건너뜀');
+
+  /* ── 드래그로 닫히지 않는가 ────────────────────────────────────────
+     브라우저는 누른 곳과 뗀 곳이 달라도 **둘의 공통 조상**에 click 을 낸다.
+     그래서 click 하나만 보고 판정하면 드로어 안에서 눌러 보드 여백에서 뗀
+     드래그가 「바깥 클릭」 이 된다 — 폭을 조절하다가도, 글자를 끌어
+     선택하다가도 패널이 닫힌다.
+
+     전에는 그 입구를 하나씩 막았다(폭 조절 핸들에 400ms 창). 핸들을 막았더니
+     본문이 왔다. **그때 이 자리에 시험이 없어서 두 번째가 될 때까지 몰랐다.**
+
+     아래는 실제로 이벤트를 쏜다 — 누르기는 안쪽 요소에, 떼기는 여백에,
+     click 은 공통 조상(body)에. 진짜 드래그가 브라우저에서 그렇게 생겼다. */
+  /* **움직임도 쏜다.** 옛 폭 조절 고침은 `moved`(2px 넘게 움직였나)가 참일
+     때만 시각을 찍었다 — 움직임을 안 쏘면 되돌려 확인했을 때 무엇 때문에
+     빨개졌는지 갈린다(down/up 인가, `moved` 가 거짓이어서인가).
+
+     `공통` 이 `document.body` 인 것은 **누른 곳과 뗀 곳이 갈릴 때**의 모양이다 —
+     브라우저는 둘의 가장 가까운 공통 조상에 click 을 낸다. 둘 다 드로어 안이면
+     click 도 드로어 안에서 나므로, 그 경우는 아래에서 따로 넘긴다. */
+  const 끌어보기 = async (label, 시작, x, y, opts = {}) => {
+    const 뗄곳 = document.elementFromPoint(x, y) || document.body;
+    const 공통 = opts.공통 || document.body;
+    const 쏘기 = (el, t, ex, ey) => el.dispatchEvent(new PointerEvent(t,
+      {bubbles: true, cancelable: true, clientX: ex ?? x, clientY: ey ?? y, view: window}));
+    /* **`detail` 을 실어야 브라우저와 같다.** 포인터가 낸 클릭은 detail >= 1
+       이고 키보드로 낸 것과 `.click()` 은 0 이다. 안 실으면 0 이 되어
+       **진짜 드래그가 키보드 클릭 흉내가 된다** — 판정 쪽이 그 둘을
+       가르므로, 안 실으면 재는 것이 실제와 달라진다. */
+    const 마우스 = (el, t, ex, ey) => el.dispatchEvent(new MouseEvent(t,
+      {bubbles: true, cancelable: true, detail: 1,
+       clientX: ex ?? x, clientY: ey ?? y, view: window}));
+    const r = 시작.getBoundingClientRect();
+    const sx = Math.round(r.left + r.width / 2), sy = Math.round(r.top + r.height / 2);
+    await check(label, async () => {
+      쏘기(시작, "pointerdown", sx, sy);
+      마우스(시작, "mousedown", sx, sy);
+      // **느리게도 끌어 본다.** 한때 판정이 pointerdown 부터 시간을 재서,
+      // 그보다 오래 끌면 고장이 그대로 났다 — 이벤트를 한 틱에 몰아 쏘면
+      // 경과가 0ms 라 **언제나 초록이다.**
+      if (opts.뜸) await sleep(opts.뜸);
+      // 2px 을 확실히 넘겨 움직인다 — 옛 `moved` 가 참이 되는 자리다
+      [12, 40, 0].forEach((d, i) => {
+        const mx = i === 2 ? x : sx - d, my = i === 2 ? y : sy;
+        쏘기(뗄곳, "pointermove", mx, my);
+        마우스(뗄곳, "mousemove", mx, my);
+      });
+      쏘기(뗄곳, "pointerup");
+      마우스(뗄곳, "mouseup");
+      공통.dispatchEvent(new MouseEvent("click",
+        {bubbles: true, cancelable: true, detail: 1,
+         clientX: x, clientY: y, view: window}));
+    }, opts);
+  };
+
+  if (empty) {
+    const {x, y} = empty;
+
+    // ③ **재는 것이 있는지 먼저 본다.** 드로어가 닫힌 채로 아래를 돌리면
+    //    「닫히지 않았다」 가 언제나 참이라 시험이 통째로 헛돈다.
+    openers()[0].click();
+    await sleep(700);
+    if (!dw.classList.contains("open")) {
+      errors.push("드래그 시험 전에 드로어를 열지 못함 — 아래 셋은 아무것도 재지 못한다");
+      results.push("✗ 드래그 시험을 위한 드로어 열기");
+    } else {
+      results.push("✓ 드래그 시험을 위한 드로어 열기");
+
+      /* **각 항목은 앞 항목에 기대지 않는다.** 앞이 실패해 드로어가 닫히면
+         뒤엣것은 `if (열려 있으면)` 에 걸려 **말없이 안 돌고**, 그러면
+         "무엇이 고장인지" 가 아니라 "무엇을 쟀는지" 가 사라진다.
+         고치기 전 코드로 되돌려 봤을 때 실제로 그랬다 — 본문 항목이
+         빨개지자 핸들 항목이 아예 목록에 없었다. */
+      const 열어둔다 = async 라벨 => {
+        if (dw.classList.contains("open")) return true;
+        openers()[0].click();
+        await sleep(700);
+        const ok = dw.classList.contains("open");
+        if (!ok) results.push("· " + 라벨 + " — 드로어를 다시 못 열어 건너뜀");
+        return ok;
+      };
+
+      // ② 안에서 눌러 여백에서 뗌 — 글자를 끌어 선택하는 그 동작이다
+      const 본문 = () => dw.querySelector(".dbody, .pane.on, #dlog") || dw;
+      if (await 열어둔다("본문 드래그"))
+        await 끌어보기("드로어 본문에서 눌러 여백에서 뗌", 본문(), x, y);
+
+      // ② **느린 드래그.** 글자를 끌어 선택하는 것은 1.5초를 흔히 넘는다.
+      if (await 열어둔다("느린 본문 드래그"))
+        await 끌어보기("드로어 본문에서 2초 끌다 여백에서 뗌", 본문(), x, y,
+                     {뜸: 2000, wait: 700});
+
+      /* ② 폭 조절 핸들에서 눌러 여백에서 뗌 — **지난번에 고친 그것이다.**
+         그때 400ms 창으로 막았고 시험은 없었다.
+
+         **이 항목은 고치기 전 코드에서도 통과한다** — 400ms 창이 실제로
+         막고 있었기 때문이다(움직임을 쏘아 `moved` 를 참으로 만들면 그렇다).
+         그러니 이 항목이 잡는 것은 이번 버그가 아니라 **회귀**다: 400ms 창을
+         걷어낸 자리를 down/up 이 정말로 대신하는가. 이번 버그를 잡는 것은
+         바로 위의 본문 항목이다. */
+      if (await 열어둔다("핸들 드래그")) {
+        const 원래폭 = getComputedStyle(document.documentElement).getPropertyValue("--dw");
+        await 끌어보기("폭 조절 핸들에서 눌러 여백에서 뗌", $("grip"), x, y);
+        // **폭을 되돌린다.** 움직임을 쏘면 핸들이 진짜로 폭을 바꾸고,
+        // 그러면 처음에 찾아 둔 여백 좌표가 더 이상 여백이 아니다 —
+        // 뒤 항목이 "고침이 과하다" 로 잘못 빨개진다. 실제로 한 번 그랬다.
+        document.documentElement.style.setProperty("--dw", 원래폭.trim() || "440px");
+        await sleep(250);
+      }
+
+      // ② 안에서 눌러 안에서 뗌.
+      //    **브라우저에서는 원래 고장나지 않던 모양이다** — 둘 다 안이면 click 도
+      //    드로어 안에서 나므로 옛 코드도 이건 막았다. 그래서 click 을 body 가
+      //    아니라 드로어에 내야 실제와 같다. 새 down/up 논리의 회귀 방어로 둔다.
+      if (await 열어둔다("안→안 드래그")) {
+        const r = dw.getBoundingClientRect();
+        const ix = Math.round(r.left + r.width / 2), iy = Math.round(r.top + r.height / 2);
+        await 끌어보기("안에서 눌러 안에서 뗌 (원래 안 닫히던 모양 · 회귀 방어)",
+                     본문(), ix, iy, {공통: dw});
+      }
+
+      // ① 반대편 — 여백을 **그냥 눌렀다 떼면** 닫혀야 한다.
+      //    과하게 걸려 정작 닫혀야 할 때 안 닫히면 그것도 고장이다.
+      if (await 열어둔다("여백 클릭")) {
+        // **여백을 다시 찾는다** — 위 드래그들이 폭을 건드렸을 수 있다
+        const 다시 = emptySpot() || {x, y};
+        const el = document.elementFromPoint(다시.x, 다시.y);
+        await check("여백을 눌렀다 뗌", () => {
+          ["pointerdown","mousedown","pointerup","mouseup","click"].forEach(t =>
+            el.dispatchEvent(new MouseEvent(t,
+              {bubbles: true, cancelable: true, detail: 1,
+               clientX: 다시.x, clientY: 다시.y, view: window})));
+        }, {mayClose: true});
+        const 닫힘 = !dw.classList.contains("open");
+        results.push((닫힘 ? "✓" : "✗") + " 여백을 눌렀다 떼면 닫힌다 (드래그 고침이 과하지 않다)");
+        if (!닫힘) errors.push("드래그 고침이 과해서 여백 클릭으로도 안 닫힘");
+      }
+
+      /* **click 없이 끝난 포인터 뒤의 키보드 클릭.**
+         오른쪽 버튼은 click 을 내지 않아서 기록이 남는다. 그 뒤 pointerdown 이
+         없는 클릭(포커스 + 엔터)이 오면 옛 값을 써서 **닫혀야 할 때 안 닫힌다.**
+         고치는 쪽이 과했을 때 나는 고장이라 반대편으로 잰다. */
+      if (await 열어둔다("우클릭 뒤 키보드 클릭")) {
+        const 본문2 = dw.querySelector(".pane.on") || dw;
+        본문2.dispatchEvent(new PointerEvent("pointerdown",
+          {bubbles: true, cancelable: true, button: 2, view: window}));
+        본문2.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true, view: window}));
+        await sleep(120);
+        // 키보드 클릭 — pointerdown 이 없다
+        const 저기 = emptySpot() || {x, y};
+        const 밖 = document.elementFromPoint(저기.x, 저기.y);
+        밖.dispatchEvent(new MouseEvent("click",
+          {bubbles: true, cancelable: true, clientX: 저기.x, clientY: 저기.y, detail: 0, view: window}));
+        await sleep(600);
+        const 닫힘2 = !dw.classList.contains("open");
+        results.push((닫힘2 ? "✓" : "✗") + " 우클릭 뒤 키보드 클릭으로도 닫힌다 (옛 기록이 안 남는다)");
+        if (!닫힘2) errors.push("우클릭 뒤 키보드 클릭에서 옛 down/up 기록이 남아 안 닫힘");
+      }
+    }
+  } else {
+    // **왜 줄었는지 화면에 남긴다** (11-3). 없으면 항목 수만 일곱 줄고
+    // 사람은 스크립트가 망가진 줄 안다.
+    results.push("· 화면 안에 빈 칸이 없어 드래그 시험 여섯 · 결과 줄 여덟을 건너뜀");
+  }
 
   // 닫은 뒤에도 보던 자리가 그대로인가 — 달력은 특히 보던 달을 잃으면 안 된다
   if (calbar) {
