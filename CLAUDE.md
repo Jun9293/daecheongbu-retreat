@@ -2433,6 +2433,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 답을 못 읽은 것을 알아보기 | `app/domain/suggest.py` 의 `못읽었나` — `stop_reason` 이 `max_tokens` 거나 JSON 이 아니면 **`실패`다.** 모델이 없다고 한 것과 갈라야 한다 |
 | 표본 네 회의 다시 내기 (성적) | `scripts/suggest_sample.py`. **나가는 곳은 `data/*.real.md`** 이고 `--공개` 를 줘야 익명화 사본이 `docs/review/` 로 간다 (11-2). 문장으로 읽는 판은 키가 없으면 **아무것도 안 쓴다**; **`--낱말` 은 키 없이 돌아** 1판 목록(`제안-1판.md`)을 낸다 — 낱말 겹침은 Claude 를 부르지 않는다 |
 | 채점표를 덮어쓰지 않기 | `scripts/suggest_sample.py` 의 `막는다` · `채운곳` — 나갈 파일이 있으면 `--replace` 를 줘야 쓰고, **사람이 채운 판정이 있으면 `--replace` 로도 막는다.** 사람이 채운 27개는 되돌릴 수 없는 유일본이다 |
+| 채점표를 화면으로 채우기 | `scripts/score.py` — **한 번 쓰고 마는 도구다.** 운영 앱에 붙이지 않고(별도 포트) 회의록은 **읽기만** 한다. 제안 하나와 그 회의의 원문을 나란히 놓고, 근거로 인용된 대목을 원문에서 짚는다 — **못 찾으면 못 찾았다고 말한다.** 파일이 정본이라 누를 때마다 바로 쓰고, 표를 읽는 규칙은 `suggest_sample.py` 의 `제안줄인가` 를 그대로 쓴다 |
 | 제안을 골라 반영하기 | `routers/meetings.py` 의 `/suggestions` · `/suggestions/apply` · `static/js/meeting.js` — **고른 것만** 들어가고 출처가 남는다 |
 | 논의로 남을 문장 만들기 | `routers/meetings.py` 의 `discussion_body` — **여기 하나다.** 누르기 전 미리보기와 실제 저장이 같은 함수를 쓴다. 두 벌이면 보여준 것과 남는 것이 갈리고, 갈린 쪽을 아무도 눈치채지 못한다 |
 | 노션처럼 쓰는 입력칸 | `app/static/js/listinput.js` — **여기 한 벌**. 논의 입력칸과 회의록 본문이 함께 쓴다 |
