@@ -38,7 +38,9 @@ def person(admin_client):
 def test_02_링크로_들어오고_두_번째는_거부된다(person, client):
     first = client.get(f"/invite/{person['token']}", follow_redirects=False)
     assert first.status_code == 303
-    assert first.headers["location"].startswith("/board")
+    # 들어오면 홈이다 (4-15) — 로그인 후 첫 화면이 곧 홈의 정의다
+    assert first.headers["location"].startswith("/")
+    assert not first.headers["location"].startswith("/board")
 
     # 로그인이 실제로 붙었다
     assert client.get("/board").status_code == 200

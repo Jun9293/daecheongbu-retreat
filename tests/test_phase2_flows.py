@@ -23,16 +23,10 @@ def _setup(admin_client, dept_names=("홍보팀", "찬양팀")):
 
 
 def _make_user(admin_client, name, phone, role, dept_id=None):
-    admin_client.post(
-        "/users/create",
-        data={
-            "name": name,
-            "phone_number": phone,
-            "role": role,
-            "department_id": str(dept_id) if dept_id else "",
-        },
-        follow_redirects=True,
-    )
+    # 구설계 POST(/users/create) 는 지웠다 (14장) — DB 에 직접 만든다
+    from tests.conftest import make_user
+
+    make_user(name, phone, role, dept_id)
     with app_session() as db:
         return db.scalars(
             select(models.User).where(models.User.name == name)

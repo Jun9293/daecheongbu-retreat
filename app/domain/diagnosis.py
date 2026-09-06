@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
+from app.domain import period
 from app.domain.board import (
     has_started,
     load_runs,
@@ -207,8 +208,8 @@ def diagnose(
                 blocks.setdefault(blocker_id, []).append(other.id)
 
     # ── 판정하지 않는 경우 ────────────────────────────────────────────
-    closing = retreat.end_date or retreat.start_date
-    if getattr(retreat, "is_archived", False) or (closing and closing < today):
+    # 종료 판정은 period.is_over 하나다 (4-10) — 화면마다 따로 재지 않는다
+    if period.is_over(retreat, today):
         return Diagnosis(
             verdict=CLOSED,
             summary=f"종료된 회차입니다. 최종 상태는 '{run.status}' 입니다.",

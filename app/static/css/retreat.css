@@ -43,10 +43,13 @@
   --bg:#F7F7F5; --card:#FFFFFF; --card-r:10px;
 
   /* 상태 배지 (4-0) — 옅은 채움 + 진한 글자. 완료를 초록으로 띄우지 않는다 */
-  --st-wait-bg:#FBF3E4; --st-wait-fg:#B7791F;
+  /* 글자색은 옅은 채움 위에서도 4.5:1 을 넘긴다 (9장) — 회차 목록에서
+     배지가 혼자 뜻을 진다. 처음 값(#B7791F 등)은 3.3:1 이었다.
+     지연 글자가 --now 보다 진한 것도 그래서다 — 뜻은 같고 명도만 다르다. */
+  --st-wait-bg:#FBF3E4; --st-wait-fg:#8A5A12;
   --st-prog-bg:var(--accent-soft); --st-prog-fg:var(--accent);
-  --st-late-bg:#FBEDEC; --st-late-fg:var(--now);
-  --st-done-bg:#EFEFED; --st-done-fg:#787774;
+  --st-late-bg:#FBEDEC; --st-late-fg:#A33F38;
+  --st-done-bg:#EFEFED; --st-done-fg:#5F5E5A;
   --now:#C4554D;                        /* 지연 */
   --now-tint:#FBF1F0; --now-ink:#A3423B;
   --go:#4C8A5E; --warn:#9A6B12; --ai:#6B5BB5;
@@ -99,7 +102,7 @@
      (4-1) 이 정도는 스크롤이 받는다. 재 본 값은 검토용 보고에 있다. */
   --h-team:42px; --h-main:38px; --h-sub:33px;
   --dw:400px;                           /* 상세 패널 폭 */
-  --sw:232px;                           /* 사이드바 폭 */
+  --sw:240px;                           /* 사이드바 폭 (9장 · 목업과 같다) */
   --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,
     "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
@@ -142,12 +145,19 @@ a{color:inherit;text-decoration:none}
 @media (min-width:1280px){
 body.sidepin .sidenav{transform:none;box-shadow:none}
 }
-.sidenav .brand{display:flex;align-items:center;gap:8px;padding:4px 8px 10px;
-  font-size:var(--fz-lg);font-weight:600;color:var(--ink);letter-spacing:-.01em}
-.sidenav .brand .mark{width:20px;height:20px;border-radius:4px;background:var(--ink);
-  color:#fff;font-size:var(--fz-sm);display:flex;align-items:center;justify-content:center;flex:none}
-.sidenav .pick{width:100%;font:inherit;font-size:var(--fz-md);padding:5px 7px;margin-bottom:10px;
-  border:1px solid var(--rule);border-radius:4px;background:var(--paper);color:var(--ink-2)}
+/* 값은 목업(docs/mockups/retreat-shell.html)의 CSS 에서 그대로 옮겼다 —
+   눈대중으로 맞추지 않는다. 로고 26×26 r7 accent · 드롭다운 r8 rule-2
+   padding 7×10 · 항목 7×8 r6 · 그룹 간격 6px · 하위 16px+가이드선. */
+.sidenav .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 10px;
+  font-size:var(--fz-base);font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.sidenav .brand .mark{width:26px;height:26px;border-radius:7px;background:var(--accent);
+  color:#fff;font-size:var(--fz-xs);display:flex;align-items:center;justify-content:center;flex:none}
+.sidenav .pick{width:100%;font:inherit;font-size:var(--fz-sm);padding:7px 10px;margin-bottom:10px;
+  border:1px solid var(--rule-2);border-radius:8px;background:none;color:var(--ink);
+  display:flex;justify-content:space-between;align-items:center;gap:6px}
+.sidenav .pick .caret{color:var(--ink-3)}
+.sidenav select.pick{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:26px;
+  background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M1 1l4 4 4-4" fill="none" stroke="%2383827F" stroke-width="1.5"/></svg>') no-repeat right 10px center}
 .sidenav nav{display:flex;flex-direction:column;gap:1px;overflow-y:auto;flex:1;min-height:0}
 .sidenav nav svg{width:16px;height:16px;flex:0 0 16px;stroke:currentColor;fill:none;
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -158,14 +168,14 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
    그룹은 호버만 있고 활성 상태가 없다. 둘 다 칠하면 어디 있는지 두 번 말한다.
    그룹 제목은 링크다 — 누르면 그 그룹의 첫 하위로 간다 (3장). */
 .sidenav nav .g,.sidenav nav .single{display:flex;align-items:center;gap:9px;
-  padding:6px 8px;border-radius:4px;margin-top:5px;
+  padding:7px 8px;border-radius:6px;margin-top:6px;
   font-size:var(--fz-md);font-weight:600;color:var(--ink);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidenav nav .g:hover,.sidenav nav .single:hover{background:var(--hover)}
 .sidenav nav .single[aria-current=page]{background:var(--accent-soft);color:var(--accent)}
 .sidenav .subs{margin-left:16px;border-left:1px solid var(--rule-2);padding-left:6px;
   display:flex;flex-direction:column;gap:1px;margin-bottom:2px}
-.sidenav .subs .n{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;
+.sidenav .subs .n{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;
   font-size:var(--fz-md);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidenav .subs .n:hover{background:var(--hover);color:var(--ink)}
 .sidenav .subs .n[aria-current=page]{background:var(--accent-soft);color:var(--accent);font-weight:600}
@@ -177,16 +187,19 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
 .sidenav .wip{font-style:normal;font-family:var(--mono);font-size:var(--fz-xs);color:var(--ink-3);
   border:1px solid var(--rule-2);border-radius:3px;padding:0 4px;margin-left:auto;flex:none}
 .sidenav .wip.live{border-color:var(--now);color:var(--now-ink);font-weight:600}
-/* 하단 사용자 카드 — 이름 · 역할 · 부서 (부서는 키로, 2장) */
-.sidefoot{border-top:1px solid var(--rule);margin-top:6px;padding:10px 8px 2px;
+/* 하단 사용자 카드 — 이름 · 역할 · 부서 **각 한 줄** (부서는 키로, 2장).
+   로그아웃은 여기 없다 — 설정 › 내 정보에만 둔다 (4-17).
+   240px 에서 꺾이지 않는다 — nowrap + 넘치면 말줄임. */
+.sidefoot{border-top:1px solid var(--rule);margin-top:auto;padding:10px 8px 2px;
   font-size:var(--fz-md);color:var(--ink-2);display:flex;gap:9px;align-items:center}
 .sidefoot .avatar{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);
   color:var(--accent);display:flex;align-items:center;justify-content:center;
   font-weight:700;font-size:var(--fz-xs);flex:none}
-.sidefoot b{font-weight:600;color:var(--ink)}
-.sidefoot small{display:block;color:var(--ink-2);font-size:var(--fz-xs)}
-.sidefoot .links{display:flex;gap:8px;margin-left:auto}
-.sidefoot .links a:hover{color:var(--ink);text-decoration:underline}
+.sidefoot .who{min-width:0;flex:1}
+.sidefoot .who b,.sidefoot .who small{display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidefoot .who b{font-weight:600;color:var(--ink)}
+.sidefoot .who small{color:var(--ink-2);font-size:var(--fz-sm)}
 
 /* 화면 왼쪽 가장자리 — 마우스를 대면 사이드바가 잠깐 떠서 나온다 */
 .sideedge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:37}
@@ -1628,3 +1641,28 @@ button.btn:disabled{opacity:.4;cursor:default}
   display:flex;align-items:center;justify-content:center}
 .tick.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .ticklabel{flex:1;font-size:var(--fz-md);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+
+/* ── 홈 (4-15) — 값은 목업의 홈 화면에서 옮겼다 */
+.pill{display:inline-block;background:var(--accent-soft);color:var(--accent);
+  font-weight:600;font-size:var(--fz-xs);padding:2px 9px;border-radius:999px;margin-left:8px}
+/* 경고 띠 — 0건이면 아예 내지 않는다. 이름을 homealert 로 둔 것은 옛 껍데기의
+   .alert(마법사 안내)와 다른 물건이라서다 */
+.homealert{display:flex;gap:8px;align-items:center;padding:10px 14px;border-radius:8px;
+  margin-top:12px;font-size:var(--fz-md)}
+.homealert.late{background:var(--st-late-bg);color:#8A3A34;border:1px solid #F0CFCB}
+.homealert.wait{background:var(--st-wait-bg);color:#7A5210;border:1px solid #EEDDB6}
+.homecols{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-top:14px}
+.homerow{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;
+  border-top:1px solid var(--rule);align-items:center}
+.homerow:first-of-type{border-top:0}
+.homerow.dim{opacity:.55}
+.homerow .t{font-weight:600;font-size:var(--fz-md)}
+.homerow .m{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.homerow .duechip{background:var(--st-late-bg);color:var(--st-late-fg)}
+.homebar{height:6px;background:var(--st-done-bg);border-radius:3px;margin:6px 0 10px;overflow:hidden}
+.homebar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.homebar i.over{background:var(--now)}
+.bl{display:flex;justify-content:space-between;font-size:var(--fz-sm);margin-top:8px}
+.bl span:last-child{color:var(--ink-2)}
+.bl .over{color:var(--now)}
+@media (max-width:820px){ .homecols{grid-template-columns:1fr} }

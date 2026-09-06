@@ -39,14 +39,13 @@ def _can_edit(db: Session, user: User, run: TaskRun) -> bool:
     )
 
 
-@router.get("/")
 @router.get("/board")
 def board_page(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """준비 단계 보드. 이 화면이 홈이다."""
+    """준비 보드. 홈은 / (4-15) — 이 화면은 /board 다."""
     raw = request.query_params.get("retreat_id")
     retreat = resolve_retreat(db, user, int(raw) if raw and raw.isdigit() else None)
     if retreat is None:

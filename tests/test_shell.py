@@ -132,6 +132,48 @@ def test_s08_1280_기준_펼침_고정():
 # ---------------------------------------------------------------- 6·7. 카드와 배지
 
 
+def _luminance(hexcolor: str) -> float:
+    r, g, b = (int(hexcolor[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def _ratio(a: str, b: str) -> float:
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def test_s13_배지_글자가_채움_위에서_4_5를_넘긴다():
+    """9장 — 회차 목록에서 배지가 혼자 뜻을 진다. 값은 문서의 표에서 읽는다."""
+    at = DOC.index("**상태 배지 = 옅은 채움 + 진한 글자.**")
+    rows = re.findall(
+        r"\|\s*(대기|진행중|지연|완료)\s*\|\s*`(#[0-9A-Fa-f]{6})`\s*\|\s*`(#[0-9A-Fa-f]{6})`\s*\|",
+        DOC[at : at + 800],
+    )
+    assert len(rows) == 4, "문서의 배지 표를 읽지 못했다"
+    for status, bg, fg in rows:
+        r = _ratio(fg, bg)
+        assert r >= 4.5, f"{status} 배지 글자 대비 {r:.2f} — 4.5 미만"
+
+
+def test_s14_사용자_카드_세_줄이_꺾이지_않는다():
+    """1-h — 이름 · 역할 · 부서 각 한 줄. 240px 에서 nowrap + 말줄임."""
+    foot = SHELL[SHELL.index('class="sidefoot"') : SHELL.index("</aside>")]
+    # 세 줄: 이름(b) + 역할(small) + 부서(small)
+    assert foot.count("<small>") == 2 and "<b>{{ user.name }}</b>" in foot
+    assert "side_dept_name" in foot
+    # 로그아웃은 카드에 없다 — 설정 › 내 정보에만 (4-17)
+    assert "/logout" not in foot
+    settings_tpl = (ROOT / "app" / "templates" / "settings.html").read_text(encoding="utf-8")
+    assert '"/logout"' in settings_tpl
+    # 꺾이지 않는다 — nowrap + 넘침 처리, 칸은 줄어들 수 있어야 한다(min-width:0)
+    who = re.search(r"\.sidefoot \.who b,\.sidefoot \.who small\{([^}]*)\}", CSS).group(1)
+    assert "white-space:nowrap" in who and "text-overflow:ellipsis" in who
+    assert re.search(r"\.sidefoot \.who\{[^}]*min-width:0", CSS)
+    # 사이드바 폭이 목업과 같은 240px 이다 (9장)
+    assert "--sw:240px" in CSS
+
+
 def test_s09b_배지가_0건이면_없고_생기면_수가_보인다(admin_client):
     """글자 검사만 두면 안 된다 (10장) — 실제 렌더링으로 잰다."""
     from app.models import Notification, User

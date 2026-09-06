@@ -20,7 +20,7 @@
 
 {# 옛 /schedule 은 지웠다 — 5-8 봉사자 시간표(/live/staff)가 그 자리다 #}
 {% set nav_items = [
-  ('/dashboard',   'home',      '홈',        [ '/dashboard' ]),
+  ('/',            'home',      '홈',        [ '/' ]),
   ('/live/staff',  'calendar',  '봉사자 시간표', [ '/live/staff' ]),
   ('/tasks',       'check',     '할 일',      [ '/tasks' ]),
   ('/expenses',    'receipt',   '지출',       [ '/expenses', '/refunds' ]),
@@ -39,7 +39,7 @@
 
   {# ---------------- 데스크톱 사이드바 ---------------- #}
   <aside class="sidebar">
-    <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
+    <a class="brand" href="/"><span class="mark">대</span>대청부 수련회</a>
 
     {% if retreats %}
     <form method="get" action="{{ path }}" class="retreat-pick">
@@ -82,7 +82,7 @@
   <div>
     {# ---------------- 모바일 상단바 ---------------- #}
     <header class="topbar">
-      <a class="brand" href="/board"><span class="mark">대</span></a>
+      <a class="brand" href="/"><span class="mark">대</span></a>
       {% if retreats %}
       <form method="get" action="{{ path }}" style="min-width:0">
         <select name="retreat_id" onchange="this.form.submit()" aria-label="회차 선택"

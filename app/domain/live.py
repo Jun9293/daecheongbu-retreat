@@ -15,6 +15,7 @@ import datetime as dt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain import period
 from app.models import (
     PROGRAM_PARTS,
     PROGRAM_PHASES,
@@ -211,11 +212,8 @@ def carried_only(retreat: Retreat, programs: list[Program], *, now: dt.datetime)
     """
     if not programs:
         return False
-    closing = retreat.end_date or retreat.start_date
-    ended = bool(getattr(retreat, "is_archived", False)) or bool(
-        closing and closing < now.date()
-    )
-    if not ended:
+    # 종료 판정은 period.is_over 하나다 (4-10) — 화면마다 따로 재지 않는다
+    if not period.is_over(retreat, now.date()):
         return False
     return not any(item.done for program in programs for item in program.items)
 

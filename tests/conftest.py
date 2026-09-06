@@ -137,6 +137,26 @@ def login_as(client, phone: str, name: str = "테스터"):
     return response
 
 
+def make_user(name, phone, role="member", department_id=None):
+    """시험용 계정을 DB 에 직접 만든다.
+
+    전에는 구설계 POST(/users/create) 로 만들었는데, 그 엔드포인트는 화면이
+    없어져 단계 2 에서 지웠다 (14장). 실제 흐름의 계정 생성은 /admin/users
+    (4-12)이고, 여기는 픽스처라 저장만 하면 된다.
+    """
+    from app.db import SessionLocal
+    from app.models import User
+
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    with SessionLocal() as db:
+        person = User(
+            name=name, phone_number=digits, role=role, department_id=department_id
+        )
+        db.add(person)
+        db.commit()
+        return person.id
+
+
 @pytest.fixture
 def admin_client(client):
     """최초 로그인 사용자 = 총무팀(관리자).

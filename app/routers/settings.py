@@ -20,11 +20,9 @@ from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
 from app.domain import board as board_domain
 from app.domain import dweek
-from app.domain.auth import normalize_phone
 from app.domain.budget import build_budget_summary
 from app.domain.clone import clone_retreat
 from app.domain.period import is_over
-from app.domain.permissions import ALL_ROLES
 from app.models import (
     ActivityLog,
     BudgetCategory,
@@ -431,91 +429,8 @@ def delete_department(
     return redirect("/settings/departments", message=f"'{name}' 부서를 삭제했습니다.")
 
 
-@router.post("/users/create")
-def create_user(
-    name: str = Form(...),
-    phone_number: str = Form(...),
-    role: str = Form("member"),
-    department_id: str = Form(""),
-    bank_account: str = Form(""),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_admin),
-    retreat: Retreat = Depends(get_current_retreat),
-):
-    if role not in ALL_ROLES:
-        raise HTTPException(status_code=400, detail="알 수 없는 역할입니다.")
-    try:
-        phone = normalize_phone(phone_number)
-    except ValueError as exc:
-        return redirect(f"/settings?retreat_id={retreat.id}", message=str(exc))
-
-    if db.scalars(select(User).where(User.phone_number == phone)).first():
-        return redirect(
-            f"/settings?retreat_id={retreat.id}", message="이미 등록된 전화번호입니다."
-        )
-
-    member = User(
-        name=name.strip(),
-        phone_number=phone,
-        role=role,
-        department_id=int(department_id) if department_id else None,
-        bank_account=bank_account.strip() or None,
-    )
-    db.add(member)
-    db.commit()
-    log_activity(
-        db,
-        retreat_id=retreat.id,
-        actor=user,
-        action="사용자_등록",
-        target_type="user",
-        target_id=member.id,
-        summary=f"{member.name} ({role})",
-    )
-    return redirect(f"/settings?retreat_id={retreat.id}", message=f"{member.name}님을 등록했습니다.")
-
-
-@router.post("/users/{user_id}/update")
-def update_user(
-    user_id: int,
-    role: str = Form(...),
-    department_id: str = Form(""),
-    is_active: str = Form(""),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_admin),
-    retreat: Retreat = Depends(get_current_retreat),
-):
-    member = db.get(User, user_id)
-    if member is None:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    if role not in ALL_ROLES:
-        raise HTTPException(status_code=400, detail="알 수 없는 역할입니다.")
-
-    if member.id == user.id and role != "admin":
-        return redirect(
-            f"/settings?retreat_id={retreat.id}",
-            message="본인의 관리자 권한은 해제할 수 없습니다. 다른 관리자에게 요청해주세요.",
-        )
-
-    before = {"role": member.role, "department_id": member.department_id}
-    member.role = role
-    member.department_id = int(department_id) if department_id else None
-    member.is_active = bool(is_active)
-    db.commit()
-    log_activity(
-        db,
-        retreat_id=retreat.id,
-        actor=user,
-        action="사용자_수정",
-        target_type="user",
-        target_id=member.id,
-        summary=member.name,
-        before_value=before,
-        after_value={"role": member.role, "department_id": member.department_id},
-    )
-    return redirect(f"/settings?retreat_id={retreat.id}", message="사용자 정보를 수정했습니다.")
-
-
+# 구설계 사용자 POST(/users/create · /users/{id}/update)는 지웠다 (14장) —
+# 화면이 없어진 엔드포인트다. 사용자 관리는 /admin/users (4-12) 하나다.
 @router.post("/me/update")
 def update_me(
     name: str = Form(...),

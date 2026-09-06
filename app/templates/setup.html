@@ -13,10 +13,10 @@
    기본은 접힘이라 만드는 중에 눈에 걸리지 않는다. #}
 <div class="sideedge" id="sideedge" aria-hidden="true"></div>
 <aside class="sidenav" id="sidenav">
-  <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
+  <a class="brand" href="/"><span class="mark">대</span>대청부 수련회</a>
   {# 3장의 구조를 따르되 마법사에서는 이동만 하면 되므로 하위까지 다 펴지 않는다 #}
   <nav>
-    <a class="single" href="/board" style="margin-top:0">홈</a>
+    <a class="single" href="/" style="margin-top:0">홈</a>
     <a class="single" href="/meetings">회의록</a>
     <a class="g" href="/tasks">수련회 준비</a>
     <a class="g" href="/live">수련회 진행</a>
@@ -25,9 +25,14 @@
     <a class="single" href="/checklists">체크리스트</a>
     <a class="single" href="/settings">설정</a>
   </nav>
+  {# 이름 · 역할 · 부서 각 한 줄 — retreat_base 와 같은 카드. 로그아웃은 설정 › 내 정보에만 #}
   <div class="sidefoot">
-    <span><b>{{ user.name }}</b> · {{ ROLE_LABELS.get(user.role, user.role) }}</span>
-    <span class="links"><a href="/settings">설정</a><a href="/logout">로그아웃</a></span>
+    <span class="avatar" aria-hidden="true">{{ user.name[:1] }}</span>
+    <span class="who">
+      <b>{{ user.name }}</b>
+      <small>{{ ROLE_LABELS.get(user.role, user.role) }}</small>
+      <small>{{ side_dept_name or '부서 미지정' }}</small>
+    </span>
   </div>
 </aside>
 

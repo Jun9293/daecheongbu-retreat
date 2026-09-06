@@ -11,8 +11,8 @@
     --bg:#F7F7F5; --card:#fff; --hover:rgba(55,53,47,.06);
     --accent:#4F46E5; --accent-soft:#EEF0FD;
     --late:#C4554D; --late-soft:#FBEDEC;
-    --wait:#B7791F; --wait-soft:#FBF3E4;
-    --done:#787774; --done-soft:#EFEFED;
+    --wait:#8A5A12; --wait-soft:#FBF3E4;
+    --done:#5F5E5A; --done-soft:#EFEFED;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
@@ -64,10 +64,10 @@
   .task .m{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
   .chip{font-size:12px;padding:1px 8px;border-radius:5px;background:var(--done-soft);color:var(--ink-2);display:inline-flex;gap:5px;align-items:center}
   .chip.d::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
-  .chip.due{background:var(--late-soft);color:var(--late)}
+  .chip.due{background:var(--late-soft);color:#A33F38}
   .chip.dim{opacity:.55}
   .st{font-size:12px;font-weight:600;padding:2px 9px;border-radius:5px}
-  .st.late{background:var(--late-soft);color:var(--late)}
+  .st.late{background:var(--late-soft);color:#A33F38}
   .st.wait{background:var(--wait-soft);color:var(--wait)}
   .st.prog{background:var(--accent-soft);color:var(--accent)}
   .bar{height:6px;background:var(--done-soft);border-radius:3px;margin:6px 0 10px;overflow:hidden}
@@ -170,7 +170,7 @@
       <div class="h">이번 주<span>7일 이내</span></div>
       <div class="b">
         <div class="task"><div><div class="t">1일차 집회 큐시트</div><div class="m"><span class="chip d" style="--c:#B44B42">6 코람데오</span><span class="chip">최도현</span><span class="chip">06/12 · D-3</span></div></div><span class="st prog">진행중</span></div>
-        <div class="task" style="opacity:.6"><div><div class="t">포스터 시안 2차</div><div class="m"><span class="chip d" style="--c:#B95A83">4 스케치</span><span class="chip">정하윤</span><span class="chip">06/14 · D-5</span></div></div><span class="st wait">대기</span></div>
+        <div class="task" style="opacity:.6"><div><div class="t">포스터 시안 2차</div><div class="m"><span class="chip d" style="--c:#B95A83">4 스케치</span><span class="chip">박서진</span><span class="chip">06/14 · D-5</span></div></div><span class="st wait">대기</span></div>
       </div>
     </div>
   </main>

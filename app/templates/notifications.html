@@ -13,6 +13,14 @@
   {% endif %}
 </div>
 
+{# 사이드바에서 /reviews 로 가는 문이 단계 4 전까지 없다 — 배지는 뜨는데 답할
+   자리가 안 보이는 공백을 이 한 줄이 잇는다. 단계 4 에서 화면째 사라진다. #}
+{% if pending_review_count %}
+<div class="banner banner-info" id="pending-reviews-line">
+  답 기다리는 확인 요청 {{ pending_review_count }}건 — <a href="/reviews" style="text-decoration:underline">확인 요청으로</a>
+</div>
+{% endif %}
+
 <div class="card" id="push-card" data-vapid="{{ push_public_key }}">
   <div class="card-head"><h2>휴대폰 푸시 알림</h2></div>
   <div class="card-body">

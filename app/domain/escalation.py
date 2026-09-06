@@ -48,6 +48,28 @@ def tasks_to_mark_delayed(tasks: list, *, today: dt.date) -> list:
     ]
 
 
+def unassigned_runs_due_soon(runs: list, *, today: dt.date) -> list:
+    """담당자 없이 마감이 코앞인 준비 업무(TaskRun) — 총무팀이 봐야 할 것.
+
+    기준(며칠 안인가)은 scan_risks 의 담당자미지정과 같은 상수를 쓴다 —
+    옛 할 일과 새 준비 업무가 다른 잣대를 갖게 두지 않는다. 홈의 경고 띠(4-15)가
+    이 목록의 길이를 그대로 쓴다 — 홈에서 다시 세지 않는다.
+    """
+    out = []
+    for run in runs:
+        if run.status == DONE or not run.included:
+            continue
+        if run.assignee_id is not None:
+            continue
+        end = run.end_date or run.start_date
+        if end is None:
+            continue
+        days_left = (end - today).days
+        if 0 <= days_left <= UNASSIGNED_ESCALATION_DAYS:
+            out.append(run)
+    return out
+
+
 def scan_risks(tasks: list, *, today: dt.date) -> list[Risk]:
     """할 일 목록에서 드러나야 할 위험을 모두 찾아낸다."""
     risks: list[Risk] = []

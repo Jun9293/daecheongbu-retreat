@@ -24,7 +24,7 @@ router = APIRouter()
 def login_page(request: Request, user: User | None = Depends(get_optional_user)):
     """로그인 화면은 없다. 어떻게 들어오는지만 알려준다."""
     if user is not None:
-        return redirect("/board")
+        return redirect("/")
     return render(request, "login.html", {})
 
 
@@ -47,7 +47,7 @@ def redeem(
         target_id=user.id,
         summary=f"{user.name} 님이 초대 링크로 들어왔습니다.",
     )
-    response = redirect("/board", message=f"{user.name}님, 환영합니다.")
+    response = redirect("/", message=f"{user.name}님, 환영합니다.")
     set_session(response, user.id)
     return response
 

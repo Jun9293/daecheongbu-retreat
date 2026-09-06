@@ -5,7 +5,7 @@ import datetime as dt
 from sqlalchemy import select
 
 from app import models
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, make_user
 
 
 def _create_retreat(client, name="2026 여름수련회 Belong", cap=8000):
@@ -181,16 +181,7 @@ def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서�
         data={"title": "콘티 정리", "department_id": str(chanyang.id), "status": "대기"},
         follow_redirects=True,
     )
-    admin_client.post(
-        "/users/create",
-        data={
-            "name": "홍보 리더",
-            "phone_number": "010-3333-4444",
-            "role": "dept_lead",
-            "department_id": str(hongbo.id),
-        },
-        follow_redirects=True,
-    )
+    make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
 
     leader = client
     login_as(leader, "01033334444")
@@ -213,16 +204,7 @@ def test_부서리더는_타부서_할일의_상태를_바꿀_수_없다(admin_c
         data={"title": "콘티 정리", "department_id": str(chanyang.id), "status": "대기"},
         follow_redirects=True,
     )
-    admin_client.post(
-        "/users/create",
-        data={
-            "name": "홍보 리더",
-            "phone_number": "010-3333-4444",
-            "role": "dept_lead",
-            "department_id": str(hongbo.id),
-        },
-        follow_redirects=True,
-    )
+    make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
     with app_session() as db:
         task = db.scalars(select(models.Task)).one()
 
@@ -236,16 +218,7 @@ def test_부서리더는_타부서_할일의_상태를_바꿀_수_없다(admin_c
 
 def test_열람전용_계정은_할일을_만들_수_없다(admin_client, client):
     hongbo, _ = _setup_two_departments(admin_client)
-    admin_client.post(
-        "/users/create",
-        data={
-            "name": "담당 전도사",
-            "phone_number": "010-5555-6666",
-            "role": "viewer",
-            "department_id": str(hongbo.id),
-        },
-        follow_redirects=True,
-    )
+    make_user("담당 전도사", "010-5555-6666", "viewer", department_id=hongbo.id)
 
     login_as(client, "01055556666")
     response = client.post(
@@ -535,16 +508,7 @@ def test_경로_조작으로_다른_파일을_읽을_수_없다(admin_client):
 
 def test_열람전용_계정은_지출을_등록할_수_없다(admin_client, client):
     _create_retreat(admin_client)
-    admin_client.post(
-        "/users/create",
-        data={
-            "name": "담당 전도사",
-            "phone_number": "010-5555-6666",
-            "role": "viewer",
-            "department_id": "",
-        },
-        follow_redirects=True,
-    )
+    make_user("담당 전도사", "010-5555-6666", "viewer")
 
     login_as(client, "01055556666")
     response = client.post("/expenses/create", data={"amount": "99999"})
@@ -557,11 +521,7 @@ def test_열람전용_계정은_지출을_등록할_수_없다(admin_client, cli
 def test_열람전용_계정도_화면은_모두_볼_수_있다(admin_client, client):
     _create_retreat(admin_client)
     _create_categories(admin_client, DEFAULT_CATEGORIES)
-    admin_client.post(
-        "/users/create",
-        data={"name": "담당 전도사", "phone_number": "010-5555-6666", "role": "viewer"},
-        follow_redirects=True,
-    )
+    make_user("담당 전도사", "010-5555-6666", "viewer")
 
     login_as(client, "01055556666")
 

@@ -41,12 +41,12 @@
    새 회차 만들기·라이브러리·작업 파일은 여기 없다 — 설정(4-17)과
    드로어의 첨부 탭(4-9)이 그 자리다.
 
-   아직 새 화면이 없는 자리는 옛 주소로 잇는다 — 홈 → /board(단계 2),
+   아직 새 화면이 없는 자리는 옛 주소로 잇는다 —
    목록 → 옛 /tasks(단계 3), 알림 → 옛 /notifications(단계 4). #}
 
 <div class="sideedge" id="sideedge" aria-hidden="true"></div>
 <aside class="sidenav" id="sidenav">
-  <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
+  <a class="brand" href="/"><span class="mark">대</span>대청부 수련회</a>
 
   {% if retreats and retreats|length > 1 %}
   <select class="pick" aria-label="회차 선택"
@@ -56,11 +56,11 @@
     {% endfor %}
   </select>
   {% elif retreat %}
-  <div class="pick" aria-label="현재 회차">{{ retreat.name }}</div>
+  <div class="pick" aria-label="현재 회차"><span>{{ retreat.name }}</span><span class="caret" aria-hidden="true">▾</span></div>
   {% endif %}
 
   <nav>
-    <a class="single" href="/board" style="margin-top:0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>홈</a>
+    <a class="single" href="/" style="margin-top:0" {% if active_tab == 'home' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>홈</a>
     <a class="single" href="/meetings" {% if active_tab == 'meetings' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM8 12h8M8 16h8"/></svg>회의록</a>
 
     <a class="g" href="/tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M9 5v14"/></svg>수련회 준비</a>
@@ -93,10 +93,14 @@
     <a class="single" href="/settings" {% if active_tab == 'settings' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>설정</a>
   </nav>
 
+  {# 이름 · 역할 · 부서 각 한 줄. 로그아웃은 설정 › 내 정보에만 (4-17) #}
   <div class="sidefoot">
     <span class="avatar" aria-hidden="true">{{ user.name[:1] }}</span>
-    <span><b>{{ user.name }}</b><small>{{ ROLE_LABELS.get(user.role, user.role) }}{% if side_dept_name %} · {{ side_dept_name }}{% endif %}</small></span>
-    <span class="links"><a href="/logout">로그아웃</a></span>
+    <span class="who">
+      <b>{{ user.name }}</b>
+      <small>{{ ROLE_LABELS.get(user.role, user.role) }}</small>
+      <small>{{ side_dept_name or '부서 미지정' }}</small>
+    </span>
   </div>
 </aside>
 

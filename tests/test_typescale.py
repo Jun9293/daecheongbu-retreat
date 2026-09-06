@@ -168,6 +168,8 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
     ".mt-one-meta label",
     # 새 껍데기 (단계 1) — 값 옆의 장식, 그리고 흐린 것이 곧 뜻인 것
     ".stabs .adm", ".kpi .v small", ".setting th", ".tickrow.done .ticklabel",
+    # 회차 드롭다운의 ▾ — 옆의 회차 이름이 뜻을 다 진다 (단계 2)
+    ".sidenav .pick .caret",
 }
 
 

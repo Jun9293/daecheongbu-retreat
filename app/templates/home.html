@@ -1,0 +1,112 @@
+{% extends "retreat_base.html" %}
+{% block title %}홈 · {{ retreat.name }}{% endblock %}
+
+{# 한 줄 = 제목 · 부서 칩 · 담당자 · 마감(D±N) · 상태 배지. 목록에 오는 것은
+   전부 미완료라 완료에 D+N 이 붙을 자리가 없다 (0장 · 4-14 와 같은 규칙).
+   지연 배지는 저장된 status 가 아니라 날짜에서 나온 계산값이다 (4-10). #}
+{% macro taskrow(r) %}
+<div class="homerow {% if r.id in home.dim_ids %}dim{% endif %}">
+  <div>
+    <div class="t">{{ r.title }}</div>
+    <div class="m">
+      {% if r.department %}<span class="deptchip" style="--c:{{ r.department.color }}"><i></i>{{ r.department.name }}</span>{% endif %}
+      {% if r.assignee %}<span class="deptchip">{{ r.assignee.name }}</span>
+      {% else %}<span class="deptchip" style="color:var(--now)">담당자 없음</span>{% endif %}
+      {% set end = r.end_date or r.start_date %}
+      <span class="deptchip {% if r.id in home.overdue_ids %}duechip{% endif %}">{{ end|short_date }} · {{ end|dday(home.today) }}</span>
+    </div>
+  </div>
+  {% if r.id in home.overdue_ids %}<span class="stbadge late">지연</span>
+  {% elif r.status == '진행중' %}<span class="stbadge prog">진행중</span>
+  {% else %}<span class="stbadge wait">대기</span>{% endif %}
+</div>
+{% endmacro %}
+
+{# 숫자는 전부 domain/home.build 에서 왔다 — 여기서는 세지 않는다 (4-15).
+   시각 스펙: docs/mockups/retreat-shell.html 의 홈 화면. #}
+
+{% block body %}
+<main class="setting">
+  <h1>{{ retreat.name }}</h1>
+  <div class="sub">
+    {{ retreat.start_date|kdate }} – {{ retreat.end_date|kdate }}
+    <span class="pill">{{ retreat.start_date|dday(home.today) }}</span>
+  </div>
+
+  {% if home.over %}
+  {# ── 결산 홈 — 폐회일 다음 날부터 (period.is_over). 경고 띠·지연 지표를 내지
+     않는다 — 끝난 회차에 「지연 N건」 은 재촉이 아니라 소음이다 (4-15) #}
+  <div class="fld" style="margin-top:14px">
+    <h3>수련회가 끝났습니다 — 정리할 것</h3>
+    <div class="kpis" style="margin-top:10px">
+      <div class="kpi"><div class="l">미지급 환급</div>
+        <div class="v" {% if home.unpaid_refund_count %}style="color:var(--now)"{% endif %}>{{ home.unpaid_refund_count }}<small>건</small></div>
+        <div class="d"><a href="/refunds" style="text-decoration:underline">환급 대상자 보기</a></div></div>
+      <div class="kpi"><div class="l">영수증 없는 지출</div>
+        <div class="v">{{ home.no_receipt_count }}<small>건</small></div>
+        <div class="d"><a href="/expenses" style="text-decoration:underline">지출 보기</a></div></div>
+      <div class="kpi"><div class="l">미완료 업무</div>
+        <div class="v">{{ home.open_task_count }}<small>건</small></div>
+        <div class="d">정리 필요 · <a href="/tasks" style="text-decoration:underline">목록 보기</a></div></div>
+      <div class="kpi"><div class="l">예산 집행률</div>
+        <div class="v" style="color:var(--accent)">{{ home.budget.progress_pct }}<small>%</small></div>
+        <div class="d">사용 {{ home.budget.total_spent|won }} / 예산 {{ home.budget.total_planned|won }}</div></div>
+    </div>
+  </div>
+
+  {% else %}
+  {# ── 보통 홈 (4-15) — 경고 띠는 0건이면 내지 않는다 #}
+  {% if home.overdue_count %}
+  <div class="homealert late">기한이 지난 할 일이 <b>&nbsp;{{ home.overdue_count }}건&nbsp;</b> 있습니다.
+    {# 지연 필터가 붙는 것은 단계 3 의 새 목록이다 — 그때 ?state= 로 잇는다 #}
+    <a href="/tasks" style="text-decoration:underline">목록에서 보기</a></div>
+  {% endif %}
+  {% if home.unassigned_soon_count %}
+  <div class="homealert wait">담당자 없이 기한이 1주일 이내인 할 일이 <b>&nbsp;{{ home.unassigned_soon_count }}건&nbsp;</b> 있습니다. 총무팀 확인이 필요합니다. <a href="/tasks" style="text-decoration:underline">목록에서 보기</a></div>
+  {% endif %}
+
+  <div class="kpis" style="margin-top:14px">
+    <div class="kpi"><div class="l">남은 할 일</div><div class="v">{{ home.remaining }}</div></div>
+    <div class="kpi"><div class="l">완료</div><div class="v">{{ home.done }} <small>/ {{ home.total }}</small></div></div>
+    <div class="kpi"><div class="l">예산 집행률</div>
+      <div class="v" style="color:var(--accent)">{{ home.budget.progress_pct }}<small>%</small></div>
+      <div class="d">사용 {{ home.budget.total_spent|won }} / 예산 {{ home.budget.total_planned|won }}</div></div>
+    <div class="kpi"><div class="l">지연</div>
+      <div class="v" {% if home.overdue_count %}style="color:var(--now)"{% endif %}>{{ home.overdue_count }}</div></div>
+  </div>
+
+  <div class="homecols">
+    <div class="fld">
+      <h3>내 할 일 <span class="sub">오늘까지</span></h3>
+      {% for r in home.my_today %}
+      {{ taskrow(r) }}
+      {% else %}
+      <div class="sub" style="padding:8px 0">오늘까지 마감인 내 담당 업무가 없습니다.</div>
+      {% endfor %}
+    </div>
+
+    <div class="fld">
+      <h3>예산 집행</h3>
+      <div class="bl" style="margin-top:6px"><b>{{ home.budget.total_spent|won }}</b><span>지출예산 {{ home.budget.total_planned|won }}</span></div>
+      <div class="homebar"><i style="width:{{ [home.budget.progress_pct, 100]|min }}%"></i></div>
+      {% for row in home.top_categories %}
+      <div class="bl"><span>{{ row.category.level1 }} › {{ row.category.level2 }}{% if row.category.level3 %} › {{ row.category.level3 }}{% endif %}</span>
+        <span {% if row.is_over_budget %}class="over"{% endif %}>{{ row.spent|num }} / {{ row.planned|num }}</span></div>
+      <div class="homebar"><i {% if row.is_over_budget %}class="over"{% endif %} style="width:{{ [row.progress_pct, 100]|min }}%"></i></div>
+      {% else %}
+      <div class="sub" style="padding:8px 0">예산 항목이 아직 없습니다.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="fld" style="margin-top:14px">
+    <h3>이번 주 <span class="sub">7일 이내</span></h3>
+    {% for r in home.week %}
+    {{ taskrow(r) }}
+    {% else %}
+    <div class="sub" style="padding:8px 0">7일 안에 마감인 업무가 없습니다.</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

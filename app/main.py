@@ -19,6 +19,7 @@ from app.routers import (
     invite,
     attachments,
     board,
+    home,
     calendar,
     live,
     budget,
@@ -159,7 +160,8 @@ class HashedStatic(StaticFiles):
 app.mount("/static", HashedStatic(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(invite.router)
-# 준비 단계 보드가 홈이다 (dashboard 보다 먼저 등록해 "/" 를 잡는다)
+# / 는 홈이다 (4-15). 보드는 /board 그대로다
+app.include_router(home.router)
 app.include_router(board.router)
 app.include_router(calendar.router)
 app.include_router(attachments.router)
