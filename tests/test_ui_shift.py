@@ -41,7 +41,9 @@ def test_01_목업이_새_방향으로_다시_만들어졌고_옛_화면이_없�
     assert "#37352F" in text, "잉크 색이 새 값이 아니다"
     assert "rgba(55,53,47,.09)" in text, "헤어라인 선이 아니다"
     assert "#F7F7F5" in text, "사이드바 면 색이 없다"
-    assert "#2383E2" in text and "#C4554D" in text, "선택·지연 색이 새 값이 아니다"
+    # 선택 파랑은 2026-09-06 UI 개편에서 accent 로 흡수됐다 (4-0)
+    assert "#4F46E5" in text and "#C4554D" in text, "선택(accent)·지연 색이 새 값이 아니다"
+    assert "#2383E2" not in text, "옛 선택 파랑이 남아 있다"
 
     # 옛 팔레트가 남아 있지 않다
     for old in ("#F2F4F3", "#141917", "#DDE2DE", "#C8442E", "#1668E3"):
@@ -69,10 +71,12 @@ def test_02b_앱에도_상단_탭_줄이_없고_사이드바로_모든_화면에
     assert "nav class=\"tabs\"" not in SHELL and "nav.tabs" not in SHELL
     assert 'id="sidenav"' in SHELL
 
-    # 탭 줄에 있던 곳은 전부 사이드바에 있다.
-    # `수련회 진행` 은 5장 스펙대로 다시 만들면서 /schedule → /live 로 옮겼다.
-    for href in ("/board", "/live", "/meetings", "/budget",
-                 "/library", "/setup", "/admin/users"):
+    # 3장의 사이드바 구조 — 그룹의 하위와 홑 항목이 전부 있다.
+    # 새 회차 만들기(/setup)·라이브러리·계정 관리는 사이드바가 아니라
+    # 설정(4-17)에서 간다 — 아래 test_02c 가 그 길을 본다.
+    for href in ("/board", "/tasks", "/calendar", "/live", "/live/staff",
+                 "/meetings", "/budget", "/expenses",
+                 "/notifications", "/checklists", "/settings"):
         assert f"'{href}'" in SHELL or f'"{href}"' in SHELL, f"{href} 로 갈 수 없다"
 
     # 마법사도 같은 사이드바를 쓴다 — 화면 이동 수단이 이것뿐이다

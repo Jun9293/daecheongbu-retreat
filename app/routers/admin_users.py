@@ -125,7 +125,7 @@ def users_page(
             "rows": rows,
             "departments": choices,
             "roles": [{"value": r, "label": ROLE_LABELS.get(r, r)} for r in ALL_ROLES],
-            "active_tab": "users",
+            "active_tab": "settings",
             "page_subtitle": "계정 관리",
             # 원문은 URL 을 타지 않는다. 한 번만 꺼내지는 자리에서 가져온다.
             # **완성된 주소로 넘긴다.** 앱은 127.0.0.1 에만 열려 있어서

@@ -79,8 +79,8 @@ def test_ts_02_본문_목록_사이드바가_하한_아래로_안_내려간다()
     하한 = 단.index("--fz-md")
     자리 = {
         "body": "본문",
-        ".sidenav nav a": "사이드바 링크",
-        ".sidenav .navlabel": "사이드바 묶음 제목",
+        ".sidenav nav .g": "사이드바 그룹 제목",
+        ".sidenav .subs .n": "사이드바 하위",
         ".sidefoot": "사이드바 아래",
         ".whoami": "사이드바의 사용자",
         ".lc": "왼쪽 업무명",
@@ -116,8 +116,10 @@ def test_ts_04_위계가_유지된다():
     """다 같은 크기가 되면 무엇이 중요한지 사라진다."""
     assert 단번호(".dtitle") > 단번호("body"), "상세 패널 제목이 본문보다 크지 않다"
     assert 단번호("body") > 단번호(".log .d"), "논의 날짜가 본문과 같은 크기다"
-    assert 단번호(".sidenav nav a") > 단번호(".sidenav .navlabel"), \
-        "사이드바 링크와 묶음 제목이 같은 크기다"
+    # 사이드바의 위계는 크기가 아니라 색·굵기·들여쓰기다 (4-0 B안) —
+    # 그룹은 잉크 600, 하위는 보조색. 둘 다 목록 하한(14px)이다.
+    assert "font-weight:600" in 선언(".sidenav nav .g").replace(" ", "")
+    assert "var(--ink-2)" in 선언(".sidenav .subs .n")
     assert 단번호(".mrow .nm") > 단번호(".mrow .meta"), "좁은 화면의 이름과 메타가 같다"
     # 실제로 여러 단이 쓰인다 — 눈금만 만들고 한 단만 쓰면 위계가 없다
     쓰인것 = set(re.findall(r"font-size:\s*var\((--fz[\w-]*)\)", _민낯()))
@@ -164,6 +166,8 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
     ".itemadd", ".c-note > .cx", ".sheetform .frow > label", ".sheetform legend",
     ".cal-cell.out .cal-d", ".cal-dot.done .cal-t", ".calday-d i",
     ".mt-one-meta label",
+    # 새 껍데기 (단계 1) — 값 옆의 장식, 그리고 흐린 것이 곧 뜻인 것
+    ".stabs .adm", ".kpi .v small", ".setting th", ".tickrow.done .ticklabel",
 }
 
 
@@ -181,11 +185,12 @@ def test_ts_08_흐림이_혼자_뜻을_지는_글자에_안_쓰인다():
     assert not 새어든것, f"혼자 뜻을 지는데 흐림이다: {새어든것}"
 
 
-def test_ts_09_사이드바_묶음_제목이_읽힌다():
-    """`실무`·`회차 준비` — **옆에 값이 없다.** 11px `--ink-3` 이었다."""
-    label = 선언(".sidenav .navlabel")
-    assert "var(--ink-2)" in label and "var(--ink-3)" not in label
-    assert 단번호(".sidenav .navlabel") >= 단.index("--fz-md")
+def test_ts_09_사이드바_그룹_제목이_읽힌다():
+    """그룹 제목을 흐림색으로 두면 제목이 아니라 장식으로 읽힌다 (4-0 B안).
+    지금은 잉크 600 이다 — 홑 항목과 같은 급."""
+    label = 선언(".sidenav nav .g")
+    assert "var(--ink)" in label and "var(--ink-3)" not in label
+    assert 단번호(".sidenav nav .g") >= 단.index("--fz-md")
 
 
 # ── 10 ~ 14. 달력의 부서 고르기 ──────────────────────────────────────

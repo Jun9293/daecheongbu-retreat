@@ -688,7 +688,8 @@ def test_Phase2_화면들이_모두_정상적으로_열린다(admin_client):
     _setup(admin_client)
     _create_categories(admin_client, DEFAULT_CATEGORIES)
 
-    for path in ["/more", "/notifications", "/reviews", "/files", "/checklists", "/meetings"]:
+    # /more 는 지웠다 — 설정 › 점검(4-17)이 그 자리다
+    for path in ["/settings/checkup", "/notifications", "/reviews", "/files", "/checklists", "/meetings"]:
         response = admin_client.get(path)
         assert response.status_code == 200, f"{path} → {response.status_code}"
 

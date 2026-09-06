@@ -26,6 +26,14 @@ router = APIRouter()
 
 
 @router.get("/library")
+def library_moved():
+    """설정 › 업무 라이브러리 탭으로 옮겼다 (4-17). 옛 링크가 살아 있게 301."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse("/settings/library", status_code=301)
+
+
+@router.get("/settings/library")
 def library_page(
     request: Request,
     db: Session = Depends(get_db),
@@ -86,7 +94,7 @@ def library_page(
             "history_depth": lib_domain.history_depth(db),
             "round_labels": lib_domain.round_labels(db),
             "required_count": sum(1 for i in items if i["always_required"]),
-            "active_tab": "library",
+            "active_tab": "settings",
             "page_subtitle": "업무 라이브러리",
         },
     )
@@ -163,7 +171,7 @@ def set_required(
         after_value={"always_required": bool(lib.always_required)},
     )
     return redirect(
-        "/library",
+        "/settings/library",
         message=f"'{lib.title}' 을(를) {'필수로 지정' if lib.always_required else '필수에서 해제'}했습니다.",
     )
 
@@ -196,7 +204,7 @@ def set_required_bulk(
             summary=f"{changed}건의 필수 지정을 바꿨습니다.",
         )
     return redirect(
-        "/library",
+        "/settings/library",
         message=f"필수 지정 {changed}건을 저장했습니다." if changed else "바뀐 내용이 없습니다.",
     )
 

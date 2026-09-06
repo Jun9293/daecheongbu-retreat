@@ -1,8 +1,10 @@
 {% extends "retreat_base.html" %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
 {% block title %}업무 라이브러리 · 대청부 수련회{% endblock %}
 
 {% block body %}
 <main class="wiz">
+  {{ settings_tabs(user, 'library') }}
   <h2>업무 라이브러리</h2>
   <p class="lead">
     회차를 넘어 계속 남는 업무 목록입니다. 여기서 <b>필수</b>로 지정한 업무는

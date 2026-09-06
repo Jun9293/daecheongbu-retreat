@@ -1,0 +1,48 @@
+{% extends "retreat_base.html" %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
+{% block title %}회차 관리 · 대청부 수련회{% endblock %}
+
+{% block body %}
+<main class="setting">
+  <h1>설정</h1>
+  <div class="sub">앞의 두 탭은 누구나, 나머지는 총무팀만 보입니다.</div>
+  {{ settings_tabs(user, 'retreats') }}
+
+  {# 「새 회차 만들기」 버튼이 곧 제목인 카드 — 제목 글자를 따로 두지 않는다 (4-17) #}
+  <div class="fld">
+    {% if is_admin(user) %}
+    <a class="sbtn p" href="/setup" style="padding:8px 16px;font-size:var(--fz-md);font-weight:600;display:inline-block">새 회차 만들기</a>
+    {% endif %}
+    <div class="sub" style="margin-top:8px">4단계 마법사로 만듭니다. 업무 라이브러리에서 고르고, D-주차를 다시 계산하고, 빠진 필수 업무를 경고합니다.</div>
+    <div class="hint" style="margin-top:6px">
+      팀별 수집 초안 —
+      {% if active_draft %}「{{ active_draft.name }}」 수집 중 · 제출 {{ active_draft.submitted }}/{{ active_draft.total }} · <a href="/draft" style="text-decoration:underline">초안 열기</a>
+      {% else %}열려 있는 초안 없음.{% if is_admin(user) %} <a href="/setup" style="text-decoration:underline">각 팀에 업무 선택 요청</a>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="fld">
+    <h3>회차 목록</h3>
+    <table>
+      <tr><th>회차</th><th>기간</th><th>업무</th><th>지출</th><th>상태</th><th></th></tr>
+      {% for row in retreat_rows %}
+      <tr>
+        <td><a href="/settings/retreats/{{ row.retreat.id }}" style="font-weight:600;color:var(--accent)">{{ row.retreat.name }}</a></td>
+        <td>{{ row.retreat.start_date|kdate }} – {{ row.retreat.end_date|kdate }}</td>
+        <td>{{ row.run_count }}건</td>
+        <td>{{ row.expense_count }}건 · {{ row.expense_sum|won }}</td>
+        <td>
+          {% if row.over %}<span class="stbadge done">종료</span>
+          {% else %}<span class="stbadge prog">진행 중</span>{% endif %}
+        </td>
+        <td style="text-align:right"><a class="sbtn" href="/settings/retreats/{{ row.retreat.id }}">수정</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="sub">아직 회차가 없습니다.</td></tr>
+      {% endfor %}
+    </table>
+    <div class="hint">지난 회차를 지어내지 않습니다 (6-9). 회차명을 누르면 상세로 갑니다.</div>
+  </div>
+</main>
+{% endblock %}

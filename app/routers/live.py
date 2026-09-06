@@ -152,7 +152,7 @@ def staff_page(
             "retreats": all_retreats(db),
             # 화면과 파일이 **같은 함수에서 나온 같은 구조**를 쓴다 (5-8)
             "sheet": sheet_domain.build(db, retreat),
-            "active_tab": "live",
+            "active_tab": "staff",
             "page_subtitle": "봉사팀 보기",
         },
     )

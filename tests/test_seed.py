@@ -147,9 +147,12 @@ def test_모든_주요_화면이_실제_데이터에서_정상_렌더링된다(c
     _seed(client)
     login_as(client, ADMIN_PHONE)
 
+    # /schedule 은 301 로 /live/staff 에 잇고(14장), /more 는 설정 › 점검이
+    # 맡는다 (4-17). TestClient 는 리다이렉트를 따라가므로 /schedule 이 남아
+    # 있는 것이 곧 「옛 링크가 살아 있다」 는 검사다.
     paths = [
         "/", "/schedule", "/tasks", "/budget", "/expenses", "/refunds",
-        "/more", "/notifications", "/reviews", "/files", "/checklists",
+        "/settings/retreats", "/notifications", "/reviews", "/files", "/checklists",
         "/meetings", "/settings",
     ]
     for path in paths:
@@ -158,30 +161,16 @@ def test_모든_주요_화면이_실제_데이터에서_정상_렌더링된다(c
         assert "Traceback" not in response.text, f"{path} 렌더링 오류"
 
 
-def test_일정표는_시각_순서대로_정렬된다(client):
+def test_옛_일정표_주소는_봉사자_시간표로_301_이다(client):
+    """옛 /schedule 화면은 지웠다 (14장 「옛 화면 걷어내기」) — 대체 화면은 5-8 봉사자 시간표다.
+    표(ScheduleDay·ScheduleItem)와 행은 남는다 (0장 첫 원칙)."""
     _seed(client)
     login_as(client, ADMIN_PHONE)
 
-    import re
+    response = client.get("/schedule", follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/live/staff"
 
-    response = client.get("/schedule")
-    times = re.findall(r'<span class="tl-range">\s*(\d{2}:\d{2})', response.text)
-
-    assert times, "타임라인에 일정이 없습니다."
-    assert times == sorted(times), f"시각 순서가 어긋납니다: {times[:8]}"
-
-
-def test_공통_일정은_부서와_무관하게_선명하게_보인다(client):
-    """봉사자 전체 일정·프로그램은 모두의 일정이므로 흐리게 처리하면 안 된다."""
-    _seed(client)
-    login_as(client, seed_data.USERS[4][1])  # 다은 · 행정 부서 리더
-
-    response = client.get("/schedule")
-
-    # 항목 블록 단위로 잘라서 검사한다 (정규식이 다음 항목까지 넘어가지 않도록)
-    blocks = response.text.split('<div class="tl-item ')[1:]
-    common = [b for b in blocks if '<span class="tag tag-outline">공통</span>' in b.split('<div class="tl-item')[0]]
-
-    assert common, "공통 일정을 찾지 못했습니다."
-    faded = [b for b in common if "faded" in b[: b.index('"')]]
-    assert faded == [], f"공통 일정이 흐리게 표시됩니다 ({len(faded)}건)"
+    # 행이 남아 있다 — 화면을 지웠다고 기록을 지우지 않는다
+    with app_session() as db:
+        assert db.scalars(select(models.ScheduleItem)).first() is not None

@@ -1,0 +1,69 @@
+{% extends "retreat_base.html" %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
+{% block title %}{{ target.name }} · 회차 관리{% endblock %}
+
+{% block body %}
+<main class="setting">
+  <div class="sub"><a href="/settings">설정</a> › <a href="/settings/retreats">회차 관리</a> › {{ target.name }}</div>
+  <h1 style="margin-top:4px">{{ target.name }}
+    {% if over %}<span class="stbadge done" style="vertical-align:middle;margin-left:6px">종료</span>
+    {% else %}<span class="stbadge prog" style="vertical-align:middle;margin-left:6px">진행 중</span>{% endif %}
+  </h1>
+  {{ settings_tabs(user, 'retreats') }}
+
+  <div class="fgrid">
+    <div class="fld">
+      <h3>회차 설정</h3>
+      {% if is_admin(user) %}
+      <form method="post" action="/retreats/{{ target.id }}/update">
+        <div class="kv">
+          <span class="k">이름</span><input name="name" value="{{ target.name }}" required>
+          <span class="k">개회일</span><input name="start_date" type="date" value="{{ target.start_date.isoformat() if target.start_date else '' }}">
+          <span class="k">폐회일</span><input name="end_date" type="date" value="{{ target.end_date.isoformat() if target.end_date else '' }}">
+          <span class="k">D-1주차</span><span style="color:var(--ink-2)">{{ d1_sunday|kdate if d1_sunday else '개회일을 넣으면 계산됩니다' }}{% if d1_sunday %} (일) · 개회일에서 계산{% endif %}</span>
+          <span class="k">식대 1인 상한</span><input name="meal_subsidy_per_person" type="number" min="0" step="500" value="{{ target.meal_subsidy_per_person }}">
+        </div>
+        <div class="hint">개회일을 바꾸면 모든 업무 날짜가 D-주차를 유지한 채 함께 움직입니다 (6-4).</div>
+        <div style="margin-top:10px;display:flex;gap:6px"><button class="sbtn p" type="submit">저장</button></div>
+      </form>
+      {% else %}
+      <div class="kv">
+        <span class="k">이름</span><span>{{ target.name }}</span>
+        <span class="k">개회일</span><span>{{ target.start_date|kdate }}</span>
+        <span class="k">폐회일</span><span>{{ target.end_date|kdate }}</span>
+        <span class="k">D-1주차</span><span style="color:var(--ink-2)">{{ d1_sunday|kdate if d1_sunday else '—' }}</span>
+        <span class="k">식대 1인 상한</span><span>{{ target.meal_subsidy_per_person|won }}</span>
+      </div>
+      <div class="hint">고치는 것은 총무팀만 합니다.</div>
+      {% endif %}
+    </div>
+
+    <div class="fld">
+      <h3>이 회차의 부서</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        {% for d in dept_rows %}
+        <span class="deptchip" style="--c:{{ d.color }}"><i></i>{{ d.name }} · {{ d.member_count }}명</span>
+        {% else %}<span class="sub">부서가 없습니다.</span>{% endfor %}
+      </div>
+      <div class="hint">부서 이름·색·순서는 <a href="/settings/departments" style="text-decoration:underline">부서</a> 탭에서 고칩니다.</div>
+    </div>
+
+    <div class="fld" style="grid-column:1/-1">
+      <h3>현황</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="l">업무</div>
+          <div class="v">{{ run_count }} <small>완료 {{ run_done }} · 지연 {{ run_overdue }}</small></div></div>
+        {# 남은 지출은 **회차가 끝난 뒤에만** 붉다. 0건이면 붉지 않다 (4-17 · period.is_over) #}
+        <div class="kpi"><div class="l">남은 지출</div>
+          <div class="v" {% if over and unspent_count %}style="color:var(--now)"{% endif %}>{{ unspent_count }}건 <small>{{ unspent_planned|won }}</small></div>
+          <div class="d">지출 완료 {{ expense_count }}건 · {{ expense_sum|won }}</div></div>
+        <div class="kpi"><div class="l">예산 집행률</div>
+          <div class="v" style="color:var(--accent)">{{ budget.progress_pct }}<small>%</small></div>
+          <div class="d">사용 {{ budget.total_spent|won }} / 예산 {{ budget.total_planned|won }}</div></div>
+        <div class="kpi"><div class="l">프로그램표</div>
+          <div class="v">{{ program_count }} <small>항목 {{ program_item_count }}</small></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

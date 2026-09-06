@@ -14,16 +14,16 @@
 <div class="sideedge" id="sideedge" aria-hidden="true"></div>
 <aside class="sidenav" id="sidenav">
   <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
+  {# 3장의 구조를 따르되 마법사에서는 이동만 하면 되므로 하위까지 다 펴지 않는다 #}
   <nav>
-    <a href="/board">준비 단계</a>
-    <a href="/schedule">수련회 진행</a>
-    <a href="/meetings">회의록</a>
-    <a href="/budget">재정</a>
-    <div class="navlabel">회차 준비</div>
-    <a href="/library">업무 라이브러리</a>
-    <a href="/setup" aria-current="page">새 회차 만들기</a>
-    <a href="/admin/users">계정 관리</a>
-    <a href="/admin/notify/preview">알림 미리보기</a>
+    <a class="single" href="/board" style="margin-top:0">홈</a>
+    <a class="single" href="/meetings">회의록</a>
+    <a class="g" href="/tasks">수련회 준비</a>
+    <a class="g" href="/live">수련회 진행</a>
+    <a class="g" href="/budget">재정</a>
+    <a class="single" href="/notifications">알림</a>
+    <a class="single" href="/checklists">체크리스트</a>
+    <a class="single" href="/settings">설정</a>
   </nav>
   <div class="sidefoot">
     <span><b>{{ user.name }}</b> · {{ ROLE_LABELS.get(user.role, user.role) }}</span>

@@ -439,12 +439,13 @@
   results.push((narrow === wide ? '✓' : '✗') + ` 달력 칸 크기 고정 (${narrow}px → ${wide}px)`);
   if (narrow !== wide) errors.push('드로어를 넓히면 달력이 커진다');
 
-  // ── 사이드바 — 상단 탭 줄을 없앤 자리. 기본은 접힘이고 여는 길이 둘이다.
+  // ── 사이드바 (B안 · 4-0) — ≥1280px 펼침 고정이 기본, 그 아래는 접힘 + 호버.
   //    화면 이동 수단이 여기 하나뿐이라, 드로어를 연 채로도 열려야 한다.
   {
     const nav = document.getElementById('sidenav');
     const edge = document.getElementById('sideedge');
     const toggle = document.getElementById('sidetoggle');
+    const wideScreen = window.innerWidth >= 1280;
     // 미끄러지는 동안을 재지 않는다. 탭이 가려져 있으면 브라우저가 그리기를
     // 멈춰 전환이 진행되지 않고, 그러면 "안 열렸다"고 잘못 말한다 — 화면이
     // 틀린 게 아니라 재는 방법이 틀린 것이다. 여기서만 전환을 끄고 끝나면 되돌린다.
@@ -454,13 +455,35 @@
     const at = () => Math.round(nav.getBoundingClientRect().left);
     const pinned = () => document.body.classList.contains('sidepin');
     const wasPinned = pinned();
-    if (wasPinned) { toggle.click(); await sleep(80); }
 
-    results.push((at() < 0 ? '✓' : '✗') + ` 사이드바가 접힌 채로 시작 (left ${at()}px)`);
-    if (at() >= 0) errors.push('사이드바가 접혀 있지 않음');
+    // 기본 상태 — 저장값이 없으면 넓은 화면은 펼침, 좁은 화면은 접힘.
+    let saved = null; try { saved = localStorage.getItem('dcb.sidepin'); } catch (e) {}
+    const expectPinned = saved === '1' || (saved === null && wideScreen);
+    results.push((pinned() === expectPinned ? '✓' : '✗')
+      + ` 사이드바 기본 상태가 1280px 기준과 저장값을 따른다 (pinned=${pinned()})`);
+    if (pinned() !== expectPinned) errors.push('사이드바 기본 상태가 틀림');
+    if (wideScreen) {
+      const openWide = !pinned() || (at() === 0 && parseInt(getComputedStyle(document.body).paddingLeft, 10) > 100);
+      results.push((openWide ? '✓' : '✗') + ' 넓은 화면 고정 시 펼쳐지고 본문이 밀린다');
+      if (!openWide) errors.push('넓은 화면에서 고정이 본문을 밀지 않음');
+    }
+
+    if (wasPinned) { toggle.click(); await sleep(80); }
+    results.push((at() < 0 ? '✓' : '✗') + ` 고정을 풀면 접힌다 (left ${at()}px)`);
+    if (at() >= 0) errors.push('고정을 풀어도 접히지 않음');
 
     results.push((!document.querySelector('nav.tabs') ? '✓' : '✗') + ' 상단 탭 줄이 없음');
     if (document.querySelector('nav.tabs')) errors.push('상단 탭 줄이 남아 있음');
+
+    // 그룹 제목은 링크이고 활성 표시는 하위에만 (3장)
+    const groups = [...nav.querySelectorAll('a.g')];
+    const groupOk = groups.length >= 3 && groups.every(g => g.getAttribute('href')
+      && !g.hasAttribute('aria-current'));
+    results.push((groupOk ? '✓' : '✗') + ` 그룹 제목 ${groups.length}개가 링크이고 활성 표시가 없다`);
+    if (!groupOk) errors.push('그룹 제목이 링크가 아니거나 활성 표시가 붙음');
+    const onGroups = [...nav.querySelectorAll('.g[aria-current], .g.on')];
+    results.push((onGroups.length === 0 ? '✓' : '✗') + ' 선택 표시는 하위에만');
+    if (onGroups.length) errors.push('그룹에 선택 표시가 있음');
 
     // 가장자리 호버 — 잠깐 들춰 본다. 본문은 밀리지 않는다.
     await check('사이드바 — 가장자리 호버', async () => {
@@ -472,12 +495,14 @@
     nav.dispatchEvent(new MouseEvent('mouseleave', {bubbles: false}));
     await sleep(260);
 
-    // 토글 — 고정해서 연다. 본문이 그만큼 밀린다.
+    // 토글 — 고정한다. 본문이 밀리는 것은 ≥1280 에서만이다 (그 아래는 CSS 가 무시).
     await check('사이드바 — 토글로 고정', () => toggle.click(), {wait: 120, mayScroll: true});
-    const pin = pinned() && at() === 0
-      && parseInt(getComputedStyle(document.body).paddingLeft, 10) > 100;
-    results.push((pin ? '✓' : '✗') + ' 토글로 고정하면 본문이 밀린다');
-    if (!pin) errors.push('토글 고정이 동작하지 않음');
+    const pad = parseInt(getComputedStyle(document.body).paddingLeft, 10);
+    const pin = pinned() && (wideScreen ? (at() === 0 && pad > 100) : pad === 0);
+    results.push((pin ? '✓' : '✗') + (wideScreen
+      ? ' 토글로 고정하면 본문이 밀린다'
+      : ' 좁은 화면에서는 고정해도 본문이 밀리지 않는다'));
+    if (!pin) errors.push('토글 고정이 1280px 기준과 다르게 동작함');
     await check('사이드바 — 토글로 접기', () => toggle.click(), {wait: 120, mayScroll: true});
     if (wasPinned) { toggle.click(); await sleep(80); }
     nav.style.transition = navEase;

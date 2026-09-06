@@ -443,34 +443,18 @@ def test_지출_내역을_엑셀로_내려받을_수_있다(admin_client):
 # ------------------------------------------------------------------ 일정
 
 
-def test_일자와_일정을_등록하고_Day별_탭으로_볼_수_있다(admin_client):
+def test_옛_일정표는_지워졌고_301_로_봉사자_시간표에_간다(admin_client):
+    """옛 /schedule 의 화면·등록 라우트는 지웠다 (14장 「옛 화면 걷어내기」). 옛 링크만 301 로 남는다."""
     _create_retreat(admin_client)
-    admin_client.post(
-        "/schedule/days", data={"label": "1일차", "date": "2026-07-20"}, follow_redirects=True
-    )
-    admin_client.post(
-        "/schedule/days", data={"label": "2일차", "date": "2026-07-21"}, follow_redirects=True
-    )
-    with app_session() as db:
-        day = db.scalars(select(models.ScheduleDay).order_by(models.ScheduleDay.id)).first()
 
-    admin_client.post(
-        f"/schedule/days/{day.id}/items",
-        data={
-            "title": "1일차 집회",
-            "start_time": "19:30",
-            "end_time": "21:30",
-            "location": "대강당",
-        },
-        follow_redirects=True,
-    )
+    response = admin_client.get("/schedule", follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/live/staff"
 
-    page = admin_client.get(f"/schedule?day_id={day.id}")
-
-    assert "1일차" in page.text and "2일차" in page.text
-    assert "1일차 집회" in page.text
-    assert "19:30" in page.text
-    assert "대강당" in page.text
+    # 옛 등록 라우트는 없다 — 지운 것이 실제로 지워졌는가 (막는 쪽 시험)
+    assert admin_client.post(
+        "/schedule/days", data={"label": "1일차", "date": "2026-07-20"}
+    ).status_code == 404
 
 
 def test_회차가_없으면_안내_화면을_보여준다(admin_client):
@@ -596,7 +580,7 @@ def test_없는_주소로_들어가면_안내_화면을_보여준다(admin_clien
 
 
 def test_없는_회차를_열면_안내_화면을_보여준다(admin_client):
-    response = admin_client.get("/schedule?retreat_id=99999", headers={"accept": "text/html"})
+    response = admin_client.get("/tasks?retreat_id=99999", headers={"accept": "text/html"})
 
     assert response.status_code == 404
     assert "회차를 찾을 수 없습니다" in response.text

@@ -1,0 +1,55 @@
+{% extends "retreat_base.html" %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
+{% block title %}점검 · 설정{% endblock %}
+
+{% block body %}
+<main class="setting">
+  <h1>설정</h1>
+  <div class="sub">시스템이 제대로 돌고 있는지 여기서 봅니다.</div>
+  {{ settings_tabs(user, 'checkup') }}
+
+  <div class="fgrid">
+    <div class="fld">
+      <h3>알림</h3>
+      <p class="sub" style="margin:0 0 10px">보내지 않고, 오늘 실행하면 누구에게 무엇이 갈지만 봅니다 (4-11).</p>
+      <a class="sbtn" href="/admin/notify/preview">알림 미리보기 열기</a>
+    </div>
+
+    <div class="fld">
+      <h3>위험 점검</h3>
+      <p class="sub" style="margin:0 0 10px">기한이 지났거나 담당자가 없는 할 일을 지금 점검합니다. 평소에는 1시간마다 자동 실행됩니다.</p>
+      <form method="post" action="/risk-scan">
+        <button class="sbtn" type="submit">지금 위험 점검하기</button>
+      </form>
+    </div>
+
+    <div class="fld">
+      <h3>자가진단</h3>
+      <div class="kv" style="grid-template-columns:150px 1fr">
+        <span class="k">푸시 준비 (VAPID)</span>
+        <span>{% if vapid_ready %}준비됨{% else %}키가 없습니다 — 푸시만 꺼진 채로 돕니다 (4-11){% endif %}</span>
+        <span class="k">관리자 계정</span>
+        <span>{{ admin_count }}명{% if dup_admin_names %} · <b style="color:var(--now)">같은 이름의 관리자가 있습니다: {{ dup_admin_names|join(', ') }}</b> (scripts/merge_users.py 로 정리){% endif %}</span>
+        <span class="k">백업 마지막</span>
+        <span>{% if last_backup %}{{ last_backup }}{% else %}백업 파일이 없습니다 — scripts/backup.py 가 매일 새벽 3시에 돕니다 (11-2){% endif %}</span>
+      </div>
+      <div class="hint">자세한 진단은 서버에서 <span class="mono">scripts/healthcheck.py</span> 를 돌립니다.</div>
+    </div>
+  </div>
+
+  <div class="fld" style="margin-top:14px">
+    <h3>변경 이력 <span class="sub">최근 {{ logs|length }}건</span></h3>
+    <table>
+      {% for log in logs %}
+      <tr>
+        <td style="white-space:nowrap;color:var(--ink-3)" class="mono">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
+        <td><b>{{ log.actor_name or '시스템' }}</b> · {{ log.action }}</td>
+        <td class="sub">{{ log.summary or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td class="sub">기록이 없습니다.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</main>
+{% endblock %}

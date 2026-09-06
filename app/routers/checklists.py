@@ -62,6 +62,8 @@ def checklist_page(
                     select(Task).where(Task.retreat_id == retreat.id).order_by(Task.id.desc())
                 )
             ),
+            "active_tab": "checklists",
+            "page_subtitle": "체크리스트",
         },
     )
 

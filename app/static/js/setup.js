@@ -214,7 +214,7 @@ function renderBasisNotice() {
       ? '실행 이력이 아직 없어 분류할 수 없습니다. 업무 라이브러리에서 지정한 <b>필수</b>가 구멍 방지를 맡습니다.'
       : '3회차가 쌓이기 전에는 “필수·추천·후순위” 대신 기록만큼만 표현합니다 — ' +
         '한 회차 기록으로 “최근 3회 모두 실행”이라고 말할 수는 없기 때문입니다.'}
-    <a href="/library" style="color:inherit;text-decoration:underline">업무 라이브러리에서 필수 지정하기</a></span></div>`;
+    <a href="/settings/library" style="color:inherit;text-decoration:underline">업무 라이브러리에서 필수 지정하기</a></span></div>`;
 }
 
 /* 팀별 수집이 진행 중이면 현황을 보여주고, 제출된 선택을 그대로 쓴다. */

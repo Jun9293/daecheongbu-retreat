@@ -1,0 +1,46 @@
+{% extends "retreat_base.html" %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
+{% block title %}부서 · 설정{% endblock %}
+
+{% block body %}
+<main class="setting">
+  <h1>설정</h1>
+  <div class="sub">{{ retreat.name if retreat else '' }} 의 부서입니다. 키는 회차를 넘어 같은 부서임을 알아보는 유일한 근거라 보여만 줍니다 (2장).</div>
+  {{ settings_tabs(user, 'departments') }}
+
+  <div class="fld">
+    <h3>부서 <span class="sub">{{ departments|length }}개</span></h3>
+    <table>
+      <tr><th>순서</th><th>이름</th><th>색</th><th>키</th><th></th></tr>
+      {% for d in departments %}
+      <tr>
+        <td class="mono">{{ d.sort_order }}</td>
+        <td><span class="deptchip" style="--c:{{ d.color_tag or '#83827F' }}"><i></i>{{ d.name }}</span></td>
+        <td class="mono">{{ d.color_tag or '—' }}</td>
+        <td class="mono" style="color:var(--ink-3)">{{ d.key or '—' }}</td>
+        <td style="text-align:right">
+          <form method="post" action="/departments/{{ d.id }}/delete" style="display:inline"
+                onsubmit="return confirm('{{ d.name }} 부서를 삭제할까요? 연결된 할일·지출은 부서 미지정으로 남습니다.')">
+            <button class="sbtn" type="submit">삭제</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="sub">등록된 부서가 없습니다.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="fld">
+    <h3>부서 추가</h3>
+    <form method="post" action="/departments/create" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input name="name" placeholder="새 부서 이름" required
+             style="font:inherit;font-size:var(--fz-md);padding:5px 9px;border:1px solid var(--rule-2);border-radius:5px;min-width:180px">
+      <input name="color_tag" type="color" value="#4F46E5" aria-label="색상"
+             style="width:42px;height:30px;padding:2px;border:1px solid var(--rule-2);border-radius:5px">
+      <button class="sbtn p" type="submit">추가</button>
+    </form>
+    <div class="hint">회차를 넘어 쓸 키는 마법사 2단계에서 발급됩니다 (6-6). 여기서 만든 부서는 이 회차에만 붙습니다.</div>
+  </div>
+</main>
+{% endblock %}

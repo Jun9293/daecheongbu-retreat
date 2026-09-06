@@ -719,7 +719,7 @@ def test_왼쪽_목록에_마우스를_올려도_뒤의_바가_비치지_않는�
         assert "linear-gradient" in decl, f"{selector} 가 아직 반투명을 그냥 깐다"
         assert floor in decl, f"{selector} 에 불투명한 바닥이 없다"
         # 새 색을 만들지 않았는지 — 토큰이나 이미 쓰던 값만
-        assert "var(--hover)" in decl or "rgba(35,131,226,.06)" in decl
+        assert "var(--hover)" in decl or "rgba(79,70,229,.06)" in decl
 
 
 def test_선택된_바가_라벨_열_위로_올라오지_않는다():

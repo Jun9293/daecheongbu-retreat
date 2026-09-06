@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>확정 사이드바(B안) — 홈 · 설정 목업</title>
+<style>
+  :root{
+    --ink:#37352F; --ink-2:#787774; --ink-3:#9B9A97;
+    --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.16);
+    --bg:#F7F7F5; --card:#fff; --hover:rgba(55,53,47,.06);
+    --accent:#4F46E5; --accent-soft:#EEF0FD;
+    --late:#C4554D; --late-soft:#FBEDEC;
+    --wait:#B7791F; --wait-soft:#FBF3E4;
+    --done:#787774; --done-soft:#EFEFED;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  a{color:inherit;text-decoration:none}
+  svg{width:16px;height:16px;flex:0 0 16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .top{padding:14px 20px;display:flex;gap:8px;align-items:center;color:var(--ink-2);font-size:13px}
+  .top b{color:var(--ink)}
+  .tab{border:1px solid var(--line-2);background:#fff;border-radius:999px;padding:5px 13px;font:inherit;font-weight:600;color:var(--ink-2);cursor:pointer}
+  .tab[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 56px);border-top:1px solid var(--line)}
+  .side{background:#fff;border-right:1px solid var(--line);padding:14px 10px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:calc(100vh - 56px)}
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 10px;font-weight:700;font-size:15px}
+  .brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;display:grid;place-items:center;font-style:normal;font-size:12px}
+  .retreat{border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;display:flex;justify-content:space-between;font-size:13px;margin:0 0 10px}
+  .retreat span:last-child{color:var(--ink-3)}
+  .g,.single{display:flex;align-items:center;gap:9px;padding:7px 8px;font-weight:600;font-size:14px;border-radius:6px;margin-top:6px}
+  .g:hover,.single:hover,.n:hover{background:var(--hover)}
+  .subs{margin-left:16px;border-left:1px solid var(--line-2);padding-left:6px;display:flex;flex-direction:column;gap:1px;margin-bottom:2px}
+  .n{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:14px;color:var(--ink-2)}
+  .n.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .n.on::before{content:"";width:2px;height:16px;background:var(--accent);margin-left:-15px;border-radius:2px}
+  .single.on{background:var(--accent-soft);color:var(--accent)}
+  .badge{margin-left:auto;background:var(--late);color:#fff;font-size:11px;font-weight:700;padding:0 7px;border-radius:999px;line-height:18px}
+  .me{margin-top:auto;border-top:1px solid var(--line);padding-top:10px;display:flex;gap:9px;align-items:center;font-size:13px}
+  .me i{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-style:normal;font-weight:700;font-size:12px}
+  .me small{display:block;color:var(--ink-3);font-size:12px}
+
+  .main{padding:24px 28px;min-width:0}
+  h1{font-size:22px;margin:0 0 2px}
+  .sub{color:var(--ink-2);font-size:13px}
+  .pill{display:inline-block;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:12px;padding:2px 9px;border-radius:999px;margin-left:8px}
+  .alert{display:flex;gap:8px;align-items:center;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:14px}
+  .alert.late{background:var(--late-soft);color:#8A3A34;border:1px solid #F0CFCB}
+  .alert.wait{background:var(--wait-soft);color:#7A5210;border:1px solid #EEDDB6}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .l{font-size:12px;color:var(--ink-2)}
+  .kpi .v{font-size:24px;font-weight:700;margin-top:2px}
+  .kpi .v small{font-size:13px;color:var(--ink-3);font-weight:500}
+  .cols{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-top:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px}
+  .card .h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600}
+  .card .h span{font-size:12px;color:var(--ink-3);font-weight:400;margin-left:6px}
+  .card .b{padding:6px 16px 10px}
+  .task{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:center}
+  .task:first-child{border-top:0}
+  .task .t{font-weight:600}
+  .task .m{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+  .chip{font-size:12px;padding:1px 8px;border-radius:5px;background:var(--done-soft);color:var(--ink-2);display:inline-flex;gap:5px;align-items:center}
+  .chip.d::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+  .chip.due{background:var(--late-soft);color:var(--late)}
+  .chip.dim{opacity:.55}
+  .st{font-size:12px;font-weight:600;padding:2px 9px;border-radius:5px}
+  .st.late{background:var(--late-soft);color:var(--late)}
+  .st.wait{background:var(--wait-soft);color:var(--wait)}
+  .st.prog{background:var(--accent-soft);color:var(--accent)}
+  .bar{height:6px;background:var(--done-soft);border-radius:3px;margin:6px 0 10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+  .bar i.over{background:var(--late)}
+  .bl{display:flex;justify-content:space-between;font-size:13px;margin-top:8px}
+  .bl span:last-child{color:var(--ink-2)}
+  .bl .over{color:var(--late)}
+  .btn{border:1px solid var(--line-2);background:#fff;border-radius:6px;padding:4px 10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+  .btn.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  /* 설정 */
+  .stabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 18px}
+  .stabs a{padding:8px 12px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .stabs a.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .stabs .adm{margin-left:auto;font-size:12px;color:var(--ink-3);padding:8px 0}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fld{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .fld h3{font-size:14px;margin:0 0 10px}
+  .kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:14px;align-items:center}
+  .kv .k{color:var(--ink-2)}
+  .kv .v{padding:4px 8px;border:1px solid transparent;border-radius:5px}
+  .kv .v:hover{border-color:var(--line-2)}
+  .hint{color:var(--ink-3);font-size:12px;margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--ink-3);font-weight:500;font-size:12px;padding:6px 8px}
+  td{padding:8px;border-top:1px solid var(--line)}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="top">
+  <b>확정 사이드바(B안), 모든 그룹 펼침.</b> 본문은 창 폭 전부를 씁니다. 보기:
+  <button class="tab" aria-pressed="true" data-view="home">홈</button>
+  <button class="tab" aria-pressed="false" data-view="settings">설정 › 회차 관리</button>
+  <button class="tab" aria-pressed="false" data-view="retreat">회차 상세</button>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand"><i>대</i>대청부 수련회</div>
+    <div class="retreat"><span>2026 여름수련회 Belong</span><span>▾</span></div>
+
+    <a class="single on" id="nav-home" href="#" style="margin-top:0"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>홈</a>
+    <a class="single" href="#"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM8 12h8M8 16h8"/></svg>회의록</a>
+
+    <!-- 그룹 제목은 링크다 — 누르면 그 그룹의 첫 하위로 간다. 활성 표시는 하위에만 (3장) -->
+    <a class="g" href="#"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M9 5v14"/></svg>수련회 준비</a>
+    <div class="subs"><a class="n" href="#">목록</a><a class="n" href="#">보드</a><a class="n" href="#">달력</a></div>
+
+    <a class="g" href="#"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9z"/></svg>수련회 진행</a>
+    <div class="subs"><a class="n" href="#">진행 화면</a><a class="n" href="#">봉사자 시간표</a></div>
+
+    <a class="g" href="#"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>재정</a>
+    <div class="subs"><a class="n" href="#">예산</a><a class="n" href="#">지출</a></div>
+
+    <a class="single" href="#"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>알림<span class="badge">14</span></a>
+    <!-- 작업 파일은 사이드바에 없다 — 드로어의 첨부 탭이 그 자리다 (3장 · 4-9) -->
+    <a class="single" href="#" style="margin-top:2px"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>체크리스트</a>
+    <a class="single" id="nav-settings" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>설정</a>
+
+    <div class="me"><i>박</i><div>박민준<small>총무팀(관리자) · 1 총무M</small></div></div>
+  </aside>
+
+  <!-- 홈 -->
+  <main class="main" id="view-home">
+    <h1>2026 여름수련회 Belong</h1>
+    <div class="sub">2026.08.21 – 2026.08.23 <span class="pill">D-11주</span></div>
+    <div class="alert late">기한이 지난 할 일이 <b>&nbsp;7건&nbsp;</b> 있습니다. <a href="#" style="text-decoration:underline">목록에서 보기</a></div>
+    <div class="alert wait">담당자 없이 기한이 1주일 이내인 할 일이 <b>&nbsp;3건&nbsp;</b> 있습니다. 총무팀 확인이 필요합니다.</div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">남은 할 일</div><div class="v">61</div></div>
+      <div class="kpi"><div class="l">완료</div><div class="v">114 <small>/ 175</small></div></div>
+      <div class="kpi"><div class="l">예산 집행률</div><div class="v" style="color:var(--accent)">38.2<small>%</small></div><div class="sub" style="margin-top:4px">사용 4,545,900원 / 예산 11,900,000원</div></div>
+      <div class="kpi"><div class="l">지연</div><div class="v" style="color:var(--late)">7</div></div>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <div class="h">내 할 일<span>오늘까지</span><button class="btn" style="margin-left:auto">전체 보기</button></div>
+        <div class="b">
+          <div class="task"><div><div class="t">수련회장 계약내용 최종 조정/확인</div><div class="m"><span class="chip d" style="--c:#2F4858">1 총무M</span><span class="chip">박민준</span><span class="chip due">06/07 · D+2</span></div></div><span class="st late">지연</span></div>
+          <div class="task"><div><div class="t">시설에 식수 확정</div><div class="m"><span class="chip d" style="--c:#2F4858">1 총무M</span><span class="chip">박민준</span><span class="chip due">06/08 · D+1</span></div></div><span class="st late">지연</span></div>
+          <div class="task"><div><div class="t">총무 재정팀 운영 계획</div><div class="m"><span class="chip d" style="--c:#8A6A4F">7 재정</span><span class="chip">박민준</span><span class="chip">06/09 · 오늘</span></div></div><span class="st prog">진행중</span></div>
+          <div class="task"><div><div class="t">To-Do list 구상 및 주차별 계획 완료 (재정)</div><div class="m"><span class="chip d" style="--c:#8A6A4F">7 재정</span><span class="chip">박민준</span><span class="chip">06/09 · 오늘</span></div></div><span class="st wait">대기</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="h">예산 집행<button class="btn" style="margin-left:auto">자세히</button></div>
+        <div class="b">
+          <div class="bl" style="margin-top:6px"><b>4,545,900원</b><span>지출예산 11,900,000원</span></div>
+          <div class="bar"><i style="width:38%"></i></div>
+          <div class="bl"><span>홍보 › 포스터 › 인쇄비</span><span class="over">339,000 / 300,000</span></div><div class="bar"><i class="over" style="width:100%"></i></div>
+          <div class="bl"><span>홍보 › 굿즈 › 명찰·웰컴키트</span><span>0 / 900,000</span></div><div class="bar"><i style="width:0"></i></div>
+          <div class="bl"><span>장소비 › 숙소 › 리조트 대관</span><span>3,800,000 / 4,000,000</span></div><div class="bar"><i style="width:95%"></i></div>
+          <div class="bl"><span>그 외 › 준비지원 › 모임 식사비</span><span>368,900 / 1,000,000</span></div><div class="bar"><i style="width:37%"></i></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="h">이번 주<span>7일 이내</span></div>
+      <div class="b">
+        <div class="task"><div><div class="t">1일차 집회 큐시트</div><div class="m"><span class="chip d" style="--c:#B44B42">6 코람데오</span><span class="chip">최도현</span><span class="chip">06/12 · D-3</span></div></div><span class="st prog">진행중</span></div>
+        <div class="task" style="opacity:.6"><div><div class="t">포스터 시안 2차</div><div class="m"><span class="chip d" style="--c:#B95A83">4 스케치</span><span class="chip">정하윤</span><span class="chip">06/14 · D-5</span></div></div><span class="st wait">대기</span></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 설정 › 회차 관리 -->
+  <main class="main" id="view-settings" hidden>
+    <h1>설정</h1>
+    <div class="sub">앞의 두 탭은 누구나, 나머지는 총무팀만 보입니다.</div>
+    <nav class="stabs">
+      <a href="#">내 정보</a>
+      <a href="#" class="on">회차 관리</a>
+      <a href="#">부서</a>
+      <a href="#">사용자</a>
+      <a href="#">업무 라이브러리</a>
+      <a href="#">점검</a>
+      <span class="adm">총무팀(관리자)</span>
+    </nav>
+
+    <div class="fld">
+      <button class="btn p" style="padding:8px 16px;font-size:14px;font-weight:600">새 회차 만들기</button>
+      <div class="sub" style="margin-top:8px">4단계 마법사로 만듭니다. 업무 라이브러리에서 고르고, D-주차를 다시 계산하고, 빠진 필수 업무를 경고합니다.</div>
+      <div class="hint" style="margin-top:6px">팀별 수집 초안 — 열려 있는 초안 없음. <a href="#" style="text-decoration:underline">각 팀에 업무 선택 요청</a></div>
+    </div>
+
+    <div class="fld" style="margin-top:14px">
+      <h3>회차 목록</h3>
+      <table>
+        <tr><th>회차</th><th>기간</th><th>업무</th><th>지출</th><th>상태</th><th></th></tr>
+        <tr><td><a href="#" class="rlink" style="font-weight:600;color:var(--accent)">2026 여름수련회 Belong</a></td><td>2026.08.21 – 08.23</td><td>175건</td><td>12건 · 8,390,900원</td><td><span class="st prog">진행 중</span></td><td style="text-align:right"><button class="btn rlink">수정</button></td></tr>
+      </table>
+      <div class="hint">지난 회차를 지어내지 않습니다. 실행 이력은 이 한 회차뿐입니다. 회차명을 누르면 상세로 갑니다.</div>
+    </div>
+  </main>
+
+  <!-- 설정 › 회차 관리 › 회차 상세 -->
+  <main class="main" id="view-retreat" hidden>
+    <div class="sub"><a href="#" class="back">설정</a> › <a href="#" class="back">회차 관리</a> › 2026 여름수련회 Belong</div>
+    <h1 style="margin-top:4px">2026 여름수련회 Belong <span class="st prog" style="vertical-align:middle;margin-left:6px">진행 중</span></h1>
+
+    <div class="form" style="margin-top:16px">
+      <div class="fld">
+        <h3>회차 설정</h3>
+        <div class="kv">
+          <span class="k">이름</span><span class="v">2026 여름수련회 Belong</span>
+          <span class="k">개회일</span><span class="v">2026-08-21</span>
+          <span class="k">폐회일</span><span class="v">2026-08-23</span>
+          <span class="k">D-1주차</span><span class="v" style="color:var(--ink-2)">2026-08-16 (일) · 개회일에서 계산</span>
+          <span class="k">식대 1인 상한</span><span class="v">8,000원</span>
+        </div>
+        <div class="hint">개회일을 바꾸면 모든 업무 날짜가 D-주차를 유지한 채 함께 움직입니다. 칸을 누르면 바로 고칩니다.</div>
+        <div style="margin-top:10px;display:flex;gap:6px"><button class="btn p">저장</button><button class="btn">회차 보관</button></div>
+      </div>
+
+      <div class="fld">
+        <h3>이 회차의 부서</h3>
+        <div class="kv" style="grid-template-columns:1fr 1fr">
+          <span class="chip d" style="--c:#2F4858;justify-self:start">1 총무M · 2명</span><span class="chip d" style="--c:#77848F;justify-self:start">1 총무팀 · 7명</span>
+          <span class="chip d" style="--c:#3B6EA5;justify-self:start">3 선교사회 · 1명</span><span class="chip d" style="--c:#B95A83;justify-self:start">4 스케치 · 1명</span>
+          <span class="chip d" style="--c:#4A8A5C;justify-self:start">5 헤브론 · 2명</span><span class="chip d" style="--c:#B44B42;justify-self:start">6 코람데오 · 2명</span>
+          <span class="chip d" style="--c:#8A6A4F;justify-self:start">7 재정 · 1명</span><span class="chip d" style="--c:#7A5BA6;justify-self:start">8 개기자 · 1명</span>
+          <span class="chip d" style="--c:#A98A1E;justify-self:start">9 새친구팀 · 1명</span>
+        </div>
+        <div class="hint">부서 이름·색·순서는 <a href="#" style="text-decoration:underline">부서</a> 탭에서 고칩니다.</div>
+      </div>
+
+      <div class="fld" style="grid-column:1/-1">
+        <h3>현황</h3>
+        <div class="kpis" style="margin-top:0">
+          <div class="kpi"><div class="l">업무</div><div class="v">175 <small>완료 114 · 지연 7</small></div></div>
+          <!-- 붉은색은 period.is_over 일 때만. 0건이면 붉지 않다. 4-17 -->
+          <div class="kpi"><div class="l">남은 지출</div><div class="v" style="color:var(--late)">3건 <small>3,500,000원</small></div><div class="sub" style="margin-top:4px">지출 완료 12건 · 8,390,900원</div></div>
+          <div class="kpi"><div class="l">예산 집행률</div><div class="v" style="color:var(--accent)">70.0<small>%</small></div><div class="sub" style="margin-top:4px">사용 8,327,900원 / 예산 11,900,000원</div></div>
+          <div class="kpi"><div class="l">프로그램표</div><div class="v">61 <small>항목 157</small></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const views={home:document.getElementById('view-home'),settings:document.getElementById('view-settings'),retreat:document.getElementById('view-retreat')};
+  const navs={home:document.getElementById('nav-home'),settings:document.getElementById('nav-settings')};
+  function show(v){
+    for(const k in views){views[k].hidden=(k!==v)}
+    navs.home.classList.toggle('on',v==='home'); navs.settings.classList.toggle('on',v!=='home');
+    document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===v));
+  }
+  document.querySelectorAll('.rlink').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();show('retreat')}));
+  document.querySelectorAll('.back').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();show('settings')}));
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
+  navs.home.addEventListener('click',e=>{e.preventDefault();show('home')});
+  navs.settings.addEventListener('click',e=>{e.preventDefault();show('settings')});
+</script>
+</body>
+</html>

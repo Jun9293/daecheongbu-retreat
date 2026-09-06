@@ -18,9 +18,10 @@
   {% block auth_content %}{% endblock %}
 {% else %}
 
+{# 옛 /schedule 은 지웠다 — 5-8 봉사자 시간표(/live/staff)가 그 자리다 #}
 {% set nav_items = [
   ('/dashboard',   'home',      '홈',        [ '/dashboard' ]),
-  ('/schedule',    'calendar',  '일정표',     [ '/schedule' ]),
+  ('/live/staff',  'calendar',  '봉사자 시간표', [ '/live/staff' ]),
   ('/tasks',       'check',     '할 일',      [ '/tasks' ]),
   ('/expenses',    'receipt',   '지출',       [ '/expenses', '/refunds' ]),
   ('/budget',      'chart',     '예산',       [ '/budget' ]),
@@ -113,9 +114,10 @@
     {{ icon(ico, 21) }}{{ label }}
   </a>
   {% endfor %}
-  {% set more_paths = ['/more', '/budget', '/reviews', '/files', '/checklists', '/meetings', '/notifications', '/settings'] %}
-  <a href="/more" class="{% if path in more_paths %}on{% endif %}">
-    {{ icon('grid', 21) }}더보기
+  {# /more 는 지웠다 — 설정 › 점검(4-17)이 그 자리다 #}
+  {% set more_paths = ['/budget', '/reviews', '/files', '/checklists', '/meetings', '/notifications', '/settings'] %}
+  <a href="/settings" class="{% if path in more_paths %}on{% endif %}">
+    {{ icon('grid', 21) }}설정
     {% if pending_review_count %}<span class="dot"></span>{% endif %}
   </a>
 </nav>
@@ -127,5 +129,6 @@
 
 <script src="{{ static('js/flash.js') }}" defer></script>
 <script src="{{ static('js/app.js') }}" defer></script>
+<script src="{{ static('js/push.js') }}" defer></script>
 </body>
 </html>

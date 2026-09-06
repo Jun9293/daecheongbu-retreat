@@ -1,116 +1,96 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import dept_tag, empty %}
-{% block title %}체크리스트{% endblock %}
-{% block content %}
+{% extends "retreat_base.html" %}
+{% block title %}체크리스트 · {{ retreat.name }}{% endblock %}
+{# 껍데기만 옮겼다 (3장 · UI 개편 단계 1) — 폼 action·항목·권한은 옛 화면 그대로다.
+   비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들이라 첨부·업무 규칙과 겹치지 않는다. #}
 
-<div class="page-head">
+{% block body %}
+<main class="setting">
   <h1>체크리스트</h1>
-  <p class="sub">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</p>
-</div>
+  <div class="sub">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</div>
 
-{% if not is_readonly(user.role) %}
-<details class="panel" {% if not checklists %}open{% endif %}>
-  <summary>{{ icon('plus', 17) }}<span class="grow">체크리스트 만들기</span></summary>
-  <div class="panel-body">
-    <form method="post" action="/checklists/create">
-      <div class="field">
-        <label for="c-name">이름</label>
-        <input id="c-name" name="name" required placeholder="예: 1일차 집회 비품">
+  {% if not is_readonly(user.role) %}
+  <details class="fld" style="margin-top:14px" {% if not checklists %}open{% endif %}>
+    <summary style="cursor:pointer;font-weight:600;font-size:var(--fz-md)">체크리스트 만들기</summary>
+    <form method="post" action="/checklists/create" style="margin-top:10px">
+      <div class="kv">
+        <span class="k">이름</span>
+        <input name="name" required placeholder="예: 1일차 집회 비품">
+        <span class="k">부서</span>
+        <select name="department_id">
+          <option value="">부서 미지정</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+        <span class="k">연결할 할 일</span>
+        <select name="task_id">
+          <option value="">연결 없음</option>
+          {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
+        </select>
+        <span class="k">항목 (한 줄에 하나)</span>
+        <textarea name="items" rows="5" placeholder="무선마이크 4개&#10;마이크 배터리&#10;HDMI 케이블"
+                  style="font:inherit;font-size:var(--fz-md);padding:6px 9px;border:1px solid var(--rule-2);border-radius:5px;width:100%;max-width:420px"></textarea>
       </div>
-      <div class="grid-2">
-        <div class="field">
-          <label for="c-dept">부서</label>
-          <select id="c-dept" name="department_id">
-            <option value="">부서 미지정</option>
-            {% for d in departments %}
-            <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label for="c-task">연결할 할 일 <span class="muted">· 선택</span></label>
-          <select id="c-task" name="task_id">
-            <option value="">연결 없음</option>
-            {% for t in tasks %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label for="c-items">항목 <span class="muted">· 한 줄에 하나씩</span></label>
-        <textarea id="c-items" name="items" rows="5" placeholder="무선마이크 4개&#10;마이크 배터리&#10;HDMI 케이블"></textarea>
-      </div>
-      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}만들기</button>
+      <div style="margin-top:10px"><button class="sbtn p" type="submit">만들기</button></div>
     </form>
-  </div>
-</details>
-{% endif %}
+  </details>
+  {% endif %}
 
-{% for c in checklists %}
-<div class="card {% if is_other_dept(user, c.department_id) %}faded{% endif %}">
-  <div class="card-head">
-    <div class="grow">
-      <h2>{{ c.name }}</h2>
-      <div class="item-meta">
-        {% if c.department %}{{ dept_tag(c.department) }}{% endif %}
-        {% if c.task %}<span class="tag">{{ icon('check') }}{{ c.task.title }}</span>{% endif %}
-        <span class="tag {% if c.progress_pct == 100 %}tag-ok{% endif %}">{{ c.checked_count }}/{{ c.items|length }}</span>
-      </div>
+  {% for c in checklists %}
+  <div class="fld" style="margin-top:14px;{% if is_other_dept(user, c.department_id) %}opacity:.6{% endif %}">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <h3 style="margin:0">{{ c.name }}</h3>
+      {% if c.department %}<span class="deptchip" style="--c:{{ c.department.color }}"><i></i>{{ c.department.name }}</span>{% endif %}
+      {% if c.task %}<span class="deptchip">{{ c.task.title }}</span>{% endif %}
+      <span class="stbadge {% if c.progress_pct == 100 %}done{% else %}prog{% endif %}">{{ c.checked_count }}/{{ c.items|length }}</span>
+      <span style="flex:1"></span>
+      {% if can_edit_dept(user, c.department_id) %}
+      <form method="post" action="/checklists/{{ c.id }}/delete" onsubmit="return confirm('이 체크리스트를 삭제할까요?')">
+        <button class="sbtn" type="submit" aria-label="삭제">삭제</button>
+      </form>
+      {% endif %}
     </div>
+
+    <div style="margin:10px 0 4px">
+      {% for item in c.items %}
+      <div class="tickrow {% if item.checked %}done{% endif %}">
+        {% if can_edit_dept(user, c.department_id) %}
+        <form method="post" action="/checklists/items/{{ item.id }}/toggle">
+          <button class="tick {% if item.checked %}on{% endif %}" type="submit" aria-label="{{ item.label }} 체크">✓</button>
+        </form>
+        {% else %}
+        <span class="tick {% if item.checked %}on{% endif %}">✓</span>
+        {% endif %}
+        <span class="ticklabel">
+          {{ item.label }}
+          {% if item.quantity %}<span class="deptchip">{{ item.quantity }}</span>{% endif %}
+          {% if item.checked and item.checked_by_name %}
+          <span class="sub">— {{ item.checked_by_name }} {{ item.checked_at.strftime('%m/%d') }}</span>
+          {% endif %}
+        </span>
+        {% if can_edit_dept(user, c.department_id) %}
+        <form method="post" action="/checklists/items/{{ item.id }}/delete">
+          <button class="sbtn" type="submit" aria-label="항목 삭제">×</button>
+        </form>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="sub">항목이 없습니다.</div>
+      {% endfor %}
+    </div>
+
     {% if can_edit_dept(user, c.department_id) %}
-    <form method="post" action="/checklists/{{ c.id }}/delete" onsubmit="return confirm('이 체크리스트를 삭제할까요?')">
-      <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 15) }}</button>
+    <form method="post" action="/checklists/{{ c.id }}/items" style="display:flex;gap:8px;border-top:1px solid var(--rule);padding-top:10px">
+      <input name="label" placeholder="항목 추가" required
+             style="font:inherit;font-size:var(--fz-md);padding:5px 9px;border:1px solid var(--rule-2);border-radius:5px;flex:1;min-width:140px">
+      <input name="quantity" placeholder="수량"
+             style="font:inherit;font-size:var(--fz-md);padding:5px 9px;border:1px solid var(--rule-2);border-radius:5px;width:80px">
+      <button class="sbtn" type="submit">추가</button>
     </form>
     {% endif %}
   </div>
-
-  <div style="padding: 0 16px">
-    <div class="bar {% if c.progress_pct == 100 %}ok{% endif %}" style="margin:12px 0 4px">
-      <i style="width: {{ c.progress_pct }}%"></i>
-    </div>
-  </div>
-
-  <div class="card-body flush">
-    {% for item in c.items %}
-    <div class="tick-row {% if item.checked %}done{% endif %}">
-      {% if can_edit_dept(user, c.department_id) %}
-      <form method="post" action="/checklists/items/{{ item.id }}/toggle">
-        <button class="tick {% if item.checked %}on{% endif %}" type="submit" aria-label="{{ item.label }} 체크">
-          {{ icon('check', 15) }}
-        </button>
-      </form>
-      {% else %}
-      <span class="tick {% if item.checked %}on{% endif %}">{{ icon('check', 15) }}</span>
-      {% endif %}
-      <span class="tick-label">
-        {{ item.label }}
-        {% if item.quantity %}<span class="tag">{{ item.quantity }}</span>{% endif %}
-        {% if item.checked and item.checked_by_name %}
-        <span class="muted tiny">— {{ item.checked_by_name }} {{ item.checked_at.strftime('%m/%d') }}</span>
-        {% endif %}
-      </span>
-      {% if can_edit_dept(user, c.department_id) %}
-      <form method="post" action="/checklists/items/{{ item.id }}/delete">
-        <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="항목 삭제">{{ icon('x', 14) }}</button>
-      </form>
-      {% endif %}
-    </div>
-    {% else %}
-    {{ empty('항목이 없습니다', 'checklist') }}
-    {% endfor %}
-  </div>
-
-  {% if can_edit_dept(user, c.department_id) %}
-  <div class="card-body" style="border-top:1px solid var(--line)">
-    <form method="post" action="/checklists/{{ c.id }}/items" class="row">
-      <input name="label" placeholder="항목 추가" required class="grow" style="min-width:140px">
-      <input name="quantity" placeholder="수량" style="width:80px;flex:0 0 auto">
-      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('plus', 15) }}</button>
-    </form>
-  </div>
-  {% endif %}
-</div>
-{% else %}
-<div class="card"><div class="card-body">{{ empty('아직 체크리스트가 없습니다', 'checklist') }}</div></div>
-{% endfor %}
+  {% else %}
+  <div class="fld" style="margin-top:14px"><span class="sub">아직 체크리스트가 없습니다.</span></div>
+  {% endfor %}
+</main>
 {% endblock %}

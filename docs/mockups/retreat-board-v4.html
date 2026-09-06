@@ -13,7 +13,7 @@
   --hover:rgba(55,53,47,.06); --sunk:rgba(55,53,47,.045);
   --ink:#37352F; --ink-2:#787774; --ink-3:#9B9A97;
   --rule:rgba(55,53,47,.09); --rule-2:rgba(55,53,47,.16);
-  --link:#2383E2; --now:#C4554D; --now-tint:#FBF1F0; --now-ink:#A3423B;
+  --link:#4F46E5; --now:#C4554D; --now-tint:#FBF1F0; --now-ink:#A3423B;
   --go:#4C8A5E;
   --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
   --h-team:38px; --h-main:34px; --h-sub:29px;
@@ -167,7 +167,7 @@ select{font:inherit;font-size:13px;padding:4px 7px;border:1px solid var(--rule-2
 #wires circle{fill:var(--link)}
 .bar.anchor{box-shadow:0 0 0 2px var(--link);z-index:9!important;opacity:1!important;font-weight:600}
 .bar.lit{box-shadow:0 0 0 1.5px var(--ink);z-index:8!important;opacity:1!important}
-.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);background:rgba(35,131,226,.06);font-weight:600}
+.row.anchorrow>.lc{box-shadow:inset 3px 0 0 var(--link);background:rgba(79,70,229,.06);font-weight:600}
 .row.hl>.lc{box-shadow:inset 2px 0 0 var(--ink-2);background:var(--hover)}
 
 /* ── 상세 패널 ── */
@@ -257,7 +257,7 @@ select{font:inherit;font-size:13px;padding:4px 7px;border:1px solid var(--rule-2
 .fitem .more:hover{background:var(--rule);color:var(--ink)}
 .drop{margin-top:12px;border:1px dashed var(--rule-2);border-radius:6px;padding:18px 14px;
   text-align:center;font-size:12.5px;color:var(--ink-3);line-height:1.7}
-.drop.over{border-color:var(--link);background:rgba(35,131,226,.05);color:var(--ink-2)}
+.drop.over{border-color:var(--link);background:rgba(79,70,229,.05);color:var(--ink-2)}
 .drop b{display:block;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:3px}
 .drop .pick{font:inherit;font-size:12.5px;margin-top:9px;padding:5px 12px;border-radius:4px;
   cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink)}
@@ -284,7 +284,7 @@ select{font:inherit;font-size:13px;padding:4px 7px;border:1px solid var(--rule-2
   font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   color:var(--ink-2);background:var(--paper);position:relative}
 .cal .dcell.pad{border-color:transparent;background:none;color:transparent}
-.cal .dcell.in{background:rgba(35,131,226,.08);border-color:rgba(35,131,226,.22);color:var(--ink)}
+.cal .dcell.in{background:rgba(79,70,229,.08);border-color:rgba(79,70,229,.22);color:var(--ink)}
 .cal .dcell.edge{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
 .cal .dcell.late{background:var(--now-tint);border-color:var(--now);color:var(--now-ink);font-weight:600}
 .cal .dots{display:flex;gap:2px;height:5px}
@@ -446,7 +446,7 @@ const TEAMS=[
  {id:'saechingu',n:'9 새친구팀',s:'새친구',c:'#A98A1E'},
 ];
 const TC=Object.fromEntries(TEAMS.map(t=>[t.id,t]));
-const STATUS={done:{l:'완료',c:'#9B9A97'},wip:{l:'진행중',c:'#2383E2'},todo:{l:'예정',c:'#787774'},late:{l:'지연',c:'#C4554D'}};
+const STATUS={done:{l:'완료',c:'#9B9A97'},wip:{l:'진행중',c:'#4F46E5'},todo:{l:'예정',c:'#787774'},late:{l:'지연',c:'#C4554D'}};
 
 const DATA={
 chongmuM:[
@@ -816,7 +816,7 @@ function drawWires(){
     const mx=(ax+lx)/2;
     d+=`<path d="M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${ly}, ${lx} ${ly}"/>`;
     d+=`<circle cx="${lx}" cy="${ly}" r="2.6"/>`});
-  d+=d?`<circle cx="${ax}" cy="${ay}" r="4.5" fill="#2383E2"/>`:'';
+  d+=d?`<circle cx="${ax}" cy="${ay}" r="4.5" fill="#4F46E5"/>`:'';
   wires.innerHTML=d;
   wires.setAttribute('width',sheet.scrollWidth);wires.setAttribute('height',sheet.scrollHeight)}
 addEventListener('resize',drawWires);

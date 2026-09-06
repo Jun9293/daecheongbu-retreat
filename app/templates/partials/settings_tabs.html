@@ -1,0 +1,16 @@
+{# 설정 탭 여섯 (4-17) — 앞 둘은 누구나, 나머지는 총무팀(admin)만.
+   화면은 흩어져 있어도(계정 관리는 /admin/users 그대로) 탭 줄은 여기 한 벌이다 —
+   두 벌이면 탭이 늘 때 한쪽만 고쳐진다. #}
+{% macro settings_tabs(user, current) %}
+<nav class="stabs">
+  <a href="/settings" {% if current == 'me' %}aria-current="page"{% endif %}>내 정보</a>
+  <a href="/settings/retreats" {% if current == 'retreats' %}aria-current="page"{% endif %}>회차 관리</a>
+  {% if is_admin(user) %}
+  <a href="/settings/departments" {% if current == 'departments' %}aria-current="page"{% endif %}>부서</a>
+  <a href="/admin/users" {% if current == 'users' %}aria-current="page"{% endif %}>사용자</a>
+  <a href="/settings/library" {% if current == 'library' %}aria-current="page"{% endif %}>업무 라이브러리</a>
+  <a href="/settings/checkup" {% if current == 'checkup' %}aria-current="page"{% endif %}>점검</a>
+  <span class="adm">{{ ROLE_LABELS.get(user.role, user.role) }}</span>
+  {% endif %}
+</nav>
+{% endmacro %}

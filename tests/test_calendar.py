@@ -135,9 +135,9 @@ def test_01_사이드바에_달력이_있고_열린다(admin_client, cal_data):
     assert "</html>" in page.text
 
     shell = open("app/templates/retreat_base.html", encoding="utf-8").read()
-    assert "'/calendar'" in shell and "'달력'" in shell
-    # 준비 단계 바로 아래
-    assert shell.index("'/board'") < shell.index("'/calendar'") < shell.index("'/live'")
+    assert 'href="/calendar"' in shell and ">달력</a>" in shell
+    # 수련회 준비 묶음 안, 보드 바로 아래 (3장 — 목록 · 보드 · 달력)
+    assert shell.index('href="/board"') < shell.index('href="/calendar"') < shell.index('"/live"')
     assert 'href="/calendar"' in page.text
 
 
@@ -1323,30 +1323,28 @@ def retreat_of_cal(db):
 # ── 1 · 2 · 3. 사이드바 ──────────────────────────────────────────────
 
 
-def test_t_01_준비_단계_묶음에_보드와_달력이_있다(admin_client, cal_data):
-    """보드와 달력은 **같은 데이터를 다른 축으로 보는 화면**이라 한 묶음이다
-    (4-13). 나란히 놓으면 별개 기능으로 읽힌다."""
+def test_t_01_수련회_준비_묶음에_목록_보드_달력이_있다(admin_client, cal_data):
+    """보드와 달력은 **같은 TaskRun 을 다른 축으로 보는 화면**이라 한 묶음이다
+    (3장 — 보드는 얽힘, 달력은 마감, 목록은 순서)."""
     page = admin_client.get("/calendar?scope=all").text
 
-    label = '<div class="navgroup">준비 단계</div>'
+    label = ">수련회 준비</a>"
     assert label in page, "묶음이 없다"
     after = page[page.index(label):]
-    # 바로 아래에 둘이 **한 단계 들어가** 붙어 있다
-    upto = after[: after.index('class="navlabel"')]
-    assert 'class="sub" href="/board"' in upto
-    assert 'class="sub" href="/calendar"' in upto
-    assert ">보드" in upto and ">달력" in upto
+    # 바로 아래에 셋이 **한 단계 들어가** 붙어 있다
+    upto = after[: after.index("수련회 진행")]
+    assert 'href="/tasks"' in upto
+    assert 'href="/board"' in upto
+    assert 'href="/calendar"' in upto
+    assert ">목록" in upto and ">보드" in upto and ">달력" in upto
 
 
-def test_t_02_준비_단계가_회색_묶음_제목과_구별된다(admin_client, cal_data):
-    """`준비 단계` 는 `수련회 진행` 과 **같은 수준의 항목**이다.
-    `실무`·`회차 준비` 의 회색 묶음 제목과 달라야 한다."""
+def test_t_02_그룹_제목이_하위와_급이_갈린다(admin_client, cal_data):
+    """그룹 제목과 홑 항목 = 같은 급 (잉크 600), 하위 = 한 급 아래
+    (들여쓰기 + 가이드선 + 보조색). 4-0 B안. 회색 묶음 제목(navlabel)은 없다."""
     page = admin_client.get("/calendar?scope=all").text
-
-    # 회색 묶음 제목은 그대로 둘이다
-    for name in ("실무", "회차 준비"):
-        assert f'<div class="navlabel">{name}</div>' in page
-    assert '<div class="navlabel">준비 단계</div>' not in page, "아직 회색 묶음 제목이다"
+    assert 'class="navlabel"' not in page, "회색 묶음 제목이 남아 있다"
+    assert 'class="navgroup"' not in page, "누를 수 없는 묶음 제목이 남아 있다"
 
     css = (ROOT / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
     import re as _r
@@ -1356,21 +1354,16 @@ def test_t_02_준비_단계가_회색_묶음_제목과_구별된다(admin_client
         at = body.index(sel + "{")
         return body[at + len(sel) + 1 : body.index("}", at)]
 
-    item = decl(".sidenav nav a")
-    group = decl(".sidenav .navgroup")
-    label = decl(".sidenav .navlabel")
+    group = decl(".sidenav nav .g,.sidenav nav .single")
+    sub = decl(".sidenav .subs .n")
 
-    # 항목과 같은 글자 크기·색. **크기는 이제 눈금에서 끌어온다** —
-    # 숫자로 박아 두면 다음에 키울 때 여기만 남는다
-    assert "font-size:var(--fz-base)" in item and "font-size:var(--fz-base)" in group
-    assert "var(--ink-2)" in item and "var(--ink-2)" in group
-    # 묶음 제목은 **더 작지만 읽힌다.** 전에는 11px `--ink-3`(3.84:1) 이라
-    # 혼자 뜻을 지는 글자가 기준에 못 미쳤다 (9장) — 옆에 값이 없다
-    assert "font-size:var(--fz-md)" in label, "묶음 제목이 목록 하한보다 작다"
-    assert "var(--ink-2)" in label, "혼자 뜻을 지는데 흐림이다"
-    assert "var(--ink-3)" not in label
-    # 하위는 한 단계 들어간다
-    assert "padding-left" in decl(".sidenav nav a.sub")
+    # 그룹·홑 항목 — 잉크 600. 크기는 눈금에서 끌어온다 (숫자로 박지 않는다)
+    assert "font-size:var(--fz-md)" in group and "font-weight:600" in group
+    assert "color:var(--ink)" in group.replace(" ", "")
+    # 하위 — 보조색, 들여쓰기와 가이드선은 .subs 가 진다
+    assert "var(--ink-2)" in sub
+    subs = decl(".sidenav .subs")
+    assert "margin-left:16px" in subs and "border-left" in subs
 
 
 def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data):
@@ -1381,12 +1374,11 @@ def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data
 
     assert current(admin_client.get("/calendar?scope=all").text) == {"/calendar"}
     assert current(admin_client.get("/board").text) == {"/board"}
-    # 묶음 자체에는 붙지 않는다 — 링크가 아니다
+    # 그룹 제목 자체에는 붙지 않는다 — 선택 표시는 하위에만 (3장)
     page = admin_client.get("/calendar?scope=all").text
-    assert '<div class="navgroup">준비 단계</div>' in page
-    assert "navgroup\" aria-current" not in page
+    assert not re.search(r'class="g"[^>]*aria-current', page)
     # 표시는 **하위 항목**에 붙는다
-    assert 'class="sub" href="/calendar" aria-current="page"' in page
+    assert 'class="n" href="/calendar" aria-current="page"' in page
 
 
 # ── 4 · 8. 점이 기간을 들고 간다 ────────────────────────────────────
@@ -1530,7 +1522,8 @@ def test_t_04c_비침이_지연_선택_이_달_밖과_갈린다():
 
     # 위에 얹히는 것이 그대로 읽힌다
     assert _ratio("#37352F", "#FAF1D2") >= 4.5, "점의 글자가 안 읽힌다"
-    assert _ratio("#2383E2", "#FAF1D2") >= 3.0, "오늘 칸 테두리가 묻힌다"
+    # 오늘 칸 테두리 = --link (accent 로 흡수됨) — 화면에 실제로 있는 색을 잰다
+    assert _ratio(_token("--accent"), "#FAF1D2") >= 3.0, "오늘 칸 테두리가 묻힌다"
     assert _ratio("#C4554D", "#FAF1D2") >= 3.0, "지연 테두리가 묻힌다"
 
 

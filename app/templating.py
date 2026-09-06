@@ -197,6 +197,35 @@ def _badge_counts(context: dict) -> dict:
     return counts
 
 
+def _side_dept_name(context: dict) -> str | None:
+    """사이드바 사용자 카드의 부서 이름 — **키로 찾는다** (2장).
+
+    `user.department` 는 어느 회차의 행일지 모른다. 지금 보는 회차에 같은
+    키의 부서가 있으면 그 이름을 쓰고, 없으면 원래 행의 이름으로 물러선다."""
+    user = context.get("user")
+    if user is None or getattr(user, "department_id", None) is None:
+        return None
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.domain.departments import department_key_of
+    from app.models import Department
+
+    with SessionLocal() as db:
+        retreat = context.get("retreat")
+        key = department_key_of(db, user)
+        if retreat is not None and key:
+            dept = db.scalars(
+                select(Department).where(
+                    Department.retreat_id == retreat.id, Department.key == key
+                )
+            ).first()
+            if dept is not None:
+                return dept.name
+        dept = db.get(Department, user.department_id)
+        return dept.name if dept is not None else None
+
+
 def render(
     request: Request, template_name: str, context: dict, status_code: int = 200
 ) -> HTMLResponse:
@@ -206,6 +235,7 @@ def render(
         "flash": urllib.parse.unquote(flash) if flash else None,
         **_badge_counts(context),
         "active_draft": _active_draft(context),
+        "side_dept_name": _side_dept_name(context),
         **context,
     }
     response = templates.TemplateResponse(

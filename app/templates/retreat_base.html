@@ -16,7 +16,14 @@
    본문이 밀려 들어왔다 — 매일 여러 번 오가는 자리라 눈에 걸린다.
    `booting` 은 그 순간의 전환을 막고, 다음 프레임에 벗겨진다. */
 (function () {
-  try { if (localStorage.getItem('dcb.sidepin') === '1') document.body.classList.add('sidepin'); }
+  /* ≥1280px 는 펼침이 기본이다 (4-0 B안). 저장된 값이 있으면 그것이 우선 —
+     넓은 화면에서 손으로 접은 사람을 매번 다시 펴 주면 안 된다.
+     1280px 아래에서는 CSS 가 sidepin 을 무시하므로 붙어 있어도 접혀 보인다. */
+  try {
+    var saved = localStorage.getItem('dcb.sidepin');
+    if (saved === '1' || (saved === null && window.innerWidth >= 1280))
+      document.body.classList.add('sidepin');
+  }
   catch (e) { /* 사생활 모드 */ }
   requestAnimationFrame(function () {
     requestAnimationFrame(function () { document.body.classList.remove('booting'); });
@@ -24,34 +31,22 @@
 })();
 </script>
 
-{# ── 사이드바 ─────────────────────────────────────────────────────────
-   상단 탭 줄을 없앴다. 같은 목록이 두 군데 있을 이유가 없다.
-   기본은 접힘. 왼쪽 위 토글로 고정해서 열고, 화면 왼쪽 가장자리에
-   마우스를 대면 잠깐 떠서 나온다. #}
-{# 보드와 달력은 **같은 데이터를 다른 축으로 보는 화면**이라 한 묶음으로 둔다
-   (4-13). 나란히 놓으면 별개 기능으로 읽힌다 — 보드는 "몇 주에 걸쳐 어떻게
-   얽혔나", 달력은 "이번 주에 내가 뭘 해야 하나" 다. #}
-{% set nav_prep = [
-  ('/board',    '보드', 'board',    none),
-  ('/calendar', '달력', 'calendar', none),
-] %}
-{% set nav_main = [
-  ('/live',     '수련회 진행', 'live',   none),
-  ('/meetings', '회의록',    'meetings', none),
-  ('/budget',   '재정',      'budget',   '재설계 예정'),
-] %}
-{% set nav_work = [
-  ('/tasks',    '할 일',     'tasks',    none),
-  ('/expenses', '지출',      'expenses', none),
-  ('/files',    '작업 파일', 'files',    none),
-  ('/reviews',  '확인 요청', 'reviews',  none),
-  ('/checklists', '체크리스트', 'checklists', none),
-  ('/notifications', '알림함', 'notifications', none),
-] %}
+{# ── 사이드바 (B안 · 3장) ────────────────────────────────────────────
+   구성: 로고+앱명 → 회차 드롭다운 → 그룹(아이콘+라벨) → 하위 → 알림 배지 →
+   하단 사용자 카드. ≥1280px 펼침 고정(본문이 밀린다), 그 아래는 접힘 +
+   가장자리 호버. 시각 스펙: docs/mockups/retreat-shell.html
+
+   그룹 제목은 **첫 하위로 가는 링크**다. 선택 표시는 하위에만 붙는다 —
+   그룹은 호버만 있고 활성 상태가 없다 (둘 다 칠하면 어디 있는지 두 번 말한다).
+   새 회차 만들기·라이브러리·작업 파일은 여기 없다 — 설정(4-17)과
+   드로어의 첨부 탭(4-9)이 그 자리다.
+
+   아직 새 화면이 없는 자리는 옛 주소로 잇는다 — 홈 → /board(단계 2),
+   목록 → 옛 /tasks(단계 3), 알림 → 옛 /notifications(단계 4). #}
 
 <div class="sideedge" id="sideedge" aria-hidden="true"></div>
 <aside class="sidenav" id="sidenav">
-  <a class="brand" href="/board"><span class="mark">대</span>{{ retreat.name if retreat else '대청부 수련회' }}</a>
+  <a class="brand" href="/board"><span class="mark">대</span>대청부 수련회</a>
 
   {% if retreats and retreats|length > 1 %}
   <select class="pick" aria-label="회차 선택"
@@ -60,50 +55,48 @@
     <option value="{{ r.id }}" {% if retreat and r.id == retreat.id %}selected{% endif %}>{{ r.name }}</option>
     {% endfor %}
   </select>
+  {% elif retreat %}
+  <div class="pick" aria-label="현재 회차">{{ retreat.name }}</div>
   {% endif %}
 
   <nav>
-    {# `준비 단계` 는 `수련회 진행`·`회의록` 과 **같은 수준의 항목**이다.
-       그 아래 `보드`·`달력` 이 한 단계 들어간다 — "준비 단계를 두 가지로
-       본다" 로 읽혀야 한다. `실무`·`회차 준비` 의 회색 묶음 제목과는 다르다.
+    <a class="single" href="/board" style="margin-top:0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>홈</a>
+    <a class="single" href="/meetings" {% if active_tab == 'meetings' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM8 12h8M8 16h8"/></svg>회의록</a>
 
-       **누를 수 없게 두었다.** 보드와 달력이 늘 함께 보이므로 부모가 갈 곳을
-       가질 이유가 없고, 같은 곳으로 가는 링크가 둘이면 어느 것을 눌러야 할지
-       알 수 없어진다 — 4-9 에서 버튼을 두 자리에 두지 않기로 한 것과 같다.
-       지금 보고 있는 화면 표시는 **하위 항목**에 붙는다. #}
-    <div class="navgroup">준비 단계</div>
-    {% for href, label, tab, wip in nav_prep %}
-    <a class="sub" href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
+    <a class="g" href="/tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M9 5v14"/></svg>수련회 준비</a>
+    <div class="subs">
+      <a class="n" href="/tasks" {% if active_tab == 'tasks' %}aria-current="page"{% endif %}>목록</a>
+      <a class="n" href="/board" {% if active_tab == 'board' %}aria-current="page"{% endif %}>보드</a>
+      <a class="n" href="/calendar" {% if active_tab == 'calendar' %}aria-current="page"{% endif %}>달력</a>
+    </div>
 
-    {% for href, label, tab, wip in nav_main %}
-    <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}
-      {% if wip %}<i class="wip" title="이전 설계 화면입니다. 다음 단계에서 다시 만듭니다.">{{ wip }}</i>{% endif %}</a>
-    {% endfor %}
+    <a class="g" href="/live"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9z"/></svg>수련회 진행</a>
+    <div class="subs">
+      <a class="n" href="/live" {% if active_tab == 'live' %}aria-current="page"{% endif %}>진행 화면</a>
+      <a class="n" href="/live/staff" {% if active_tab == 'staff' %}aria-current="page"{% endif %}>봉사자 시간표</a>
+    </div>
 
-    <div class="navlabel">실무</div>
-    {% for href, label, tab, wip in nav_work %}
-    <a href="{{ href }}" {% if active_tab == tab %}aria-current="page"{% endif %}>{{ label }}</a>
-    {% endfor %}
+    <a class="g" href="/budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>재정</a>
+    <div class="subs">
+      <a class="n" href="/budget" {% if active_tab == 'budget' %}aria-current="page"{% endif %}>예산</a>
+      <a class="n" href="/expenses" {% if active_tab == 'expenses' %}aria-current="page"{% endif %}>지출</a>
+    </div>
 
-    {% if active_draft or is_admin(user) %}
-    <div class="navlabel">회차 준비</div>
     {% if active_draft %}
-    <a href="/draft" {% if active_tab == 'draft' %}aria-current="page"{% endif %}>회차 준비
+    <a class="single" href="/draft" {% if active_tab == 'draft' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>회차 준비
       <i class="wip live">{{ active_draft.submitted }}/{{ active_draft.total }}</i></a>
     {% endif %}
-    {% if is_admin(user) %}
-    <a href="/library" {% if active_tab == 'library' %}aria-current="page"{% endif %}>업무 라이브러리</a>
-    <a href="/setup" {% if active_tab == 'setup' %}aria-current="page"{% endif %}>새 회차 만들기</a>
-    <a href="/admin/users" {% if active_tab == 'users' %}aria-current="page"{% endif %}>계정 관리</a>
-    <a href="/admin/notify/preview" {% if active_tab == 'notify' %}aria-current="page"{% endif %}>알림 미리보기</a>
-    {% endif %}
-    {% endif %}
+
+    {% set nav_badge = (unread_count or 0) + (pending_review_count or 0) %}
+    <a class="single" href="/notifications" {% if active_tab == 'notifications' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>알림{% if nav_badge %}<span class="badge">{{ nav_badge }}</span>{% endif %}</a>
+    <a class="single" href="/checklists" {% if active_tab == 'checklists' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>체크리스트</a>
+    <a class="single" href="/settings" {% if active_tab == 'settings' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>설정</a>
   </nav>
 
   <div class="sidefoot">
-    <span><b>{{ user.name }}</b> · {{ ROLE_LABELS.get(user.role, user.role) }}{% if user.department %} · {{ user.department.name }}{% endif %}</span>
-    <span class="links"><a href="/settings">설정</a><a href="/logout">로그아웃</a></span>
+    <span class="avatar" aria-hidden="true">{{ user.name[:1] }}</span>
+    <span><b>{{ user.name }}</b><small>{{ ROLE_LABELS.get(user.role, user.role) }}{% if side_dept_name %} · {{ side_dept_name }}{% endif %}</small></span>
+    <span class="links"><a href="/logout">로그아웃</a></span>
   </div>
 </aside>
 

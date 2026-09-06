@@ -1,9 +1,11 @@
 {% extends "retreat_base.html" %}
-{% block title %}계정 관리 · 대청부 수련회{% endblock %}
+{% from "partials/settings_tabs.html" import settings_tabs %}
+{% block title %}사용자 · 설정{% endblock %}
 
 {% block body %}
 <main class="wiz">
-  <h2>계정 관리</h2>
+  {{ settings_tabs(user, 'users') }}
+  <h2>사용자</h2>
   <p class="lead">
     사람을 등록하고 <b>초대 링크</b>를 발급합니다. 링크는 카카오톡으로 직접 전달하세요.
     링크는 <b>7일</b> 동안 쓸 수 있고 <b>한 번 쓰면 만료</b>됩니다.

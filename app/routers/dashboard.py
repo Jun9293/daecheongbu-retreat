@@ -13,9 +13,6 @@ from app.deps import all_retreats, get_current_retreat
 from app.domain.budget import build_budget_summary
 from app.domain.dependencies import blocking_tasks
 from app.models import (
-    Checklist,
-    FileAsset,
-    Meeting,
     Retreat,
     ScheduleDay,
     Task,
@@ -27,40 +24,7 @@ from app.templating import render
 router = APIRouter()
 
 
-@router.get("/more")
-def more_menu(
-    request: Request,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """모바일 하단바에 다 넣을 수 없는 화면들을 모은 허브."""
-    retreats = all_retreats(db)
-    if not retreats:
-        return render(request, "no_retreat.html", {"user": user})
-
-    retreat = get_current_retreat(request, db, user)
-    counts = {
-        "files": len(
-            db.scalars(select(FileAsset).where(FileAsset.retreat_id == retreat.id)).all()
-        ),
-        "checklists": len(
-            db.scalars(select(Checklist).where(Checklist.retreat_id == retreat.id)).all()
-        ),
-        "meetings": len(
-            db.scalars(
-                select(Meeting).where(
-                    (Meeting.retreat_id == retreat.id) | (Meeting.retreat_id.is_(None))
-                )
-            ).all()
-        ),
-    }
-    return render(
-        request,
-        "more.html",
-        {"user": user, "retreat": retreat, "retreats": retreats, "counts": counts},
-    )
-
-
+# /more 는 지웠다 — 설정 › 점검 탭(4-17)이 그 자리다.
 # 새 준비 단계 보드가 홈이 됐다. 기존 대시보드는 /dashboard 로 옮겼다.
 @router.get("/dashboard")
 def dashboard(
