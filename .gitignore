@@ -46,3 +46,8 @@ data/notion-meetings/
 # Claude API 키. **저장소에 한 번 올라가면 지우고 커밋해도 히스토리에 남는다.**
 # 넣는 방법은 docs/배포-안내.md 14장.
 data/anthropic_key.txt
+
+# 채점 화면(scripts/score.py)이 쓰기 전에 남기는 원본 백업과 쓰는 동안의
+# 임시 파일. **실명이 든 채점표의 사본이다** (data/*.real.md 와 같은 이유).
+data/*.bak
+data/*.tmp
