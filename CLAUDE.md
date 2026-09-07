@@ -1822,7 +1822,12 @@ TaskRun {
   startedAt?,                         // 처음 '대기'를 벗어난 날. 되돌려도 지우지 않는다 (4-10)
   completedAt?,                       // 실제로 끝난 날. '완료'를 벗어나면 지운다
                                       // (착수는 사실이지만 완료는 취소된다)
-  blockedByRunIds[]
+  blockedByRunIds[],
+  sourceMeetingId?                    // 출처 — 회의 항목에서 전환된 업무면 그
+                                      // 회의록 (12장). 논의의 sourceMeetingId
+                                      // (4-9)와 같은 자리 — 논의는 논의 쪽에,
+                                      // 업무는 업무 쪽에 단다. 비면 사람이
+                                      // 보드·마법사에서 만든 것
 }
 
 DiscussionEntry {
@@ -2710,6 +2715,17 @@ https://raw.githubusercontent.com/Jun9293/daecheongbu-retreat/<이번>/docs/revi
   영수증은 지출 1건에 N개(`ExpenseReceipt`), 환급 대상자는 지출 목록의 필터다
 - 회의록 + 액션아이템 → 업무 전환 — 화면과 옮기기는 만들었고(`/meetings` ·
   `scripts/import_meetings.py`), **제안이 남았습니다.**
+
+  **회의 항목 → 할 일 전환(`/meetings/items/{id}/to-task`)은 이번 회차의
+  업무(TaskRun)를 만듭니다** — 보드의 「새로 만들기」(/board/add/new)와 같은
+  모양(라이브러리 + run · run_no max+1 · 선행 재연결)이고, 날짜는 항목의
+  마감일 하나(없으면 비움 — 달력의 「날짜 없는 업무」), 출처는
+  `TaskRun.sourceMeetingId`(8장)로 남으며, 만든 뒤 그 업무의 드로어
+  (`/tasks?task=`)로 갑니다. **옛 Task 를 만들던 기간이 있었습니다**(UI 개편
+  전 설계 그대로 2026-09-07 까지) — 옛 화면을 걷어낸 뒤에는 그 행을 아무
+  화면도 안 읽어서, 전환한 항목이 어디에도 안 나타났습니다. 운영에서 그 길로
+  만들어진 행은 0건이고(활동기록 실측), 옛 Task 행은 옮기지 않습니다
+  (`docs/봐둘것.md`).
   지금은 **낱말 겹침**으로 고릅니다. 2026-09-03 에 사람이 표본 21개를 눈으로
   채점했습니다(`docs/review/제안-성적표.md`) — **14/21 (67%)**, 논의 8/13 ·
   새 업무 6/8. 틀린 일곱 중 **넷이 같은 모양**입니다: 낱말은 겹쳤는데
@@ -2872,6 +2888,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 노션 회의록 자르기 | `app/domain/meeting_import.py` (`cut` · `people_notes`) |
 | 회의록 옮기기 (일회성) | `scripts/import_meetings.py` — 미리보기가 기본. `--until` 로 시뮬레이션, `--undo` 로 되돌림 |
 | 회의록 화면 | `app/routers/meetings.py` · `templates/meetings.html` · `meeting_detail.html` |
+| 회의 항목 → 할 일 전환 (12장) | `routers/meetings.py` 의 `/items/{id}/to-task` — TaskRun 을 만들고 `source_meeting_id` 로 출처를 남긴 뒤 `/tasks?task=` 로 간다. 옛 Task 를 만들던 기간의 행은 옮기지 않는다 |
 | 회의록을 읽고 제안하기 | `app/domain/suggest.py` — **읽고 제안하는 창구는 여기 하나다** (화면이든 채팅이든) |
 | Claude API 로 나가기 | `app/domain/llm.py` — **문은 여기 하나다.** 키·모델·요금이 두 곳에 있으면 갈리고, 갈린 쪽을 아무도 모른다 |
 | 회의록을 문장으로 읽기 | `app/domain/suggest.py` 의 `분석()` — 1차(목록+회의록) → 2차(후보의 논의 이력). **2차는 볼 것이 있을 때만** |
