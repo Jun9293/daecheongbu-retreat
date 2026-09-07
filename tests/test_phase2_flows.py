@@ -34,11 +34,48 @@ def _make_user(admin_client, name, phone, role, dept_id=None):
 
 
 def _make_task(admin_client, title, dept_id=None, **extra):
-    data = {"title": title, "department_id": str(dept_id) if dept_id else "", "status": "대기"}
-    data.update(extra)
-    admin_client.post("/tasks/create", data=data, follow_redirects=True)
+    """옛 Task 행을 DB 에 직접 만든다.
+
+    옛 /tasks/create 는 단계 3 에서 지웠다 (4-14) — 표와 행은 남으므로,
+    남은 코드(위험 점검·확인 요청)가 그 행을 어떻게 다루는지는 계속 시험한다.
+    """
     with app_session() as db:
-        return db.scalars(select(models.Task).where(models.Task.title == title)).one()
+        task = models.Task(
+            retreat_id=db.scalars(select(models.Retreat)).first().id,
+            title=title,
+            department_id=dept_id,
+            assignee_id=int(extra["assignee_id"]) if extra.get("assignee_id") else None,
+            due_date=dt.date.fromisoformat(extra["due_date"]) if extra.get("due_date") else None,
+            status=extra.get("status", "대기"),
+            blocked_by_task_ids=[],
+            related_department_ids=[],
+        )
+        db.add(task)
+        db.commit()
+        return task
+
+
+def _request_review(task, department_ids, message=""):
+    """확인 요청을 직접 만든다 — 옛 /tasks/{id}/review-request 는 지웠고(4-14),
+    만드는 함수(create_review_requests)는 파일 쪽이 계속 쓴다. 응답 흐름
+    (/reviews/{id}/respond)은 그대로 살아 있다."""
+    from app.routers.reviews import create_review_requests
+
+    with app_session() as db:
+        retreat = db.get(models.Retreat, task.retreat_id)
+        requester = db.scalars(
+            select(models.User).where(models.User.role == "admin")
+        ).first()
+        created = create_review_requests(
+            db,
+            retreat=retreat,
+            requester=requester,
+            department_ids=department_ids,
+            message=message,
+            task=db.get(models.Task, task.id),
+        )
+        db.commit()
+        return [r.id for r in created]
 
 
 def _unread(user_id: int) -> list[models.Notification]:
@@ -54,96 +91,11 @@ def _unread(user_id: int) -> list[models.Notification]:
 
 
 # ================================================================ 선후행 의존성
-
-
-def test_선행_작업을_지정하면_후행이_막힘으로_표시된다(admin_client):
-    _setup(admin_client)
-    design = _make_task(admin_client, "포스터 시안 확정")
-    printing = _make_task(admin_client, "포스터 인쇄 발주")
-
-    response = admin_client.post(
-        f"/tasks/{printing.id}/blockers",
-        data={"blocker_ids": [str(design.id)]},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-
-    page = admin_client.get("/tasks")
-    assert "선행 대기: 포스터 시안 확정" in page.text
-    with app_session() as db:
-        assert db.get(models.Task, printing.id).blocked_by_task_ids == [design.id]
-
-
-def test_선행이_완료되면_후행_담당자에게_시작가능_알림이_간다(admin_client):
-    _, depts = _setup(admin_client)
-    hongbo = depts[0]
-    worker = _make_user(admin_client, "최부원", "010-4444-5555", "member", hongbo.id)
-
-    design = _make_task(admin_client, "포스터 시안 확정", hongbo.id)
-    printing = _make_task(
-        admin_client, "포스터 인쇄 발주", hongbo.id, assignee_id=str(worker.id)
-    )
-    admin_client.post(
-        f"/tasks/{printing.id}/blockers",
-        data={"blocker_ids": [str(design.id)]},
-        follow_redirects=True,
-    )
-
-    response = admin_client.post(
-        f"/tasks/{design.id}/status", data={"status": "완료"}, follow_redirects=True
-    )
-
-    assert response.status_code == 200
-    titles = [n.title for n in _unread(worker.id)]
-    assert any("시작할 수 있습니다" in t and "포스터 인쇄 발주" in t for t in titles)
-
-
-def test_선행이_두_개면_하나만_끝나도_시작가능_알림은_안_간다(admin_client):
-    _, depts = _setup(admin_client)
-    hongbo = depts[0]
-    worker = _make_user(admin_client, "최부원", "010-4444-5555", "member", hongbo.id)
-
-    a = _make_task(admin_client, "시안 확정", hongbo.id)
-    b = _make_task(admin_client, "예산 승인", hongbo.id)
-    printing = _make_task(admin_client, "인쇄 발주", hongbo.id, assignee_id=str(worker.id))
-    admin_client.post(
-        f"/tasks/{printing.id}/blockers",
-        data={"blocker_ids": [str(a.id), str(b.id)]},
-        follow_redirects=True,
-    )
-
-    admin_client.post(f"/tasks/{a.id}/status", data={"status": "완료"}, follow_redirects=True)
-
-    assert not any("시작할 수 있습니다" in n.title for n in _unread(worker.id))
-
-
-def test_순환_참조는_거부된다(admin_client):
-    _setup(admin_client)
-    a = _make_task(admin_client, "A 작업")
-    b = _make_task(admin_client, "B 작업")
-
-    admin_client.post(
-        f"/tasks/{b.id}/blockers", data={"blocker_ids": [str(a.id)]}, follow_redirects=True
-    )
-    response = admin_client.post(
-        f"/tasks/{a.id}/blockers", data={"blocker_ids": [str(b.id)]}, follow_redirects=True
-    )
-
-    assert response.status_code == 200
-    with app_session() as db:
-        assert db.get(models.Task, a.id).blocked_by_task_ids == []
-
-
-def test_자기_자신은_선행으로_지정할_수_없다(admin_client):
-    _setup(admin_client)
-    a = _make_task(admin_client, "A 작업")
-
-    admin_client.post(
-        f"/tasks/{a.id}/blockers", data={"blocker_ids": [str(a.id)]}, follow_redirects=True
-    )
-
-    with app_session() as db:
-        assert db.get(models.Task, a.id).blocked_by_task_ids == []
+#
+# 옛 /tasks 의 선행 지정·시작가능 알림 흐름은 화면과 함께 지웠다 (4-14).
+# 순환·자기 자신 거부는 도메인이 지키고(tests/test_dependencies.py),
+# 새 화면의 선행은 보드 엔드포인트(/board/task/{id}/prerequisites)가 맡는다 —
+# tests/test_prerequisites.py 가 그쪽을 시험한다.
 
 
 # ================================================================ 에스컬레이션
@@ -218,13 +170,8 @@ def test_부서리더는_위험_점검을_직접_돌릴_수_없다(admin_client,
     assert response.status_code == 403
 
 
-def test_담당자로_지정되면_알림을_받는다(admin_client):
-    _, depts = _setup(admin_client)
-    worker = _make_user(admin_client, "최부원", "010-4444-5555", "member", depts[0].id)
-
-    _make_task(admin_client, "굿즈 수량 취합", depts[0].id, assignee_id=str(worker.id))
-
-    assert any("담당자로 지정됐습니다" in n.title for n in _unread(worker.id))
+# (옛 /tasks 라우터의 담당자 지정 알림은 화면과 함께 지웠다 — 4-14.
+#  TaskRun 쪽 알림은 4-11 의 묶음이 맡는다: tests/test_notify.py)
 
 
 # ================================================================ 확인 요청
@@ -236,18 +183,12 @@ def test_확인_요청을_보내면_상대_부서에_알림이_간다(admin_clie
     reviewer = _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
     task = _make_task(admin_client, "포스터 시안 확정", hongbo.id)
 
-    response = admin_client.post(
-        f"/tasks/{task.id}/review-request",
-        data={"department_ids": [str(chanyang.id)], "message": "문구 확인 부탁드려요"},
-        follow_redirects=True,
-    )
+    _request_review(task, [chanyang.id], "문구 확인 부탁드려요")
 
-    assert response.status_code == 200
     with app_session() as db:
         review = db.scalars(select(models.ReviewRequest)).one()
         assert review.status == "대기"
         assert review.department_id == chanyang.id
-        assert db.get(models.Task, task.id).status == "피드백요청"
 
     bodies = [n.body or "" for n in _unread(reviewer.id)]
     assert any("문구 확인 부탁드려요" in b for b in bodies)
@@ -258,11 +199,7 @@ def test_요청받은_부서가_승인하면_요청자에게_결과_알림이_�
     hongbo, chanyang = depts
     _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
     task = _make_task(admin_client, "포스터 시안 확정", hongbo.id)
-    admin_client.post(
-        f"/tasks/{task.id}/review-request",
-        data={"department_ids": [str(chanyang.id)], "message": "확인 부탁"},
-        follow_redirects=True,
-    )
+    _request_review(task, [chanyang.id], "확인 부탁")
     with app_session() as db:
         review = db.scalars(select(models.ReviewRequest)).one()
         requester_id = review.requester_id
@@ -290,11 +227,7 @@ def test_요청받지_않은_부서는_응답할_수_없다(admin_client, client
     hongbo, chanyang, saega = depts
     _make_user(admin_client, "새가족리더", "010-7777-8888", "dept_lead", saega.id)
     task = _make_task(admin_client, "포스터 시안 확정", hongbo.id)
-    admin_client.post(
-        f"/tasks/{task.id}/review-request",
-        data={"department_ids": [str(chanyang.id)]},
-        follow_redirects=True,
-    )
+    _request_review(task, [chanyang.id])
     with app_session() as db:
         review = db.scalars(select(models.ReviewRequest)).one()
 
@@ -311,11 +244,7 @@ def test_이미_처리된_요청은_다시_처리되지_않는다(admin_client, 
     hongbo, chanyang = depts
     _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
     task = _make_task(admin_client, "포스터 시안 확정", hongbo.id)
-    admin_client.post(
-        f"/tasks/{task.id}/review-request",
-        data={"department_ids": [str(chanyang.id)]},
-        follow_redirects=True,
-    )
+    _request_review(task, [chanyang.id])
     with app_session() as db:
         review = db.scalars(select(models.ReviewRequest)).one()
 

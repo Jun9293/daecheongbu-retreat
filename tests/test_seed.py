@@ -129,18 +129,22 @@ def test_할일_목록이_실제_데이터에서도_가볍게_유지된다(clien
     assert 'name="blocker_ids"' not in response.text
 
 
-def test_할일_상세에서_선행_작업을_지정할_수_있다(client):
+def test_옛_할일_상세_주소는_목록으로_301_이다(client):
+    """옛 /tasks/{id} 는 지웠다 (4-14) — 그 id 는 옛 Task 표의 것이라 run 으로
+    잇지 못한다. 표와 행은 남는다 (0장 첫 원칙)."""
     _seed(client)
     login_as(client, ADMIN_PHONE)
 
     with app_session() as db:
         task_id = db.scalars(select(models.Task)).first().id
+        before = len(db.scalars(select(models.Task)).all())
 
-    response = client.get(f"/tasks/{task_id}")
+    response = client.get(f"/tasks/{task_id}", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert 'name="blocker_ids"' in response.text
-    assert "선행 작업" in response.text
+    assert response.status_code == 301
+    assert response.headers["location"] == "/tasks"
+    with app_session() as db:
+        assert len(db.scalars(select(models.Task)).all()) == before  # 행은 그대로
 
 
 def test_모든_주요_화면이_실제_데이터에서_정상_렌더링된다(client):

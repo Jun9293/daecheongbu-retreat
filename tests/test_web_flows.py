@@ -48,17 +48,33 @@ def _create_categories(client, rows):
 
 
 def _dim_by_task_title(html: str) -> dict[str, bool]:
-    """할 일 카드마다 '제목 → 흐리게(dim) 표시 여부'를 뽑아낸다."""
+    """목록(4-14) 행마다 '제목 → 흐리게(dim) 표시 여부'를 뽑아낸다."""
     import re
 
     result = {}
     for match in re.finditer(
-        r'<div class="item ([^"]*)">.*?<div class="item-title">(.*?)</div>', html, re.S
+        r'<div class="trow lrow([^"]*)"[^>]*>.*?<span class="nm">([^<]+)', html, re.S
     ):
-        title = re.sub(r"<[^>]+>", "", match.group(2)).strip()
+        title = match.group(2).strip()
         if title:
-            result[title] = "faded" in match.group(1)
+            result[title] = "dim" in match.group(1)
     return result
+
+
+def _make_run(retreat_id, title, dept_id):
+    """TaskRun 하나를 DB 에 직접 만든다 — 목록(4-14)은 TaskRun 을 그린다."""
+    with app_session() as db:
+        lib = models.TaskLibrary(title=title, kind="main", default_d_week=5)
+        db.add(lib)
+        db.flush()
+        run = models.TaskRun(
+            library_id=lib.id, retreat_id=retreat_id, included=True,
+            department_id=dept_id, d_week=5,
+            start_date=dt.date.today(), end_date=dt.date.today() + dt.timedelta(days=7),
+            status="대기")
+        db.add(run)
+        db.commit()
+        return run.id
 
 
 DEFAULT_CATEGORIES = [
@@ -168,19 +184,22 @@ def _setup_two_departments(admin_client):
     return depts
 
 
-def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서는_흐리게_본다(admin_client, client):
-    hongbo, chanyang = _setup_two_departments(admin_client)
+def _keyed_two_departments(admin_client):
+    """부서 둘에 키를 붙인다 — 소속 비교는 키로 한다 (2장)."""
+    retreat = _create_retreat(admin_client)
+    hongbo, chanyang = _create_departments(admin_client, ["홍보팀", "찬양팀"])
+    with app_session() as db:
+        db.get(models.Department, hongbo.id).key = "hongbo"
+        db.get(models.Department, chanyang.id).key = "chanyang"
+        db.commit()
+    return retreat, hongbo, chanyang
 
-    admin_client.post(
-        "/tasks/create",
-        data={"title": "포스터 시안 확정", "department_id": str(hongbo.id), "status": "대기"},
-        follow_redirects=True,
-    )
-    admin_client.post(
-        "/tasks/create",
-        data={"title": "콘티 정리", "department_id": str(chanyang.id), "status": "대기"},
-        follow_redirects=True,
-    )
+
+def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서는_흐리게_본다(admin_client, client):
+    """옛 /tasks(Task 표)가 하던 것을 새 목록(4-14 · TaskRun)이 그대로 지킨다."""
+    retreat, hongbo, chanyang = _keyed_two_departments(admin_client)
+    _make_run(retreat.id, "포스터 시안 확정", hongbo.id)
+    _make_run(retreat.id, "콘티 정리", chanyang.id)
     make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
 
     leader = client
@@ -188,7 +207,7 @@ def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서�
     page = leader.get("/tasks?scope=all")
 
     assert page.status_code == 200
-    # 타 부서 할 일도 화면에 존재하되 흐리게(dim) 표시된다
+    # 타 부서 업무도 화면에 존재하되 흐리게(dim) 표시된다
     assert "포스터 시안 확정" in page.text
     assert "콘티 정리" in page.text
 
@@ -198,36 +217,35 @@ def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서�
 
 
 def test_부서리더는_타부서_할일의_상태를_바꿀_수_없다(admin_client, client):
-    hongbo, chanyang = _setup_two_departments(admin_client)
-    admin_client.post(
-        "/tasks/create",
-        data={"title": "콘티 정리", "department_id": str(chanyang.id), "status": "대기"},
-        follow_redirects=True,
-    )
+    """목록의 상태 변경도 보드와 같은 엔드포인트다 (4-14) — 같은 권한이 걸린다."""
+    retreat, hongbo, chanyang = _keyed_two_departments(admin_client)
+    run_id = _make_run(retreat.id, "콘티 정리", chanyang.id)
     make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
-    with app_session() as db:
-        task = db.scalars(select(models.Task)).one()
 
     login_as(client, "01033334444")
-    response = client.post(f"/tasks/{task.id}/status", data={"status": "완료"})
+    response = client.post(f"/board/task/{run_id}/status", json={"status": "완료"})
 
     assert response.status_code == 403
     with app_session() as db:
-        assert db.get(models.Task, task.id).status == "대기"
+        assert db.get(models.TaskRun, run_id).status == "대기"
 
 
-def test_열람전용_계정은_할일을_만들_수_없다(admin_client, client):
-    hongbo, _ = _setup_two_departments(admin_client)
+def test_열람전용_계정은_업무를_고칠_수_없다(admin_client, client):
+    """옛 /tasks/create 는 지웠다 (4-14) — 편집이 막히는 자리는 이제
+    보드·목록이 함께 쓰는 엔드포인트다."""
+    retreat, hongbo, _ = _keyed_two_departments(admin_client)
+    run_id = _make_run(retreat.id, "포스터 시안 확정", hongbo.id)
     make_user("담당 전도사", "010-5555-6666", "viewer", department_id=hongbo.id)
 
     login_as(client, "01055556666")
-    response = client.post(
-        "/tasks/create", data={"title": "몰래 추가", "department_id": str(hongbo.id)}
-    )
-
-    assert response.status_code == 403
+    assert client.post(
+        f"/board/task/{run_id}/status", json={"status": "완료"}
+    ).status_code == 403
+    assert client.post(
+        f"/board/task/{run_id}/discussion", json={"body": "몰래"}
+    ).status_code == 403
     with app_session() as db:
-        assert db.scalars(select(models.Task)).all() == []
+        assert db.get(models.TaskRun, run_id).status == "대기"
 
 
 # ------------------------------------------------------------ DoD: 지출·예산 진행률

@@ -25,7 +25,7 @@ from app.domain import suggestions as suggest_domain
 from app.domain.departments import DEPARTMENT_MASTER, DEPARTMENT_NAMES
 from app.models import User
 from app.security import require_admin
-from app.templating import redirect, render
+from app.templating import redirect, render, templates
 
 router = APIRouter()
 
@@ -35,6 +35,72 @@ def _parse(value: str) -> dt.date:
         return dt.date.fromisoformat(value)
     except ValueError as exc:  # pragma: no cover - 폼 검증 실패
         raise HTTPException(status_code=400, detail="날짜 형식이 올바르지 않습니다.") from exc
+
+
+def _render_item_rows(items: list[dict], db: Session, round_count: int) -> None:
+    """3단계의 행을 **목록과 같은 partial** 로 미리 그려서 실어 보낸다 (6-6 · 4-14).
+
+    행 모양을 두 벌(서버 Jinja + 화면 JS 템플릿)로 두면 반드시 갈리고,
+    갈린 쪽을 아무도 눈치채지 못한다. setup.js 는 받은 HTML 에 선택 상태
+    (on/off/clash)와 체크박스 동작만 얹는다 — 체크박스만 마법사의 것이다.
+    """
+    from markupsafe import escape
+
+    mod = templates.env.get_template("partials/taskrow.html").module
+    base = lib_domain.latest_retreat(db)
+    dept_map = {d.key: {"name": d.name, "color": d.color}
+                for d in (base.departments if base else [])}
+    for key, name, color in DEPARTMENT_MASTER:
+        dept_map.setdefault(key, {"name": name, "color": color})
+
+    def dept_of(key):
+        if not key:
+            return None                       # 담당 없음
+        # 모르는 키도 조용히 담당 없음으로 만들지 않는다 — 키를 그대로 보인다
+        return dept_map.get(key) or {"name": key, "color": "#69726D"}
+
+    for item in items:
+        tags = [{"cls": item["verdict"]["tone"], "label": item["verdict"]["label"]}]
+        if item["always_required"]:
+            tags.append({"cls": "must", "label": "필수 지정"})
+        if item["sub_count"]:
+            tags.append({"cls": "sub", "label": f"하위 {item['sub_count']}"})
+        if item["history"]:
+            hist = "".join(
+                f'<i{"" if h["executed"] else " class=\"no\""}><b></b></i>'
+                for h in item["history"]
+            )
+        else:
+            hist = "<i></i>" * round_count
+        cells = [
+            {"cls": "hist", "html": hist},
+            {"cls": "dwlbl", "html": f"D-{item['d_week']}주"},
+            {"cls": "dtlbl", "html": str(escape(item["start_label"]))},
+        ]
+        if item["kind"] == "library":
+            cells.append({
+                "cls": "rowact",
+                "html": f'<button type="button" class="editbtn" '
+                        f'data-edit="{escape(item["id"])}" title="이 업무 편집">편집</button>',
+            })
+        item["row_html"] = str(mod.taskrow({
+            "title": item["title"],
+            "attrs": {"data-i": item["id"]},
+            "tags": tags,
+            "why": item["rationale"] or None,
+            "dept": dept_of(item["department_key"]),
+            "cells": cells,
+        }, box=True))
+        item["subs_html"] = [
+            str(mod.subrow({
+                "title": sub["title"],
+                "cells": [
+                    {"cls": "dwlbl", "html": f"D-{sub['d_week']}주"},
+                    {"cls": "dtlbl", "html": str(escape(sub["start_label"]))},
+                ],
+            }))
+            for sub in item["children"]
+        ]
 
 
 def _default_open_date(db: Session) -> dt.date:
@@ -179,6 +245,9 @@ def preview(
                 "prereqs": [],
             }
         )
+
+    # 행을 목록과 같은 partial 로 미리 그린다 (6-6 · 4-14) — 두 벌을 두지 않는다
+    _render_item_rows(items, db, round_count=len(lib_domain.round_labels(db)))
 
     weeks = [
         {

@@ -1,121 +1,89 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import task_row, dept_tag, empty %}
-{% block title %}할 일 · {{ retreat.name }}{% endblock %}
-{% block content %}
+{% extends "retreat_base.html" %}
+{% from "partials/taskrow.html" import taskrow %}
+{% block title %}목록 · {{ retreat.name }}{% endblock %}
 
-<div class="page-head">
-  <h1>할 일</h1>
-  <p class="sub">타 부서 항목은 흐리게 표시됩니다. 존재는 보이되 내 일에 집중할 수 있게.</p>
+{#
+  목록 보기 (CLAUDE.md 4-14) — 같은 TaskRun 을 순서 축으로 본다.
+  행을 펼치면 보드 드로어(4-9)와 같은 partial · 같은 JS 가 그 자리에서 열린다.
+  삭제 단추는 없다 (4-9 · 0장). 배지는 구조가 실어 보낸 것을 그대로 쓴다 —
+  여기서 상태를 다시 가르지 않는다 (4-3).
+#}
+
+{# 한 행의 칸들 — 담당자 · 마감(D±N) · 상태 배지. 완료에는 D±N 이 안 실려
+   온다(도메인이 뺀다). due 의 b-* 는 배지 이름을 기계적으로 이어 붙인 것.
+   배지 html 은 `~` 로 잇지 않는다 — Markup 이 섞이면 나머지 글자까지
+   이스케이프돼 태그가 글자 그대로 찍힌다. 값 둘은 도메인 상수라 안전하다. #}
+{% macro lrow(row) %}
+{{ taskrow({
+  'title': row.title,
+  'cls': 'lrow' ~ (' dim' if row.dim else ''),
+  'attrs': {'data-run': row.run_id},
+  'dept': row.dept,
+  'cells': [
+    {'cls': 'cell asg' ~ ('' if row.assignee else ' none'),
+     'html': row.assignee|e if row.assignee else '담당자 없음'},
+    {'cls': 'cell due b-' ~ row.badge.cls,
+     'html': (row.end|short_date ~ (' · ' ~ row.dday if row.dday else '')) if row.end else '날짜 없음'},
+    {'cls': 'cell st',
+     'html': '<span class="stbadge %s">%s</span>'|format(row.badge.cls, row.badge.label)},
+  ],
+}) }}
+<div class="lfoot" data-run="{{ row.run_id }}">
+  <button type="button" class="lopen" data-open="{{ row.run_id }}">상세 · 선행 작업 · 확인 요청</button>
 </div>
+<div class="lslot" data-slot="{{ row.run_id }}" hidden></div>
+{% endmacro %}
 
-{% set qs = '?scope=' ~ scope %}
-<div class="chips">
-  <a href="/tasks?scope=mine{% if status_filter %}&status={{ status_filter }}{% endif %}"
-     class="chip {% if scope == 'mine' %}on{% endif %}">내 부서</a>
-  <a href="/tasks?scope=all{% if status_filter %}&status={{ status_filter }}{% endif %}"
-     class="chip {% if scope != 'mine' %}on{% endif %}">전체</a>
-  <span style="width:1px;background:var(--line);margin:4px 3px;flex:0 0 auto"></span>
-  {% for s in statuses %}
-  {% set cnt = all_tasks | selectattr('status', 'equalto', s) | list | length %}
-  <a href="/tasks{{ qs }}&status={{ s }}" class="chip {% if status_filter == s %}on{% endif %}">
-    {{ s }}<span class="cnt">{{ cnt }}</span>
-  </a>
-  {% endfor %}
-  {% if status_filter or department_filter %}
-  <a href="/tasks{{ qs }}" class="chip">{{ icon('x', 14) }}필터 해제</a>
-  {% endif %}
-</div>
+{% block body %}
+<main class="setting tlist" id="tlist" data-open-task="{{ open_task or '' }}">
+  <h1>목록</h1>
 
-<div class="chips">
-  {% for d in departments %}
-  {% set cnt = all_tasks | selectattr('department_id', 'equalto', d.id) | list | length %}
-  {% if cnt %}
-  <a href="/tasks{{ qs }}{% if status_filter %}&status={{ status_filter }}{% endif %}&department_id={{ d.id }}"
-     class="chip {% if department_filter == d.id %}on{% endif %}" style="--dept: {{ d.color_tag or '#878d97' }}">
-    <span class="swatch"></span>{{ d.name }}<span class="cnt">{{ cnt }}</span>
-  </a>
-  {% endif %}
-  {% endfor %}
-</div>
-
-{% if not is_readonly(user.role) %}
-<details class="panel">
-  <summary>{{ icon('plus', 17) }}<span class="grow">새 할 일 추가</span></summary>
-  <div class="panel-body">
-    <form method="post" action="/tasks/create">
-      <div class="field">
-        <label for="t-title">할 일</label>
-        <input id="t-title" name="title" required placeholder="예: 포스터 인쇄 발주">
-      </div>
-      <div class="grid-2">
-        <div class="field">
-          <label for="t-dept">담당 부서</label>
-          <select id="t-dept" name="department_id">
-            <option value="">부서 미지정</option>
-            {% for d in departments %}
-            <option value="{{ d.id }}" {% if d.id == user.department_id %}selected{% endif %}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label for="t-assignee">담당자</label>
-          <select id="t-assignee" name="assignee_id">
-            <option value="">미지정</option>
-            {% for m in members %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="field"><label for="t-due">기한</label><input id="t-due" name="due_date" type="date"></div>
-        <div class="field">
-          <label for="t-status">상태</label>
-          <select id="t-status" name="status">
-            {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label for="t-item">연결할 일정 <span class="muted">· 선택</span></label>
-        <select id="t-item" name="schedule_item_id">
-          <option value="">일정에 종속되지 않는 할 일</option>
-          {% for item in schedule_items %}
-          <option value="{{ item.id }}">{{ item.day.label }} {{ item.start_time or '' }} · {{ item.title }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="t-desc">설명 <span class="muted">· 선택</span></label>
-        <textarea id="t-desc" name="description" placeholder="필요한 내용을 적어주세요"></textarea>
-      </div>
-      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}할 일 추가</button>
-    </form>
+  {% set keep_dept = ('&dept=' ~ view.dept) if view.dept else '' %}
+  {% set keep_state = ('&state=' ~ view.state) if view.state else '' %}
+  {# 1줄 — 범위 + 상태 (4-14). 지연 건수는 계산값(overdue_of)이다 #}
+  <div class="chips">
+    <a class="chip{{ ' on' if view.scope == 'mine' }}" href="/tasks?scope=mine{{ keep_state }}{{ keep_dept }}">내 부서</a>
+    <a class="chip{{ ' on' if view.scope != 'mine' }}" href="/tasks?scope=all{{ keep_state }}{{ keep_dept }}">전체</a>
+    <span class="chipsep"></span>
+    {% for s, label in view.state_labels %}
+    <a class="chip{{ ' on' if view.state == s }}"
+       href="/tasks?scope={{ view.scope }}{{ '' if view.state == s else '&state=' ~ s }}{{ keep_dept }}">
+      {{ label }}<span class="cnt">{{ view.state_counts[s] }}</span></a>
+    {% endfor %}
   </div>
-</details>
-{% endif %}
+  {# 2줄 — 부서별 건수. 부서는 키로 (2장) #}
+  <div class="chips">
+    {% for d in view.dept_counts %}
+    <a class="chip{{ ' on' if view.dept == d.key }}" style="--dept:{{ d.color }}"
+       href="/tasks?scope={{ view.scope }}{{ keep_state }}{{ '' if view.dept == d.key else '&dept=' ~ d.key }}">
+      <span class="swatch"></span>{{ d.name }}<span class="cnt">{{ d.count }}</span></a>
+    {% endfor %}
+  </div>
 
-<div class="card">
-  <div class="card-head"><h2>{{ tasks|length }}건</h2></div>
-  <div class="card-body flush">
-    {% if tasks %}
-    <div class="list">
-      {% for task in tasks %}
-      {% set blockers = blockers_by_task.get(task.id, []) %}
-      <div>
-        {{ task_row(task, user, statuses, "/tasks", today(), blockers) }}
-        {% set reviews = reviews_by_task.get(task.id, []) %}
-        <div class="row tight" style="padding: 0 16px 11px 16px">
-          {% for r in reviews %}
-          <span class="tag rv-{{ r.status }}">{{ icon('inbox') }}{{ r.department.name }} {{ r.status }}</span>
-          {% endfor %}
-          <a class="tag tag-outline" href="/tasks/{{ task.id }}">{{ icon('chevron-right') }}상세 · 선행 작업 · 확인 요청</a>
-        </div>
-      </div>
-      {% endfor %}
+  <div class="lcard">
+    {% for row in view.rows %}{{ lrow(row) }}{% else %}
+    <div class="lempty">조건에 맞는 업무가 없습니다.</div>
+    {% endfor %}
+  </div>
+
+  {% if view.done_rows %}
+  {# 완료는 기본 접힘 (4-14) — 시선은 미완료로 가야 한다 #}
+  <details class="ldone"{% if open_in_done %} open{% endif %}>
+    <summary>완료 {{ view.done_rows|length }}건 보기</summary>
+    <div class="lcard">
+      {% for row in view.done_rows %}{{ lrow(row) }}{% endfor %}
     </div>
-    {% else %}
-      {{ empty('조건에 맞는 할 일이 없습니다', 'check') }}
-    {% endif %}
-  </div>
-</div>
+  </details>
+  {% endif %}
+</main>
+
+{# 상세 — 보드·달력과 같은 조각·같은 코드다 (4-9 · 4-14). 목록 전용 상세를
+   만들지 않는다. tasks.js 가 이 패널을 누른 행 아래로 옮겨 그 자리에서 편다. #}
+{% include "partials/drawer.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/listinput.js') }}" defer></script>
+<script src="{{ static('js/drawer.js') }}" defer></script>
+<script src="{{ static('js/tasks.js') }}" defer></script>
 {% endblock %}

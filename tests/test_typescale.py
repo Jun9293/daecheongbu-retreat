@@ -170,6 +170,8 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
     ".stabs .adm", ".kpi .v small", ".setting th", ".tickrow.done .ticklabel",
     # 회차 드롭다운의 ▾ — 옆의 회차 이름이 뜻을 다 진다 (단계 2)
     ".sidenav .pick .caret",
+    # 목록의 완료 접힘 캐럿(▸) — 옆의 「완료 N건 보기」 가 뜻을 다 진다 (단계 3)
+    ".ldone > summary::before",
 }
 
 
@@ -230,11 +232,15 @@ def test_ts_12_고른_부서가_주소에_남는다():
 
 
 def test_ts_14_좁은_화면도_같은_것을_본다():
-    """주 목록은 같은 `cal.weeks` 를 그린다 — 거르는 곳이 하나다."""
-    cal = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
-    격자 = cal.index('<table class="cal-grid">')
-    목록 = cal.index('<div class="calweeks">')
-    assert cal.count("for week in cal.weeks") == 2, "격자와 주 목록이 같은 것을 안 쓴다"
+    """주 목록은 같은 `cal.weeks` 를 그린다 — 거르는 곳이 하나다.
+    격자는 partial 로 나갔다 (4-13) — 전체 페이지와 /calendar/partial 이 같은 것."""
+    grid = (ROOT / "app" / "templates" / "partials" / "calendar_grid.html").read_text(
+        encoding="utf-8")
+    격자 = grid.index('<table class="cal-grid">')
+    목록 = grid.index('<div class="calweeks">')
+    assert grid.count("for week in cal.weeks") == 2, "격자와 주 목록이 같은 것을 안 쓴다"
     assert 격자 < 목록
-    # 고르는 칸은 둘 위에 하나뿐이다
+    # 고르는 칸은 둘 위에 하나뿐이다 — 달과 무관해서 partial 밖에 있다
+    cal = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
     assert cal.count("deptpick(") == 1
+    assert grid.count("deptpick(") == 0

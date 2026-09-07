@@ -1,0 +1,33 @@
+{#
+  업무 한 줄 — **목록(4-14)과 마법사 3단계(6-6)가 같은 것을 씁니다.**
+  두 벌이면 행 모양이 두 곳에서 갈리고, 갈린 쪽을 아무도 눈치채지 못합니다.
+
+  화면마다 다른 것은 칸(cells)의 내용뿐입니다 — 목록은 담당자·마감·상태 배지,
+  마법사는 이력 막대·D-주차·시작일. 체크박스(box)는 마법사만 켭니다.
+
+  r: {title, cls?, attrs?, tags: [{cls,label}], why?, dept?, cells: [{cls, html}]}
+  — dept 키가 없으면 그 칸을 내지 않고, 값이 비면 「담당 없음」 입니다.
+  — cells 의 html 은 부른 쪽(파이썬/템플릿)이 만든 것이라 safe 로 넣습니다.
+    글자를 넣는 쪽이 |e 로 이스케이프할 책임을 집니다.
+#}
+{% macro taskrow(r, box=False) -%}
+<div class="trow{% if r.cls %} {{ r.cls }}{% endif %}"{% for k, v in (r.attrs or {}).items() %} {{ k }}="{{ v }}"{% endfor %}>
+  {%- if box %}<span class="box"></span>{% endif -%}
+  <span class="main"><span class="nm">{{ r.title }}
+    {%- for t in (r.tags or []) %}<span class="tag {{ t.cls }}">{{ t.label }}</span>{% endfor %}</span>
+    {%- if r.why %}<span class="why">{{ r.why }}</span>{% endif -%}
+  </span>
+  {%- if 'dept' in r -%}
+    <span class="tm">{% if r.dept %}<i style="background:{{ r.dept.color }}"></i>{{ r.dept.name }}{% else %}담당 없음{% endif %}</span>
+  {%- endif -%}
+  {%- for c in (r.cells or []) %}<span class="{{ c.cls }}">{{ c.html|safe }}</span>{% endfor -%}
+</div>
+{%- endmacro %}
+
+{% macro subrow(s) -%}
+<div class="subrow{% if s.cls %} {{ s.cls }}{% endif %}">
+  <span class="branch">↳</span>
+  <span class="nm">{{ s.title }}</span>
+  {%- for c in (s.cells or []) %}<span class="{{ c.cls }}">{{ c.html|safe }}</span>{% endfor -%}
+</div>
+{%- endmacro %}

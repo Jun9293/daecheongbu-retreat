@@ -133,37 +133,21 @@ function renderLib() {
      rows: shown.filter(i => i.kind === 'suggestion')},
   ].filter(sec => sec.rows.length);
 
-  const dept = key => key
-    ? `<i style="background:${COLOR[key] || '#69726D'}"></i>${esc(NAME[key] || key)}`
-    : '담당 없음';
-
+  /* 행은 서버가 **목록과 같은 partial** 로 그려서 보낸다 (partials/taskrow.html ·
+     6-6 · 4-14). 여기서는 선택 상태(on/off/clash)와 하위 흐림만 얹는다 —
+     행 모양을 이쪽에도 적으면 두 벌이 되고, 갈린 쪽을 아무도 눈치채지 못한다.
+     체크박스(.box)는 partial 이 box=True 로 넣어 준 마법사만의 것이다. */
   const rowHtml = item => {
-    const hist = item.history.length
-      ? item.history.map(h => `<i class="${h.executed ? '' : 'no'}"><b></b></i>`).join('')
-      : data.round_labels.map(() => '<i></i>').join('');
     const on = sel.has(item.id);
-    const subs = (item.children || []).map(sub => `
-      <div class="subrow${on ? '' : ' off'}">
-        <span class="branch">↳</span>
-        <span class="nm">${esc(sub.title)}</span>
-        <span class="dwlbl">D-${sub.d_week}주</span>
-        <span class="dtlbl">${esc(sub.start_label)}</span>
-      </div>`).join('');
-    return `<div class="tgroup">
-      <div class="trow${on ? ' on' : ' off'}${item.clash ? ' clash' : ''}" data-i="${esc(item.id)}">
-        <span class="box"></span>
-        <span class="main"><span class="nm">${esc(item.title)}
-          <span class="tag ${item.verdict.tone}">${esc(item.verdict.label)}</span>
-          ${item.always_required ? '<span class="tag must">필수 지정</span>' : ''}
-          ${item.sub_count ? `<span class="tag sub">하위 ${item.sub_count}</span>` : ''}</span>
-          ${item.rationale ? `<span class="why">${esc(item.rationale)}</span>` : ''}</span>
-        <span class="tm">${dept(item.department_key)}</span>
-        <span class="hist">${hist}</span>
-        <span class="dwlbl">D-${item.d_week}주</span>
-        <span class="dtlbl">${esc(item.start_label)}</span>
-        ${item.kind === 'library' ? `<button type="button" class="editbtn" data-edit="${esc(item.id)}"
-            title="이 업무 편집">편집</button>` : ''}
-      </div>${subs}</div>`;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = (item.row_html || '') + (item.subs_html || []).join('');
+    const row = tpl.content.querySelector('.trow');
+    if (row) {
+      row.classList.add(on ? 'on' : 'off');
+      if (item.clash) row.classList.add('clash');
+    }
+    if (!on) tpl.content.querySelectorAll('.subrow').forEach(s => s.classList.add('off'));
+    return `<div class="tgroup">${tpl.innerHTML}</div>`;
   };
 
   $('lib').innerHTML = sections.map(sec => {
