@@ -65,6 +65,15 @@
     toggle.addEventListener('change', syncMealFields);
     syncMealFields();
   }
+
+  // 「수련회계좌」 한 번 클릭 — 환급 판정의 열쇠말이라(7-4) 오타를 줄인다
+  var payerFill = document.getElementById('payer-fill');
+  var payerInput = document.getElementById('e-payer');
+  if (payerFill && payerInput) {
+    payerFill.addEventListener('click', function () {
+      payerInput.value = payerFill.dataset.value;
+    });
+  }
   [amountInput, headInput].forEach(function (el) {
     if (el) el.addEventListener('input', updatePreview);
   });

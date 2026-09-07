@@ -112,17 +112,36 @@ def _departments(db: Session, retreat: Retreat) -> list[Department]:
     )
 
 
+def _my_department_id(db: Session, retreat: Retreat, user: User) -> int | None:
+    """이 회차에서의 내 부서 행 — **키로 찾는다** (2장). 소속 행이 다른 회차
+    것이어도 이번 회차의 같은 키 부서를 돌려준다. 없으면(키 없는 부서 등)
+    원래 행으로 물러선다."""
+    from app.domain.departments import department_key_of
+
+    my_key = department_key_of(db, user)
+    if my_key:
+        mine = db.scalar(
+            select(Department.id).where(
+                Department.retreat_id == retreat.id, Department.key == my_key
+            )
+        )
+        if mine is not None:
+            return mine
+    return user.department_id
+
+
 def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
     """'모임 식사비-1, -2, -3...' 반복 입력을 줄이기 위한 직전 입력값 제안 (7-2)."""
+    my_dept = _my_department_id(db, retreat, user)
     query = select(ExpenseEntry).where(
         ExpenseEntry.retreat_id == retreat.id, ExpenseEntry.is_meal_expense
     )
-    if user.department_id:
-        query = query.where(ExpenseEntry.department_id == user.department_id)
+    if my_dept:
+        query = query.where(ExpenseEntry.department_id == my_dept)
     last = db.scalars(query.order_by(ExpenseEntry.id.desc())).first()
     if last is None:
         return {
-            "department_id": user.department_id,
+            "department_id": my_dept,
             "payer_name": user.name,
             "payer_account": user.bank_account or "",
             "attendees": "",
@@ -243,7 +262,7 @@ def create_expense(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     dept_id = int(department_id) if department_id else None
-    assert_can_edit_department(user, dept_id)
+    assert_can_edit_department(db, user, dept_id)
 
     if amount < 0:
         raise HTTPException(status_code=400, detail="금액은 0원 이상이어야 합니다.")
@@ -325,7 +344,7 @@ def add_receipt(
     entry = db.get(ExpenseEntry, entry_id)
     if entry is None or entry.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
-    assert_can_edit_department(user, entry.department_id)
+    assert_can_edit_department(db, user, entry.department_id)
 
     added = _add_receipt(db, retreat, entry, file=receipt, memo=memo)
     if added is None:
@@ -354,7 +373,7 @@ def toggle_paid(
     entry = db.get(ExpenseEntry, entry_id)
     if entry is None or entry.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
-    assert_can_edit_department(user, entry.department_id)
+    assert_can_edit_department(db, user, entry.department_id)
 
     entry.paid = not entry.paid
     entry.paid_date = dt.date.today() if entry.paid else None
@@ -385,7 +404,7 @@ def delete_expense(
     entry = db.get(ExpenseEntry, entry_id)
     if entry is None or entry.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
-    assert_can_edit_department(user, entry.department_id)
+    assert_can_edit_department(db, user, entry.department_id)
 
     db.delete(entry)
     db.commit()
@@ -402,9 +421,15 @@ def delete_expense(
 
 
 @router.get("/refunds")
-def old_refund_list():
-    """옛 환급 대상자 페이지 — 지출 목록의 필터가 그 자리다 (7-4)."""
-    return RedirectResponse("/expenses?filter=refund", status_code=301)
+def old_refund_list(request: Request):
+    """옛 환급 대상자 페이지 — 지출 목록의 필터가 그 자리다 (7-4).
+
+    쿼리를 버리지 않는다 — 옛 즐겨찾기 `/refunds?retreat_id=N` 이
+    현재 회차로 조용히 떨어지면 다른 회차를 보게 된다.
+    """
+    query = str(request.url.query)
+    target = "/expenses?filter=refund" + (f"&{query}" if query else "")
+    return RedirectResponse(target, status_code=301)
 
 
 @router.get("/uploads/{filename}")

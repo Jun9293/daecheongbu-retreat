@@ -1759,6 +1759,8 @@ button.btn:disabled{opacity:.4;cursor:default}
 .expform .frow2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .expform .mealtoggle{flex-direction:row;align-items:center;gap:8px;font-size:var(--fz-md);color:var(--ink);
   padding:9px 12px;border:1px solid var(--rule-2);border-radius:6px}
+.expform .payerrow{display:flex;gap:6px}
+.expform .payerrow input{flex:1;min-width:0}
 .mealnote{background:var(--st-prog-bg);color:var(--st-prog-fg);border-radius:6px;
   padding:8px 12px;font-size:var(--fz-md);margin:0}
 .mealnote.warn{background:var(--st-wait-bg);color:var(--st-wait-fg)}

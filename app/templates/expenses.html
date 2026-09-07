@@ -66,7 +66,13 @@
       </div>
 
       <div class="frow2">
-        <label>지출자 <input name="payer_name" value="{{ meal_defaults.payer_name }}" placeholder="이름 또는 수련회계좌"></label>
+        {# 「수련회계좌」 는 환급 판정의 열쇠말이라(7-4) 한 번 클릭으로 넣는다 —
+           자유 텍스트는 그대로 두되 오타로 환급 목록에 끼는 길을 줄인다 #}
+        <label>지출자
+          <span class="payerrow">
+            <input id="e-payer" name="payer_name" value="{{ meal_defaults.payer_name }}" placeholder="이름 또는 수련회계좌">
+            <button type="button" class="sbtn" id="payer-fill" data-value="수련회계좌">수련회계좌</button>
+          </span></label>
         <label>지출자 계좌 <input name="payer_account" value="{{ meal_defaults.payer_account }}" placeholder="예: 국민 123456-01-123456"></label>
       </div>
 
@@ -115,7 +121,7 @@
                 {% if r.stored_name %}<a class="rcpt" href="/uploads/{{ r.stored_name }}" target="_blank">영수증 {{ r.number }}</a>
                 {% elif r.memo %}<span class="rcpt memo">영수증 {{ r.number }} · {{ r.memo }}</span>{% endif %}
               {% endfor %}
-              {% if can_edit_dept(user, e.department_id) %}
+              {% if can_edit_dept(user, e.department) %}
               <details class="rowedit"><summary>영수증 붙이기</summary>
                 <form method="post" action="/expenses/{{ e.id }}/receipts" enctype="multipart/form-data" class="editform">
                   <input name="receipt" type="file" accept="image/*,.pdf">
@@ -132,7 +138,7 @@
             <td class="nowrap">{{ e.payer_name or '–' }}
               {% if e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
             <td>
-              {% if can_edit_dept(user, e.department_id) %}
+              {% if can_edit_dept(user, e.department) %}
               <form method="post" action="/expenses/{{ e.id }}/paid">
                 <input type="hidden" name="redirect_to" value="/expenses{{ '?filter=' ~ filter if filter != 'all' }}">
                 <button class="sbtn{{ ' p' if not e.paid }}" type="submit">{{ '지급완료' if e.paid else '미지급' }}</button>
@@ -143,7 +149,7 @@
               {% if e.paid_date %}<div class="dim enote mono">{{ e.paid_date|short_date }}</div>{% endif %}
             </td>
             <td class="r">
-              {% if can_edit_dept(user, e.department_id) %}
+              {% if can_edit_dept(user, e.department) %}
               <form method="post" action="/expenses/{{ e.id }}/delete" onsubmit="return confirm('이 지출을 삭제할까요?')">
                 <button class="sbtn" type="submit">삭제</button>
               </form>

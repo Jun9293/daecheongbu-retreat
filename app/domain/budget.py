@@ -194,8 +194,16 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
 
 
 def is_refund_target(entry: ExpenseEntry) -> bool:
-    """지출자가 수련회계좌면 환급 대상이 아니고, 개인이면 환급 대상이다 (7-4)."""
-    return (entry.payer_name or "").strip() != RETREAT_ACCOUNT
+    """지출자가 수련회계좌면 환급 대상이 아니고, 개인이면 환급 대상이다 (7-4).
+
+    입력이 자유 텍스트라 **공백을 지우고** 견준다 — 「수련회 계좌」 같은 변형
+    표기가 환급 목록에 잡음으로 끼지 않게. **빈 값은 환급 대상이 아니다** —
+    지출자를 안 적은 것이지 개인이 낸 것이 아니고, 돌려줄 사람도 없다.
+    """
+    name = "".join((entry.payer_name or "").split())
+    if not name:
+        return False
+    return name != RETREAT_ACCOUNT
 
 
 def refund_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
