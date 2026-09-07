@@ -130,10 +130,10 @@ def test8_p01_장소_실명을_심으면_걸린다(tmp_path):
     # 개발 DB 게이트도 같은 목록을 본다 (load_map 의 names 에 합쳐진다)
     dev = _load_script("check_dev_db")
     assert real in [a for a, _ in dev._anon.load_map()[0]]
-    # 그리고 **장소가 살던 칸을 실제로 본다** — 목록에만 있고 칸을 안 보면
-    # 익명화 이전 프로그램표를 든 dev DB 가 그대로 지나간다 (검토자 지적)
+    # 그리고 **장소가 살던 칸을 실제로 본다** — 게이트는 글자 칸 전부를
+    # 기본으로 훑고 제외 목록만 뺀다. 그 칸들이 제외에 없어야 한다
     for 칸 in (("program_items", "text"), ("programs", "place"), ("programs", "name")):
-        assert 칸 in dev.이름칸
+        assert 칸 not in dev.제외칸
     import sqlite3
     import tempfile
     with tempfile.TemporaryDirectory() as td:
@@ -214,7 +214,7 @@ def test8_i04_JS_없는_길의_배너가_이름을_말한다(admin_client, perso
     r = admin_client.post(f"/admin/users/{person}/invite", follow_redirects=False)
     assert r.status_code == 303
     location = r.headers["location"]
-    assert "k=" in location and f"u={person}" in location
+    assert "k=" in location and "u=" not in location      # 이름은 키에 묶여 간다
     page = admin_client.get(location)
     assert "초대받을 사람 님의 링크입니다" in page.text
     assert 'id="invitelink"' in page.text and 'id="copylink"' in page.text

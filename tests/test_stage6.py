@@ -278,7 +278,7 @@ def test6_g05_깨진_대응표는_통과가_아니라_멈춤이다(tmp_path, mon
     with pytest.raises(SystemExit):                     # 삼키지 않는다
         dev.실명이있나(_fake_db(tmp_path, "아무개"))
 
-    monkeypatch.setattr(dev._anon, "load_map", lambda: ([], {}))
+    monkeypatch.setattr(dev._anon, "load_map", lambda: ([], [], []))
     with pytest.raises(SystemExit):                     # 빈 목록도 통과가 아니다
         dev.실명이있나(_fake_db(tmp_path, "아무개"))
 
