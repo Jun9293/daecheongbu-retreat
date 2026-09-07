@@ -51,59 +51,63 @@ _스펙.loader.exec_module(_anon)
 # 글자 칸은 스키마에서 읽어 기본으로 전부 훑고(새 칸도 저절로 대상이 된다),
 # 값의 형태가 정해져 있어 사람·장소·연락처가 들어올 수 없는 칸만 뺀다.
 # 시험(test9)이 이 제외 목록을 모델과 견주고, 볼 칸마다 심어서 걸리는지 잰다.
+# 각 줄은 「이유 — 근거: 파일:줄」 이다. 근거는 그 값을 만드는(또는 값의
+# 목록을 정하는) 자리 — **쓰는 곳을 실제로 열어 보고 적는다.** import_batch
+# 가 잘못 제외됐던 이유가 정확히 그것을 안 열어 본 것이었다. 줄이 밀리면
+# 목록이 낡는 것이고, test10_e01 이 자리 자체가 비는 것을 막는다.
 제외칸: dict[tuple[str, str], str] = {
-    ("activity_logs", "action"): "동작 슬러그 (코드가 정한 값)",
-    ("activity_logs", "actor_type"): "user|claude|system",
-    ("activity_logs", "target_type"): "대상 종류 슬러그",
-    ("departments", "color_tag"): "색 값",
-    ("departments", "key"): "영문 부서 키 (2장)",
-    ("draft_submissions", "department_key"): "영문 부서 키",
-    ("draft_submissions", "library_ids"): "숫자 id JSON",
-    ("expense_receipts", "stored_name"): "임의 난수 파일명 (4-9)",
-    ("file_assets", "status"): "상태 enum (옛 표)",
-    ("file_versions", "stored_name"): "임의 난수 파일명",
-    ("invite_tokens", "token_hash"): "토큰 해시 (4-12)",
-    ("meeting_items", "kind"): "종류 enum",
-    ("meetings", "origin"): "노션|직접 enum",
-    ("meetings", "suggest_hash"): "본문 해시",
-    ("meetings", "suggest_state"): "상태 enum",
-    ("meetings", "suggest_tokens"): "토큰 수 문자열",
-    ("notification_logs", "kind"): "알림 종류 enum (4-11)",
-    ("notifications", "dedupe_key"): "기계 중복 키",
-    ("notifications", "kind"): "알림 종류 enum",
-    ("notifications", "link"): "내부 경로 (/tasks?task=N)",
-    ("notifications", "target_type"): "대상 종류 슬러그",
-    ("program_items", "part_key"): "고정 파트 목록 (5-3)",
-    ("program_items", "phase"): "pre|mid|post",
-    ("program_items", "scope"): "team|person",
-    ("programs", "audience"): "all|staff",
-    ("programs", "day"): "선발대|N일차|폐회 (5-1)",
-    ("programs", "end_time"): "HH:MM",
-    ("programs", "start_time"): "HH:MM",
-    ("programs", "track"): "main|ops",
-    ("push_subscriptions", "auth"): "푸시 키",
-    ("push_subscriptions", "endpoint"): "푸시 서버 주소",
-    ("push_subscriptions", "p256dh"): "푸시 키",
-    ("push_subscriptions", "user_agent"): "브라우저가 만든 기계 문자열",
-    ("retreat_drafts", "department_keys"): "영문 부서 키 JSON",
-    ("retreat_drafts", "status"): "수집중|생성완료|취소",
-    ("review_requests", "status"): "대기|승인|반려",
-    ("schedule_days", "label"): "일자 라벨 (옛 표)",
-    ("schedule_items", "end_time"): "HH:MM (옛 표)",
-    ("schedule_items", "start_time"): "HH:MM (옛 표)",
-    ("task_attachments", "stored_name"): "임의 난수 파일명 (4-9)",
-    ("task_library", "date_anchor"): "week|open",
-    ("task_library", "default_department_key"): "영문 부서 키",
-    ("task_library", "origin"): "history|claude_suggestion",
-    ("task_library", "prerequisite_library_ids"): "숫자 id JSON",
-    ("task_library", "related_department_keys"): "영문 부서 키 JSON",
-    ("task_library", "related_library_ids"): "숫자 id JSON",
-    ("task_runs", "blocked_by_run_ids"): "숫자 id JSON",
-    ("task_runs", "status"): "대기|진행중|완료 (4-3)",
-    ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표)",
-    ("tasks", "related_department_ids"): "숫자 id JSON (옛 표)",
-    ("tasks", "status"): "상태 enum (옛 표)",
-    ("users", "role"): "권한 enum",
+    ("activity_logs", "action"): "동작 슬러그 — 근거: app/deps.py:85 (부르는 쪽이 상수로 준다)",
+    ("activity_logs", "actor_type"): "user|claude|system — 근거: app/deps.py:77 (기본 user)",
+    ("activity_logs", "target_type"): "대상 종류 슬러그 — 근거: app/deps.py:86",
+    ("departments", "color_tag"): "색 값 — 근거: seed.py:143 · app/routers/settings.py:390",
+    ("departments", "key"): "영문 부서 키 (2장) — 근거: app/routers/setup.py:333 (team{n} 발급)",
+    ("draft_submissions", "department_key"): "영문 부서 키 — 근거: app/domain/drafts.py:57",
+    ("draft_submissions", "library_ids"): "숫자 id JSON — 근거: app/domain/drafts.py:57",
+    ("expense_receipts", "stored_name"): "임의 난수 파일명 (4-9) — 근거: app/routers/expenses.py:76 (token_hex)",
+    ("file_assets", "status"): "상태 enum (옛 표 — 화면 없음) — 근거: app/routers/reviews.py:185",
+    ("file_versions", "stored_name"): "코드가 박는 데모 파일명 — 근거: seed.py:372 (실명이 들어올 입력 경로가 없다)",
+    ("invite_tokens", "token_hash"): "토큰 해시 (4-12) — 근거: app/domain/auth.py:76 (hash_token)",
+    ("meeting_items", "kind"): "안건|결정사항|액션아이템 — 근거: app/models.py:416 (MEETING_ITEM_KINDS)",
+    ("meetings", "origin"): "노션|직접 — 근거: scripts/import_meetings.py:296",
+    ("meetings", "suggest_hash"): "본문 해시 — 근거: app/routers/meetings.py:419",
+    ("meetings", "suggest_state"): "됨|실패|기다림 — 근거: app/routers/meetings.py:403-471",
+    ("meetings", "suggest_tokens"): "입력/출력 토큰 수 — 근거: app/routers/meetings.py:413",
+    ("notification_logs", "kind"): "알림 종류 enum (4-11) — 근거: app/domain/notify.py:306",
+    ("notifications", "dedupe_key"): "기계 중복 키 — 근거: app/notifications.py:143",
+    ("notifications", "kind"): "알림 종류 enum — 근거: app/notifications.py:137",
+    ("notifications", "link"): "코드가 만드는 내부 경로 — 근거: app/notifications.py:272 (/tasks?…)",
+    ("notifications", "target_type"): "대상 종류 슬러그 — 근거: app/notifications.py:141",
+    ("program_items", "part_key"): "고정 파트 목록 (5-3) — 근거: app/models.py:942 (PROGRAM_PARTS)",
+    ("program_items", "phase"): "pre|mid|post — 근거: app/models.py:937 (PROGRAM_PHASES)",
+    ("program_items", "scope"): "team|person — 근거: app/domain/live.py:52 (guess_scope)",
+    ("programs", "audience"): "all|staff — 근거: app/models.py:1008",
+    ("programs", "day"): "선발대|N일차|폐회 (5-1) — 근거: app/domain/live.py:95 (day_names)",
+    ("programs", "end_time"): "HH:MM — 근거: app/routers/live.py:306 (_check_time)",
+    ("programs", "start_time"): "HH:MM — 근거: app/routers/live.py:306 (_check_time)",
+    ("programs", "track"): "main|ops — 근거: app/models.py:1010",
+    ("push_subscriptions", "auth"): "브라우저가 만든 푸시 키 — 근거: app/push.py:112 언저리",
+    ("push_subscriptions", "endpoint"): "푸시 서버 주소 — 근거: app/push.py:104",
+    ("push_subscriptions", "p256dh"): "브라우저가 만든 푸시 키 — 근거: app/push.py:112",
+    ("push_subscriptions", "user_agent"): "브라우저가 만든 기계 문자열 — 근거: app/push.py:102",
+    ("retreat_drafts", "department_keys"): "영문 부서 키 JSON — 근거: app/domain/drafts.py:51",
+    ("retreat_drafts", "status"): "수집중|생성완료|취소 — 근거: app/domain/drafts.py:44·135",
+    ("review_requests", "status"): "대기|승인|반려|취소 — 근거: app/routers/reviews.py:177·239",
+    ("schedule_days", "label"): "고정 일자 라벨 (옛 표 — seed 만 쓴다) — 근거: seed.py:199",
+    ("schedule_items", "end_time"): "HH:MM (옛 표) — 근거: seed.py:210 언저리",
+    ("schedule_items", "start_time"): "HH:MM (옛 표) — 근거: seed.py:210",
+    ("task_attachments", "stored_name"): "임의 난수 파일명 (4-9) — 근거: app/routers/attachments.py:223 (token_hex)",
+    ("task_library", "date_anchor"): "week|open — 근거: app/domain/library.py:590",
+    ("task_library", "default_department_key"): "영문 부서 키 — 근거: app/domain/library.py:588 언저리",
+    ("task_library", "origin"): "history|claude_suggestion — 근거: app/domain/library.py:594",
+    ("task_library", "prerequisite_library_ids"): "숫자 id JSON — 근거: app/domain/library.py:345",
+    ("task_library", "related_department_keys"): "영문 부서 키 JSON — 근거: app/routers/board.py:950",
+    ("task_library", "related_library_ids"): "숫자 id JSON — 근거: app/routers/board.py:816",
+    ("task_runs", "blocked_by_run_ids"): "숫자 id JSON — 근거: app/domain/library.py:705",
+    ("task_runs", "status"): "대기|진행중|완료 (4-3) — 근거: app/models.py:36 (RUN_STATUSES)",
+    ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표 — seed 와 할 일 전환만 쓴다) — 근거: seed.py:241 (빈/숫자 목록)",
+    ("tasks", "related_department_ids"): "숫자 id JSON (옛 표 — seed 와 할 일 전환만 쓴다) — 근거: app/routers/meetings.py:225 (숫자 id)",
+    ("tasks", "status"): "상태 enum (옛 표) — 근거: app/models.py:26 (TASK_STATUSES)",
+    ("users", "role"): "권한 enum — 근거: app/domain/permissions.py:8 (ALL_ROLES)",
 }
 
 _글자형 = ("CHAR", "TEXT", "CLOB", "JSON")
@@ -147,12 +151,11 @@ def 실명이있나(db_path: pathlib.Path) -> dict:
         for real, _ in names
     ]
     # 연락처도 본다 — 사람 이름만 보는 검사는 연락처에 아무 말도 하지
-    # 않았다 (11-2). 숫자 그대로와 3-4-4 표기 둘 다 잡는다
+    # 않았다 (11-2). **변형(숫자·3-4-4·공백)은 anonymize.번호변형들 한
+    # 곳에서 나온다** — 문서 검사와 다른 변형을 보면 그 틈이 구멍이다 (Y-a)
     for num, _ in phones:
-        patterns.append(re.compile(rf"(?<!\d){re.escape(num)}(?!\d)"))
-        if len(num) == 11:
-            hy = f"{num[:3]}-{num[3:7]}-{num[7:]}"
-            patterns.append(re.compile(rf"(?<!\d){re.escape(hy)}(?!\d)"))
+        for 형 in _anon.번호변형들(num):
+            patterns.append(re.compile(rf"(?<!\d){re.escape(형)}(?!\d)"))
 
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     걸림: dict[str, int] = {}

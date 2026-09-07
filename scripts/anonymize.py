@@ -125,10 +125,38 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple
 # `test_x_21` 이 `p[0]` 에서 깨졌다. 그래서 **물음 단위로만** 낸다.
 
 
+def 번호변형들(표기: str) -> list[str]:
+    """번호 하나가 글에 나타날 수 있는 모양 전부 — 숫자 그대로 · 3-4-4 ·
+    공백 낀 것. **변형을 만드는 곳은 여기 하나다** — 문서 검사(check_names)와
+    개발 DB 게이트(check_dev_db)가 같은 것을 부른다. 두 검사가 다른 변형을
+    보면 그 틈이 다음 구멍이다 (Y-a).
+
+    대응표에 하이픈·공백을 섞어 적어도 숫자를 먼저 모으므로 같은 변형이
+    나온다 — 하이픈으로 적힌 번호의 숫자-그대로 형이 조용히 빠지지 않는다.
+    """
+    숫자 = "".join(ch for ch in 표기 if ch.isdigit())
+    if not 숫자:
+        return [표기]
+    변형 = [숫자]
+    if len(숫자) == 11:
+        변형.append(f"{숫자[:3]}-{숫자[3:7]}-{숫자[7:]}")
+        변형.append(f"{숫자[:3]} {숫자[3:7]} {숫자[7:]}")
+    # **원표기를 버리지 않는다** — 지역번호처럼 11자리가 아닌 것을 하이픈으로
+    # 적으면, 숫자만 남긴 목록에는 그 하이픈 원문형이 없다. 대응표에 적힌
+    # 모양 그대로도 찾아야 표기법에 따라 흔들리지 않는다 (Y-a 가 막으려던 것)
+    if 표기 not in 변형:
+        변형.append(표기)
+    return 변형
+
+
 def 표기들() -> list[str]:
-    """찾아야 할 표기 전부 (이름 + 장소 + 번호). **긴 것부터.**"""
+    """찾아야 할 표기 전부 — 이름·장소(긴 것부터) + 번호의 변형들.
+    순서에 기대지 말 것 — 번호 변형 꼬리는 길이순이 아니다."""
     names, phones, _장소 = load_map()
-    return [a for a, _ in names] + [a for a, _ in phones]
+    번호쪽: list[str] = []
+    for a, _ in phones:
+        번호쪽.extend(번호변형들(a))
+    return [a for a, _ in names] + 번호쪽
 
 
 def 장소들() -> list[tuple[str, str]]:
