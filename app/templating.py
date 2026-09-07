@@ -146,13 +146,24 @@ def can_edit_dept(user, target_department_id: int | None) -> bool:
     )
 
 
-def is_other_dept(user, target_department_id: int | None) -> bool:
-    """내 부서가 아닌 항목인지 — 흐리게 표시할 대상."""
+def is_other_dept(user, department) -> bool:
+    """내 부서가 아닌 항목인지 — 흐리게 표시할 대상. **키로 비교한다** (2장).
+
+    Department **행**을 받는다(id 가 아니라). id 로 견주면 새 회차가 열리는
+    순간 다른 회차의 같은 부서가 전부 흐려진다 — 소속인데 남의 것으로 보인다.
+    키 없는 부서(구설계 데이터)만 행으로 견준다 — None == None 으로 남의
+    부서까지 내 것이 되면 안 된다.
+    """
     if user is None or user.role == perm.ADMIN:
         return False
-    if user.department_id is None:
-        return target_department_id is not None
-    return target_department_id != user.department_id
+    mine = user.department
+    if mine is None:
+        return department is not None
+    if department is None:
+        return True
+    if mine.key and department.key:
+        return mine.key != department.key
+    return mine.id != department.id
 
 
 templates.env.globals["ROLE_LABELS"] = perm.ROLE_LABELS
@@ -179,16 +190,21 @@ def _active_draft(context: dict) -> dict | None:
 
 
 def _badge_counts(context: dict) -> dict:
-    """모든 화면 상단에 표시할 미확인 알림 / 대기 중인 확인 요청 수."""
+    """사이드바 배지의 두 항 (4-0) — 안 읽은 **시스템** 알림 + 답 대기 중 요청.
+
+    사람 발신(확인요청)은 앞항에서 빼고 뒷항으로만 센다 — 안 그러면 요청
+    하나가 배지에 +2 로 뜬다(봐둘것 T-c 였던 것). 뒷항은 알림 페이지의
+    「답을 기다리는 것」 칩과 **같은 함수**(pending_for_user)라 두 수가 같다.
+    """
     user = context.get("user")
     if user is None:
         return {"unread_count": 0, "pending_review_count": 0}
 
     from app.db import SessionLocal
-    from app.notifications import unread_count
+    from app.notifications import system_unread_count
 
     with SessionLocal() as db:
-        counts = {"unread_count": unread_count(db, user), "pending_review_count": 0}
+        counts = {"unread_count": system_unread_count(db, user), "pending_review_count": 0}
         retreat = context.get("retreat")
         if retreat is not None:
             from app.routers.reviews import pending_for_user

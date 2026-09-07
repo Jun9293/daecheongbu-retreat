@@ -44,6 +44,32 @@
     {% endif %}
   </div>
 
+  {% if chip == 'pending' %}
+  {# 답을 기다리는 것 — 배지의 뒷항과 같은 목록(pending_for_user)이다.
+     행 수 = 배지의 「답 대기 요청」 수. 부서 없는 admin 도 여기서 전부 본다 #}
+  <div class="ncard flush">
+    {% for r in pending_reviews %}
+    <div class="nitem pending-review">
+      <div class="ntop">
+        <span class="sender human">{% if r.department %}<i style="background:{{ r.department.color }}"></i>{% endif %}{{ r.requester_name or '사람' }}</span>
+        <b class="ttl">확인 요청 · {{ r.subject }}</b>
+        <span class="at">{{ r.created_at.strftime('%m/%d %H:%M') }}</span>
+      </div>
+      {% if r.message %}<div class="nbody">{{ r.message }}</div>{% endif %}
+      <div class="nact">
+        <form method="post" action="/reviews/{{ r.id }}/respond" class="respond">
+          <input type="text" name="comment" placeholder="코멘트 (선택)">
+          <button class="sbtn p" name="decision" value="승인" type="submit">승인</button>
+          <button class="sbtn" name="decision" value="반려" type="submit">반려</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="nempty">답을 기다리는 확인 요청이 없습니다.</div>
+    {% endfor %}
+  </div>
+
+  {% else %}
   <div class="ncard flush">
     {% for r in rows %}
     <div class="nitem{{ ' read' if r.n.read_at }}">
@@ -82,21 +108,31 @@
     <div class="nempty">알림이 없습니다.</div>
     {% endfor %}
   </div>
+  {% endif %}
 
   {% else %}
   {# 내가 보낸 요청 — 답이 왔는지가 한눈에 #}
   <div class="ncard flush">
     {% for r in sent %}
-    <div class="nitem">
+    {# 취소한 요청은 지우지 않고 흐리게 남는다 (0장 · 1-a) #}
+    <div class="nitem{{ ' cancelled' if r.status == '취소' }}">
       <div class="ntop">
         <span class="sender human"><i style="background:{{ r.department.color }}"></i>{{ r.department.name }}</span>
         <b class="ttl">{{ r.subject }}</b>
-        <span class="stbadge {{ 'wait' if r.status == '대기' else ('done' if r.status == '승인' else 'late') }}">{{ r.status }}</span>
+        {# 취소는 붉지 않다 — 거절이 아니라 거둔 것이다 #}
+        <span class="stbadge {{ 'wait' if r.status == '대기' else ('done' if r.status in ('승인', '취소') else 'late') }}">{{ r.status }}</span>
         <span class="at">{{ r.created_at.strftime('%m/%d %H:%M') }}</span>
       </div>
       {% if r.message %}<div class="nbody">{{ r.message }}</div>{% endif %}
       {% if r.responder_name %}
       <div class="nbody ans">{{ r.responder_name }} — {{ r.status }}{% if r.response_comment %} · {{ r.response_comment }}{% endif %}</div>
+      {% endif %}
+      {% if r.status == '대기' %}
+      <div class="nact">
+        <form method="post" action="/reviews/{{ r.id }}/cancel">
+          <button class="sbtn" type="submit">취소</button>
+        </form>
+      </div>
       {% endif %}
     </div>
     {% else %}
@@ -107,6 +143,5 @@
 </main>
 {% endblock %}
 
-{% block scripts %}
-<script src="{{ static('js/push.js') }}" defer></script>
-{% endblock %}
+{# push.js 는 retreat_base 가 전역으로 싣는다 (단계 5) — 두 번 실으면
+   구독 버튼에 리스너가 두 번 붙는다 #}

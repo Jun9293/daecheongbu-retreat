@@ -17,8 +17,8 @@ from app.templating import redirect, render
 router = APIRouter()
 
 
-# 사람 발신 = 확인 요청과 그 답 (4-16). 나머지는 시스템 발신이다.
-HUMAN_KINDS = ("확인요청", "확인결과")
+# 사람 발신 = 확인 요청과 그 답 (4-16). 정의는 배지와 한 곳(notifications 서비스)이다.
+HUMAN_KINDS = notify_service.HUMAN_KINDS
 
 
 @router.get("/notifications")
@@ -78,9 +78,15 @@ def notification_box(
         rows = [r for r in rows if r["human"]]
     elif chip == "system":
         rows = [r for r in rows if not r["human"]]
-    elif chip == "pending":
-        # 답을 기다리는 것 — 내가 답할 수 있는 대기 중 요청
-        rows = [r for r in rows if r["can_respond"]]
+
+    # 답을 기다리는 것 — 배지의 뒷항과 **같은 함수**(pending_for_user)로 센다.
+    # 알림 행을 거르는 방식이면 부서 없는 admin 이 배지에는 잡히는데 화면에는
+    # 아무것도 안 떠서, 배지와 화면이 서로 다른 말을 한다 (봐둘것 T-c 였던 것).
+    from app.routers.reviews import pending_for_user
+
+    pending_reviews = pending_for_user(db, user, retreat)
+    if chip == "pending":
+        rows = []
 
     sent = list(
         db.scalars(
@@ -103,6 +109,7 @@ def notification_box(
             "tab": "sent" if tab == "sent" else "received",
             "chip": chip,
             "rows": rows,
+            "pending_reviews": pending_reviews,
             "sent": sent,
             # 「모두 읽음 (N)」 — N 은 read_all 이 실제로 처리하는 범위(이 회차
             # + 회차 없는 것)와 같은 수다. 사이드바 배지의 전 회차 수를 그대로

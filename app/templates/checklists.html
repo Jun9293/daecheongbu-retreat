@@ -37,7 +37,7 @@
   {% endif %}
 
   {% for c in checklists %}
-  <div class="fld" style="margin-top:14px;{% if is_other_dept(user, c.department_id) %}opacity:.6{% endif %}">
+  <div class="fld" style="margin-top:14px;{% if is_other_dept(user, c.department) %}opacity:.6{% endif %}">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <h3 style="margin:0">{{ c.name }}</h3>
       {% if c.department %}<span class="deptchip" style="--c:{{ c.department.color }}"><i></i>{{ c.department.name }}</span>{% endif %}

@@ -160,6 +160,28 @@ def _try_push(db: Session, notifications: list[Notification]) -> None:
         logger.exception("웹 푸시 발송 실패 (앱 알림함에는 정상 저장됨)")
 
 
+# 사람 발신 = 확인 요청과 그 답 (4-16). 나머지는 시스템 발신이다.
+# 배지(4-0)와 알림 페이지가 같은 목록을 봐야 하므로 여기 한 곳에 둔다.
+HUMAN_KINDS = ("확인요청", "확인결과")
+
+
+def system_unread_count(db: Session, user: User) -> int:
+    """안 읽은 **시스템** 알림 수 — 사이드바 배지의 앞항이다 (4-0).
+
+    사람 발신(확인요청)을 여기서 세면 배지가 요청 하나를 둘로 센다 —
+    같은 요청이 「답 대기 중 요청」(뒷항)으로 이미 세어지기 때문이다.
+    """
+    return len(
+        db.scalars(
+            select(Notification).where(
+                Notification.user_id == user.id,
+                Notification.read_at.is_(None),
+                Notification.kind.not_in(HUMAN_KINDS),
+            )
+        ).all()
+    )
+
+
 def unread_count(db: Session, user: User, retreat_id: int | None = None) -> int:
     """안 읽은 내 알림 수. retreat_id 를 주면 그 회차 것(+회차 없는 것)만 —
     「모두 읽음 (N)」 의 N 은 **처리 범위와 같은 수**여야 한다 (4-16).

@@ -227,9 +227,26 @@ def cancel(
         raise HTTPException(status_code=404, detail="확인 요청을 찾을 수 없습니다.")
     if review.requester_id != user.id and user.role != "admin":
         raise HTTPException(status_code=403, detail="요청한 본인만 취소할 수 있습니다.")
+    if review.status != "대기":
+        return redirect(
+            f"/notifications?tab=sent&retreat_id={retreat.id}",
+            message="이미 처리된 요청입니다.",
+        )
 
-    db.delete(review)
+    # 지우지 않는다 (0장) — 상태만 '취소' 로. 「내가 보낸 요청」 에 흐리게 남고,
+    # '대기' 가 아니게 되므로 배지(pending)와 답 버튼(can_respond)에서 빠진다.
+    # responded_at 은 **답한 시각**이라 안 찍는다 — 취소 시각은 ActivityLog 에 남는다.
+    review.status = "취소"
     db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="확인요청_취소",
+        target_type="review",
+        target_id=review.id,
+        summary=review.subject,
+    )
     return redirect(f"/notifications?tab=sent&retreat_id={retreat.id}", message="확인 요청을 취소했습니다.")
 
 
