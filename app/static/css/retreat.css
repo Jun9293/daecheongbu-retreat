@@ -1647,6 +1647,16 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fld .hint{color:var(--ink-2);font-size:var(--fz-xs);margin-top:8px}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .fgrid .full{grid-column:1/-1}
+/* 초대 링크 (4-17) — 발급을 누른 **그 자리**에 뜬다. 링크는 저장되지 않아
+   한 번만 보이고, 닫으면 사라진다. */
+.invitebox{display:flex;gap:6px;align-items:center;margin-top:6px}
+.invitebox input{flex:1;min-width:260px;font:inherit;font-size:var(--fz-sm);
+  font-family:var(--mono);color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule-2);border-radius:5px;padding:5px 8px}
+.issuedrow{margin-top:8px;padding:9px 11px;background:var(--st-wait-bg);
+  border:1px solid var(--rule);border-radius:6px;font-size:var(--fz-md);
+  line-height:1.6;max-width:520px}
+
 /* 라벨-값 줄 — 값 칸은 평소에 글자처럼, 마우스를 올리면 테두리 (4-9 와 같은 판단) */
 .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;
   font-size:var(--fz-md);align-items:center}

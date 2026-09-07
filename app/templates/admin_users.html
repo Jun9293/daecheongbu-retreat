@@ -12,9 +12,11 @@
   </p>
 
   {% if issued_url %}
+  {# JS 가 없을 때의 길 — 평소에는 아래 행에서 그 자리에 뜬다 (4-17) #}
   <div class="alert warn" id="issued">
     <span class="ic">발급</span>
     <span>
+      {% if issued_for %}<b>{{ issued_for }} 님의 링크입니다.</b> {% endif -%}
       <b>이 링크는 지금 한 번만 보입니다.</b> 화면을 벗어나면 다시 볼 수 없으니
       지금 복사해서 카카오톡으로 보내주세요. (다시 필요하면 재발급하면 됩니다 —
       원문을 저장하지 않기 때문입니다.)<br>
@@ -116,13 +118,18 @@
               <button type="submit" class="btn sm">저장</button>
             </form>
           </td>
-          <td>
+          <td class="invitecell">
             {% if row.invite_live %}
             <span class="tag must">{{ row.invite_expires }}까지</span>
             {% else %}
             <span class="tag low">없음</span>
             {% endif %}
-            <form method="post" action="/admin/users/{{ row.id }}/invite" class="inlineform">
+            {# JS 가 있으면 **그 자리에서** 링크가 뜬다 — 발급마다 페이지가 새로
+               그려져 맨 위로 튀고, 배너가 누구 것인지 말하지 않던 것이 이 화면이
+               안 쓰인 이유였다 (4-17). JS 가 없으면 원래 길(리다이렉트 배너) #}
+            <form method="post" action="/admin/users/{{ row.id }}/invite" class="inlineform issueform"
+                  data-uid="{{ row.id }}" data-name="{{ row.name }}"
+                  data-live="{{ '1' if row.invite_live }}">
               <button type="submit" class="btn sm">{{ '재발급' if row.invite_live else '발급' }}</button>
             </form>
             {% if row.invite_live %}
@@ -156,14 +163,65 @@
 
 <script>
 (() => {
-  const btn = document.getElementById('copylink');
-  if (!btn) return;
-  btn.onclick = async () => {
-    const box = document.getElementById('invitelink');
+  'use strict';
+  async function copy(box, btn) {
     box.select();
     try { await navigator.clipboard.writeText(box.value); btn.textContent = '복사됨'; }
     catch { document.execCommand('copy'); btn.textContent = '복사됨'; }
-  };
+  }
+
+  const top = document.getElementById('copylink');
+  if (top) top.onclick = () => copy(document.getElementById('invitelink'), top);
+
+  /* 발급을 누른 **그 자리**에서 링크가 뜬다 (4-17). 페이지를 다시 그리지
+     않으므로 보던 행을 잃지 않는다 — 열아홉 명에게 연달아 보내는 화면이다.
+     링크는 저장되지 않아 한 번만 보이고, 닫으면 사라진다. */
+  document.querySelectorAll('form.issueform').forEach(form => {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      // 재발급은 누르기 **전에** 말한다 — 지금 링크가 죽는다는 것을
+      if (form.dataset.live && !confirm(
+        form.dataset.name + ' 님의 지금 링크는 못 쓰게 됩니다. 새로 발급할까요?')) return;
+      const btn = form.querySelector('button');
+      const wasLive = !!form.dataset.live;               // 재발급이었나 — 결과 문구용
+      btn.disabled = true;
+      try {
+        const res = await fetch(form.action + '?inline=1', {method: 'POST'});
+        if (!res.ok) { form.submit(); return; }          // 무슨 일이든 원래 길로
+        const data = await res.json();
+        showInline(form, data, wasLive);
+      } catch { form.submit(); }
+      finally { btn.disabled = false; }
+    });
+  });
+
+  function showInline(form, data, wasLive) {
+    const cell = form.closest('.invitecell');
+    // 다른 행에 열려 있던 것은 닫는다 — 한 번에 하나면 어느 링크가 누구
+    // 것인지 헷갈릴 자리가 없다
+    document.querySelectorAll('.issuedrow').forEach(el => el.remove());
+    const box = document.createElement('div');
+    box.className = 'issuedrow';
+    box.innerHTML =
+      '<b></b> 님의 링크 — <b>한 번만 보입니다.</b> 저장하지 않으므로 닫으면' +
+      ' 사라집니다(다시 필요하면 재발급).' +
+      (wasLive ? ' <b>이전에 발급한 링크는 이제 쓸 수 없습니다.</b>' : '') +
+      '<span class="invitebox"><input type="text" readonly>' +
+      '<button type="button" class="btn sm docopy">복사</button>' +
+      '<button type="button" class="btn sm doclose">닫기</button></span>';
+    box.querySelector('b').textContent = data.name;
+    const input = box.querySelector('input');
+    input.value = data.url;
+    box.querySelector('.docopy').onclick = function () { copy(input, this); };
+    box.querySelector('.doclose').onclick = () => box.remove();
+    cell.appendChild(box);
+    // 만료일 표시와 단추 글자를 그 자리에서 새 상태로
+    const tag = cell.querySelector('.tag');
+    if (tag && data.expires) { tag.className = 'tag must'; tag.textContent = data.expires + '까지'; }
+    form.dataset.live = '1';
+    form.querySelector('button').textContent = '재발급';
+    input.select();
+  }
 })();
 </script>
 {% endblock %}

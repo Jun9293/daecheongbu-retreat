@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -135,6 +136,14 @@ def users_page(
                 invites.invite_url(raw)
                 if (raw := invites.take(request.query_params.get("k"))) else None
             ),
+            # 누구의 링크인지 배너가 말한다 — 이름 없이 링크만 뜨면 열아홉 명에게
+            # 연달아 보낼 때 방금 복사한 것이 누구 것인지 화면이 답하지 못한다
+            "issued_for": (
+                person.name
+                if raw and (uid := request.query_params.get("u", "")).isdigit()
+                and len(uid) < 10        # 터무니없는 수로 SQLite 바인딩이 죽지 않게
+                and (person := db.get(User, int(uid))) else None
+            ),
             "no_departments": not choices,
         },
     )
@@ -183,8 +192,8 @@ def create_user(
     )
     raw = invites.issue(db, user=person, actor=user)
     # 원문 대신 **한 번 쓰면 사라지는 키**만 싣는다 — 주소창·방문 기록·접속 로그
-    # 어디에도 링크가 남지 않게 하기 위해서다.
-    return redirect(f"/admin/users?k={invites.stash(raw)}")
+    # 어디에도 링크가 남지 않게 하기 위해서다. u= 는 배너가 이름을 말하기 위한 것.
+    return redirect(f"/admin/users?k={invites.stash(raw)}&u={person.id}")
 
 
 def _clean_phone(raw: str) -> str:
@@ -300,11 +309,18 @@ def update_user(
 
 @router.post("/admin/users/{user_id}/invite")
 def issue_invite(
+    request: Request,
     user_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    """새 링크를 발급한다. 남아 있던 링크는 함께 취소된다."""
+    """새 링크를 발급한다. 남아 있던 링크는 함께 취소된다.
+
+    만드는 것은 화면이든 스크립트(create_admin.py)든 **invites.issue 하나**다 —
+    두 길로 만들면 하나만 고쳐진다. 화면의 JS 가 부르면(inline=1) JSON 으로
+    그 자리에 돌려주고, JS 가 없으면 리다이렉트로 맨 위 배너에 띄운다 —
+    이때 누구의 링크인지(u=)를 같이 실어 배너가 이름을 말하게 한다.
+    """
     person = db.get(User, user_id)
     if person is None:
         raise HTTPException(status_code=404, detail="계정을 찾을 수 없습니다.")
@@ -318,7 +334,18 @@ def issue_invite(
         target_id=person.id,
         summary=f"{person.name} 님의 초대 링크를 발급했습니다.",
     )
-    return redirect(f"/admin/users?k={invites.stash(raw)}")
+    if request.query_params.get("inline"):
+        token = invites.live_token(db, user=person)
+        return JSONResponse(
+            {
+                "url": invites.invite_url(raw),
+                "name": person.name,
+                "expires": token.expires_at.date().isoformat() if token else None,
+            },
+            # 링크 원문이 담긴 응답이다 — 어디에도 저장될 이유가 없다
+            headers={"Cache-Control": "no-store"},
+        )
+    return redirect(f"/admin/users?k={invites.stash(raw)}&u={person.id}")
 
 
 @router.post("/admin/users/{user_id}/revoke")
