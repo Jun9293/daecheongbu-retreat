@@ -113,7 +113,8 @@
             aria-pressed="false" aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
     <div class="title">
       {{ retreat.name if retreat else '대청부 수련회' }}
-      <em>· {{ page_subtitle }}</em>
+      {# 부제 없이 오는 화면(404 등)에서 「· 」 만 남지 않게 #}
+      {% if page_subtitle %}<em>· {{ page_subtitle }}</em>{% endif %}
     </div>
     {% if retreat and retreat.start_date %}
     <div class="countdown">
