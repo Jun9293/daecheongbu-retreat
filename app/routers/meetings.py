@@ -1,6 +1,9 @@
-"""회의록 — 안건/결정사항/액션아이템 기록과 Task 전환.
+"""회의록 — 안건/결정사항/액션아이템 기록과 할 일 전환.
 
-회의 따로, 실행 따로가 되지 않도록 액션아이템은 한 번의 클릭으로 Task가 된다.
+회의 따로, 실행 따로가 되지 않도록 액션아이템은 한 번의 클릭으로 이번 회차의
+업무(TaskRun)가 된다. 옛 Task 를 만들던 기간이 있었다 — 옛 화면을 걷어낸
+뒤(14장)에는 그 행을 아무 화면도 안 읽어서, 전환한 항목이 어디에도 안
+나타났다 (12장).
 """
 
 from __future__ import annotations
@@ -28,7 +31,6 @@ from app.models import (
     Meeting,
     MeetingItem,
     Retreat,
-    Task,
     TaskRun,
     User,
 )
@@ -205,45 +207,96 @@ def convert_to_task(
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
 ):
+    """회의 항목을 이번 회차의 업무(TaskRun)로 만든다.
+
+    **옛 Task 를 만들면 어느 화면에도 안 나타난다** — 옛 /tasks 화면을 걷어낸
+    뒤(14장) Task 표는 아무 화면도 안 읽는다. 그래서 보드의 「새로 만들기」
+    (/board/add/new)와 같은 모양으로 라이브러리 + run 을 만든다 — 새 규칙을
+    만들지 않는다. 날짜는 항목의 마감일 하나(시작=마감 — 달력의 점과 같은
+    뜻, 4-13)이고, 마감이 없으면 비워 둔다 — 날짜 없는 업무는 달력 아래에
+    모여 「보드에서 기간을 정해 주세요」 가 붙는다. 지어내지 않는다.
+    """
+    from app.domain import board as board_domain
+    from app.domain import dweek as dweek_mod
+    from app.domain import library as lib_domain
+    from app.models import TaskLibrary
+
     item = db.get(MeetingItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
-    if item.converted_task_id is not None:
+    meeting = _owned(db, item.meeting_id, retreat)
+    if item.converted_run_id is not None:
+        # 이미 만든 업무의 드로어로 보낸다 — 만들었는데 어디 있는지
+        # 모르면 전환하지 않은 것과 같다
         return redirect(
-            f"/meetings/{item.meeting_id}?retreat_id={retreat.id}",
+            f"/tasks?task={item.converted_run_id}&retreat_id={retreat.id}",
             message="이미 할 일로 등록된 항목입니다.",
         )
+    if item.converted_task_id is not None:
+        # 옛 Task 로 전환됐던 항목. 그 행은 옮기지 않으므로(어느 것이
+        # 회의에서 왔는지 그 행만으로는 못 가린다 — 봐둘것) 새로 만들지도
+        # 않는다 — 만들면 같은 항목의 할 일이 둘이 된다
+        return redirect(
+            f"/meetings/{item.meeting_id}?retreat_id={retreat.id}",
+            message="옛 방식으로 이미 등록된 항목입니다 — 목록에는 안 보입니다.",
+        )
 
-    task = Task(
-        retreat_id=retreat.id,
-        title=item.content[:200],
-        description=f"[회의록] {item.meeting.title} ({item.meeting.meeting_date})",
-        department_id=item.department_id,
-        assignee_id=item.assignee_id,
-        due_date=item.due_date,
-        status="대기",
-        blocked_by_task_ids=[],
-        related_department_ids=[],
+    title = item.content.strip()[:200]
+    if not title:
+        raise HTTPException(status_code=400, detail="내용이 빈 항목은 전환할 수 없습니다.")
+    dept = item.department
+    due = item.due_date
+    # 고른 날짜를 라이브러리의 상대 위치로 되돌려 둔다 (/board/add/new 와 같다)
+    rel = (
+        dweek_mod.relative_position(retreat.start_date, due, due)
+        if due and retreat.start_date
+        else {}
     )
-    db.add(task)
+    lib = TaskLibrary(
+        title=title,
+        kind="main",
+        default_department_key=dept.key if dept else None,
+        related_department_keys=[],
+        related_library_ids=[],
+        origin="history",
+        **rel,
+    )
+    db.add(lib)
     db.flush()
-    item.converted_task_id = task.id
+    run = TaskRun(
+        library_id=lib.id,
+        retreat_id=retreat.id,
+        included=True,
+        department_id=dept.id if dept else None,
+        assignee_id=item.assignee_id,
+        d_week=lib.default_d_week,
+        start_date=due,
+        end_date=due,
+        status="대기",
+        run_no=lib_domain.next_run_no(db, retreat.id),  # max+1 (4-14)
+        source_meeting_id=meeting.id,  # 출처 — 업무 쪽에 단다 (8장)
+    )
+    db.add(run)
+    db.flush()
+    item.converted_run_id = run.id
+    # 새로 만든 업무도 라이브러리의 선행을 잇는다 (/board/add/new 와 같다)
+    board_domain.relink_prerequisites(db, retreat)
     db.commit()
 
-    if task.assignee_id:
-        assignee = db.get(User, task.assignee_id)
+    if run.assignee_id:
+        assignee = db.get(User, run.assignee_id)
         if assignee is not None:
             notify_service.notify(
                 db,
                 users=[assignee],
                 retreat_id=retreat.id,
                 kind="할일배정",
-                title=f"📋 새 할 일 · {task.title}",
-                body=f"'{item.meeting.title}' 회의의 액션아이템이 할 일로 등록됐습니다.",
-                link=f"/tasks?retreat_id={retreat.id}",
-                target_type="task",
-                target_id=task.id,
-                dedupe_key=f"task-assigned:{task.id}",
+                title=f"📋 새 할 일 · {title}",
+                body=f"'{meeting.title}' 회의의 액션아이템이 할 일로 등록됐습니다.",
+                link=f"/tasks?task={run.id}&retreat_id={retreat.id}",
+                target_type="task_run",
+                target_id=run.id,
+                dedupe_key=f"task-assigned:run:{run.id}",
                 exclude_user_id=user.id,
             )
 
@@ -252,12 +305,14 @@ def convert_to_task(
         retreat_id=retreat.id,
         actor=user,
         action="액션아이템_할일전환",
-        target_type="task",
-        target_id=task.id,
-        summary=task.title,
+        target_type="task_run",
+        target_id=run.id,
+        summary=title,
+        after_value={"meeting_id": meeting.id, "run_id": run.id},
     )
+    # 만든 업무의 드로어가 열린 목록으로 간다 (4-14 의 ?task=)
     return redirect(
-        f"/meetings/{item.meeting_id}?retreat_id={retreat.id}", message="할 일로 등록했습니다."
+        f"/tasks?task={run.id}&retreat_id={retreat.id}", message="할 일로 등록했습니다."
     )
 
 

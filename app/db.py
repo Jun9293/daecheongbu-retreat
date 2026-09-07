@@ -87,6 +87,10 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("budget_categories", "times", "INTEGER"),
     # 지출 취소 표시 (7-4) — 지우지 않는다 (0장). NULL 이면 산 행이다.
     ("expense_entries", "canceled_at", "DATETIME"),
+    # 회의 항목 → 할 일 전환 (12장). 옛 Task 대신 TaskRun 을 만들고
+    # 출처를 업무 쪽에 남긴다 — 비면 사람이 보드·마법사에서 만든 것이다.
+    ("task_runs", "source_meeting_id", "INTEGER REFERENCES meetings(id)"),
+    ("meeting_items", "converted_run_id", "INTEGER REFERENCES task_runs(id)"),
 )
 
 

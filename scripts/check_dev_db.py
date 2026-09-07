@@ -104,8 +104,8 @@ _스펙.loader.exec_module(_anon)
     ("task_library", "related_library_ids"): "숫자 id JSON — 근거: app/routers/board.py:816",
     ("task_runs", "blocked_by_run_ids"): "숫자 id JSON — 근거: app/domain/library.py:705",
     ("task_runs", "status"): "대기|진행중|완료 (4-3) — 근거: app/models.py:36 (RUN_STATUSES)",
-    ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표 — seed 와 할 일 전환만 쓴다) — 근거: seed.py:241 (빈/숫자 목록)",
-    ("tasks", "related_department_ids"): "숫자 id JSON (옛 표 — seed 와 할 일 전환만 쓴다) — 근거: app/routers/meetings.py:225 (숫자 id)",
+    ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표 — 이제 seed 만 쓴다; 할 일 전환은 TaskRun 을 만든다) — 근거: seed.py:241 (빈/숫자 목록)",
+    ("tasks", "related_department_ids"): "숫자 id JSON (옛 표 — 이제 seed 만 쓴다) — 근거: seed.py:230 (빈 목록)",
     ("tasks", "status"): "상태 enum (옛 표) — 근거: app/models.py:26 (TASK_STATUSES)",
     ("users", "role"): "권한 enum — 근거: app/domain/permissions.py:8 (ALL_ROLES)",
 }

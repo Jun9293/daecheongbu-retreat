@@ -710,7 +710,7 @@ class Meeting(Base):
 
 
 class MeetingItem(Base):
-    """안건 / 결정사항 / 액션아이템. 액션아이템은 Task로 전환할 수 있다."""
+    """안건 / 결정사항 / 액션아이템. 액션아이템은 업무(TaskRun)로 전환할 수 있다."""
 
     __tablename__ = "meeting_items"
 
@@ -725,8 +725,15 @@ class MeetingItem(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     due_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    # 옛 Task 표 FK — 남기되 새로 쓰지 않는다 (0장 — 표와 행은 남긴다).
+    # 옛 화면을 걷어낸 뒤(14장) Task 표는 아무 화면도 안 읽어서, 이 길로
+    # 전환한 항목은 어디에도 안 나타났다. 새 전환은 converted_run_id 다.
     converted_task_id: Mapped[int | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    # 할 일 전환의 결과 — 이번 회차의 TaskRun. 목록(/tasks?task=)에 보인다.
+    converted_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_runs.id", ondelete="SET NULL"), nullable=True
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -840,6 +847,12 @@ class TaskRun(Base):
     # started_at 과 달리 '완료' 를 벗어나면 지운다 — 착수는 사실이지만 완료는 취소된다.
     completed_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     blocked_by_run_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+    # 출처 — 회의 항목에서 전환된 업무면 그 회의록 (8장). 논의의
+    # source_meeting_id(4-9)와 같은 자리다: 논의는 논의 쪽에, 업무는 업무
+    # 쪽에 단다. 비면 보드·마법사에서 사람이 만든 것이다.
+    source_meeting_id: Mapped[int | None] = mapped_column(
+        ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     library: Mapped[TaskLibrary] = relationship(back_populates="runs")

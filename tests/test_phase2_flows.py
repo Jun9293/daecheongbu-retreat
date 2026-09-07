@@ -398,13 +398,22 @@ def test_액션아이템을_할일로_등록하면_담당자에게_알림이_간
 
     assert response.status_code == 200
     with app_session() as db:
-        task = db.scalars(
-            select(models.Task).where(models.Task.title == "인쇄소 견적 3곳 비교")
+        # 옛 Task 가 아니라 TaskRun 이 만들어진다 — 옛 Task 는 어느 화면에도
+        # 안 나타난다 (12장). 담당자·부서·마감이 항목에서 그대로 온다.
+        run = db.scalars(
+            select(models.TaskRun)
+            .join(models.TaskLibrary)
+            .where(models.TaskLibrary.title == "인쇄소 견적 3곳 비교")
         ).one()
-        assert task.assignee_id == worker.id
-        assert task.department_id == depts[0].id
-        assert task.due_date == TODAY + dt.timedelta(days=5)
-        assert db.get(models.MeetingItem, item.id).converted_task_id == task.id
+        assert run.assignee_id == worker.id
+        assert run.department_id == depts[0].id
+        assert run.end_date == TODAY + dt.timedelta(days=5)
+        assert run.source_meeting_id == meeting.id      # 출처 (8장)
+        assert db.get(models.MeetingItem, item.id).converted_run_id == run.id
+        # 옛 Task 행은 만들어지지 않는다
+        assert db.scalars(
+            select(models.Task).where(models.Task.title == "인쇄소 견적 3곳 비교")
+        ).first() is None
 
     assert any("새 할 일" in n.title for n in _unread(worker.id))
 
@@ -424,8 +433,12 @@ def test_같은_액션아이템을_두_번_등록하지_않는다(admin_client):
     admin_client.post(f"/meetings/items/{item.id}/to-task", follow_redirects=True)
 
     with app_session() as db:
-        tasks = db.scalars(select(models.Task).where(models.Task.title == "견적 비교")).all()
-    assert len(tasks) == 1
+        runs = db.scalars(
+            select(models.TaskRun)
+            .join(models.TaskLibrary)
+            .where(models.TaskLibrary.title == "견적 비교")
+        ).all()
+    assert len(runs) == 1
 
 
 def test_수련회와_무관한_일반_회의도_기록할_수_있다(admin_client):
