@@ -45,8 +45,13 @@
 
 <div class="calnote" id="calnote" hidden role="status"></div>
 
-{# 달 격자 — 전체 페이지와 /calendar/partial 이 같은 partial 을 그린다 (4-13) #}
+{# 달 격자 — 전체 페이지와 /calendar/partial 이 같은 partial 을 그린다 (4-13).
+   calswap 은 달 전환 애니메이션의 자리다 — 새 격자가 아래(다음 달)나
+   위(지난 달)에서 미끄러져 들어오는 동안 옛 격자를 붙들어 둔다. 드로어는
+   이 밖에 있어 전환 중에도 살아 있다. #}
+<div id="calswap">
 {% include "partials/calendar_grid.html" %}
+</div>
 
 {% if cal.undated %}
 {#

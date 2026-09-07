@@ -49,6 +49,34 @@ if (scopePick && bar) {
    갈아 끼운 격자에서도 그대로 동작한다. */
 const grid = () => document.getElementById('calgrid');
 
+/* 달 전환 (4-13) — 위아래로 미끄러진다. 다음 달은 아래에서, 지난 달은
+   위에서 들어온다. **갈아 끼우는 느낌이 없어야 한다**: 새 격자를 먼저
+   흐름에 붙이고, 옛 격자를 그 위에 겹쳐 둘을 함께 옮긴 뒤 지나간 것을
+   뗀다. prefers-reduced-motion 이면 움직임 없이 바로 바뀐다 (전환 0ms). */
+function slideSwap(old, next, dir) {
+  const swap = document.getElementById('calswap');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!swap || !dir || reduce || !next.animate) {
+    old.replaceWith(next);
+    return Promise.resolve();
+  }
+  const h = old.offsetHeight;
+  old.replaceWith(next);                 // 새 격자가 먼저 흐름에 들어간다
+  swap.appendChild(old);                 // 옛 격자는 그 위에 겹쳐 둔다
+  old.style.position = 'absolute';
+  old.style.inset = '0 0 auto 0';
+  swap.classList.add('anim');
+  const from = dir === 'next' ? h : -h;  // 다음 달 = 아래에서, 지난 달 = 위에서
+  const opts = {duration: 280, easing: 'ease-out'};
+  const slide = next.animate(
+    [{transform: `translateY(${from}px)`}, {transform: 'none'}], opts);
+  old.animate([{transform: 'none'}, {transform: `translateY(${-from}px)`}], opts);
+  return slide.finished.catch(() => {}).finally(() => {
+    old.remove();
+    swap.classList.remove('anim');
+  });
+}
+
 let fetching = false;
 async function goMonth(month) {
   if (!bar || !month || fetching) return;
@@ -67,7 +95,10 @@ async function goMonth(month) {
     const old = grid();
     if (!next || !old) return;
     clearSpan();
-    old.replaceWith(next);
+    // 방향은 달 문자열로 안다 — yyyy-mm(-dd) 라 그대로 견줘진다
+    const dir = next.dataset.month > old.dataset.month ? 'next'
+      : next.dataset.month < old.dataset.month ? 'prev' : null;
+    const settled = slideSwap(old, next, dir);
 
     // 격자 밖의 값들 — 달 이름·건수·화살표 주소. 격자가 실어 온 값을 그대로 쓴다.
     bar.dataset.month = next.dataset.month;
@@ -86,12 +117,8 @@ async function goMonth(month) {
     url.set('month', next.dataset.month);
     history.replaceState(null, '', location.pathname + '?' + url.toString());
 
-    // 격자가 12px 미끄러진다 (180ms). 줄인 동작을 원하면 미끄럼 없이.
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && next.animate) {
-      next.animate(
-        [{transform: 'translateX(12px)', opacity: .65}, {transform: 'none', opacity: 1}],
-        {duration: 180, easing: 'ease-out'});
-    }
+    // 전환이 끝날 때까지 다음 넘김을 막는다 — 옛 격자가 아직 겹쳐 있다
+    await settled;
   } finally { fetching = false; }
 }
 
