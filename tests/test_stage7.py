@@ -181,7 +181,7 @@ def test7_c02_드로어는_전환_자리_밖에_있다():
 
 
 # ════════════════════════════════════════════════════════════════════
-# 2. 목록 — 이름 클릭 · 정렬 · 부서 드롭다운 · 배지 자리 (4-14)
+# 2. 목록 — 행 클릭 · 정렬 · 부서 드롭다운 · 배지 자리 (4-14)
 # ════════════════════════════════════════════════════════════════════
 
 
@@ -225,11 +225,11 @@ def _titles(page_text: str) -> list[str]:
                       page_text)
 
 
-def test7_l01_이름을_눌러_펼친다_버튼_줄은_없다(admin_client, list_retreat):
+def test7_l01_행을_눌러_펼친다_버튼_줄은_없다(admin_client, list_retreat):
     admin_client.get(f"/board?retreat_id={list_retreat}")
     page = admin_client.get("/tasks")
     assert page.status_code == 200
-    # 버튼 줄이 없다 — 이름과 캐럿이 그 일을 한다
+    # 버튼 줄이 없다 — 행 전체가 그 일을 하고 캐럿이 상태를 보인다 (4-14)
     assert "lopen" not in page.text and "lfoot" not in page.text
     assert 'class="cell caretc"' in page.text and "▸" in page.text
     # ?task= 는 그대로다 (보드·달력과 같은 이름 — 알림 바로가기)
@@ -238,9 +238,12 @@ def test7_l01_이름을_눌러_펼친다_버튼_줄은_없다(admin_client, list
             models.TaskRun.retreat_id == list_retreat)).first()
     opened = admin_client.get(f"/tasks?task={run.id}")
     assert f'data-open-task="{run.id}"' in opened.text
-    # 이름 클릭이 여는 길이다 — JS 가 .nm 을 듣는다
+    # **여는 길을 재는 것은 여기가 아니다.** 전에는 `".nm" in js` 로 쟀는데
+    # 그 글자는 meta()·onTitle() 도 쓰므로 여는 규칙을 어떻게 바꿔도
+    # 초록이었다(10장 — 글자를 찾는 시험). 여는 규칙은 stage13 의
+    # r01·r01b 가 「안 여는 자리」 로 재고, 여기서는 탭만 본다.
     js = (ROOT / "app" / "static" / "js" / "tasks.js").read_text(encoding="utf-8")
-    assert ".nm" in js and "selectTab('rules')" in js and "lopen" not in js
+    assert "selectTab('rules')" in js and "lopen" not in js
 
 
 def test7_l02_정렬_두_축과_방향(admin_client, list_retreat):

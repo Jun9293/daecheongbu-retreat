@@ -43,7 +43,9 @@
   const openers = () => isBoard
     ? [...sheet.querySelectorAll('.bar[data-run]')].filter(b => shown(b) && !b.dataset.ghost)
     : isList
-    ? [...document.querySelectorAll('.trow.lrow .nm')].filter(shown)
+    // **행 전체가 여는 자리다** (4-14) — 이름은 그중 한 곳일 뿐이다.
+    // 여는 자리 목록이 아니라 안 여는 자리 목록이므로, 여기서는 행을 연다
+    ? [...document.querySelectorAll('.trow.lrow')].filter(shown)
     : [...document.querySelectorAll('.cal-dot[data-run]')].filter(shown);
 
   const snapshot = () => ({
@@ -324,7 +326,8 @@
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
   // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
   const emptySpot = () => {
-    // 목록 — 제목 줄 오른쪽의 빈 자리. 여는 자리(이름·캐럿)도 패널도 아닌 곳이다.
+    // 목록 — 제목 줄 오른쪽의 빈 자리. **행 밖이고** 패널도 아닌 곳이다
+    // (행은 어디를 눌러도 열린다 — 4-14).
     if (isList) {
       const h = tlist.querySelector('h1');
       if (!h) return null;
@@ -332,7 +335,8 @@
       const x = Math.round(Math.min(window.innerWidth - 24, r.right + 180));
       const y = Math.round(r.top + r.height / 2);
       const el = document.elementFromPoint(x, y);
-      if (el && !el.closest('#drawer') && !el.closest('.nm') && !el.closest('.caretc')
+      // 행 밖이어야 한다 — 행은 이제 어디를 눌러도 열린다 (4-14)
+      if (el && !el.closest('#drawer') && !el.closest('.trow.lrow')
           && !el.closest('header,.toolbar,.sidenav')) return {x, y};
       return null;
     }
@@ -693,7 +697,32 @@
       await check('완료 접힘 펴기', () => { done.open = true; }, {mayScroll: false});
       done.open = false;
     } else results.push('· 완료 업무가 없어 접힘 자리는 건너뜀');
-    // 같은 행의 이름을 다시 누르면 닫힌다 (토글)
+    // **행의 빈 곳을 눌러도 열린다** (4-14) — 예외는 안 여는 자리뿐이다
+    {
+      const row = [...document.querySelectorAll('.trow.lrow')].filter(shown)[0];
+      const meta = row && row.querySelector('.metaline');
+      if (meta) {
+        if (dw.classList.contains('open')) { Drawer.close(); await sleep(400); }
+        meta.click();                     // 이름도 캐럿도 아닌 자리
+        await sleep(700);
+        const opened = dw.classList.contains('open');
+        results.push((opened ? '✓' : '✗') + ' 행의 빈 곳(메타)을 눌러도 열림');
+        if (!opened) errors.push('행의 빈 곳을 눌러도 안 열린다');
+      }
+      // 상태 배지는 **안 여는 자리** — 눌러도 아무 일이 없어야 한다
+      const closedRow = [...document.querySelectorAll('.trow.lrow')]
+        .filter(r => shown(r) && !r.classList.contains('open'))[0];
+      const badge = closedRow && closedRow.querySelector('.stbadge');
+      if (badge) {
+        const before = new URLSearchParams(location.search).get('task');
+        badge.click();
+        await sleep(400);
+        const 그대로 = new URLSearchParams(location.search).get('task') === before;
+        results.push((그대로 ? '✓' : '✗') + ' 상태 배지를 눌러도 그 행이 안 열림');
+        if (!그대로) errors.push('상태 배지가 행을 열었다');
+      }
+    }
+    // 같은 행을 다시 누르면 닫힌다 (토글)
     const first = openers()[0];
     if (first && !dw.classList.contains('open')) { first.click(); await sleep(700); }
     if (first && dw.classList.contains('open')) {

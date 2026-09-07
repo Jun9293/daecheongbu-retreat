@@ -1304,7 +1304,7 @@ window.Drawer = {
   },
   open: openDrawer,
   close: closeDrawer,
-  // 목록이 이름 클릭으로 열며 업무 규칙 탭을 고를 때 쓴다 (4-14)
+  // 목록이 행을 눌러 열며 업무 규칙 탭을 고를 때 쓴다 (4-14)
   selectTab,
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,
