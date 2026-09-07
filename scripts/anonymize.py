@@ -46,8 +46,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAP_PATH = ROOT / "data" / "anonymize-map.json"
 
 
-def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """(이름·장소 쌍, 번호 쌍). **긴 표기부터** 돌려준다 —
+def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+    """(이름·장소 쌍, 번호 쌍, 장소 쌍) — 3-튜플. 이름 목록은 **긴 표기부터** —
     성을 붙인 표기를 이름만 적은 표기보다 먼저 만나야 함께 바뀐다.
 
     **장소(`places`)도 이름과 같은 쌍으로 합쳐 나간다** — 사람 이름만 보는
@@ -99,7 +99,9 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
                     "성을 붙여 갈라 주세요.")
             임자[표기] = 이표기의가명
             names.append((표기, 이표기의가명))
-    # 장소 — 단순한 쌍이다. 같은 겹침 거절을 지나 이름 목록에 합쳐진다
+    # 장소 — 단순한 쌍이다. 같은 겹침 거절을 지나 이름 목록에 합쳐지고,
+    # 따로 물을 수 있게 셋째 값으로도 나간다 — places 구조를 아는 곳은 여기뿐
+    장소쌍: list[tuple[str, str]] = []
     for 줄 in data.get("places", []):
         표기, 이가명 = 줄[0], 줄[1]
         if 표기 in 임자 and 임자[표기] != 이가명:
@@ -107,11 +109,12 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
                 f"대응표에서 한 표기가 두 곳에 있습니다: {표기[0]}◯… — "
                 "names 와 places 사이에서도 한 표기 = 한 뜻입니다.")
         임자[표기] = 이가명
+        장소쌍.append((표기, 이가명))
         names.append((표기, 이가명))
     # **긴 표기부터 바꾼다.** 이름만 적은 표기를 먼저 바꾸면 성이 붙은
     # 표기가 `성 + 가명` 이 되어 **두 사람이 다시 섞인다.**
     names.sort(key=lambda pair: -len(pair[0]))
-    return names, [(a, b) for a, b in data.get("phones", [])]
+    return (names, [(a, b) for a, b in data.get("phones", [])], 장소쌍)
 
 
 # ── 물어보는 창구 ────────────────────────────────────────────────
@@ -124,23 +127,20 @@ def load_map() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
 
 def 표기들() -> list[str]:
     """찾아야 할 표기 전부 (이름 + 장소 + 번호). **긴 것부터.**"""
-    names, phones = load_map()
+    names, phones, _장소 = load_map()
     return [a for a, _ in names] + [a for a, _ in phones]
 
 
 def 장소들() -> list[tuple[str, str]]:
     """장소 쌍 (실제, 가명)만 따로. 찾기·바꾸기는 이름과 한 목록으로 가지만
     (load_map 이 합친다), 「장소가 실려 있나」 를 물을 창구는 있어야 한다 —
-    시험이 대응표 파일을 직접 읽으면 읽는 곳이 둘이 된다."""
-    if not MAP_PATH.exists():
-        raise SystemExit(f"대응표가 없습니다: {MAP_PATH}")
-    data = json.loads(MAP_PATH.read_text(encoding="utf-8"))
-    return [(a, b) for a, b in data.get("places", [])]
+    구조 파싱은 load_map 한 곳이다. 여기서 다시 파싱하면 아는 곳이 둘이 된다."""
+    return load_map()[2]
 
 
 def 가명(표기: str) -> str | None:
     """그 표기가 무엇으로 바뀌는가. 모르는 표기면 None."""
-    names, phones = load_map()
+    names, phones, _장소 = load_map()
     return dict(names + phones).get(표기)
 
 
@@ -153,13 +153,13 @@ def 가명수() -> int:
     가명을 두게 되면서 그 이름이 **거짓이 됐다.** 세는 것이
     바뀌었으면 이름도 바뀌어야 한다.
     """
-    names, _ = load_map()
+    names, _, _ = load_map()
     return len({b for _, b in names})
 
 
 def 표기수() -> int:
     """이름 표기 수."""
-    names, _ = load_map()
+    names, _, _ = load_map()
     return len(names)
 
 
@@ -173,7 +173,7 @@ def 표기여럿인줄이있나() -> bool:
     # **읽는 곳은 하나다.** 전에는 여기서 직접 파싱했는데, 파일 안이라
     # "읽는 곳은 하나" 는 지켜졌지만 **구조를 아는 곳이 둘**이 됐다.
     # 대응표가 없을 때의 안내도 `load_map()` 것만 나와야 한다.
-    names, _ = load_map()
+    names, _, _ = load_map()
     임자: dict[str, int] = {}
     for _표기, 가명 in names:
         임자[가명] = 임자.get(가명, 0) + 1
@@ -242,7 +242,7 @@ def swap(text: str, *, doc: bool = False, names=None, phones=None) -> tuple[str,
     """바꾼 글과 바꾼 횟수. **기록을 다시 쓸 때도 이 함수를 쓴다** —
     두 벌로 만들면 작업 트리와 기록이 다르게 바뀐다."""
     if names is None or phones is None:
-        names, phones = load_map()
+        names, phones, _장소 = load_map()
     changed = 0
 
     for real, fake in phones:
@@ -285,7 +285,7 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="실제로 고친다")
     args = ap.parse_args()
 
-    names, phones = load_map()
+    names, phones, _장소 = load_map()
     total, touched = 0, []
     for path in targets():
         try:

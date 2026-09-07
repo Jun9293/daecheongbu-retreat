@@ -6,7 +6,9 @@
 갔다 — 검토자가 막았다. 스크린샷은 늘 개발 서버에서 찍으므로, 서버가
 뜨기 전에 DB 를 검사하는 것이 그 길을 입구에서 막는다.
 
-- 사람 이름이 지나가는 칸만 본다 (아래 `이름칸`)
+- **글자 칸 전부를 본다** — 안 볼 것만 이유와 함께 뺀다 (아래 `제외칸`).
+  볼 목록은 세 번 불완전했다(11-2) — 목록을 고쳐야 잡히는 구조는 그 사이가
+  늘 뚫려 있다
 - 대조는 대응표의 **실명 쪽**과, `anonymize.py` 의 경계 규칙으로 —
   앞뒤가 한글·영문·숫자면 이름이 아니되(안 그러면 한 글자 표기가
   `진행` 같은 보통 낱말 속에서 걸려 서버가 영영 안 뜬다), **`M` 이
@@ -43,23 +45,82 @@ _스펙 = importlib.util.spec_from_file_location(
 _anon = importlib.util.module_from_spec(_스펙)
 _스펙.loader.exec_module(_anon)
 
-# 사람 이름이 지나가는 칸 — 늘어나면 여기 더한다 (check_names 의 담당칸과
-# 같은 원칙: 이 목록이 곧 "무엇을 보는가" 다)
-이름칸: tuple[tuple[str, str], ...] = (
-    ("users", "name"),
-    ("expense_entries", "payer_name"),
-    ("expense_entries", "meal_attendee_names"),   # JSON 배열이지만 글로 본다
-    ("budget_categories", "level3"),              # 강사 이름이 들어간다
-    ("program_items", "assignee_name"),
-    ("program_items", "text"),                    # 실제 카페 이름이 살던 칸 —
-                                                  # 장소가 대응표에 든 뒤에도 이
-                                                  # 칸을 안 보면 그 경로가 그대로다
-    ("programs", "host"),
-    ("programs", "name"),
-    ("programs", "place"),
-    ("meetings", "body"),
-    ("discussion_entries", "body"),
-)
+# **볼 칸을 손으로 고르지 않는다 — 전부 보고, 안 볼 것만 이유와 함께 뺀다.**
+# 「무엇을 보는가」 목록은 세 번 불완전했다(사람 이름만 · 텍스트만 · 칸 일부만).
+# 새 칸이 생기면 목록을 고쳐야 잡히는 구조는 그 사이가 늘 뚫려 있다 —
+# 글자 칸은 스키마에서 읽어 기본으로 전부 훑고(새 칸도 저절로 대상이 된다),
+# 값의 형태가 정해져 있어 사람·장소·연락처가 들어올 수 없는 칸만 뺀다.
+# 시험(test9)이 이 제외 목록을 모델과 견주고, 볼 칸마다 심어서 걸리는지 잰다.
+제외칸: dict[tuple[str, str], str] = {
+    ("activity_logs", "action"): "동작 슬러그 (코드가 정한 값)",
+    ("activity_logs", "actor_type"): "user|claude|system",
+    ("activity_logs", "target_type"): "대상 종류 슬러그",
+    ("departments", "color_tag"): "색 값",
+    ("departments", "key"): "영문 부서 키 (2장)",
+    ("draft_submissions", "department_key"): "영문 부서 키",
+    ("draft_submissions", "library_ids"): "숫자 id JSON",
+    ("expense_receipts", "stored_name"): "임의 난수 파일명 (4-9)",
+    ("file_assets", "status"): "상태 enum (옛 표)",
+    ("file_versions", "stored_name"): "임의 난수 파일명",
+    ("invite_tokens", "token_hash"): "토큰 해시 (4-12)",
+    ("meeting_items", "kind"): "종류 enum",
+    ("meetings", "origin"): "노션|직접 enum",
+    ("meetings", "suggest_hash"): "본문 해시",
+    ("meetings", "suggest_state"): "상태 enum",
+    ("meetings", "suggest_tokens"): "토큰 수 문자열",
+    ("notification_logs", "kind"): "알림 종류 enum (4-11)",
+    ("notifications", "dedupe_key"): "기계 중복 키",
+    ("notifications", "kind"): "알림 종류 enum",
+    ("notifications", "link"): "내부 경로 (/tasks?task=N)",
+    ("notifications", "target_type"): "대상 종류 슬러그",
+    ("program_items", "part_key"): "고정 파트 목록 (5-3)",
+    ("program_items", "phase"): "pre|mid|post",
+    ("program_items", "scope"): "team|person",
+    ("programs", "audience"): "all|staff",
+    ("programs", "day"): "선발대|N일차|폐회 (5-1)",
+    ("programs", "end_time"): "HH:MM",
+    ("programs", "start_time"): "HH:MM",
+    ("programs", "track"): "main|ops",
+    ("push_subscriptions", "auth"): "푸시 키",
+    ("push_subscriptions", "endpoint"): "푸시 서버 주소",
+    ("push_subscriptions", "p256dh"): "푸시 키",
+    ("push_subscriptions", "user_agent"): "브라우저가 만든 기계 문자열",
+    ("retreat_drafts", "department_keys"): "영문 부서 키 JSON",
+    ("retreat_drafts", "status"): "수집중|생성완료|취소",
+    ("review_requests", "status"): "대기|승인|반려",
+    ("schedule_days", "label"): "일자 라벨 (옛 표)",
+    ("schedule_items", "end_time"): "HH:MM (옛 표)",
+    ("schedule_items", "start_time"): "HH:MM (옛 표)",
+    ("task_attachments", "stored_name"): "임의 난수 파일명 (4-9)",
+    ("task_library", "date_anchor"): "week|open",
+    ("task_library", "default_department_key"): "영문 부서 키",
+    ("task_library", "origin"): "history|claude_suggestion",
+    ("task_library", "prerequisite_library_ids"): "숫자 id JSON",
+    ("task_library", "related_department_keys"): "영문 부서 키 JSON",
+    ("task_library", "related_library_ids"): "숫자 id JSON",
+    ("task_runs", "blocked_by_run_ids"): "숫자 id JSON",
+    ("task_runs", "status"): "대기|진행중|완료 (4-3)",
+    ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표)",
+    ("tasks", "related_department_ids"): "숫자 id JSON (옛 표)",
+    ("tasks", "status"): "상태 enum (옛 표)",
+    ("users", "role"): "권한 enum",
+}
+
+_글자형 = ("CHAR", "TEXT", "CLOB", "JSON")
+
+
+def 볼칸들(con: sqlite3.Connection) -> list[tuple[str, str]]:
+    """이 DB 의 글자 칸 전부에서 제외칸을 뺀 것."""
+    나온것 = []
+    표들 = [r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master"
+        " WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+    for 표 in 표들:
+        for _cid, 칸, 형, *_ in con.execute(f"PRAGMA table_info({표})"):
+            형 = (형 or "").upper()
+            if (any(t in 형 for t in _글자형) or 형 == "") and (표, 칸) not in 제외칸:
+                나온것.append((표, 칸))
+    return 나온것
 
 
 def 실명이있나(db_path: pathlib.Path) -> dict:
@@ -70,7 +131,7 @@ def 실명이있나(db_path: pathlib.Path) -> dict:
     # 대응표가 깨졌으면(load_map 의 SystemExit) **그대로 멈춘다** —
     # 삼키면 게이트가 조용히 꺼진 채 통과한다 (fail-open). 빈 목록도
     # 통과가 아니다 — 센 것이 0이면 성공이 아니라 실패다 (11-3)
-    names = _anon.load_map()[0]
+    names, phones, _장소 = _anon.load_map()
     if not names:
         raise SystemExit("대응표가 비어 있습니다 — 0개를 보는 검사는 통과가 아닙니다 (11-3)")
 
@@ -85,20 +146,20 @@ def 실명이있나(db_path: pathlib.Path) -> dict:
         re.compile(f"(?<!{wordish}){re.escape(real)}(?:M|(?!{wordish}))")
         for real, _ in names
     ]
+    # 연락처도 본다 — 사람 이름만 보는 검사는 연락처에 아무 말도 하지
+    # 않았다 (11-2). 숫자 그대로와 3-4-4 표기 둘 다 잡는다
+    for num, _ in phones:
+        patterns.append(re.compile(rf"(?<!\d){re.escape(num)}(?!\d)"))
+        if len(num) == 11:
+            hy = f"{num[:3]}-{num[3:7]}-{num[7:]}"
+            patterns.append(re.compile(rf"(?<!\d){re.escape(hy)}(?!\d)"))
 
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     걸림: dict[str, int] = {}
     try:
-        표들 = {r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'")}
-        for 표, 칸 in 이름칸:
-            if 표 not in 표들:
-                continue
-            칸들 = {r[1] for r in con.execute(f"PRAGMA table_info({표})")}
-            if 칸 not in 칸들:
-                continue
+        for 표, 칸 in 볼칸들(con):
             수 = 0
-            for (값,) in con.execute(f"SELECT {칸} FROM {표} WHERE {칸} IS NOT NULL"):
+            for (값,) in con.execute(f'SELECT "{칸}" FROM "{표}" WHERE "{칸}" IS NOT NULL'):
                 글 = str(값)
                 if any(p.search(글) for p in patterns):
                     수 += 1
