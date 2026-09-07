@@ -51,7 +51,12 @@ _스펙.loader.exec_module(_anon)
     ("expense_entries", "meal_attendee_names"),   # JSON 배열이지만 글로 본다
     ("budget_categories", "level3"),              # 강사 이름이 들어간다
     ("program_items", "assignee_name"),
+    ("program_items", "text"),                    # 실제 카페 이름이 살던 칸 —
+                                                  # 장소가 대응표에 든 뒤에도 이
+                                                  # 칸을 안 보면 그 경로가 그대로다
     ("programs", "host"),
+    ("programs", "name"),
+    ("programs", "place"),
     ("meetings", "body"),
     ("discussion_entries", "body"),
 )
