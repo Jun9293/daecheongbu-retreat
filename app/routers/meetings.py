@@ -178,6 +178,12 @@ def add_item(
     meeting = _owned(db, meeting_id, retreat)
     if kind not in MEETING_ITEM_KINDS:
         raise HTTPException(status_code=400, detail="알 수 없는 항목 종류입니다.")
+    # 부서는 이번 회차의 행이어야 한다 — 다른 회차의 id 가 들어오면 전환된
+    # 업무가 보드·목록의 엉뚱한 자리에 서거나 어디에도 안 선다
+    if department_id:
+        dept = db.get(Department, int(department_id))
+        if dept is None or dept.retreat_id != retreat.id:
+            raise HTTPException(status_code=400, detail="이 회차의 부서가 아닙니다.")
 
     max_order = (
         db.scalar(
@@ -210,16 +216,18 @@ def convert_to_task(
     """회의 항목을 이번 회차의 업무(TaskRun)로 만든다.
 
     **옛 Task 를 만들면 어느 화면에도 안 나타난다** — 옛 /tasks 화면을 걷어낸
-    뒤(14장) Task 표는 아무 화면도 안 읽는다. 그래서 보드의 「새로 만들기」
-    (/board/add/new)와 같은 모양으로 라이브러리 + run 을 만든다 — 새 규칙을
-    만들지 않는다. 날짜는 항목의 마감일 하나(시작=마감 — 달력의 점과 같은
+    뒤(14장) Task 표는 아무 화면도 안 읽는다. **만드는 것은
+    `domain/tasks.create_run` 하나다** — 보드의 「새로 만들기」 와 같은
+    함수를 지난다. 날짜는 항목의 마감일 하나(시작=마감 — 달력의 점과 같은
     뜻, 4-13)이고, 마감이 없으면 비워 둔다 — 날짜 없는 업무는 달력 아래에
     모여 「보드에서 기간을 정해 주세요」 가 붙는다. 지어내지 않는다.
+
+    **부서가 적힌 항목은 그 부서를 편집할 수 있어야 전환한다** — 보드와
+    같은 축(키 비교, 키 없는 구설계 행만 id — security 의 그 문). 부서
+    없는 항목은 편집자면 된다.
     """
-    from app.domain import board as board_domain
-    from app.domain import dweek as dweek_mod
-    from app.domain import library as lib_domain
-    from app.models import TaskLibrary
+    from app.domain import tasks as tasks_domain
+    from app.security import assert_can_edit_department
 
     item = db.get(MeetingItem, item_id)
     if item is None:
@@ -241,46 +249,27 @@ def convert_to_task(
             message="옛 방식으로 이미 등록된 항목입니다 — 목록에는 안 보입니다.",
         )
 
-    title = item.content.strip()[:200]
-    if not title:
-        raise HTTPException(status_code=400, detail="내용이 빈 항목은 전환할 수 없습니다.")
     dept = item.department
-    due = item.due_date
-    # 고른 날짜를 라이브러리의 상대 위치로 되돌려 둔다 (/board/add/new 와 같다)
-    rel = (
-        dweek_mod.relative_position(retreat.start_date, due, due)
-        if due and retreat.start_date
-        else {}
-    )
-    lib = TaskLibrary(
-        title=title,
-        kind="main",
-        default_department_key=dept.key if dept else None,
-        related_department_keys=[],
-        related_library_ids=[],
-        origin="history",
-        **rel,
-    )
-    db.add(lib)
-    db.flush()
-    run = TaskRun(
-        library_id=lib.id,
-        retreat_id=retreat.id,
-        included=True,
-        department_id=dept.id if dept else None,
-        assignee_id=item.assignee_id,
-        d_week=lib.default_d_week,
-        start_date=due,
-        end_date=due,
-        status="대기",
-        run_no=lib_domain.next_run_no(db, retreat.id),  # max+1 (4-14)
-        source_meeting_id=meeting.id,  # 출처 — 업무 쪽에 단다 (8장)
-    )
-    db.add(run)
-    db.flush()
+    if dept is not None and dept.retreat_id != retreat.id:
+        # add_item 이 지금은 막지만(위), 그 검증 전에 들어온 옛 행이 있을 수
+        # 있다 — 다른 회차의 부서 줄에 업무를 세우지 않는다
+        raise HTTPException(status_code=400, detail="항목의 부서가 이 회차의 것이 아닙니다.")
+    if dept is not None:
+        assert_can_edit_department(db, user, dept.id)
+
+    try:
+        lib, run = tasks_domain.create_run(
+            db,
+            retreat,
+            title=item.content,
+            department=dept,
+            start=item.due_date,
+            assignee_id=item.assignee_id,
+            source_meeting_id=meeting.id,  # 출처 — 업무 쪽에 단다 (8장)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     item.converted_run_id = run.id
-    # 새로 만든 업무도 라이브러리의 선행을 잇는다 (/board/add/new 와 같다)
-    board_domain.relink_prerequisites(db, retreat)
     db.commit()
 
     if run.assignee_id:
@@ -291,7 +280,7 @@ def convert_to_task(
                 users=[assignee],
                 retreat_id=retreat.id,
                 kind="할일배정",
-                title=f"📋 새 할 일 · {title}",
+                title=f"📋 새 할 일 · {lib.title}",
                 body=f"'{meeting.title}' 회의의 액션아이템이 할 일로 등록됐습니다.",
                 link=f"/tasks?task={run.id}&retreat_id={retreat.id}",
                 target_type="task_run",
@@ -307,7 +296,7 @@ def convert_to_task(
         action="액션아이템_할일전환",
         target_type="task_run",
         target_id=run.id,
-        summary=title,
+        summary=lib.title,
         after_value={"meeting_id": meeting.id, "run_id": run.id},
     )
     # 만든 업무의 드로어가 열린 목록으로 간다 (4-14 의 ?task=)
@@ -663,6 +652,9 @@ def meeting_suggestions(
             "quote": x.get("quote"),
             "parent_title": x.get("parent_title"),
             "department": x.get("department"),
+            # 새 업무 제안을 그 자리에서 만들 때 쓴다 (apply-new)
+            "title": x.get("title"),
+            "parent_run_id": x.get("parent_run_id"),
             # 누르기 전에 볼 수 있어야 한다
             "preview": 남을것 if x.get("kind") == "discussion" else None,
             "already": bool(run_id and run_id in 이미),
@@ -772,3 +764,86 @@ def apply_suggestion(
     db.commit()
     return {"ok": True, "entry_id": entry.id,
             "run_title": runs[0].library.title}
+
+
+class NewTaskPick(BaseModel):
+    title: str
+    department: str | None = None      # 제안의 부서 — **이름**이다 (표시용)
+    parent_run_id: int | None = None
+
+
+@router.post("/{meeting_id}/suggestions/apply-new")
+def apply_new_task(
+    meeting_id: int,
+    payload: NewTaskPick,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """「새 업무로 만들기」 제안 하나를 이번 회차의 업무로 만든다.
+
+    **회의록에서 업무로 가는 길은 제안 흐름 하나다** (12장) — 전에는
+    "보드의 + 업무 추가 에서" 라고 안내만 했는데, 그 자리에서 만들 수
+    있어야 길이 된다. **만드는 것은 `domain/tasks.create_run` 하나** —
+    보드·항목 전환과 같은 함수를 지나고, 출처(source_meeting_id)가 남는다.
+
+    제안의 부서는 **이름**이라 이번 회차의 부서와 이름으로 맞춰 본다 —
+    못 맞추면 부서 없이 만들고 **그렇다고 말한다** (조용히 다른 값이 되면
+    화면에서 고른 것과 저장된 것이 갈린다, 5-1). 상위가 있으면 그 아래
+    하위(sub)로 선다.
+    """
+    from app.domain import tasks as tasks_domain
+    from app.security import assert_can_edit_department
+
+    meeting = _owned(db, meeting_id, retreat)
+
+    parent_library_id = None
+    if payload.parent_run_id is not None:
+        parent = db.get(TaskRun, payload.parent_run_id)
+        if parent is None or parent.retreat_id != retreat.id:
+            raise HTTPException(status_code=404, detail="상위 업무를 찾을 수 없습니다.")
+        parent_library_id = parent.library_id
+
+    dept = None
+    if payload.department:
+        이름 = payload.department.strip()
+        dept = next((d for d in retreat.departments if d.name == 이름), None)
+    if dept is not None:
+        # 부서 줄에 서는 업무 — 항목 전환·보드와 같은 문 (키 비교)
+        assert_can_edit_department(db, user, dept.id)
+
+    try:
+        lib, run = tasks_domain.create_run(
+            db,
+            retreat,
+            title=payload.title,
+            kind="sub" if parent_library_id else "main",
+            department=dept,
+            parent_library_id=parent_library_id,
+            source_meeting_id=meeting.id,   # 출처 — 업무 쪽에 (8장)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+
+    방식, _, _말 = (meeting.suggest_note or "").partition("|")
+    if not _말:
+        방식 = ""
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="회의록_새업무_반영",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{meeting.title} → {lib.title} ({방식 or '알 수 없음'})",
+        after_value={"meeting_id": meeting.id, "run_id": run.id,
+                     "고른방식": 방식 or "알 수 없음"},
+        actor_type="claude",
+    )
+    return {"ok": True, "run_id": run.id, "run_no": run.run_no,
+            "title": lib.title,
+            "department": dept.name if dept else None,
+            # 이름을 못 맞췄으면 그렇다고 말한다 — 조용히 부서 없이 서면
+            # 화면에서 본 것과 저장된 것이 갈린다
+            "dept_missed": bool(payload.department and dept is None)}

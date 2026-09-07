@@ -83,14 +83,22 @@ function 줄(x) {
       ${출처}</div></div>`;
   }
   if (x.kind === 'new') {
-    // 붙일 곳이 없다 — 단추 대신 어디서 만드는지를 말한다
+    // 그 자리에서 만든다 — 회의록에서 업무로 가는 길은 제안 흐름 하나다
+    // (12장). 만드는 것은 서버의 domain/tasks.create_run 하나를 지난다.
     const 곁 = [x.parent_title ? `「${x.parent_title}」 의 하위` : '',
                 x.department || ''].filter(Boolean).join(' · ');
+    // 낱말 겹침 판은 제목을 다듬지 않아 title 이 없다 — 회의록 문장을
+    // 그대로 제목으로 쓰지 않는다(성적표가 짚은 그 모양). 그때는 보드로 안내
+    const 만들기 = canEdit && x.title
+      ? `<button type="button" data-apply-new
+           data-title="${esc(x.title)}"
+           data-department="${esc(x.department || '')}"
+           data-parent-run="${x.parent_run_id == null ? '' : Number(x.parent_run_id)}">업무로 만들기</button>`
+      : (x.title ? '' : `<span class="mt-sug-where">보드의 <b>+ 업무 추가</b> 에서</span>`);
     return `<div class="mt-sug-row is-new"><div class="mt-sug-main">
       <p class="mt-do"><i class="mt-kind">새 업무로 만들기</i>${esc(x.action)}</p>
       ${곁 ? `<p class="mt-where-to">${esc(곁)}</p>` : ''}
-      ${근거}${출처}</div>
-      <span class="mt-sug-where">보드의 <b>+ 업무 추가</b> 에서</span></div>`;
+      ${근거}${출처}</div>${만들기}</div>`;
   }
   const 이미 = x.already
     ? `<p class="mt-dup">이 회의록에서 온 논의가 <b>이미 있습니다.</b>` +
@@ -217,6 +225,40 @@ list.addEventListener('click', async e => {
       await fetch(`/meetings/${meetingId}/suggestions/rerun`, {method: 'POST'});
     } catch (err) { /* 아래에서 다시 물어본다 */ }
     불러온다();
+    return;
+  }
+  const 새단추 = e.target.closest('[data-apply-new]');
+  if (새단추) {
+    const row = 새단추.closest('.mt-sug-row');
+    새단추.disabled = true;
+    새단추.textContent = '만드는 중…';
+    try {
+      const res = await fetch(`/meetings/${meetingId}/suggestions/apply-new`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          title: 새단추.dataset.title,
+          department: 새단추.dataset.department || null,
+          parent_run_id: 새단추.dataset.parentRun ? Number(새단추.dataset.parentRun) : null,
+        }),
+      });
+      if (!res.ok) throw new Error(res.status);
+      const saved = await res.json();
+      row.classList.add('done');
+      // 만들었는데 어디 있는지 모르면 지금과 같다 — 드로어로 가는 길을 준다
+      row.querySelector('.mt-do').innerHTML =
+        `만들었습니다 — <a href="/tasks?task=${Number(saved.run_id)}">`
+        + `${saved.run_no != null ? `<span class="mt-no">${Number(saved.run_no)}</span>` : ''}`
+        + `${esc(saved.title)}</a>`
+        + (saved.dept_missed
+           ? ' <b>부서는 못 맞춰 비워 두었습니다</b> — 드로어에서 골라 주세요.'
+           : '');
+      새단추.remove();
+    } catch (err) {
+      새단추.disabled = false;
+      새단추.textContent = '업무로 만들기';
+      // 조용히 삼키지 않는다 (5-0)
+      row.querySelector('.mt-sug-why').textContent = '만들지 못했습니다. 다시 눌러 주세요.';
+    }
     return;
   }
   const btn = e.target.closest('[data-apply]');
