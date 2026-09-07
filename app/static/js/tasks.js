@@ -43,12 +43,13 @@ function place(runId) {
   dw.classList.add('inline');
 }
 
-/* ▸/▾ — 접었다 펴는 것임이 보이게 (4-14). 펼쳐진 행의 캐럿만 ▾ 다. */
+/* ▸/▾ — 접었다 펴는 것임이 보이게 (4-14). 캐럿은 행 오른쪽 끝에 있고
+   펼쳐진 행의 것만 ▾ 다. */
 function carets(openId) {
-  document.querySelectorAll('.lfoot').forEach(f => {
-    const on = openId != null && f.dataset.run === String(openId);
-    f.classList.toggle('open', on);
-    const c = f.querySelector('.caret');
+  document.querySelectorAll('.trow.lrow').forEach(r => {
+    const on = openId != null && r.dataset.run === String(openId);
+    r.classList.toggle('open', on);
+    const c = r.querySelector('.caret');
     if (c) c.textContent = on ? '▾' : '▸';
   });
 }
@@ -96,7 +97,7 @@ Drawer.init({
     const due = row.querySelector('.cell.due');
     if (due) due.className = due.className.replace(/b-\S+/, 'b-' + view.badge.cls);
   },
-  isTaskClick: el => el.closest('.lopen'),
+  isTaskClick: el => el.closest('.trow.lrow') && el.closest('.nm, .caretc'),
 
   /* ── 일부러 등록하지 않은 것 ──────────────────────────────────────
      빠뜨린 것과 구별되도록 적는다. call() 은 없는 핸들러를 조용히 건너뛴다. */
@@ -113,19 +114,25 @@ Drawer.init({
   onRelatedTeams() { return true; },
 });
 
-/* 「상세 · 선행 작업 · 확인 요청」 — 눌린 행 아래에서, 그 탭을 연 채로
-   펼쳐진다 (4-14). 같은 행의 같은 글자를 다시 누르면 닫는다. */
-let lastTab = null;
+/* **업무 이름(또는 캐럿)을 누르면** 그 자리에서 펼쳐진다 — 업무 규칙 탭이
+   기본이다 (4-14). 버튼 줄은 없앴다: 같은 일을 하는 자리가 둘이면 어느 쪽을
+   눌러야 할지 모른다. 같은 행을 다시 누르면 닫는다. */
 list.addEventListener('click', e => {
-  const btn = e.target.closest('.lopen');
-  if (!btn) return;
-  const runId = btn.dataset.open;
-  const tab = btn.dataset.tab || 'rules';
-  const sameRun = Drawer.isOpen() && String(Drawer.current()) === String(runId);
-  if (sameRun && lastTab === tab) { Drawer.close(); lastTab = null; return; }
-  if (sameRun) { Drawer.selectTab(tab); lastTab = tab; return; }
+  const row = e.target.closest('.trow.lrow');
+  if (!row || !e.target.closest('.nm, .caretc')) return;
+  const runId = row.dataset.run;
+  if (Drawer.isOpen() && String(Drawer.current()) === String(runId)) {
+    Drawer.close();
+    return;
+  }
   Drawer.open(runId);
-  Drawer.selectTab(tab);
-  lastTab = tab;
+  Drawer.selectTab('rules');
+});
+
+/* 부서 드롭다운 — 값은 부서 **키**다 (2장). 고르면 그 부서만 남는다 */
+const ldept = document.getElementById('ldept');
+if (ldept) ldept.addEventListener('change', () => {
+  const base = ldept.dataset.base || '/tasks';
+  location.href = base + (ldept.value ? '&dept=' + encodeURIComponent(ldept.value) : '');
 });
 })();

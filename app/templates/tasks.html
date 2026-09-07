@@ -9,9 +9,10 @@
   여기서 상태를 다시 가르지 않는다 (4-3).
 #}
 
-{# 한 행 — 제목(번호와 함께) 아래에 부서 칩 · 담당자 · 마감(D±N)이 붙고,
-   상태 배지는 오른쪽이다. 홈 행(4-15)과 같은 구조 — 칸을 행 오른쪽 끝에
-   두면 넓은 창에서 제목과 칸 사이가 수백 px 벌어져 행이 비어 보인다.
+{# 한 행 — 제목(번호와 함께) 오른쪽에 부서 칩 · 담당자 · 마감(D±N), 행 오른쪽
+   끝에 상태 배지와 ▸ 캐럿 (4-14). 좁은 화면(<820px)에서는 메타와 배지가
+   이름 아래로 내려간다. **업무 이름을 누르면 그 자리에서 펼쳐진다** — 버튼
+   줄은 없앴다(같은 일을 하는 자리가 둘이면 어느 쪽을 눌러야 할지 모른다).
    완료에는 D±N 이 안 실려 온다(도메인이 뺀다). due 의 b-* 는 배지 이름을
    기계적으로 이어 붙인 것. 배지 html 은 `~` 로 잇지 않는다 — Markup 이
    섞이면 나머지 글자까지 이스케이프돼 태그가 글자 그대로 찍힌다. #}
@@ -32,18 +33,10 @@
   'cells': [
     {'cls': 'cell st',
      'html': '<span class="stbadge %s">%s</span>'|format(row.badge.cls, row.badge.label)},
+    {'cls': 'cell caretc',
+     'html': '<span class="caret" aria-hidden="true">▸</span>'},
   ],
 }) }}
-{# 접었다 펴는 것임이 보이게 ▸ 를 붙이고, 글자 셋은 각각 그 탭을 연 채로
-   펼친다 (4-14) — 상세→업무 규칙 · 선행 작업→연결 · 확인 요청→확인 요청 #}
-<div class="lfoot" data-run="{{ row.run_id }}">
-  <span class="caret" aria-hidden="true">▸</span>
-  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="rules">상세</button>
-  <span class="sep">·</span>
-  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="rel">선행 작업</button>
-  <span class="sep">·</span>
-  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="review">확인 요청</button>
-</div>
 <div class="lslot" data-slot="{{ row.run_id }}" hidden></div>
 {% endmacro %}
 
@@ -53,23 +46,34 @@
 
   {% set keep_dept = ('&dept=' ~ view.dept) if view.dept else '' %}
   {% set keep_state = ('&state=' ~ view.state) if view.state else '' %}
-  {# 1줄 — 범위 + 상태 (4-14). 지연 건수는 계산값(overdue_of)이다 #}
+  {% set keep_sort = ('&sort=' ~ view.sort ~ '&dir=' ~ view.dir) if not view.default_sort else '' %}
+  {# 1줄 — 범위 + 상태 (4-14). 지연 건수는 계산값(overdue_of)이다.
+     부서는 칩 줄 대신 **드롭다운 하나** — 값은 부서 키다 (2장) #}
   <div class="chips">
-    <a class="chip{{ ' on' if view.scope == 'mine' }}" href="/tasks?scope=mine{{ keep_state }}{{ keep_dept }}">내 부서</a>
-    <a class="chip{{ ' on' if view.scope != 'mine' }}" href="/tasks?scope=all{{ keep_state }}{{ keep_dept }}">전체</a>
+    <a class="chip{{ ' on' if view.scope == 'mine' }}" href="/tasks?scope=mine{{ keep_state }}{{ keep_dept }}{{ keep_sort }}">내 부서</a>
+    <a class="chip{{ ' on' if view.scope != 'mine' }}" href="/tasks?scope=all{{ keep_state }}{{ keep_dept }}{{ keep_sort }}">전체</a>
     <span class="chipsep"></span>
     {% for s, label in view.state_labels %}
     <a class="chip{{ ' on' if view.state == s }}"
-       href="/tasks?scope={{ view.scope }}{{ '' if view.state == s else '&state=' ~ s }}{{ keep_dept }}">
+       href="/tasks?scope={{ view.scope }}{{ '' if view.state == s else '&state=' ~ s }}{{ keep_dept }}{{ keep_sort }}">
       {{ label }}<span class="cnt">{{ view.state_counts[s] }}</span></a>
     {% endfor %}
+    <span class="chipsep"></span>
+    <select class="ldept" id="ldept" aria-label="부서"
+            data-base="/tasks?scope={{ view.scope }}{{ keep_state }}{{ keep_sort }}">
+      <option value="">부서 전체</option>
+      {% for d in view.dept_counts %}
+      <option value="{{ d.key }}"{{ ' selected' if view.dept == d.key }}>{{ d.name }} · {{ d.count }}</option>
+      {% endfor %}
+    </select>
   </div>
-  {# 2줄 — 부서별 건수. 부서는 키로 (2장) #}
-  <div class="chips">
-    {% for d in view.dept_counts %}
-    <a class="chip{{ ' on' if view.dept == d.key }}" style="--dept:{{ d.color }}"
-       href="/tasks?scope={{ view.scope }}{{ keep_state }}{{ '' if view.dept == d.key else '&dept=' ~ d.key }}">
-      <span class="swatch"></span>{{ d.name }}<span class="cnt">{{ d.count }}</span></a>
+  {# 정렬 — 누를 때마다 오름 ↔ 내림. 지금 축과 방향은 화살표로 (4-14) #}
+  <div class="chips lsort">
+    {% for s, label in [('date', '날짜'), ('name', '이름')] %}
+    {% set flip = 'desc' if (view.sort == s and view.dir == 'asc') else 'asc' %}
+    <a class="chip sort{{ ' on' if view.sort == s }}"
+       href="/tasks?scope={{ view.scope }}{{ keep_state }}{{ keep_dept }}&sort={{ s }}&dir={{ flip }}">
+      {{ label }}{% if view.sort == s %}<span class="dirmark">{{ '↑' if view.dir == 'asc' else '↓' }}</span>{% endif %}</a>
     {% endfor %}
   </div>
 

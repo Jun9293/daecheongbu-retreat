@@ -43,7 +43,7 @@
   const openers = () => isBoard
     ? [...sheet.querySelectorAll('.bar[data-run]')].filter(b => shown(b) && !b.dataset.ghost)
     : isList
-    ? [...document.querySelectorAll('.lopen[data-open]')].filter(shown)
+    ? [...document.querySelectorAll('.trow.lrow .nm')].filter(shown)
     : [...document.querySelectorAll('.cal-dot[data-run]')].filter(shown);
 
   const snapshot = () => ({
@@ -87,7 +87,7 @@
   opener.click();
   await sleep(900);
   if (!dw.classList.contains('open')) return {치명: `${where} 에서 드로어가 열리지 않음`};
-  results.push(`✓ ${isBoard ? '바' : isList ? '「상세 · 선행 작업 · 확인 요청」' : '점'}을 눌러 그 자리에서 패널이 열림`);
+  results.push(`✓ ${isBoard ? '바' : isList ? '업무 이름' : '점'}을 눌러 그 자리에서 패널이 열림`);
 
   // 달력·목록이라면 **보드로 넘어가지 않았는지** 함께 본다
   if (!isBoard) {
@@ -132,13 +132,13 @@
       if (bad.length) errors.push('행의 칸이 화면에 안 보임: ' + bad.join(', '));
     }
 
-    // ▸/▾ — 접었다 펴는 것임이 보인다 (4-14)
+    // ▸/▾ — 접었다 펴는 것임이 보인다. 캐럿은 행 오른쪽 끝이다 (4-14)
     {
       const cur = new URLSearchParams(location.search).get('task');
-      const foot = document.querySelector(`.lfoot[data-run="${cur}"]`);
-      const openCaret = foot && foot.querySelector('.caret')?.textContent === '▾';
-      const others = [...document.querySelectorAll('.lfoot')].filter(f => f !== foot);
-      const rest = others.every(f => f.querySelector('.caret')?.textContent === '▸');
+      const row = document.querySelector(`.trow.lrow[data-run="${cur}"]`);
+      const openCaret = row && row.querySelector('.caret')?.textContent === '▾';
+      const others = [...document.querySelectorAll('.trow.lrow')].filter(r => r !== row);
+      const rest = others.every(r => r.querySelector('.caret')?.textContent === '▸');
       results.push((openCaret && rest ? '✓' : '✗') + ' 펼친 행만 ▾, 나머지는 ▸');
       if (!(openCaret && rest)) errors.push('▸/▾ 토글이 상태를 안 보여줌');
     }
@@ -324,7 +324,7 @@
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
   // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
   const emptySpot = () => {
-    // 목록 — 제목 줄 오른쪽의 빈 자리. 행(.lopen)도 패널도 아닌 곳이다.
+    // 목록 — 제목 줄 오른쪽의 빈 자리. 여는 자리(이름·캐럿)도 패널도 아닌 곳이다.
     if (isList) {
       const h = tlist.querySelector('h1');
       if (!h) return null;
@@ -332,7 +332,7 @@
       const x = Math.round(Math.min(window.innerWidth - 24, r.right + 180));
       const y = Math.round(r.top + r.height / 2);
       const el = document.elementFromPoint(x, y);
-      if (el && !el.closest('#drawer') && !el.closest('.lopen')
+      if (el && !el.closest('#drawer') && !el.closest('.nm') && !el.closest('.caretc')
           && !el.closest('header,.toolbar,.sidenav')) return {x, y};
       return null;
     }
@@ -693,12 +693,12 @@
       await check('완료 접힘 펴기', () => { done.open = true; }, {mayScroll: false});
       done.open = false;
     } else results.push('· 완료 업무가 없어 접힘 자리는 건너뜀');
-    // 같은 행의 펼침 버튼을 다시 누르면 닫힌다 (토글)
+    // 같은 행의 이름을 다시 누르면 닫힌다 (토글)
     const first = openers()[0];
     if (first && !dw.classList.contains('open')) { first.click(); await sleep(700); }
     if (first && dw.classList.contains('open')) {
       const cur = new URLSearchParams(location.search).get('task');
-      document.querySelector(`.lopen[data-open="${cur}"]`)?.click();
+      document.querySelector(`.trow.lrow[data-run="${cur}"] .nm`)?.click();
       await sleep(400);
       const closed = !dw.classList.contains('open');
       results.push((closed ? '✓' : '✗') + ' 같은 행을 다시 누르면 닫힘');

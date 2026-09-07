@@ -23,14 +23,22 @@ STATE_ORDER = ("wait", "prog", "done", "late")
 
 @dataclass
 class ListView:
-    rows: list = field(default_factory=list)        # 미완료 — 시작일 순
+    rows: list = field(default_factory=list)        # 미완료 — 정렬 순
     done_rows: list = field(default_factory=list)   # 완료 — 기본 접힘 (4-14)
     state_counts: dict = field(default_factory=dict)
     dept_counts: list = field(default_factory=list)
     scope: str = "all"
     state: str = ""
     dept: str = ""
+    sort: str = "date"                              # 'date' | 'name' (4-14)
+    dir: str = "asc"                                # 'asc' | 'desc'
     total: int = 0
+
+    @property
+    def default_sort(self) -> bool:
+        """기본 정렬(시작일 오름)이면 주소에 sort 를 싣지 않는다 — 알림의
+        바로가기 주소가 정렬 파라미터로 길어질 이유가 없다."""
+        return self.sort == "date" and self.dir == "asc"
 
     @property
     def state_labels(self):
@@ -83,19 +91,29 @@ def build(
     scope: str = "all",
     state: str = "",
     dept: str = "",
+    sort: str = "date",
+    dir: str = "asc",
 ) -> ListView:
     """my_key 는 「내 부서」 칩의 기준, dim 은 소속 외 흐림을 켤지다.
 
     총무팀(admin)은 dim=False 로 전부 선명하게 본다 — 홈(4-15)·옛 화면과
     같은 규칙이다. 흐림을 끄더라도 「내 부서」 칩은 소속이 있으면 동작한다.
+    정렬은 날짜(기본 · 시작일)·이름 두 축, 오름/내림 (4-14) — 모르는 값은
+    기본으로 떨어뜨린다.
     """
+    if sort not in ("date", "name"):
+        sort = "date"
+    if dir not in ("asc", "desc"):
+        dir = "asc"
+    key = _sort_key if sort == "date" else (lambda r: (r.library.title, r.id))
     runs = sorted(
         db.scalars(
             select(TaskRun).where(
                 TaskRun.retreat_id == retreat.id, TaskRun.included
             )
         ),
-        key=_sort_key,
+        key=key,
+        reverse=(dir == "desc"),
     )
 
     # 소속이 없으면 '내 부서' 는 고를 것이 없다 — 전체로 떨어뜨린다
@@ -137,5 +155,7 @@ def build(
         scope=scope,
         state=state,
         dept=dept,
+        sort=sort,
+        dir=dir,
         total=len(scoped),
     )

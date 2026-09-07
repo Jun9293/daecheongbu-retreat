@@ -1304,7 +1304,7 @@ window.Drawer = {
   },
   open: openDrawer,
   close: closeDrawer,
-  // 목록의 「상세 · 선행 작업 · 확인 요청」 이 각각 그 탭을 연 채로 펼친다 (4-14)
+  // 목록이 이름 클릭으로 열며 업무 규칙 탭을 고를 때 쓴다 (4-14)
   selectTab,
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,

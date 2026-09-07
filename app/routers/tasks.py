@@ -33,6 +33,8 @@ def tasks_page(
     scope: str = "all",
     state: str = "",
     dept: str = "",
+    sort: str = "date",
+    dir: str = "asc",
     task: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -52,6 +54,8 @@ def tasks_page(
         scope=scope,
         state=state,
         dept=dept,
+        sort=sort,
+        dir=dir,
     )
     # ?task= 로 온 업무가 완료 접힘 안에 있으면 접힌 채 열 수 없다 —
     # 서버가 미리 펴 둔다
