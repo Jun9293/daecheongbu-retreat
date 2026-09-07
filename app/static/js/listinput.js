@@ -83,10 +83,46 @@ function attach(box) {
   });
 }
 
-function attachAll(root) {
-  (root || document).querySelectorAll('textarea[data-listedit]').forEach(attach);
+/* ── 내용만큼 길어지는 칸 ────────────────────────────────────────────
+   회의록 본문처럼 **길게 적는 칸**은 손잡이로 늘리게 두지 않는다 — 칸
+   안에 스크롤이 생기면 위에 적은 것을 보려고 두 번 스크롤하게 되고,
+   손잡이는 매번 사람이 끌어야 한다. 내용이 늘면 칸이 따라 늘어난다.
+
+   **켜는 곳에만 붙는다**(`data-autogrow`). 논의 입력칸(4-9)은 드로어
+   안이라 패널이 통째로 길어지면 안 되므로 켜지 않는다 — 같은 코드를
+   두 벌로 만들지 않되, 어디에 쓸지는 그 자리가 정한다.
+
+   높이는 `scrollHeight` + 테두리다. `box-sizing:border-box` 라
+   테두리를 안 더하면 그만큼 모자라 **1px 스크롤이 남는다.** */
+function grow(box) {
+  if (!box) return;
+  const 테두리 = box.offsetHeight - box.clientHeight;   // 위아래 테두리
+  box.style.height = 'auto';        // 줄어드는 쪽도 재려면 먼저 풀어야 한다
+  box.style.height = (box.scrollHeight + 테두리) + 'px';
 }
 
-window.ListInput = {attach, attachAll, BULLETS, LIST_RE};
+function autogrow(box) {
+  if (!box || box.dataset.growOn) return;
+  box.dataset.growOn = '1';
+  // JS 가 죽으면 CSS 의 스크롤로 물러선다 — 그때 감춰 두면 글이 잘린다
+  box.style.overflowY = 'hidden';
+  // 붙여넣기·지우기·자동 채움까지 한 이벤트로 (input) — 처음 그릴 때도 한 번
+  box.addEventListener('input', () => grow(box));
+  grow(box);
+}
+
+function attachAll(root) {
+  const 안 = root || document;
+  안.querySelectorAll('textarea[data-listedit]').forEach(attach);
+  안.querySelectorAll('textarea[data-autogrow]').forEach(autogrow);
+}
+
+window.ListInput = {attach, attachAll, autogrow, grow, BULLETS, LIST_RE};
 attachAll();
+// 글꼴이 늦게 오면 줄 수가 달라진다 — 준비된 뒤 한 번 더 잰다
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    document.querySelectorAll('textarea[data-autogrow]').forEach(grow);
+  });
+}
 })();

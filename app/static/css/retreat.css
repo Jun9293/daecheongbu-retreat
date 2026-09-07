@@ -1532,7 +1532,10 @@ button.btn:disabled{opacity:.4;cursor:default}
 .mt-one-meta label{display:flex;flex-direction:column;gap:4px;
   font-size:var(--fz-sm);color:var(--ink-3)}
 .mt-one-meta label.grow{flex:1;min-width:220px}
-.mt-one-body{min-height:340px;line-height:1.65;white-space:pre-wrap;resize:vertical}
+/* 본문 칸은 **내용만큼 길어진다** — 손잡이를 없애고 listinput 의
+   autogrow 가 높이를 잡는다. JS 가 죽으면 보통 textarea 로 물러서
+   스크롤이 생긴다(글이 잘리지는 않는다) */
+.mt-one-body{min-height:340px;line-height:1.65;white-space:pre-wrap;resize:none}
 .mt-one-foot{display:flex;align-items:center;gap:12px}
 .mt-one-hint{font-size:var(--fz-md);color:var(--ink-2)}
 .mt-from-note{font-size:var(--fz-md);color:var(--ink-2);line-height:1.6;
@@ -1585,6 +1588,15 @@ button.btn:disabled{opacity:.4;cursor:default}
 /* 새 업무 제안은 붙일 곳이 없다 — 단추 대신 **어디서 만드는지**를 말한다 */
 .mt-sug-row.is-new{box-shadow:inset 2px 0 0 var(--rule-2)}
 .mt-sug-where{font-size:var(--fz-md);color:var(--ink-2);flex:none}
+/* 이미 업무가 된 제안 — 단추가 섰던 자리다. **형제와 같은 급이어야
+   한다**: 크기를 안 주면 본문(15px)을 상속해 대체한 단추보다 커지고,
+   flex 를 안 주면 좁은 폭에서 줄어든다 (4-14 의 그 링크) */
+.mt-sug-made{font-size:var(--fz-md);color:var(--ink-2);flex:none;
+  display:inline-flex;align-items:center;gap:5px}
+.mt-sug-made a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule-2)}
+.mt-sug-made a:hover{border-bottom-color:var(--ink-3)}
+.mt-sug-made .mt-no{font-family:var(--mono);font-size:var(--fz-xs);color:var(--ink-3);
+  margin-right:5px}
 /* 잘렸다는 한 줄. 누를 것이 없으므로 더 조용하게 */
 .mt-sug-row.is-more{color:var(--ink-2)}
 .mt-sug-row.is-more b{font-weight:400}
@@ -1833,9 +1845,12 @@ button.btn:disabled{opacity:.4;cursor:default}
   margin-top:12px;overflow:hidden}
 /* 행 자체는 .trow (partials/taskrow.html) — 목록 변형만 여기 얹는다.
    이름 오른쪽에 메타(부서·담당자·마감), 행 오른쪽 끝에 배지와 캐럿 (4-14).
-   **이름을 누르면 펼쳐진다** — 버튼 줄은 없앴다. 좁은 화면(<820px)에서는
-   메타와 배지가 이름 아래로 내려간다. */
-.trow.lrow{cursor:default;padding:10px 16px;align-items:center}
+   버튼 줄은 없앴다. 좁은 화면(<820px)에서는 메타와 배지가 이름 아래로
+   내려간다. */
+/* **행 전체가 여는 자리다** (4-14) — 커서도 행 전체에 pointer. 예외
+   (안 여는 자리)에만 그 자리의 커서를 되돌린다 — tasks.js 의 `안여는곳` */
+.trow.lrow{cursor:pointer;padding:10px 16px;align-items:center}
+.trow.lrow .stbadge{cursor:default}
 .trow.lrow + .trow.lrow,.lslot + .trow.lrow{border-top:1px solid var(--rule)}
 .trow.lrow.dim{opacity:.55}
 .trow.lrow .main{display:flex;align-items:center;gap:10px;min-width:0}
@@ -1856,6 +1871,12 @@ button.btn:disabled{opacity:.4;cursor:default}
 .tlist .ldept{font:inherit;font-size:var(--fz-md);color:var(--ink);
   border:1px solid var(--rule-2);border-radius:6px;background:var(--paper);
   padding:4px 8px;max-width:220px}
+/* 정렬은 **상태 칩보다 한 급 아래**다 — 무엇을 볼지가 먼저고 순서는
+   그다음이다. 크기는 배지가 쓰는 장식 단(--fz-xs)을 그대로 쓴다: 눈금
+   밖 값을 새로 만들지 않는다 (4-0). **장식 단에 두는 예외**이고 그
+   이유는 4-0 에 적혀 있다 — 목록이 곧 그 뜻을 보여주는 조작 라벨이다.
+   자리는 tests/test_typescale.py 의 `장식이어도_되는곳` 에 있다 */
+.tlist .lsort .chip{font-size:var(--fz-xs);padding:3px 9px}
 .tlist .lsort .chip .dirmark{font-family:var(--mono);font-size:var(--fz-xs)}
 .lslot{border-bottom:1px solid var(--rule);background:var(--paper)}
 .lempty{padding:22px 16px;color:var(--ink-2);font-size:var(--fz-md)}

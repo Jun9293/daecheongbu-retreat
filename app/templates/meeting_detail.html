@@ -37,8 +37,11 @@
   {% endif %}
 
   {# 본문 입력칸은 **논의 입력칸과 같은 코드**를 쓴다 (4-9 · static/js/listinput.js).
-     줄바꿈은 저장 후에도 그대로 보인다 — 화면 쪽은 white-space: pre-wrap #}
-  <textarea class="mt-one-body" name="body" data-listedit rows="20"
+     줄바꿈은 저장 후에도 그대로 보인다 — 화면 쪽은 white-space: pre-wrap.
+     `data-autogrow` — 길게 적는 칸이라 내용만큼 길어진다. 손잡이는 없다:
+     칸 안에 스크롤이 생기면 위에 적은 것을 보려고 두 번 스크롤하게 된다.
+     `rows` 는 JS 가 죽었을 때의 높이다 #}
+  <textarea class="mt-one-body" name="body" data-listedit data-autogrow rows="20"
             aria-label="회의 내용"
             {{ 'readonly' if not can_edit }}>{{ meeting.body or '' }}</textarea>
 
