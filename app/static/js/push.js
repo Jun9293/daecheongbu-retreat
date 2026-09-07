@@ -1,6 +1,19 @@
 /* 웹 푸시 구독 (4-11) — #push-card 가 있는 화면이면 어디서든 돈다.
-   설정 › 내 정보(새 껍데기)와 옛 알림함이 같이 쓴다 — 한 벌이다.
-   app.js 에 있던 것을 그대로 옮겼다. */
+   설정 › 내 정보와 알림 페이지가 같이 쓴다 — 한 벌이다. */
+
+// ---------------------------------------------------------------- 서비스워커 등록
+// 옛 껍데기의 app.js 가 하던 일 — 그 파일이 껍데기와 함께 사라지면서 여기로
+// 왔다(단계 5). 아래 구독 코드가 serviceWorker.ready 를 기다리는데, 등록하는
+// 곳이 없으면 **영영 resolve 되지 않는다** — 새 기기에서 푸시가 조용히 죽는다.
+(function () {
+  "use strict";
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () { /* 무시 */ });
+    });
+  }
+})();
+
 // ---------------------------------------------------------------- 웹 푸시 구독
 (function () {
   "use strict";

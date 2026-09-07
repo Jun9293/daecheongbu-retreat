@@ -53,6 +53,5 @@
 </main>
 {% endblock %}
 
-{% block scripts %}
-<script src="{{ static('js/push.js') }}" defer></script>
-{% endblock %}
+{# push.js 는 retreat_base 가 전역으로 싣는다 (단계 5) — 두 번 실으면
+   구독 버튼에 리스너가 두 번 붙는다 #}
