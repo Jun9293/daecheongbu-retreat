@@ -44,10 +44,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import pathlib
 import subprocess
 import sys
+
+# 콘솔이 cp949 여도 안내문이 죽지 않아야 한다 — 막는 검사가 말을 못 하면
+# 막히는 쪽이 사람에게 안 보인다 (11-3). 못 적는 글자는 ? 로 바꾼다.
+# (실패 경로의 「—」 가 cp949 에 없어 첫 줄만 찍고 트레이스백으로 죽었다)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -262,54 +269,58 @@ def 표밖담당자(자료폴더: pathlib.Path | None = None) -> dict:
     return {"본칸": 본칸, "표밖": 나온것, "안본말": sorted(걸린아는말)}
 
 
-def 새이미지() -> list[str]:
-    """docs/ 아래 이미지 중 **마지막 커밋(HEAD)에 없는 것** — 상대경로 목록.
+def 이미지해시(p: pathlib.Path) -> str:
+    """이미지의 내용 해시(md5 앞 12자리) — 확인 기록이 「그 내용」 을 봤다는
+    표시다. 경로만 적으면 같은 이름으로 다시 찍은 것이 조용히 지나간다."""
+    return hashlib.md5(p.read_bytes()).hexdigest()[:12]
 
-    이미지는 글이 아니라 이 검사의 실명 찾기가 못 본다. 그래서 새 이미지는
-    사람이 눈으로 보고 `docs/review/이미지-확인.md` 에 적어야 통과다 —
-    「볼 목록 밖」 을 볼 목록 안으로 들이는 장치다. HEAD 에 이미 있는
-    이미지는 이미 나간 것이라 여기서 다시 막을 수 없다.
+
+def 이미지목록() -> list[tuple[str, str]]:
+    """docs/ 아래 이미지 **전부** — (상대경로, 내용 해시) 목록.
+
+    이미지는 글이 아니라 이 검사의 실명 찾기가 못 본다. 그래서 이미지는
+    사람이 눈으로 보고 `docs/review/이미지-확인.md` 에 경로와 해시를 적어야
+    통과다 — 「볼 목록 밖」 을 볼 목록 안으로 들이는 장치다.
+    전에는 마지막 커밋에 없는 경로만 봤는데, **같은 이름으로 다시 찍으면**
+    (재촬영 — 실제로 있는 일이다) 새 이미지가 아니어서 아무도 안 봤다.
     """
-    있는것 = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "ls-tree", "-r", "HEAD",
-         "--name-only", "docs"],
-        capture_output=True, cwd=ROOT,
-    ).stdout.decode("utf-8")
-    커밋됨 = {줄.strip() for 줄 in 있는것.split("\n") if 줄.strip()}
     나온것 = []
     for p in sorted((ROOT / "docs").rglob("*")):
         if not p.is_file() or p.suffix.lower() not in 이미지꼴:
             continue
         if 무시되나(p):
             continue
-        상대 = 상대경로(p)
-        if 상대 not in 커밋됨:
-            나온것.append(상대)
+        나온것.append((상대경로(p), 이미지해시(p)))
     return 나온것
 
 
-def 미확인이미지(새것: list[str], 확인글: str) -> list[str]:
-    """확인 파일에 이름이 안 적힌 새 이미지 — 순수 함수라 시험이 바로 잰다."""
-    return [상대 for 상대 in 새것 if 상대 not in 확인글]
+def 미확인이미지(목록: list[tuple[str, str]], 확인글: str) -> list[str]:
+    """확인 파일에 경로와 **지금 내용의 해시**가 함께 안 적힌 이미지.
+
+    순수 함수라 시험이 바로 잰다. 해시가 다르면 — 확인한 뒤 내용이
+    바뀌었으면 — 확인 안 된 것이다.
+    """
+    return [f"{상대} (해시 {해시})" for 상대, 해시 in 목록
+            if 상대 not in 확인글 or 해시 not in 확인글]
 
 
 def 이미지검사() -> int:
-    """0 이면 통과. 새 이미지가 확인 파일에 없으면 목록을 찍고 1."""
-    새것 = 새이미지()
-    if not 새것:
-        print("새 이미지 없음 (docs/ · 마지막 커밋 기준)")
+    """0 이면 통과. 확인 안 된 이미지(새것·내용 바뀐 것)가 있으면 찍고 1."""
+    목록 = 이미지목록()
+    if not 목록:
+        print("docs/ 에 이미지 없음")
         return 0
     확인글 = 이미지확인.read_text(encoding="utf-8") if 이미지확인.exists() else ""
-    남은것 = 미확인이미지(새것, 확인글)
+    남은것 = 미확인이미지(목록, 확인글)
     if not 남은것:
-        print(f"새 이미지 {len(새것)}개 — 전부 사람이 확인함 ({이미지확인.name})")
+        print(f"이미지 {len(목록)}개 — 전부 사람이 확인함 (경로·해시 일치, {이미지확인.name})")
         return 0
     print()
-    print(f"!! 새 이미지 {len(남은것)}개를 아직 사람이 확인하지 않았습니다.")
+    print(f"!! 이미지 {len(남은것)}개를 아직 사람이 확인하지 않았습니다 (새것 또는 내용이 바뀐 것).")
     print("   이미지는 실명 검사가 못 봅니다 — 눈으로 보고 실명이 없으면")
-    print(f"   docs/review/{이미지확인.name} 에 그 경로를 적어 주세요.")
-    for 상대 in 남은것:
-        print(f"   {상대}")
+    print(f"   docs/review/{이미지확인.name} 에 경로와 해시를 적어 주세요.")
+    for 줄 in 남은것:
+        print(f"   {줄}")
     return 1
 
 

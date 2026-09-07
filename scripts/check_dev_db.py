@@ -32,6 +32,10 @@ import re
 import sqlite3
 import sys
 
+# 콘솔이 cp949 여도 안내문이 죽지 않아야 한다 (11-3 — check_names 와 같은 이유)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 _스펙 = importlib.util.spec_from_file_location(

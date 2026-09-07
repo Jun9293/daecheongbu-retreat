@@ -35,6 +35,11 @@ import re
 import subprocess
 import sys
 
+# 콘솔이 cp949 여도 안내문이 죽지 않아야 한다 (11-3 — check_names 와 같은 이유.
+# 미리보기 끝 문장의 「—」 가 cp949 에 없어 실제로 죽은 적이 있다)
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # 표는 `data/` 에 두고 gitignore 한다 — 실데이터를 저장소 밖에 두는 것과 같다.
