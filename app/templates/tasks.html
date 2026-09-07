@@ -11,7 +11,8 @@
 
 {# 한 행 — 제목(번호와 함께) 오른쪽에 부서 칩 · 담당자 · 마감(D±N), 행 오른쪽
    끝에 상태 배지와 ▸ 캐럿 (4-14). 좁은 화면(<820px)에서는 메타와 배지가
-   이름 아래로 내려간다. **업무 이름을 누르면 그 자리에서 펼쳐진다** — 버튼
+   이름 아래로 내려간다. **행 아무 데나 누르면 그 자리에서 펼쳐진다** —
+   예외는 tasks.js 의 `안여는곳`(상태 배지 등)뿐이다. 버튼
    줄은 없앴다(같은 일을 하는 자리가 둘이면 어느 쪽을 눌러야 할지 모른다).
    완료에는 D±N 이 안 실려 온다(도메인이 뺀다). due 의 b-* 는 배지 이름을
    기계적으로 이어 붙인 것. 배지 html 은 `~` 로 잇지 않는다 — Markup 이
@@ -44,35 +45,47 @@
 <main class="setting tlist" id="tlist" data-open-task="{{ open_task or '' }}">
   <h1>목록</h1>
 
-  {% set keep_dept = ('&dept=' ~ view.dept) if view.dept else '' %}
-  {% set keep_state = ('&state=' ~ view.state) if view.state else '' %}
-  {% set keep_sort = ('&sort=' ~ view.sort ~ '&dir=' ~ view.dir) if not view.default_sort else '' %}
-  {# 1줄 — 범위 + 상태 (4-14). 지연 건수는 계산값(overdue_of)이다.
-     부서는 칩 줄 대신 **드롭다운 하나** — 값은 부서 키다 (2장) #}
+  {# 주소 만들기 — **구분자(`?`·`&`)는 템플릿 글자이고 값만 끼운다.**
+     `&` 를 변수에 담으면 Jinja 가 `&amp;` 로 바꿔 주소가 읽기 어려워지고,
+     그렇다고 `|safe` 로 풀면 `?dept=` 에 아무 글자나 넣어 보낸 것이
+     그대로 링크가 된다. 값은 urlencode 로 지나간다. #}
+  {% macro q(state='', dept='', sort='', dir='') -%}
+    {%- set ns = namespace(first=True) -%}
+    {%- for k, v in [('state', state), ('dept', dept), ('sort', sort), ('dir', dir)] if v -%}
+      {%- if ns.first %}?{% else %}&{% endif -%}{{ k }}={{ v|urlencode }}
+      {%- set ns.first = False -%}
+    {%- endfor -%}
+  {%- endmacro %}
+  {% set keep_sort = view.sort if not view.default_sort else '' %}
+  {% set keep_dir = view.dir if not view.default_sort else '' %}
+  {# 1줄 — **부서 드롭다운이 맨 왼쪽**이고 그것이 범위다 (4-14). 「내 부서 /
+     전체」 칩은 없앴다: 같은 것을 두 곳에서 고르면 둘이 어긋날 때 어느 쪽이
+     이겼는지 화면이 말해 주지 않는다. 값은 부서 키다 (2장).
+     그 오른쪽이 상태 — 지연 건수는 계산값(overdue_of)이다 #}
   <div class="chips">
-    <a class="chip{{ ' on' if view.scope == 'mine' }}" href="/tasks?scope=mine{{ keep_state }}{{ keep_dept }}{{ keep_sort }}">내 부서</a>
-    <a class="chip{{ ' on' if view.scope != 'mine' }}" href="/tasks?scope=all{{ keep_state }}{{ keep_dept }}{{ keep_sort }}">전체</a>
-    <span class="chipsep"></span>
-    {% for s, label in view.state_labels %}
-    <a class="chip{{ ' on' if view.state == s }}"
-       href="/tasks?scope={{ view.scope }}{{ '' if view.state == s else '&state=' ~ s }}{{ keep_dept }}{{ keep_sort }}">
-      {{ label }}<span class="cnt">{{ view.state_counts[s] }}</span></a>
-    {% endfor %}
-    <span class="chipsep"></span>
     <select class="ldept" id="ldept" aria-label="부서"
-            data-base="/tasks?scope={{ view.scope }}{{ keep_state }}{{ keep_sort }}">
+            data-base="/tasks{{ q(state=view.state, sort=keep_sort, dir=keep_dir) }}">
       <option value="">부서 전체</option>
       {% for d in view.dept_counts %}
       <option value="{{ d.key }}"{{ ' selected' if view.dept == d.key }}>{{ d.name }} · {{ d.count }}</option>
       {% endfor %}
     </select>
+    <span class="chipsep"></span>
+    {# 누른 상태를 다시 누르면 그 필터가 풀린다 (지금까지와 같다) #}
+    {% for s, label in view.state_labels %}
+    <a class="chip{{ ' on' if view.state == s }}"
+       href="/tasks{{ q(state=('' if view.state == s else s), dept=view.dept,
+                        sort=keep_sort, dir=keep_dir) }}">
+      {{ label }}<span class="cnt">{{ view.state_counts[s] }}</span></a>
+    {% endfor %}
   </div>
-  {# 정렬 — 누를 때마다 오름 ↔ 내림. 지금 축과 방향은 화살표로 (4-14) #}
+  {# 정렬 — 누를 때마다 오름 ↔ 내림. 지금 축과 방향은 화살표로 (4-14).
+     **상태 칩보다 작은 급**이다: 무엇을 볼지가 먼저고 순서는 그다음이다 #}
   <div class="chips lsort">
     {% for s, label in [('date', '날짜'), ('name', '이름')] %}
     {% set flip = 'desc' if (view.sort == s and view.dir == 'asc') else 'asc' %}
     <a class="chip sort{{ ' on' if view.sort == s }}"
-       href="/tasks?scope={{ view.scope }}{{ keep_state }}{{ keep_dept }}&sort={{ s }}&dir={{ flip }}">
+       href="/tasks{{ q(state=view.state, dept=view.dept, sort=s, dir=flip) }}">
       {{ label }}{% if view.sort == s %}<span class="dirmark">{{ '↑' if view.dir == 'asc' else '↓' }}</span>{% endif %}</a>
     {% endfor %}
   </div>

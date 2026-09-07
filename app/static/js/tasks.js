@@ -16,6 +16,26 @@ if (!list || !dw) return;
 const slotOf = id => document.querySelector(`.lslot[data-slot="${CSS.escape(String(id))}"]`);
 const rowOf = id => document.querySelector(`.trow[data-run="${CSS.escape(String(id))}"]`);
 
+/* ── 행의 **안 여는 자리** ──────────────────────────────────────────
+   행 전체가 여는 자리다. 목록으로 두는 것은 「여는 자리」 가 아니라
+   **「안 여는 자리」** 다 — 새 요소가 생기면 열림 쪽이 기본이어야 한다.
+   여는 자리를 세어 두면 칸이 하나 늘 때마다 여기도 고쳐야 하고, 안
+   고치면 그 칸만 조용히 죽는다 (10장 「자리를 세어 두지 않습니다」).
+
+   여기 드는 것은 **그 자리에서 다른 일을 하는 것**뿐이다 —
+   · 상태 배지: 드로어에서 상태를 바꾸는 그 칩(#statchip)과 같은 것이라,
+     누르면 상태를 고치려는 손이다. 패널이 열리는 것은 그 손의 답이 아니다
+   · 링크·단추·입력칸: 자기 일이 있는 것들. 지금 행에는 없지만 생기면
+     저절로 예외가 된다(이름을 더 적을 필요가 없다) */
+const 안여는곳 = '.stbadge, a, button, input, select, textarea, label, [contenteditable]';
+
+/* 눌린 곳이 여는 자리면 그 행 — 아니면 null */
+function 여는자리(el) {
+  const row = el.closest('.trow.lrow');
+  if (!row || el.closest(안여는곳)) return null;
+  return row;
+}
+
 /* 펼친 상태는 주소에 남는다 (4-14) — ?task=<run_id>. 보드·달력과 같은 이름이라
    알림의 바로가기가 목록으로 와도 같은 것이 열린다. */
 function writeUrl(runId) {
@@ -97,7 +117,11 @@ Drawer.init({
     const due = row.querySelector('.cell.due');
     if (due) due.className = due.className.replace(/b-\S+/, 'b-' + view.badge.cls);
   },
-  isTaskClick: el => el.closest('.trow.lrow') && el.closest('.nm, .caretc'),
+  /* **행 안은 「바깥」 이 아니다.** 여는 자리인지와 별개다 — 안 여는
+     자리(상태 배지)를 눌렀다고 열려 있던 패널이 닫히면, 아무 일도 안
+     하려던 손이 보던 것을 잃는다. 여는 것은 아래 click 이 정하고,
+     여기서는 「업무 영역인가」 만 답한다 (보드의 바와 같은 자리). */
+  isTaskClick: el => !!el.closest('.trow.lrow'),
 
   /* ── 일부러 등록하지 않은 것 ──────────────────────────────────────
      빠뜨린 것과 구별되도록 적는다. call() 은 없는 핸들러를 조용히 건너뛴다. */
@@ -114,12 +138,13 @@ Drawer.init({
   onRelatedTeams() { return true; },
 });
 
-/* **업무 이름(또는 캐럿)을 누르면** 그 자리에서 펼쳐진다 — 업무 규칙 탭이
-   기본이다 (4-14). 버튼 줄은 없앴다: 같은 일을 하는 자리가 둘이면 어느 쪽을
-   눌러야 할지 모른다. 같은 행을 다시 누르면 닫는다. */
+/* **행 아무 데나 누르면** 그 자리에서 펼쳐진다 — 업무 규칙 탭이 기본이다
+   (4-14). 이름만 여는 자리였을 때는 행의 대부분이 죽은 면이었다: 누를 것이
+   보이는데 아무 일도 안 일어나면 사람은 두 번 누르고 만다.
+   예외는 위 `안여는곳` 뿐이고, 같은 행을 다시 누르면 닫는다. */
 list.addEventListener('click', e => {
-  const row = e.target.closest('.trow.lrow');
-  if (!row || !e.target.closest('.nm, .caretc')) return;
+  const row = 여는자리(e.target);
+  if (!row) return;
   const runId = row.dataset.run;
   if (Drawer.isOpen() && String(Drawer.current()) === String(runId)) {
     Drawer.close();
@@ -129,10 +154,12 @@ list.addEventListener('click', e => {
   Drawer.selectTab('rules');
 });
 
-/* 부서 드롭다운 — 값은 부서 **키**다 (2장). 고르면 그 부서만 남는다 */
+/* 부서 드롭다운 — 값은 부서 **키**다 (2장). 이것이 곧 범위다 (4-14):
+   「내 부서 / 전체」 칩은 없앴고, 내 부서를 고르는 것이 옛 「내 부서」 다. */
 const ldept = document.getElementById('ldept');
 if (ldept) ldept.addEventListener('change', () => {
   const base = ldept.dataset.base || '/tasks';
-  location.href = base + (ldept.value ? '&dept=' + encodeURIComponent(ldept.value) : '');
+  const sep = base.includes('?') ? '&' : '?';
+  location.href = base + (ldept.value ? sep + 'dept=' + encodeURIComponent(ldept.value) : '');
 });
 })();

@@ -42,8 +42,17 @@ def tasks_page(
 ):
     """목록. `?retreat_id=N` 은 get_current_retreat 가 받아 그 회차로 전환한다 —
     알림 1,483건이 전부 이 주소라 이 길이 끊기면 알림이 끊긴다 (4-11).
-    `?task=<run_id>` 는 그 행을 펼친 채 연다 — 보드·달력과 같은 이름이다."""
+    `?task=<run_id>` 는 그 행을 펼친 채 연다 — 보드·달력과 같은 이름이다.
+
+    **옛 `?scope=mine` 은 드롭다운 값으로 받는다** (4-14). 부서를 고르는
+    자리가 드롭다운 하나가 되면서 그 칩은 없어졌는데, 즐겨찾기와 지난
+    링크는 남아 있다 — 모르는 값이라고 전체로 떨어뜨리면 어제까지 내
+    부서를 보던 사람이 오늘 갑자기 전체를 보고 **왜인지 알 수 없다**
+    (달력의 옛 `dept` 값을 옮겨 준 것과 같은 자리, 4-13).
+    """
     my_key = department_key_of(db, user)
+    if not dept and scope == "mine" and my_key:
+        dept = my_key
     view = tasklist.build(
         db,
         retreat,
@@ -51,7 +60,6 @@ def tasks_page(
         my_key=my_key,
         # 총무팀은 전부 선명하게 — 홈·옛 화면과 같은 규칙 (4-15 · 9장)
         dim=user.role != "admin",
-        scope=scope,
         state=state,
         dept=dept,
         sort=sort,

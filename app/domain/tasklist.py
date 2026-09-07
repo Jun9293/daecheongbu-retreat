@@ -27,7 +27,6 @@ class ListView:
     done_rows: list = field(default_factory=list)   # 완료 — 기본 접힘 (4-14)
     state_counts: dict = field(default_factory=dict)
     dept_counts: list = field(default_factory=list)
-    scope: str = "all"
     state: str = ""
     dept: str = ""
     sort: str = "date"                              # 'date' | 'name' (4-14)
@@ -88,18 +87,21 @@ def build(
     today: dt.date,
     my_key: str | None,
     dim: bool = True,
-    scope: str = "all",
     state: str = "",
     dept: str = "",
     sort: str = "date",
     dir: str = "asc",
 ) -> ListView:
-    """my_key 는 「내 부서」 칩의 기준, dim 은 소속 외 흐림을 켤지다.
+    """my_key 는 소속 외 흐림의 기준, dim 은 그 흐림을 켤지다.
 
     총무팀(admin)은 dim=False 로 전부 선명하게 본다 — 홈(4-15)·옛 화면과
-    같은 규칙이다. 흐림을 끄더라도 「내 부서」 칩은 소속이 있으면 동작한다.
-    정렬은 날짜(기본 · 시작일)·이름 두 축, 오름/내림 (4-14) — 모르는 값은
-    기본으로 떨어뜨린다.
+    같은 규칙이다. 정렬은 날짜(기본 · 시작일)·이름 두 축, 오름/내림 (4-14) —
+    모르는 값은 기본으로 떨어뜨린다.
+
+    **부서를 고르는 자리는 드롭다운 하나다** (4-14). 전에는 「내 부서 /
+    전체」 칩과 부서 드롭다운이 같은 일을 나눠 가졌는데, 같은 것을 두
+    곳에서 고르면 둘이 어긋날 때 어느 쪽이 이겼는지 화면이 말해 주지
+    않는다. 드롭다운이 곧 범위다 — 내 부서를 고르면 옛 「내 부서」 다.
     """
     if sort not in ("date", "name"):
         sort = "date"
@@ -116,35 +118,32 @@ def build(
         reverse=(dir == "desc"),
     )
 
-    # 소속이 없으면 '내 부서' 는 고를 것이 없다 — 전체로 떨어뜨린다
-    if scope == "mine" and not my_key:
-        scope = "all"
     if state not in STATE_LABELS:
         state = ""
 
     def key_of(run: TaskRun) -> str | None:
         return run.department.key if run.department else None
 
-    scoped = [r for r in runs if scope != "mine" or key_of(r) == my_key]
+    badge_of = {r.id: board.paint_of(r, today)["badge"]["cls"] for r in runs}
 
-    # 칩의 건수는 **거른 뒤가 아니라 거르기 전** 범위에서 센다 — 상태 칩을
-    # 누른 채로도 다른 상태의 건수가 보여야 이동할 수 있다.
-    badge_of = {r.id: board.paint_of(r, today)["badge"]["cls"] for r in scoped}
-    state_counts = {s: sum(1 for r in scoped if badge_of[r.id] == s) for s in STATE_ORDER}
-
+    # **부서 건수는 부서를 고르기 전 전체에서 센다** — 한 부서를 보는
+    # 중에도 다른 부서로 옮겨 갈 수 있어야 한다 (상태 칩과 같은 이유)
     dept_counts = []
     for d in sorted(retreat.departments, key=lambda d: d.sort_order):
-        n = sum(1 for r in scoped if key_of(r) == d.key)
+        n = sum(1 for r in runs if key_of(r) == d.key)
         if n:
             dept_counts.append(
                 {"key": d.key, "name": d.name, "color": d.color, "count": n}
             )
 
+    # 부서가 곧 범위다. **상태 건수는 그 안에서 센다** — 「홍보팀 · 대기 3」
+    # 처럼 지금 보고 있는 것을 말해야 한다
+    scoped = [r for r in runs if not dept or key_of(r) == dept]
+    state_counts = {s: sum(1 for r in scoped if badge_of[r.id] == s) for s in STATE_ORDER}
+
     picked = scoped
     if state:
         picked = [r for r in picked if badge_of[r.id] == state]
-    if dept:
-        picked = [r for r in picked if key_of(r) == dept]
 
     rows = [_row(r, today, dim_key=my_key if dim else None) for r in picked]
     return ListView(
@@ -152,7 +151,6 @@ def build(
         done_rows=[r for r in rows if r["badge"]["cls"] == "done"],
         state_counts=state_counts,
         dept_counts=dept_counts,
-        scope=scope,
         state=state,
         dept=dept,
         sort=sort,
