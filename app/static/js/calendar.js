@@ -42,6 +42,88 @@ if (scopePick && bar) {
   });
 }
 
+/* ── 달 넘기기 (4-13) — 페이지를 다시 그리지 않는다 ──────────────────
+   화살표·휠 모두 `/calendar/partial?month=` 을 받아 **격자(#calgrid)만**
+   갈아 끼운다. 주소는 replaceState 로 `?month=` 만 갱신 — 열려 있던
+   `?task=` 드로어는 달을 넘겨도 안 닫힌다. 점 클릭·비침은 문서 위임이라
+   갈아 끼운 격자에서도 그대로 동작한다. */
+const grid = () => document.getElementById('calgrid');
+
+let fetching = false;
+async function goMonth(month) {
+  if (!bar || !month || fetching) return;
+  fetching = true;
+  try {
+    const q = new URLSearchParams({
+      month,
+      scope: bar.dataset.scope || '',
+      only_open: onlyOpen() ? '1' : '0',
+    });
+    const res = await fetch('/calendar/partial?' + q.toString());
+    if (!res.ok) { location.href = '/calendar?' + q.toString(); return; }
+    const tpl = document.createElement('template');
+    tpl.innerHTML = await res.text();
+    const next = tpl.content.querySelector('#calgrid');
+    const old = grid();
+    if (!next || !old) return;
+    clearSpan();
+    old.replaceWith(next);
+
+    // 격자 밖의 값들 — 달 이름·건수·화살표 주소. 격자가 실어 온 값을 그대로 쓴다.
+    bar.dataset.month = next.dataset.month;
+    const label = document.querySelector('.calmonth');
+    if (label) label.textContent = next.dataset.label;
+    const count = document.querySelector('.calcount');
+    if (count) count.textContent = next.dataset.count + '건';
+    const keep = `scope=${encodeURIComponent(bar.dataset.scope || '')}&only_open=${onlyOpen() ? '1' : '0'}`;
+    document.querySelectorAll('.calnav [data-nav]').forEach(a => {
+      const m = a.dataset.nav === 'prev' ? next.dataset.prev
+        : a.dataset.nav === 'next' ? next.dataset.next : next.dataset.nowMonth;
+      a.href = `/calendar?month=${m}&${keep}`;
+    });
+
+    const url = new URLSearchParams(location.search);
+    url.set('month', next.dataset.month);
+    history.replaceState(null, '', location.pathname + '?' + url.toString());
+
+    // 격자가 12px 미끄러진다 (180ms). 줄인 동작을 원하면 미끄럼 없이.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && next.animate) {
+      next.animate(
+        [{transform: 'translateX(12px)', opacity: .65}, {transform: 'none', opacity: 1}],
+        {duration: 180, easing: 'ease-out'});
+    }
+  } finally { fetching = false; }
+}
+
+document.addEventListener('click', e => {
+  const nav = e.target.closest('.calnav [data-nav]');
+  if (!nav || !bar) return;
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;  // 새 탭은 막지 않는다
+  e.preventDefault();
+  const g = grid();
+  if (!g) return;
+  goMonth(nav.dataset.nav === 'prev' ? g.dataset.prev
+    : nav.dataset.nav === 'next' ? g.dataset.next : g.dataset.nowMonth);
+});
+
+/* 휠 — **포인터가 격자 위에 있을 때만** 잡는다. 격자 밖은 보통 스크롤.
+   deltaY 누적 ±120 에 한 달, 이동 후 350ms 는 누적을 버린다 —
+   트랙패드의 관성으로 한 번에 여러 달이 넘어가지 않게 (4-13). */
+let wheelAcc = 0, wheelMovedAt = 0;
+document.addEventListener('wheel', e => {
+  if (!bar || !(e.target instanceof Element) || !e.target.closest('.calwrap')) return;
+  e.preventDefault();
+  if (Date.now() - wheelMovedAt < 350) return;
+  wheelAcc += e.deltaY;
+  if (Math.abs(wheelAcc) < 120) return;
+  const g = grid();
+  if (!g) return;
+  const month = wheelAcc > 0 ? g.dataset.next : g.dataset.prev;
+  wheelAcc = 0;
+  wheelMovedAt = Date.now();
+  goMonth(month);
+}, {passive: false});
+
 const dots = runId => [...document.querySelectorAll(`.cal-dot[data-run="${runId}"]`)];
 
 /* 같은 업무가 여러 곳에 있다 — 월 격자, 좁은 화면의 주 목록, 그리고
@@ -68,8 +150,8 @@ function say(text, runId) {
    판단하면서 색은 손대지 않아, **붉은 점을 미래로 옮겨도 붉게 남았다.**
 
    `paint` 는 `/status` 와 `/dates` 가 똑같은 모양으로 돌려준다
-   (`board.paint_of`). 달력은 그중 `dot_*` 를 쓴다 — 보드의 바는 저장된
-   상태 그대로 칠하지만 점은 기한이 지나면 '지연' 으로 칠하기 때문이다. */
+   (`board.paint_of`). 달력은 그중 `dot_*` 를 쓴다 — 바와 점은 이제 한
+   규칙이지만(4-3: '지연' 은 계산값), 받는 이름은 화면마다 그대로다. */
 function paint(dot, p) {
   dot.style.background = p.dot_background;
   dot.style.borderColor = p.dot_border;

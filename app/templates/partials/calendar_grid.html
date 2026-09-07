@@ -1,0 +1,69 @@
+{#
+  달력의 달 격자 (CLAUDE.md 4-13) — **전체 페이지와 /calendar/partial 이 같은
+  이 partial 을 그린다.** 달을 넘길 때 페이지를 다시 그리지 않고 이 조각만
+  갈아 끼운다(calendar.js). 두 벌이면 화살표로 넘긴 달과 새로고침한 달이
+  다르게 생긴다.
+
+  달에 따라 바뀌는 것(격자 · 주 목록 · 빈 달 문구)만 여기 있다. 범위 칩 ·
+  날짜 없는 업무 · 드로어는 달과 무관해 밖(calendar.html)에 있다.
+#}
+{% from "partials/caldot.html" import caldot %}
+
+{#- 오늘이 든 달(now-month)도 서버가 준다 — 화면은 날짜를 견주지 않는다 (4-13) -#}
+<div id="calgrid" data-month="{{ cal.month }}" data-label="{{ cal.label }}"
+     data-prev="{{ cal.prev }}" data-next="{{ cal.next }}"
+     data-now-month="{{ cal.today_month }}" data-count="{{ cal.count }}">
+{# 넓은 화면 — 월 격자 #}
+<div class="calwrap">
+  <table class="cal-grid">
+    <thead>
+      <tr>{% for w in cal.weekdays %}<th class="cal-wd">{{ w }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for week in cal.weeks %}
+      <tr>
+        {% for cell in week %}
+        <td class="cal-cell{{ ' out' if not cell.in_month }}{{ ' today' if cell.is_today }}"
+            data-date="{{ cell.date }}">
+          <span class="cal-d">{{ cell.day_label }}</span>
+          {% for dot in cell.dots %}{{ caldot(dot) }}{% endfor %}
+          {% if cell.more %}
+          <details class="cal-more">
+            <summary>외 {{ cell.more|length }}건</summary>
+            {% for dot in cell.more %}{{ caldot(dot) }}{% endfor %}
+          </details>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# 좁은 화면 — 주 단위 목록. 7칸 격자는 글자가 안 들어간다 (4-13) #}
+<div class="calweeks">
+  {% for week in cal.weeks %}
+    {% set days = week|selectattr('dots')|list + week|selectattr('more')|list %}
+    {% if days %}
+    <section class="calweek" data-from="{{ week[0].date }}" data-to="{{ week[6].date }}">
+      <h3>{{ week[0].day_label }} – {{ week[6].day_label }}</h3>
+      {% for cell in week %}
+        {% if cell.dots or cell.more %}
+        <div class="calday{{ ' today' if cell.is_today }}" data-date="{{ cell.date }}">
+          <span class="calday-d">{{ cell.day_label }}<i>{{ cal.weekdays[cell.weekday] }}</i></span>
+          <div class="calday-l">
+            {% for dot in cell.dots + cell.more %}{{ caldot(dot) }}{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </section>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if not cal.count and not cal.undated %}
+<p class="calempty">이 달에는 마감인 업무가 없습니다.</p>
+{% endif %}
+</div>

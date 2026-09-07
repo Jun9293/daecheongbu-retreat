@@ -1272,7 +1272,11 @@ def test_p33d_달력_화면이_읽는_값을_구조가_다_가지고_있다(live
             db, retreat_of(db, live_data), today=dt.date(2026, 8, 10),
             scope="all")
 
+    # 달 격자는 partial 로 나갔다 (4-13) — 전체 페이지와 /calendar/partial 이
+    # 같은 것을 그리므로, 화면이 읽는 이름은 둘을 합쳐서 본다
     reads = template_reads("calendar.html", "cal")
+    for first, seconds in template_reads("partials/calendar_grid.html", "cal").items():
+        reads.setdefault(first, set()).update(seconds)
     # `scopes`(칩 셋) 가 `departments`(부서 드롭다운) 로 바뀌었다 —
     # 어느 부서든 고를 수 있어야 하기 때문이다
     assert "weeks" in reads and "undated" in reads and "departments" in reads

@@ -1,0 +1,25 @@
+{#
+  달력의 점 하나 (CLAUDE.md 4-13) — **보드와 같은 색·테두리**를 구조가 실어
+  보낸 그대로 씁니다. 달 격자(partials/calendar_grid.html)와 격자 밖
+  (날짜 없는 업무 목록)이 같은 이 매크로를 씁니다.
+
+  누르면 **그 자리에서** 상세 패널이 열립니다 — 보드로 넘어가지 않습니다.
+  패널은 보드와 같은 조각(partials/drawer.html)·같은 코드(drawer.js)입니다.
+
+  `href` 는 그대로 둡니다 — 가운데 버튼으로 새 탭에 열거나 자바스크립트가
+  죽었을 때 보드로 가는 길이 남습니다. 평소에는 calendar.js 가 가로챕니다.
+#}
+{% macro caldot(dot) %}
+<a class="cal-dot{{ ' late' if dot.overdue }}{{ ' done' if dot.status == '완료' }}"
+   href="/board?task={{ dot.run_id }}"
+   data-run="{{ dot.run_id }}" data-overdue="{{ 1 if dot.overdue else 0 }}"
+   {% if dot.start %}data-start="{{ dot.start }}" data-end="{{ dot.end }}"{% endif %}
+   style="background:{{ dot.background }};border-color:{{ dot.border }}"
+   {#- **조립하지 않는다.** 이 한 줄을 만드는 곳은 `board.tooltip_of` 하나뿐이고
+       첫 그림도 바뀐 뒤도 거기서 나온 값을 그대로 쓴다 — 매크로와 화면이
+       각각 조립하던 때는 담당자를 바꾸면 옛 사람이 툴팁에 남았다. -#}
+   title="{{ dot.tooltip }}">
+  <i class="cal-tm" style="background:{{ dot.color }}"></i>
+  <span class="cal-t">{{ dot.title }}</span>
+</a>
+{%- endmacro %}

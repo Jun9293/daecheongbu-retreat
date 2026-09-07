@@ -1,8 +1,9 @@
 """달력 보기 (CLAUDE.md 4-13).
 
-**점을 누르면 보드의 상세 패널이 열립니다** — 여기서 새로 만들지 않습니다.
-`/board?task=<run_id>` 가 이미 그 일을 합니다(알림을 누르고 들어올 때 쓰던 길,
-4-11). 패널을 한 벌 더 만들면 논의·상태·첨부가 두 곳에서 갈립니다.
+점을 누르면 **그 자리에서** 상세 패널이 열린다 — 패널은 보드와 같은 조각
+(partials/drawer.html)·같은 코드(drawer.js)다. 한 벌 더 만들면 논의·상태·
+첨부가 두 곳에서 갈린다. 달을 넘기는 것은 `/calendar/partial` 이 맡는다 —
+전체 페이지와 같은 계산(_view)·같은 partial 을 그린다.
 """
 
 from __future__ import annotations
@@ -32,16 +33,19 @@ def _today() -> dt.date:
     return dt.date.today()
 
 
-@router.get("/calendar")
-def calendar_page(
+def _view(
     request: Request,
-    month: str | None = None,
-    scope: str | None = None,
-    only_open: str | None = None,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    retreat: Retreat = Depends(get_current_retreat),
-):
+    month: str | None,
+    scope: str | None,
+    only_open: str | None,
+    db: Session,
+    user: User,
+    retreat: Retreat,
+) -> dict:
+    """전체 페이지와 `/calendar/partial` 이 **같은 이 함수**로 달을 그린다 (4-13).
+
+    두 벌이면 화살표로 넘긴 달과 새로고침한 달이 다르게 계산된다.
+    """
     my_key = department_key_of(db, user)
 
     # 주소에 없으면 지난번에 고른 것, 그것도 없으면 기본값.
@@ -52,7 +56,7 @@ def calendar_page(
     else:
         open_only = only_open in ("1", "true", "on")
 
-    view = calendar_domain.build(
+    return calendar_domain.build(
         db,
         retreat,
         today=_today(),
@@ -62,6 +66,36 @@ def calendar_page(
         scope=chosen,
         only_open=open_only,
     )
+
+
+@router.get("/calendar/partial")
+def calendar_partial(
+    request: Request,
+    month: str | None = None,
+    scope: str | None = None,
+    only_open: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """달 격자만 (4-13). 달을 넘길 때 페이지를 다시 그리지 않는다 —
+    calendar.js 가 이것을 받아 `#calgrid` 만 갈아 끼운다.
+    전체 페이지와 **같은 계산(_view) · 같은 partial** 을 그린다."""
+    view = _view(request, month, scope, only_open, db, user, retreat)
+    return render(request, "partials/calendar_grid.html", {"cal": view})
+
+
+@router.get("/calendar")
+def calendar_page(
+    request: Request,
+    month: str | None = None,
+    scope: str | None = None,
+    only_open: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    view = _view(request, month, scope, only_open, db, user, retreat)
 
     response = render(
         request,
