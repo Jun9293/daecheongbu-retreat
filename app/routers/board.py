@@ -774,18 +774,16 @@ def add_new(
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    """라이브러리에 없던 업무를 새로 만든다. 다음 회차의 후보로도 남는다."""
-    from app.domain import dweek as dweek_mod
-    from app.models import TASK_KINDS, TaskLibrary
+    """라이브러리에 없던 업무를 새로 만든다. 다음 회차의 후보로도 남는다.
+
+    **만드는 것은 `domain/tasks.create_run` 하나다** (14장) — 회의록 쪽
+    (항목 전환·제안 반영)과 같은 함수를 지난다. 여기 남는 것은 이 경로의
+    문(부서 편집 권한)과 입력 파싱뿐이다.
+    """
+    from app.domain import tasks as tasks_domain
 
     if perm.is_readonly(user.role):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
-    title = payload.title.strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="업무 이름을 입력해주세요.")
-    if payload.kind not in TASK_KINDS:
-        raise HTTPException(status_code=400, detail="알 수 없는 분류입니다.")
-
     dept_by_key = {d.key: d for d in retreat.departments}
     dept = dept_by_key.get(payload.department_key or "")
     if not perm.can_edit_department_by_key(
@@ -800,40 +798,20 @@ def add_new(
         end = dt.date.fromisoformat(payload.end) if payload.end else start
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="기간을 다시 골라주세요.") from exc
-    if end < start:
-        raise HTTPException(status_code=400, detail="마감이 시작보다 빠릅니다.")
-    if payload.kind == "sub" and payload.parent_library_id is None:
-        raise HTTPException(status_code=400, detail="하위 업무는 상위 업무를 골라야 합니다.")
 
-    # 고른 날짜를 라이브러리의 상대 위치로 되돌려 둔다 (다음 회차에서 다시 계산된다)
-    rel = dweek_mod.relative_position(retreat.start_date, start, end)
-    lib = TaskLibrary(
-        title=title,
-        kind=payload.kind,
-        parent_library_id=payload.parent_library_id,
-        default_department_key=payload.department_key,
-        related_department_keys=[],
-        related_library_ids=[],
-        origin="history",
-        **rel,
-    )
-    db.add(lib)
-    db.flush()
-    db.add(
-        TaskRun(
-            library_id=lib.id,
-            retreat_id=retreat.id,
-            included=True,
-            department_id=dept.id if dept else None,
-            d_week=lib.default_d_week,
-            start_date=start,
-            end_date=end,
-            status="대기",
-            run_no=lib_domain.next_run_no(db, retreat.id),   # max+1 (4-14)
+    try:
+        lib, _run = tasks_domain.create_run(
+            db,
+            retreat,
+            title=payload.title,
+            kind=payload.kind,
+            department=dept,
+            parent_library_id=payload.parent_library_id,
+            start=start,
+            end=end,
         )
-    )
-    db.flush()
-    board_view.relink_prerequisites(db, retreat)   # 새로 만든 업무도 선행을 잇는다
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     log_activity(
         db,
@@ -842,7 +820,7 @@ def add_new(
         action="업무_신규생성",
         target_type="task_library",
         target_id=lib.id,
-        summary=f"{title} ({start.isoformat()} ~ {end.isoformat()})",
+        summary=f"{lib.title} ({start.isoformat()} ~ {end.isoformat()})",
     )
     return {"library_id": lib.id, "redirect": "/board"}
 
