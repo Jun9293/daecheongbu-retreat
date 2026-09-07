@@ -1,11 +1,11 @@
 /* 상세 패널 상호작용 점검 — CLAUDE.md 10장의 규칙을 실제로 돌리는 스크립트.
  *
- * 쓰는 법: **보드(/board) 또는 달력(/calendar)** 을 연 뒤 브라우저 콘솔에
- * 이 파일 내용을 붙여넣습니다. 화면을 고쳤으면 "됐다"고 말하기 전에 돌립니다.
+ * 쓰는 법: **보드(/board) · 달력(/calendar) · 목록(/tasks)** 을 연 뒤 브라우저
+ * 콘솔에 이 파일 내용을 붙여넣습니다. 화면을 고쳤으면 "됐다"고 말하기 전에 돌립니다.
  *
- * **두 화면에서 각각 돌립니다.** 패널은 한 벌이지만(templates/partials/drawer.html ·
+ * **세 화면에서 각각 돌립니다.** 패널은 한 벌이지만(templates/partials/drawer.html ·
  * static/js/drawer.js), 그것을 여는 자리와 고쳐 그리는 코드는 화면마다 다릅니다.
- * 한쪽만 통과하면 패널이 실제로는 한 벌이 아니라는 뜻입니다 (CLAUDE.md 4-13).
+ * 한쪽만 통과하면 패널이 실제로는 한 벌이 아니라는 뜻입니다 (CLAUDE.md 4-13 · 4-14).
  *
  * 탭이 화면에 보이는 상태에서 돌립니다. 배경 탭에서는 브라우저가 타이머를
  * 1초 단위로 묶어 버려 중간에 끊깁니다 — 페이지가 멈춘 것이 아닙니다.
@@ -25,27 +25,34 @@
     return cs.display !== 'none' && r.width > 0 && r.height > 0; };
   const errors = [], results = [];
 
-  if (!dw) return {치명: '이 화면에는 상세 패널이 없습니다 (/board 나 /calendar 에서 돌리세요)'};
+  if (!dw) return {치명: '이 화면에는 상세 패널이 없습니다 (/board · /calendar · /tasks 에서 돌리세요)'};
 
   /* ── 어느 화면인가 ────────────────────────────────────────────────
      패널은 같지만 "무엇을 눌러 여는가" 와 "보던 자리가 무엇인가" 는 다르다.
-     보드는 바와 부서 그룹, 달력은 점과 보던 달이다. */
+     보드는 바와 부서 그룹, 달력은 점과 보던 달, 목록은 행의 펼침이다 (4-14). */
   const sheet = $('sheet'), board = $('board');
+  const tlist = $('tlist');
   const calbar = document.querySelector('.calbar');
   const isBoard = !!(sheet && board);
-  const where = isBoard ? '보드' : '달력';
+  const isList = !isBoard && !!tlist;
+  const where = isBoard ? '보드' : isList ? '목록' : '달력';
   const scroller = isBoard ? board
+    : isList ? document.scrollingElement
     : (document.querySelector('.calwrap') || document.scrollingElement);
 
   const openers = () => isBoard
     ? [...sheet.querySelectorAll('.bar[data-run]')].filter(b => shown(b) && !b.dataset.ghost)
+    : isList
+    ? [...document.querySelectorAll('.lopen[data-open]')].filter(shown)
     : [...document.querySelectorAll('.cal-dot[data-run]')].filter(shown);
 
   const snapshot = () => ({
     drawer: dw.classList.contains('open'),
-    // 보던 자리 — 보드는 펼쳐진 부서 수, 달력은 보이는 점의 수
+    // 보던 자리 — 보드는 펼쳐진 부서 수, 달력은 보이는 점, 목록은 보이는 행
     kept: isBoard
       ? [...sheet.querySelectorAll('.row.team')].filter(t => !t.classList.contains('collapsed')).length
+      : isList
+      ? [...document.querySelectorAll('.trow.lrow')].filter(shown).length
       : openers().length,
     scroll: Math.round(scroller.scrollTop),
     // 달력은 보던 달과 칩이 그대로여야 한다
@@ -80,13 +87,29 @@
   opener.click();
   await sleep(900);
   if (!dw.classList.contains('open')) return {치명: `${where} 에서 드로어가 열리지 않음`};
-  results.push(`✓ ${isBoard ? '바' : '점'}을 눌러 그 자리에서 패널이 열림`);
+  results.push(`✓ ${isBoard ? '바' : isList ? '「상세 · 선행 작업 · 확인 요청」' : '점'}을 눌러 그 자리에서 패널이 열림`);
 
-  // 달력이라면 **보드로 넘어가지 않았는지** 함께 본다 — 그것이 이 작업의 요점이다
+  // 달력·목록이라면 **보드로 넘어가지 않았는지** 함께 본다
   if (!isBoard) {
-    const stayed = location.pathname.startsWith('/calendar');
+    const stayed = location.pathname.startsWith(isList ? '/tasks' : '/calendar');
     results.push((stayed ? '✓' : '✗') + ` 보드로 넘어가지 않음 (${location.pathname})`);
-    if (!stayed) errors.push('점을 눌렀더니 보드로 넘어감');
+    if (!stayed) errors.push('눌렀더니 보드로 넘어감');
+  }
+
+  // 목록 전용 (4-14) — 패널이 눌린 행 아래로 들어가고, 펼침이 주소에 남는다
+  if (isList) {
+    const slot = document.querySelector('.lslot:not([hidden])');
+    const inline = !!(slot && slot.contains(dw) && dw.classList.contains('inline'));
+    results.push((inline ? '✓' : '✗') + ' 패널이 눌린 행 아래에서 펼쳐짐 (그 자리에서)');
+    if (!inline) errors.push('패널이 행 아래로 들어가지 않음');
+    const inUrl = new URLSearchParams(location.search).get('task');
+    results.push((inUrl ? '✓' : '✗') + ` 펼친 상태가 주소에 남음 (?task=${inUrl || '없음'})`);
+    if (!inUrl) errors.push('펼친 상태가 주소에 안 남음');
+    // 삭제 단추 없음 (4-9 · 0장) — 패널과 목록 어디에도
+    const del = [...document.querySelectorAll('#drawer button, .tlist button')]
+      .some(b => b.textContent.includes('삭제'));
+    results.push((!del ? '✓' : '✗') + ' 삭제 단추 없음');
+    if (del) errors.push('삭제 단추가 있다');
   }
 
   results.push((document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules' ? '✓' : '✗')
@@ -222,6 +245,18 @@
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
   // 진짜 빈 점을 찾아야 한다. 고스트 바도 바이므로, 눌러도 닫히지 않는 게 정상이다.
   const emptySpot = () => {
+    // 목록 — 제목 줄 오른쪽의 빈 자리. 행(.lopen)도 패널도 아닌 곳이다.
+    if (isList) {
+      const h = tlist.querySelector('h1');
+      if (!h) return null;
+      const r = h.getBoundingClientRect();
+      const x = Math.round(Math.min(window.innerWidth - 24, r.right + 180));
+      const y = Math.round(r.top + r.height / 2);
+      const el = document.elementFromPoint(x, y);
+      if (el && !el.closest('#drawer') && !el.closest('.lopen')
+          && !el.closest('header,.toolbar,.sidenav')) return {x, y};
+      return null;
+    }
     const host = isBoard ? board : scroller;
     const hb = host.getBoundingClientRect();
     const cells = isBoard
@@ -569,6 +604,29 @@
       results.push((ok ? '✓' : '✗') + ' 왼쪽 라벨 열이 불투명 ('
         + Object.entries(잰값).map(([k, v]) => `${k} ${v ? 'O' : 'X'}`).join(' · ') + ')');
       if (!ok) errors.push('왼쪽 라벨 열 배경이 반투명 — 뒤의 바가 비친다');
+    }
+  } else if (isList) {
+    // 목록 (4-14) — 완료는 기본 접힘, 「완료 N건 보기」 로 편다
+    const done = document.querySelector('details.ldone');
+    if (done) {
+      results.push('✓ 완료 접힘 자리 있음' + (done.open ? ' (?task= 로 미리 펴짐)' : ' (기본 접힘)'));
+      // 접힘을 펴도 드로어·스크롤이 그대로다
+      await check('완료 접힘 펴기', () => { done.open = true; }, {mayScroll: false});
+      done.open = false;
+    } else results.push('· 완료 업무가 없어 접힘 자리는 건너뜀');
+    // 같은 행의 펼침 버튼을 다시 누르면 닫힌다 (토글)
+    const first = openers()[0];
+    if (first && !dw.classList.contains('open')) { first.click(); await sleep(700); }
+    if (first && dw.classList.contains('open')) {
+      const cur = new URLSearchParams(location.search).get('task');
+      document.querySelector(`.lopen[data-open="${cur}"]`)?.click();
+      await sleep(400);
+      const closed = !dw.classList.contains('open');
+      results.push((closed ? '✓' : '✗') + ' 같은 행을 다시 누르면 닫힘');
+      if (!closed) errors.push('같은 행 토글이 닫지 않음');
+      const urlCleared = !new URLSearchParams(location.search).get('task');
+      results.push((urlCleared ? '✓' : '✗') + ' 닫으면 ?task= 가 주소에서 빠짐');
+      if (!urlCleared) errors.push('닫아도 ?task= 가 남음');
     }
   } else {
     // 달력은 **마감일에 점 하나**다. 기간 띠가 아니다 (CLAUDE.md 4-13).
