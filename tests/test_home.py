@@ -126,7 +126,7 @@ def home_data(admin_client):
         db.flush()
         db.add(models.ExpenseEntry(
             retreat_id=retreat.id, budget_category_id=cat.id,
-            receipt_number="1", expense_date=TODAY, amount=120_000,
+            expense_date=TODAY, amount=120_000,
             payer_name="박민준", payer_account="", paid=False,
             subsidy_amount=120_000, personal_burden_amount=0))
         db.commit()

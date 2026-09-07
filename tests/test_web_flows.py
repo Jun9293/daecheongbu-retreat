@@ -301,11 +301,12 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
 
     with app_session() as db:
         entry = db.scalars(select(models.ExpenseEntry)).one()
+        # 영수증 파일·메모가 없으면 영수증 행도 없다 (7-4) — 번호는 붙일 때 받는다
+        assert entry.receipts == []
 
     assert entry.subsidy_amount == 96_000  # min(130,600, 12 × 8,000)
     assert entry.personal_burden_amount == 34_600
     assert entry.meal_attendee_names == ["이름1", "이름2", "이름3"]
-    assert entry.receipt_number == 1
 
     page = admin_client.get("/expenses")
     assert "96,000" in page.text
@@ -348,7 +349,10 @@ def test_식대는_지원금액만_예산에서_집행된_것으로_집계된다
     assert "130,600" not in page.text
 
 
-def test_환급_대상자_목록에_지출자별_합계가_나온다(admin_client):
+def test_환급_필터에_지출자와_계좌와_지원금_합이_보인다(admin_client):
+    """환급 대상자는 별도 페이지가 아니라 지출 목록의 필터다 (7-4 · 단계 5).
+    옛 /refunds 는 301 로 따라오고, 화면에는 지출자·계좌와 필터된 목록의
+    식대 지원금 합(지표)이 보인다 — 지출자별 소계 표는 엑셀 환급 시트가 맡는다."""
     _create_retreat(admin_client, cap=8000)
     for amount, head in [("68900", "9"), ("130600", "12")]:
         admin_client.post(
@@ -363,11 +367,11 @@ def test_환급_대상자_목록에_지출자별_합계가_나온다(admin_clien
             follow_redirects=True,
         )
 
-    page = admin_client.get("/refunds")
+    page = admin_client.get("/refunds")   # 301 → /expenses?filter=refund
 
     assert "박민준" in page.text
     assert "국민 123456-01-123456" in page.text
-    assert "164,900" in page.text  # 68,900 + 96,000
+    assert "164,900" in page.text  # 식대 지원금 지표 = 68,900 + 96,000
 
 
 def test_지급여부를_전환할_수_있다(admin_client):
@@ -426,9 +430,10 @@ def test_지출_내역을_엑셀로_내려받을_수_있다(admin_client):
     row = [c.value for c in ws[2]]
     assert 130600 in row and 96000 in row and 34600 in row
 
+    # 환급 시트는 이제 행 목록이다 (7-4) — 지출자 E열 · 지원금액 D열
     refunds = wb["환급 대상자"]
-    assert refunds["A2"].value == "박민준"
-    assert refunds["C2"].value == 96000
+    assert refunds["E2"].value == "박민준"
+    assert refunds["D2"].value == 96000
 
 
 # ------------------------------------------------------------------ 일정
@@ -476,10 +481,13 @@ def test_영수증_파일을_첨부해서_지출을_등록할_수_있다(admin_c
 
     with app_session() as db:
         entry = db.scalars(select(models.ExpenseEntry)).one()
-    assert entry.receipt_file_url is not None
-    assert entry.receipt_file_url.startswith("/uploads/")
+        # 영수증은 ExpenseReceipt 가 유일한 출처 (7-4) — 번호 1부터
+        receipt = entry.receipts[0]
+        assert receipt.number == 1
+        assert receipt.original_name == "receipt.png"
+        stored_name = receipt.stored_name
 
-    stored = admin_client.get(entry.receipt_file_url)
+    stored = admin_client.get(f"/uploads/{stored_name}")
     assert stored.status_code == 200
     assert stored.content == png
 
@@ -507,7 +515,8 @@ def test_로그인하지_않으면_영수증_파일을_볼_수_없다(admin_clie
         follow_redirects=True,
     )
     with app_session() as db:
-        url = db.scalars(select(models.ExpenseEntry)).one().receipt_file_url
+        entry = db.scalars(select(models.ExpenseEntry)).one()
+        url = f"/uploads/{entry.receipts[0].stored_name}"
 
     response = client.get(url, follow_redirects=False)
 

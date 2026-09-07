@@ -220,11 +220,10 @@ def test_15_환영_알림이_스스로_사라지고_눌러서도_닫힌다():
     assert "setTimeout(function () { dismiss(el); }, LINGER)" in js   # 시간이 지나면
     assert 'addEventListener("click", function () { dismiss(el); })' in js  # 눌러서도
 
-    # 두 화면이 같은 한 벌을 쓴다 — 예전에는 app.js 안에만 있어서 보드 쪽은 안 사라졌다
-    base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
-    assert "flash.js" in base and "flash.js" in SHELL
-    app_js = (ROOT / "app" / "static" / "js" / "app.js").read_text(encoding="utf-8")
-    assert "flash.style.opacity" not in app_js, "app.js 에 옛 사본이 남아 있다"
+    # 껍데기가 하나가 되면서(단계 5) 사본이 생길 자리 자체가 없어졌다 —
+    # flash.js 는 retreat_base 가 싣고, 옛 base.html·app.js 는 지웠다
+    assert "flash.js" in SHELL
+    assert not (ROOT / "app" / "static" / "js" / "app.js").exists()
 
 
 # ---------------------------------------------------------------- 16. 자가진단

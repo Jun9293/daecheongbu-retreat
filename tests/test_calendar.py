@@ -2148,13 +2148,14 @@ def test_v_05_static_응답에_우리가_정한_캐시가_붙는다(admin_client
 def test_v_07_서비스워커와_매니페스트는_해시_주소가_아니다(admin_client):
     """배포마다 주소가 바뀌면 **매번 새로 등록되고 옛 등록이 남는다.**
     매니페스트 주소가 바뀌면 홈 화면에 추가한 앱이 다른 앱으로 읽힌다."""
-    for tpl in ("base.html", "retreat_base.html"):
-        view = (ROOT / "app" / "templates" / tpl).read_text(encoding="utf-8")
-        assert 'href="/manifest.webmanifest"' in view, f"{tpl} 의 매니페스트가 바뀌었다"
-        assert "static('manifest" not in view
+    # 껍데기는 retreat_base 하나다 (단계 5 — 옛 base.html 은 지웠다)
+    view = (ROOT / "app" / "templates" / "retreat_base.html").read_text(encoding="utf-8")
+    assert 'href="/manifest.webmanifest"' in view, "매니페스트 주소가 바뀌었다"
+    assert "static('manifest" not in view
 
-    app_js = read_js("app.js")
-    assert 'register("/sw.js")' in app_js, "서비스워커 주소가 바뀌었다"
+    # 서비스워커 등록은 push.js 로 갔다 (옛 app.js 는 껍데기와 함께 지웠다)
+    push_js = read_js("push.js")
+    assert 'register("/sw.js")' in push_js, "서비스워커 주소가 바뀌었다"
 
     # 둘 다 `/static` 밖의 고정 주소이므로 immutable 도 붙지 않는다
     for path in ("/sw.js", "/manifest.webmanifest"):
