@@ -80,6 +80,11 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 확인 요청이 가리키는 업무 (4-9 · 4-16). task_id 는 옛 Task 표 FK 라
     # 남기되 새 요청은 이것을 쓴다.
     ("review_requests", "run_id", "INTEGER REFERENCES task_runs(id)"),
+    # 예산금액 = 단가 × 명수 × 횟수 (7-3). 기존 행은 NULL — planned_amount 가
+    # 직접 입력값이다.
+    ("budget_categories", "unit_price", "INTEGER"),
+    ("budget_categories", "headcount", "INTEGER"),
+    ("budget_categories", "times", "INTEGER"),
 )
 
 
@@ -310,6 +315,70 @@ def _assign_run_numbers() -> None:
             )
 
 
+def _move_receipts() -> None:
+    """영수증 행(ExpenseReceipt)이 없는 지출만 옛 두 컬럼에서 한 번 옮긴다 (7-4).
+
+    영수증의 유일한 출처는 expense_receipts 표다. 옛 행은 receipt_number ·
+    receipt_file_url 을 지출에 직접 들고 있으므로 그 값으로 영수증 행 하나를
+    만들어 준다. **여기가 옛 두 컬럼을 읽는 유일한 자리다** — 모델의 속성
+    이름을 _legacy_* 로 바꿔 다른 곳은 읽으면 AttributeError 다.
+
+    두 번 떠도 두 번 옮기지 않는다 — 이미 영수증 행이 있는 지출은 건너뛴다.
+    옛 receipt_file_url 은 '/uploads/<이름>' 꼴이라 파일 이름만 떼어
+    stored_name 에 넣는다(내려받기는 기존 /uploads 경로 그대로).
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        # 번호만 있는 행도, **파일 링크만 있는 행도** 옮긴다 — 번호 조건만 보면
+        # url 만 있던 옛 영수증 파일을 읽을 길이 영영 없어진다 (옛 컬럼은 봉인).
+        rows = list(
+            conn.execute(
+                text(
+                    "SELECT e.id, e.retreat_id, e.receipt_number, e.receipt_file_url"
+                    " FROM expense_entries e"
+                    " WHERE (e.receipt_number IS NOT NULL"
+                    "        OR COALESCE(e.receipt_file_url, '') != '')"
+                    "   AND NOT EXISTS (SELECT 1 FROM expense_receipts r WHERE r.expense_id = e.id)"
+                    " ORDER BY e.id"
+                )
+            )
+        )
+        # 번호 없는 행은 그 회차의 다음 번호를 받는다 (회차 안 자동 증가 — 7-4)
+        next_no: dict[int, int] = {}
+        for expense_id, retreat_id, number, url in rows:
+            if number is None:
+                if retreat_id not in next_no:
+                    current = conn.execute(
+                        text(
+                            "SELECT COALESCE(MAX(r.number), 0) FROM expense_receipts r"
+                            " JOIN expense_entries e2 ON e2.id = r.expense_id"
+                            " WHERE e2.retreat_id = :rt"
+                        ),
+                        {"rt": retreat_id},
+                    ).scalar_one()
+                    next_no[retreat_id] = current
+                next_no[retreat_id] += 1
+                number = next_no[retreat_id]
+            stored = url.rsplit("/", 1)[-1] if url else None
+            conn.execute(
+                text(
+                    "INSERT INTO expense_receipts (expense_id, number, stored_name, original_name, memo)"
+                    " VALUES (:e, :n, :s, NULL, NULL)"
+                ),
+                {"e": expense_id, "n": number, "s": stored},
+            )
+        if rows:
+            import logging
+
+            logging.getLogger("dcb.db").info(
+                "지출 %d건의 영수증 번호를 ExpenseReceipt 로 옮겼습니다 — 한 번만",
+                len(rows),
+            )
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (모델 등록)
 
@@ -320,3 +389,4 @@ def init_db() -> None:
     _convert_stored_late()
     _link_discussion_runs()
     _assign_run_numbers()
+    _move_receipts()

@@ -27,6 +27,7 @@ from app.models import (
     ChecklistItem,
     Department,
     ExpenseEntry,
+    ExpenseReceipt,
     FileAsset,
     FileVersion,
     Meeting,
@@ -295,7 +296,7 @@ def seed(demo: bool = False) -> None:
                     item.converted_task_id = tasks[content].id
                 db.add(item)
 
-        # 지출 — 식대
+        # 지출 — 식대. 영수증은 ExpenseReceipt 가 유일한 출처다 (7-4)
         receipt_no = 0
         meal_cat = cats[("그 외", "수련회 준비지원")]
         for dept_name, payer, account, amount, head, label, date in D.MEAL_EXPENSES:
@@ -303,50 +304,48 @@ def seed(demo: bool = False) -> None:
             settlement = calculate_meal_settlement(
                 amount=amount, headcount=head, per_person_cap=retreat.meal_subsidy_per_person
             )
-            db.add(
-                ExpenseEntry(
-                    retreat_id=retreat.id,
-                    budget_category_id=meal_cat.id,
-                    level1=meal_cat.level1,
-                    level2=meal_cat.level2,
-                    level3a=meal_cat.level3,
-                    level3b=label,
-                    receipt_number=receipt_no,
-                    expense_date=date,
-                    amount=amount,
-                    department_id=depts[dept_name].id,
-                    payer_name=payer,
-                    payer_account=account,
-                    paid=False,
-                    is_meal_expense=True,
-                    meal_headcount=head,
-                    meal_attendee_names=[],
-                    subsidy_amount=settlement.subsidy_amount,
-                    personal_burden_amount=settlement.personal_burden_amount,
-                )
+            entry = ExpenseEntry(
+                retreat_id=retreat.id,
+                budget_category_id=meal_cat.id,
+                level1=meal_cat.level1,
+                level2=meal_cat.level2,
+                level3a=meal_cat.level3,
+                level3b=label,
+                expense_date=date,
+                amount=amount,
+                department_id=depts[dept_name].id,
+                payer_name=payer,
+                payer_account=account,
+                paid=False,
+                is_meal_expense=True,
+                meal_headcount=head,
+                meal_attendee_names=[],
+                subsidy_amount=settlement.subsidy_amount,
+                personal_burden_amount=settlement.personal_burden_amount,
             )
+            entry.receipts.append(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
+            db.add(entry)
 
         # 지출 — 일반
         for l1, l2, amount, payer, note, date, paid in D.GENERAL_EXPENSES:
             receipt_no += 1
             cat = cats[(l1, l2)]
-            db.add(
-                ExpenseEntry(
-                    retreat_id=retreat.id,
-                    budget_category_id=cat.id,
-                    level1=cat.level1,
-                    level2=cat.level2,
-                    level3a=cat.level3,
-                    receipt_number=receipt_no,
-                    expense_date=date,
-                    amount=amount,
-                    payer_name=payer,
-                    note=note,
-                    paid=paid,
-                    paid_date=date + dt.timedelta(days=2) if paid else None,
-                    subsidy_amount=amount,
-                )
+            entry = ExpenseEntry(
+                retreat_id=retreat.id,
+                budget_category_id=cat.id,
+                level1=cat.level1,
+                level2=cat.level2,
+                level3a=cat.level3,
+                expense_date=date,
+                amount=amount,
+                payer_name=payer,
+                note=note,
+                paid=paid,
+                paid_date=date + dt.timedelta(days=2) if paid else None,
+                subsidy_amount=amount,
             )
+            entry.receipts.append(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
+            db.add(entry)
 
         # 작업 파일 (실제로 열리는 파일을 만들어 둔다)
         poster = FileAsset(

@@ -22,7 +22,7 @@ from app.domain import board, escalation, period
 from app.domain.departments import department_key_of
 from app.domain.board import overdue_of
 from app.domain.budget import BudgetSummary, build_budget_summary
-from app.models import ExpenseEntry, Retreat, TaskRun, User
+from app.models import Retreat, TaskRun, User
 
 WEEK_DAYS = 7  # 「이번 주」 = 오늘 다음 날부터 7일 안
 
@@ -48,8 +48,8 @@ class HomeView:
     badges: dict = field(default_factory=dict)           # run_id → board.paint_of 의 badge (4-3)
 
     # ── 결산 홈 ──────────────────────────────────────────────────────
-    unpaid_refund_count: int = 0     # 환급 대상(지원금 > 0)인데 미지급
-    no_receipt_count: int = 0        # 영수증 파일이 없는 지출
+    unpaid_refund_count: int = 0     # budget.refund_entries — 개인이 냈는데 미지급
+    no_receipt_count: int = 0        # budget.no_receipt_entries — ExpenseReceipt 0건
     open_task_count: int = 0         # 미완료 업무 (정리 필요)
 
 
@@ -81,14 +81,12 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
 
     if view.over:
         # 결산 홈 — 경고 띠·지연 지표 대신 정리할 것을 낸다 (4-15).
-        # 환급·영수증 기준은 옛 /refunds 와 같다 — 단계 5 에서 바뀌면 그때 따라간다.
-        expenses = list(
-            db.scalars(select(ExpenseEntry).where(ExpenseEntry.retreat_id == retreat.id))
-        )
-        view.unpaid_refund_count = sum(
-            1 for e in expenses if e.subsidy_amount and e.subsidy_amount > 0 and not e.paid
-        )
-        view.no_receipt_count = sum(1 for e in expenses if not e.receipt_file_url)
+        # 숫자는 지출 필터와 **같은 함수**다 — 홈의 N 을 눌러 간 화면
+        # (?filter=refund · ?filter=noreceipt)의 행 수와 같아야 한다.
+        from app.domain.budget import no_receipt_entries, refund_entries
+
+        view.unpaid_refund_count = len(refund_entries(db, retreat))
+        view.no_receipt_count = len(no_receipt_entries(db, retreat))
         view.open_task_count = len(open_runs)
         view.budget = build_budget_summary(db, retreat=retreat)
         view.done = len(runs) - len(open_runs)

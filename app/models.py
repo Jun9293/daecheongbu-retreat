@@ -179,6 +179,12 @@ class BudgetCategory(Base):
     level1: Mapped[str] = mapped_column(String(100))  # 구분
     level2: Mapped[str] = mapped_column(String(100))  # 항목
     level3: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 세부항목
+    # 예산금액 = 단가 × 명수 × 횟수 (7-3). 셋이 다 있으면 planned_amount 를
+    # 계산해 덮어쓰고, 하나라도 비면 planned_amount 가 직접 입력값이다.
+    # 넷을 다 저장한다 — 계산 근거가 남아야 다음 사람이 숫자를 고칠 수 있다.
+    unit_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    headcount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    times: Mapped[int | None] = mapped_column(Integer, nullable=True)
     planned_amount: Mapped[int] = mapped_column(Integer, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -208,7 +214,13 @@ class ExpenseEntry(Base):
     level3b: Mapped[str | None] = mapped_column(String(100), nullable=True)
     level3c: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    receipt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 옛 컬럼 — 남기되 **읽지 않는다** (7-4). 영수증은 ExpenseReceipt 가
+    # 유일한 출처다 (지출 1건에 N개). 앱이 뜰 때 한 번 옮긴다(db._move_receipts).
+    # 속성 이름을 바꿔 구조로 막는다 — 옛 이름으로 읽으면 AttributeError 다
+    # (단계 3 의 _legacy_run_id 와 같은 방식).
+    _legacy_receipt_number: Mapped[int | None] = mapped_column(
+        "receipt_number", Integer, nullable=True
+    )
     expense_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     amount: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -224,7 +236,9 @@ class ExpenseEntry(Base):
     paid: Mapped[bool] = mapped_column(Boolean, default=False)
     paid_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    receipt_file_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    _legacy_receipt_file_url: Mapped[str | None] = mapped_column(
+        "receipt_file_url", String(300), nullable=True
+    )
 
     is_meal_expense: Mapped[bool] = mapped_column(Boolean, default=False)
     meal_headcount: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -240,6 +254,10 @@ class ExpenseEntry(Base):
     retreat: Mapped[Retreat] = relationship(back_populates="expenses")
     budget_category: Mapped[BudgetCategory | None] = relationship(back_populates="expenses")
     department: Mapped[Department | None] = relationship()
+    receipts: Mapped[list[ExpenseReceipt]] = relationship(
+        back_populates="expense", cascade="all, delete-orphan",
+        order_by="ExpenseReceipt.number",
+    )
 
     @property
     def settlement_amount(self) -> int:
@@ -248,6 +266,43 @@ class ExpenseEntry(Base):
         식대는 지원금액만 수련회 예산에서 나가고 초과분은 개인부담이다.
         """
         return self.subsidy_amount if self.is_meal_expense else self.amount
+
+
+class ExpenseReceipt(Base):
+    """영수증 — 지출 1건에 N개 (7-4). 파일일 수도, 「결산 파일에 별첨」 같은
+    메모일 수도 있다. 번호는 회차 안에서 자동 증가한다."""
+
+    __tablename__ = "expense_receipts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expense_entries.id", ondelete="CASCADE")
+    )
+    number: Mapped[int] = mapped_column(Integer)
+    stored_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    original_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    memo: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    expense: Mapped[ExpenseEntry] = relationship(back_populates="receipts")
+
+
+class IncomeItem(Base):
+    """수입 (7-3) — 교개협 지원 · 수련회비 · 후원금 · 기관부담금 등.
+
+    단가·명수가 있으면 amount 의 근거이고, 없으면 amount 가 직접 입력값이다.
+    홈 집행률의 분모는 지출예산 총액이라 수입은 예산 페이지에서만 본다.
+    """
+
+    __tablename__ = "income_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    unit_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    headcount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amount: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class ScheduleDay(Base):
@@ -352,7 +407,9 @@ class UserRetreatState(Base):
 # ==========================================================================
 
 FILE_STATUSES = ("작업중", "검토요청", "승인", "반려")
-REVIEW_STATUSES = ("대기", "승인", "반려")
+# '취소' 는 요청자가 거둔 것 — 지우지 않고 상태로 남긴다 (0장 첫 원칙).
+# 지우면 업무 이력(드로어의 확인 요청 탭)에서 요청이 있었다는 사실이 사라진다.
+REVIEW_STATUSES = ("대기", "승인", "반려", "취소")
 MEETING_ITEM_KINDS = ("안건", "결정사항", "액션아이템")
 
 
