@@ -4,6 +4,12 @@ cd /d "%~dp0.."
 set DCB_DATA_DIR=%TEMP%\dcb-dev
 set DCB_SECRET_KEY=dev-only-secret
 set DCB_DEV=1
+REM real-name gate (11-2): block serving if the dev DB holds real names.
+REM see scripts/check_dev_db.py - it prints what to do, without the names.
+if exist "%DCB_DATA_DIR%\app.db" (
+  .venv\Scripts\python.exe scripts\check_dev_db.py
+  if errorlevel 1 exit /b 1
+)
 if not exist "%DCB_DATA_DIR%\app.db" .venv\Scripts\python.exe seed.py
 REM --reload 로 코드도 화면도 고치면 알아서 다시 읽는다.
 REM 없으면 파이썬은 켤 때 읽은 코드를 들고 있는데 화면만 디스크에서

@@ -60,10 +60,14 @@ _스펙.loader.exec_module(_anon)
 
 넘긴목록 = ROOT / "docs" / "이름-확인됨.txt"
 남은목록 = ROOT / "docs" / "이름-남은곳.txt"
+이미지확인 = ROOT / "docs" / "review" / "이미지-확인.md"
 
-# 글자만 있는 파일을 본다. 이미지·zip 안의 실명은 이 검사의 몫이 아니다.
+# 글자만 있는 파일의 **본문**을 본다. 이미지 안의 실명은 기계가 못 읽는다 —
+# 그래서 이미지는 본문 대신 **「사람이 봤는가」** 를 본다 (아래 새이미지 검사.
+# 2026-09-07 에 스크린샷 2장이 실명을 담은 채 커밋 직전까지 간 뒤 생겼다).
 글파일 = {".py", ".md", ".txt", ".html", ".js", ".css", ".json", ".bat",
         ".yml", ".yaml", ".ini", ".cfg", ".toml"}
+이미지꼴 = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 
 
 def 가린다(이름: str) -> str:
@@ -258,6 +262,57 @@ def 표밖담당자(자료폴더: pathlib.Path | None = None) -> dict:
     return {"본칸": 본칸, "표밖": 나온것, "안본말": sorted(걸린아는말)}
 
 
+def 새이미지() -> list[str]:
+    """docs/ 아래 이미지 중 **마지막 커밋(HEAD)에 없는 것** — 상대경로 목록.
+
+    이미지는 글이 아니라 이 검사의 실명 찾기가 못 본다. 그래서 새 이미지는
+    사람이 눈으로 보고 `docs/review/이미지-확인.md` 에 적어야 통과다 —
+    「볼 목록 밖」 을 볼 목록 안으로 들이는 장치다. HEAD 에 이미 있는
+    이미지는 이미 나간 것이라 여기서 다시 막을 수 없다.
+    """
+    있는것 = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "ls-tree", "-r", "HEAD",
+         "--name-only", "docs"],
+        capture_output=True, cwd=ROOT,
+    ).stdout.decode("utf-8")
+    커밋됨 = {줄.strip() for 줄 in 있는것.split("\n") if 줄.strip()}
+    나온것 = []
+    for p in sorted((ROOT / "docs").rglob("*")):
+        if not p.is_file() or p.suffix.lower() not in 이미지꼴:
+            continue
+        if 무시되나(p):
+            continue
+        상대 = 상대경로(p)
+        if 상대 not in 커밋됨:
+            나온것.append(상대)
+    return 나온것
+
+
+def 미확인이미지(새것: list[str], 확인글: str) -> list[str]:
+    """확인 파일에 이름이 안 적힌 새 이미지 — 순수 함수라 시험이 바로 잰다."""
+    return [상대 for 상대 in 새것 if 상대 not in 확인글]
+
+
+def 이미지검사() -> int:
+    """0 이면 통과. 새 이미지가 확인 파일에 없으면 목록을 찍고 1."""
+    새것 = 새이미지()
+    if not 새것:
+        print("새 이미지 없음 (docs/ · 마지막 커밋 기준)")
+        return 0
+    확인글 = 이미지확인.read_text(encoding="utf-8") if 이미지확인.exists() else ""
+    남은것 = 미확인이미지(새것, 확인글)
+    if not 남은것:
+        print(f"새 이미지 {len(새것)}개 — 전부 사람이 확인함 ({이미지확인.name})")
+        return 0
+    print()
+    print(f"!! 새 이미지 {len(남은것)}개를 아직 사람이 확인하지 않았습니다.")
+    print("   이미지는 실명 검사가 못 봅니다 — 눈으로 보고 실명이 없으면")
+    print(f"   docs/review/{이미지확인.name} 에 그 경로를 적어 주세요.")
+    for 상대 in 남은것:
+        print(f"   {상대}")
+    return 1
+
+
 def 예외파일() -> set:
     """이 셋만 스스로를 담아도 된다 — 자기 코드 · 자기 시험 · 넘길 목록."""
     return {
@@ -434,7 +489,7 @@ def main() -> int:
         print("걸린 것이 없습니다.")
         남은말()
         표밖말()
-        return 0
+        return 이미지검사()
 
     print()
     print(f"!! {len(나온것)}곳에서 실명이 보입니다 (이름은 가려 찍습니다).")
@@ -450,6 +505,7 @@ def main() -> int:
     print()
     남은말()
     표밖말()
+    이미지검사()
     return 1
 
 
