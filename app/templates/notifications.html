@@ -1,70 +1,112 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import empty %}
-{% block title %}알림함{% endblock %}
-{% block content %}
+{% extends "retreat_base.html" %}
+{% block title %}알림 · {{ retreat.name }}{% endblock %}
 
-<div class="page-head" style="display:flex;align-items:flex-end;gap:10px">
-  <div class="grow"><h1>알림함</h1><p class="sub">푸시를 켜지 않아도 알림은 여기에 계속 쌓입니다.</p></div>
-  {% if unread_count %}
-  <form method="post" action="/notifications/read-all">
-    <button class="btn btn-ghost btn-sm" type="submit">{{ icon('check', 15) }}모두 읽음</button>
-  </form>
-  {% endif %}
-</div>
+{#
+  알림 (CLAUDE.md 4-16) — /reviews 를 여기로 합쳤다. 한 페이지, 탭 둘.
+  저장 구조는 합치지 않는다 — Review 와 Notification 은 그대로 두고
+  화면에서 한 목록으로 만든다. 항목마다 발신 배지: 사람(이름 + 부서 점) /
+  시스템. 사람 발신 = 확인 요청 — 승인·반려 단추와 코멘트가 붙는다.
+#}
 
-{# 사이드바에서 /reviews 로 가는 문이 단계 4 전까지 없다 — 배지는 뜨는데 답할
-   자리가 안 보이는 공백을 이 한 줄이 잇는다. 단계 4 에서 화면째 사라진다. #}
-{% if pending_review_count %}
-<div class="banner banner-info" id="pending-reviews-line">
-  답 기다리는 확인 요청 {{ pending_review_count }}건 — <a href="/reviews" style="text-decoration:underline">확인 요청으로</a>
-</div>
-{% endif %}
+{% block body %}
+<main class="setting nlist">
+  <h1>알림</h1>
 
-<div class="card" id="push-card" data-vapid="{{ push_public_key }}">
-  <div class="card-head"><h2>휴대폰 푸시 알림</h2></div>
-  <div class="card-body">
-    <p class="sub" id="push-status" style="margin:0">확인 중…</p>
-    <div class="row" style="margin-top:10px">
-      <button class="btn btn-sm" type="button" id="push-enable" hidden>{{ icon('bell', 15) }}알림 켜기</button>
-      <button class="btn btn-ghost btn-sm" type="button" id="push-disable" hidden>알림 끄기</button>
-      <form method="post" action="/push/test" id="push-test-form" hidden>
-        <button class="btn btn-ghost btn-sm" type="submit">테스트 보내기</button>
+  {# 푸시 켜기 카드 — 상단 그대로 (4-16) #}
+  <div class="ncard pushcard" id="push-card" data-vapid="{{ push_public_key }}">
+    <b>휴대폰 푸시 알림</b>
+    <span class="sub" id="push-status">확인 중…</span>
+    <span class="pushbtns">
+      <button class="sbtn" type="button" id="push-enable" hidden>알림 켜기</button>
+      <button class="sbtn" type="button" id="push-disable" hidden>알림 끄기</button>
+      <form method="post" action="/push/test" id="push-test-form" hidden style="display:inline">
+        <button class="sbtn" type="submit">테스트 보내기</button>
       </form>
-    </div>
-    <p class="muted" style="margin:10px 0 0">
-      브라우저 메뉴에서 <b>홈 화면에 추가</b>를 하면 앱처럼 알림을 받을 수 있습니다.
-    </p>
+    </span>
   </div>
-</div>
 
-<div class="card">
-  <div class="card-body flush">
-    {% if notifications %}
-    <div class="list">
-      {% for n in notifications %}
-      <div class="item" style="{% if n.read_at %}opacity:.6{% endif %}">
-        <span style="margin-top:3px;color:{% if n.read_at %}var(--ink-3){% else %}var(--brand){% endif %}">
-          {{ icon('bell', 17) }}
-        </span>
-        <div class="item-main">
-          <div class="item-title">{{ n.title }}</div>
-          {% if n.body %}<div class="item-note">{{ n.body }}</div>{% endif %}
-          <div class="item-meta">
-            <span class="muted tiny num">{{ n.created_at.strftime('%m/%d %H:%M') }}</span>
-            {% if n.link %}<a class="tag tag-brand" href="{{ n.link }}">{{ icon('chevron-right') }}바로가기</a>{% endif %}
-          </div>
-        </div>
-        {% if not n.read_at %}
-        <form method="post" action="/notifications/{{ n.id }}/read">
-          <input type="hidden" name="redirect_to" value="/notifications">
-          <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="읽음">{{ icon('check', 15) }}</button>
+  <div class="ntabs">
+    <a class="t{{ ' on' if tab == 'received' }}" href="/notifications">받은 것</a>
+    <a class="t{{ ' on' if tab == 'sent' }}" href="/notifications?tab=sent">내가 보낸 요청</a>
+  </div>
+
+  {% if tab == 'received' %}
+  <div class="chips">
+    <a class="chip{{ ' on' if chip == 'all' }}" href="/notifications">전체</a>
+    <a class="chip{{ ' on' if chip == 'human' }}" href="/notifications?chip=human">사람이 보낸 것</a>
+    <a class="chip{{ ' on' if chip == 'system' }}" href="/notifications?chip=system">시스템이 보낸 것</a>
+    <a class="chip{{ ' on' if chip == 'pending' }}" href="/notifications?chip=pending">답을 기다리는 것</a>
+    {# N 은 read-all 이 실제로 지우는 범위(이 회차)와 같은 수다 (4-16) #}
+    {% if retreat_unread %}
+    <form method="post" action="/notifications/read-all" style="margin-left:auto">
+      <button class="sbtn" type="submit">모두 읽음 ({{ retreat_unread }})</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="ncard flush">
+    {% for r in rows %}
+    <div class="nitem{{ ' read' if r.n.read_at }}">
+      <div class="ntop">
+        {% if r.human %}
+        <span class="sender human">
+          {% if r.sender_dept %}<i style="background:{{ r.sender_dept.color }}"></i>{% endif %}
+          {{ r.review.requester_name if r.review else '사람' }}</span>
+        {% else %}
+        <span class="sender sys">시스템</span>
+        {% endif %}
+        <b class="ttl">{{ r.n.title }}</b>
+        <span class="at">{{ r.n.created_at.strftime('%m/%d %H:%M') }}</span>
+      </div>
+      {% if r.n.body %}<div class="nbody">{{ r.n.body }}</div>{% endif %}
+      <div class="nact">
+        {% if r.can_respond %}
+        {# 승인·반려 — 기존 /reviews/{id}/respond 그대로 (4-16) #}
+        <form method="post" action="/reviews/{{ r.review.id }}/respond" class="respond">
+          <input type="text" name="comment" placeholder="코멘트 (선택)">
+          <button class="sbtn p" name="decision" value="승인" type="submit">승인</button>
+          <button class="sbtn" name="decision" value="반려" type="submit">반려</button>
+        </form>
+        {% elif not r.human and r.n.link %}
+        <a class="go" href="{{ r.n.link }}">바로가기</a>
+        {% endif %}
+        {% if not r.n.read_at %}
+        <form method="post" action="/notifications/{{ r.n.id }}/read">
+          <input type="hidden" name="redirect_to" value="/notifications{{ '?chip=' ~ chip if chip != 'all' }}">
+          <button class="sbtn" type="submit">읽음</button>
         </form>
         {% endif %}
       </div>
-      {% endfor %}
     </div>
-    {% else %}{{ empty('알림이 없습니다', 'bell') }}{% endif %}
+    {% else %}
+    <div class="nempty">알림이 없습니다.</div>
+    {% endfor %}
   </div>
-</div>
+
+  {% else %}
+  {# 내가 보낸 요청 — 답이 왔는지가 한눈에 #}
+  <div class="ncard flush">
+    {% for r in sent %}
+    <div class="nitem">
+      <div class="ntop">
+        <span class="sender human"><i style="background:{{ r.department.color }}"></i>{{ r.department.name }}</span>
+        <b class="ttl">{{ r.subject }}</b>
+        <span class="stbadge {{ 'wait' if r.status == '대기' else ('done' if r.status == '승인' else 'late') }}">{{ r.status }}</span>
+        <span class="at">{{ r.created_at.strftime('%m/%d %H:%M') }}</span>
+      </div>
+      {% if r.message %}<div class="nbody">{{ r.message }}</div>{% endif %}
+      {% if r.responder_name %}
+      <div class="nbody ans">{{ r.responder_name }} — {{ r.status }}{% if r.response_comment %} · {{ r.response_comment }}{% endif %}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="nempty">보낸 확인 요청이 없습니다. 업무의 「확인 요청」 탭에서 보냅니다.</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/push.js') }}" defer></script>
 {% endblock %}

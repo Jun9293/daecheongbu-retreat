@@ -28,7 +28,6 @@ from app.routers import (
     drafts,
     expenses,
     export,
-    files,
     library,
     meetings,
     notifications,
@@ -181,7 +180,7 @@ app.include_router(notifications.router)
 app.include_router(notify_admin.router)
 app.include_router(admin_users.router)
 app.include_router(reviews.router)
-app.include_router(files.router)
+# (/files 는 단계 4에서 지웠다 — 파일은 업무 첨부(4-9)로 옮겼고 행은 남는다)
 app.include_router(checklists.router)
 app.include_router(meetings.router)
 

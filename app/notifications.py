@@ -65,12 +65,29 @@ def recipients_for_risk(db: Session, risk: Risk) -> list[User]:
 
 
 def department_members(db: Session, department_id: int) -> list[User]:
+    """그 부서의 (알림 받을) 사람들 — **키로 넓혀서** 찾는다 (2장).
+
+    User.department_id 는 계정을 만들 때의 회차 행을 가리킨다. 요청의
+    department_id 는 이번 회차 행이라, id 로만 찾으면 새 회차가 열리는 순간
+    옛 회차 소속 사람들이 조용히 빠진다 — 아무 오류도 나지 않고 알림이 안 간다.
+    """
+    from app.domain.departments import users_in_department
+    from app.models import Department
+
+    dept = db.get(Department, department_id)
+    if dept is None:
+        return []
+    if dept.key:
+        members = users_in_department(db, dept.key)
+    else:
+        # 키 없는 부서(구설계 데이터)는 넓힐 근거가 없다 — 그 행 소속만
+        members = list(
+            db.scalars(select(User).where(User.department_id == department_id))
+        )
     return [
         user
-        for user in db.scalars(
-            select(User).where(User.department_id == department_id, User.is_active)
-        )
-        if not perm.is_readonly(user.role)
+        for user in members
+        if user.is_active and not perm.is_readonly(user.role)
     ]
 
 
@@ -143,25 +160,31 @@ def _try_push(db: Session, notifications: list[Notification]) -> None:
         logger.exception("웹 푸시 발송 실패 (앱 알림함에는 정상 저장됨)")
 
 
-def unread_count(db: Session, user: User) -> int:
-    return len(
-        db.scalars(
-            select(Notification).where(
-                Notification.user_id == user.id, Notification.read_at.is_(None)
-            )
-        ).all()
+def unread_count(db: Session, user: User, retreat_id: int | None = None) -> int:
+    """안 읽은 내 알림 수. retreat_id 를 주면 그 회차 것(+회차 없는 것)만 —
+    「모두 읽음 (N)」 의 N 은 **처리 범위와 같은 수**여야 한다 (4-16).
+    버튼이 (5) 라고 말하고 3건만 지우면 숫자가 거짓말이 된다."""
+    query = select(Notification).where(
+        Notification.user_id == user.id, Notification.read_at.is_(None)
     )
-
-
-def recent_notifications(db: Session, user: User, limit: int = 50) -> list[Notification]:
-    return list(
-        db.scalars(
-            select(Notification)
-            .where(Notification.user_id == user.id)
-            .order_by(Notification.id.desc())
-            .limit(limit)
+    if retreat_id is not None:
+        query = query.where(
+            (Notification.retreat_id == retreat_id)
+            | (Notification.retreat_id.is_(None))
         )
-    )
+    return len(db.scalars(query).all())
+
+
+def recent_notifications(
+    db: Session, user: User, limit: int = 50, retreat_id: int | None = None
+) -> list[Notification]:
+    """내 알림 — retreat_id 를 주면 그 회차 것(+회차 없는 일반 알림)만 (4-16)."""
+    query = select(Notification).where(Notification.user_id == user.id)
+    if retreat_id is not None:
+        query = query.where(
+            (Notification.retreat_id == retreat_id) | (Notification.retreat_id.is_(None))
+        )
+    return list(db.scalars(query.order_by(Notification.id.desc()).limit(limit)))
 
 
 def mark_read(db: Session, user: User, notification_id: int) -> None:
@@ -171,12 +194,19 @@ def mark_read(db: Session, user: User, notification_id: int) -> None:
         db.commit()
 
 
-def mark_all_read(db: Session, user: User) -> int:
-    rows = db.scalars(
-        select(Notification).where(
-            Notification.user_id == user.id, Notification.read_at.is_(None)
+def mark_all_read(db: Session, user: User, retreat_id: int | None = None) -> int:
+    """모두 읽음 — retreat_id 를 주면 **이 회차의** 내 안 읽은 알림 전부 (4-16).
+
+    회차 없는 일반 알림도 함께 읽는다 — 화면의 한 목록에 같이 떠 있다.
+    """
+    query = select(Notification).where(
+        Notification.user_id == user.id, Notification.read_at.is_(None)
+    )
+    if retreat_id is not None:
+        query = query.where(
+            (Notification.retreat_id == retreat_id) | (Notification.retreat_id.is_(None))
         )
-    ).all()
+    rows = db.scalars(query).all()
     for row in rows:
         row.read_at = _now()
     db.commit()

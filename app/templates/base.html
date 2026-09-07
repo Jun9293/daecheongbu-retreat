@@ -26,12 +26,11 @@
   ('/expenses',    'receipt',   '지출',       [ '/expenses', '/refunds' ]),
   ('/budget',      'chart',     '예산',       [ '/budget' ]),
 ] %}
+{# 확인 요청·작업 파일은 지웠다 — 알림(4-16)과 업무 첨부(4-9)가 그 자리다 #}
 {% set nav_more = [
-  ('/reviews',     'inbox',     '확인 요청',   [ '/reviews' ]),
-  ('/files',       'folder',    '작업 파일',   [ '/files' ]),
   ('/checklists',  'checklist', '체크리스트',  [ '/checklists' ]),
   ('/meetings',    'notes',     '회의록',     [ '/meetings' ]),
-  ('/notifications','bell',     '알림함',     [ '/notifications' ]),
+  ('/notifications','bell',     '알림',      [ '/notifications' ]),
   ('/settings',    'settings',  '설정',       [ '/settings' ]),
 ] %}
 
@@ -62,8 +61,8 @@
       {% for href, ico, label, actives in nav_more %}
       <a href="{{ href }}" class="{% if path.startswith(href) %}on{% endif %}">
         {{ icon(ico, 19) }}{{ label }}
-        {% if href == '/reviews' and pending_review_count %}<span class="count">{{ pending_review_count }}</span>{% endif %}
-        {% if href == '/notifications' and unread_count %}<span class="count">{{ unread_count if unread_count < 100 else '99+' }}</span>{% endif %}
+        {# 배지 = 안 읽은 알림 + 답 기다리는 요청 (4-0) #}
+        {% if href == '/notifications' and (unread_count + pending_review_count) %}<span class="count">{{ (unread_count + pending_review_count) if (unread_count + pending_review_count) < 100 else '99+' }}</span>{% endif %}
       </a>
       {% endfor %}
     </nav>
@@ -115,7 +114,7 @@
   </a>
   {% endfor %}
   {# /more 는 지웠다 — 설정 › 점검(4-17)이 그 자리다 #}
-  {% set more_paths = ['/budget', '/reviews', '/files', '/checklists', '/meetings', '/notifications', '/settings'] %}
+  {% set more_paths = ['/budget', '/checklists', '/meetings', '/notifications', '/settings'] %}
   <a href="/settings" class="{% if path in more_paths %}on{% endif %}">
     {{ icon('grid', 21) }}설정
     {% if pending_review_count %}<span class="dot"></span>{% endif %}
