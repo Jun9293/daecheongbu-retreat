@@ -149,14 +149,20 @@ def settings_retreat_detail(
         .where(Program.retreat_id == target.id)
     ) or 0
 
+    # 소속 인원도 **키로** 센다 (2장) — 행(id)으로 세면 다른 회차에 붙은
+    # 계정이 빠져 새 회차의 부서가 전부 0명으로 보인다
+    from app.domain.departments import users_in_department
+
     dept_rows = [
         {
             "name": d.name,
             "color": d.color,
-            "member_count": db.scalar(
-                select(func.count()).select_from(User).where(User.department_id == d.id)
-            )
-            or 0,
+            "member_count": (
+                len(users_in_department(db, d.key)) if d.key
+                else db.scalar(
+                    select(func.count()).select_from(User).where(User.department_id == d.id)
+                ) or 0
+            ),
         }
         for d in db.scalars(
             select(Department)

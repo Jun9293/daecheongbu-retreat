@@ -135,14 +135,25 @@ templates.env.filters["short_date"] = short_date
 templates.env.filters["dday"] = dday
 
 
-def can_edit_dept(user, target_department_id: int | None) -> bool:
-    """템플릿에서 편집 버튼 노출 여부를 판단할 때 쓴다."""
+def can_edit_dept(user, department) -> bool:
+    """화면의 편집 버튼 — 서버 판정(assert_can_edit_department)과 **같은 축**
+    (부서 키 · 2장)으로 가른다. Department **행**을 받는다. id 로 견주면
+    새 회차가 열리는 순간 버튼이 조용히 사라져, 403 이 나기도 전에 길이 없다.
+    키 없는 부서(구설계 데이터)만 행으로 견준다.
+    """
     if user is None:
         return False
+    mine = user.department
+    if department is not None and department.key and mine is not None and mine.key:
+        return perm.can_edit_department_by_key(
+            role=user.role,
+            user_department_key=mine.key,
+            target_department_key=department.key,
+        )
     return perm.can_edit_department_content(
         role=user.role,
         user_department_id=user.department_id,
-        target_department_id=target_department_id,
+        target_department_id=department.id if department is not None else None,
     )
 
 

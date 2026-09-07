@@ -54,7 +54,8 @@ def recipients_for_risk(db: Session, risk: Risk) -> list[User]:
         add(db.get(User, task.assignee_id))
 
     if task.department_id is not None:
-        for user in db.scalars(select(User).where(User.department_id == task.department_id)):
+        # 부서는 키로 넓혀 찾는다 (2장) — department_members 가 그 일을 한다
+        for user in department_members(db, task.department_id):
             add(user)
 
     if risk.escalate_to_admin or task.department_id is None:

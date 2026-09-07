@@ -79,7 +79,7 @@ def create_checklist(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     dept_id = int(department_id) if department_id else None
-    assert_can_edit_department(user, dept_id)
+    assert_can_edit_department(db, user, dept_id)
 
     max_order = (
         db.scalar(
@@ -126,7 +126,7 @@ def add_item(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     checklist = _owned(db, checklist_id, retreat)
-    assert_can_edit_department(user, checklist.department_id)
+    assert_can_edit_department(db, user, checklist.department_id)
 
     max_order = (
         db.scalar(
@@ -158,7 +158,7 @@ def toggle_item(
     item = db.get(ChecklistItem, item_id)
     if item is None or item.checklist.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
-    assert_can_edit_department(user, item.checklist.department_id)
+    assert_can_edit_department(db, user, item.checklist.department_id)
 
     item.checked = not item.checked
     if item.checked:
@@ -183,7 +183,7 @@ def delete_item(
     item = db.get(ChecklistItem, item_id)
     if item is None or item.checklist.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
-    assert_can_edit_department(user, item.checklist.department_id)
+    assert_can_edit_department(db, user, item.checklist.department_id)
 
     db.delete(item)
     db.commit()
@@ -198,7 +198,7 @@ def delete_checklist(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     checklist = _owned(db, checklist_id, retreat)
-    assert_can_edit_department(user, checklist.department_id)
+    assert_can_edit_department(db, user, checklist.department_id)
 
     name = checklist.name
     db.delete(checklist)

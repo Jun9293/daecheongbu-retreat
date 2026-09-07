@@ -76,12 +76,32 @@ def require_editor(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-def assert_can_edit_department(user: User, target_department_id: int | None) -> None:
-    if not perm.can_edit_department_content(
-        role=user.role,
-        user_department_id=user.department_id,
-        target_department_id=target_department_id,
-    ):
+def assert_can_edit_department(db, user: User, target_department_id: int | None) -> None:
+    """부서 귀속 항목(지출·체크리스트)의 편집 권한 — **키로 비교한다** (2장).
+
+    Department 행은 회차마다 새로 만들어진다. id 로 견주면 새 회차가 열리는
+    순간 부서 리더가 자기 부서 지출조차 못 만지는데(403), 화면 버튼도 같은
+    비교라 버튼까지 사라져 **조용히** 틀린다. 키를 알아보려면 두 부서 행을
+    읽어야 해서 db 를 받는다. 키 없는 부서(구설계 데이터)만 행(id)으로
+    견준다 — None == None 으로 남의 부서까지 통과시키면 안 된다.
+    """
+    from app.domain.departments import department_key_of
+    from app.models import Department
+
+    target = db.get(Department, target_department_id) if target_department_id else None
+    if target is not None and target.key:
+        ok = perm.can_edit_department_by_key(
+            role=user.role,
+            user_department_key=department_key_of(db, user),
+            target_department_key=target.key,
+        )
+    else:
+        ok = perm.can_edit_department_content(
+            role=user.role,
+            user_department_id=user.department_id,
+            target_department_id=target_department_id,
+        )
+    if not ok:
         raise HTTPException(
             status_code=403, detail="내 부서의 항목만 편집할 수 있습니다."
         )

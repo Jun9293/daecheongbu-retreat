@@ -658,9 +658,9 @@ def add_task_page(
             "retreats": all_retreats(db),
             "library_rows": rows,
             "departments": departments,
-            "my_department_key": next(
-                (d.key for d in departments if d.id == user.department_id), None
-            ),
+            # 소속 키는 회차를 가리지 않고 찾는다 (2장) — 이 회차 목록에서
+            # id 로 찾으면 다른 회차 소속의 키가 안 잡힌다
+            "my_department_key": department_key_of(db, user),
             "viewer_is_admin": perm.can_manage_retreat(user.role),
             "slots": slots,
             "parents": parents,
