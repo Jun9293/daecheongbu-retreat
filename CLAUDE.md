@@ -1794,6 +1794,9 @@ User { id, phoneNumber, name, departmentId?, role }
 // role: 'admin' | 'dept_lead' | 'member' | 'viewer'
 
 /* ── 업무: 라이브러리(영속) + 회차별 실행 기록 ── */
+/* 일회성 업무(라이브러리+run)를 만드는 곳은 domain/tasks.create_run
+   하나다 (14장) — 보드 「새로 만들기」·회의 항목 전환·제안 반영이 같이
+   쓴다. 두 벌이던 시절 제목 자르기 하나가 이미 갈렸다 */
 TaskLibrary {
   id, title, kind,                    // 'main' | 'sub' | 'schedule'
   parentLibraryId?,
@@ -2617,7 +2620,9 @@ https://raw.githubusercontent.com/Jun9293/daecheongbu-retreat/<이번>/docs/revi
 `작성 시각: … (KST)` · `커밋: <짧은 해시>` · `작업: …` 이고, 그 아래에 한
 것 · 수용 기준별 통과 여부와 테스트 함수명 · 요청받은 출력 · pytest 마지막
 줄 · `git diff --name-only` · 판단이 들어간 자리의 발췌를 담습니다.
-2000줄을 넘기지 않습니다.
+**검토자 원문(익명화를 지난 그대로)도 파일 안에 싣습니다** — 「채팅에
+있다」 로 가리키지 않습니다. 채팅 덩어리는 저장소에 남지 않아, 다음
+사람이 그 검토를 볼 길이 없어집니다. 2000줄을 넘기지 않습니다.
 
 ### 마치기 전에 되짚는 것 (하는 일이 아닙니다)
 
@@ -2717,8 +2722,9 @@ https://raw.githubusercontent.com/Jun9293/daecheongbu-retreat/<이번>/docs/revi
   `scripts/import_meetings.py`), **제안이 남았습니다.**
 
   **회의 항목 → 할 일 전환(`/meetings/items/{id}/to-task`)은 이번 회차의
-  업무(TaskRun)를 만듭니다** — 보드의 「새로 만들기」(/board/add/new)와 같은
-  모양(라이브러리 + run · run_no max+1 · 선행 재연결)이고, 날짜는 항목의
+  업무(TaskRun)를 만듭니다** — 보드의 「새로 만들기」 와 **같은 함수**
+  (`domain/tasks.create_run` — 라이브러리 + run · run_no max+1 · 선행
+  재연결)를 지나고, 날짜는 항목의
   마감일 하나(없으면 비움 — 달력의 「날짜 없는 업무」), 출처는
   `TaskRun.sourceMeetingId`(8장)로 남으며, 만든 뒤 그 업무의 드로어
   (`/tasks?task=`)로 갑니다. **옛 Task 를 만들던 기간이 있었습니다**(UI 개편
@@ -2726,6 +2732,14 @@ https://raw.githubusercontent.com/Jun9293/daecheongbu-retreat/<이번>/docs/revi
   화면도 안 읽어서, 전환한 항목이 어디에도 안 나타났습니다. 운영에서 그 길로
   만들어진 행은 0건이고(활동기록 실측), 옛 Task 행은 옮기지 않습니다
   (`docs/봐둘것.md`).
+
+  **회의록에서 업무로 가는 길은 제안 흐름 하나입니다.** 새 업무 제안의
+  「업무로 만들기」 가 그 자리에서 만들고(`/suggestions/apply-new` —
+  출처가 남습니다), to-task 엔드포인트는 그 안쪽 경로라 화면 입구를
+  따로 두지 않습니다. 낱말 겹침으로 물러선 판의 새 업무 제안은 다듬은
+  제목이 없어 단추 대신 보드로 안내합니다 — 회의록 문장을 그대로
+  제목으로 쓰지 않습니다(성적표가 짚은 그 모양). 셋 다 **만드는 것은
+  `domain/tasks.create_run` 하나**입니다(14장).
   지금은 **낱말 겹침**으로 고릅니다. 2026-09-03 에 사람이 표본 21개를 눈으로
   채점했습니다(`docs/review/제안-성적표.md`) — **14/21 (67%)**, 논의 8/13 ·
   새 업무 6/8. 틀린 일곱 중 **넷이 같은 모양**입니다: 낱말은 겹쳤는데
@@ -2888,7 +2902,9 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 노션 회의록 자르기 | `app/domain/meeting_import.py` (`cut` · `people_notes`) |
 | 회의록 옮기기 (일회성) | `scripts/import_meetings.py` — 미리보기가 기본. `--until` 로 시뮬레이션, `--undo` 로 되돌림 |
 | 회의록 화면 | `app/routers/meetings.py` · `templates/meetings.html` · `meeting_detail.html` |
-| 회의 항목 → 할 일 전환 (12장) | `routers/meetings.py` 의 `/items/{id}/to-task` — TaskRun 을 만들고 `source_meeting_id` 로 출처를 남긴 뒤 `/tasks?task=` 로 간다. 옛 Task 를 만들던 기간의 행은 옮기지 않는다 |
+| **업무 만들기 (일회성 — 라이브러리+run)** | `app/domain/tasks.py` 의 `create_run` — **여기 하나다.** 보드 「새로 만들기」·회의 항목 전환·제안 반영이 같이 쓴다. 제목 자르기·검증·번호·선행 재연결까지 여기서. 모양이 달라 남긴 것(회차 개설의 일괄 생성·add_existing·라이브러리 항목만 — 개수는 세지 않는다)의 이유는 파일 머리에, 목록은 test12_g01 이 지킨다 |
+| 회의 항목 → 할 일 전환 (12장) | `routers/meetings.py` 의 `/items/{id}/to-task` — `create_run` 으로 만들고 `source_meeting_id` 로 출처를 남긴 뒤 `/tasks?task=` 로 간다. 부서가 적힌 항목은 그 부서를 편집할 수 있어야 한다(키 비교 — security 의 그 문). 옛 Task 를 만들던 기간의 행은 옮기지 않는다 |
+| 제안의 새 업무를 그 자리에서 만들기 (12장) | `routers/meetings.py` 의 `/suggestions/apply-new` · `static/js/meeting.js` 의 「업무로 만들기」 — `create_run` 을 지나고 출처가 남는다. 부서 이름을 못 맞추면 비우고 그렇다고 말한다 |
 | 회의록을 읽고 제안하기 | `app/domain/suggest.py` — **읽고 제안하는 창구는 여기 하나다** (화면이든 채팅이든) |
 | Claude API 로 나가기 | `app/domain/llm.py` — **문은 여기 하나다.** 키·모델·요금이 두 곳에 있으면 갈리고, 갈린 쪽을 아무도 모른다 |
 | 회의록을 문장으로 읽기 | `app/domain/suggest.py` 의 `분석()` — 1차(목록+회의록) → 2차(후보의 논의 이력). **2차는 볼 것이 있을 때만** |
