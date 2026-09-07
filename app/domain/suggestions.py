@@ -100,16 +100,25 @@ def generate(
 
             저장 '지연' 이 없어지면서 옛 `status == '지연'` 분기는 영원히
             거짓이 됐다 — 그대로 두면 지연 계열 제안이 조용히 죽는다.
-            폐회 다음 날 기준으로 기한이 지난 미완료였거나, 끝났더라도 마감을
-            넘겨 끝난 것(completed_at > end_date)을 지연으로 본다.
-            """
-            from app.domain.board import overdue_of
 
-            ref = base_retreat.end_date or base_retreat.start_date
-            if ref is not None and overdue_of(run, ref + dt.timedelta(days=1)):
+            둘 중 하나면 늦은 것이다:
+            - **폐회 시점 미완료** — overdue_by_date(run, 폐회일).
+              `overdue_of` 가 아니다 — 그쪽의 종료 가드(period.is_over)는
+              is_archived 도 종료로 보므로, 기준 회차를 보관하는 순간 이
+              기준이 통째로 False 가 되어 지연 제안이 조용히 죽는다.
+              여기는 화면이 아니라 **그 시점의 사실**을 재는 자리다
+            - **늦게 끝남** — completed_at 이 마감(due_of)을 넘겼다
+
+            날짜 비교는 여기서 다시 적지 않는다 — overdue_by_date 와 due_of 가
+            그 정의를 하나로 쥔다.
+            """
+            from app.domain.board import due_of, overdue_by_date
+
+            close = base_retreat.end_date or base_retreat.start_date
+            if close is not None and overdue_by_date(run, close):
                 return True
-            end = run.end_date or run.start_date
-            return bool(run.completed_at and end and run.completed_at > end)
+            due = due_of(run)
+            return bool(run.completed_at and due and run.completed_at > due)
 
         for run in sorted(runs, key=lambda r: r.start_date or dt.date.min):
             title = run.library.title

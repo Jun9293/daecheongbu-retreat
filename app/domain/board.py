@@ -12,18 +12,14 @@ import datetime as dt
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain import dweek
+from app.domain import dweek, period
 from app.domain.departments import short_name
 from app.models import Retreat, TaskLibrary, TaskRun
 
 WEEKDAYS = ("일", "월", "화", "수", "목", "금", "토")
 
-STATUS_COLORS = {
-    "대기": "#4A544F",
-    "진행중": "#1668E3",
-    "완료": "#8B948F",
-    "지연": "#C8442E",
-}
+# (옛 STATUS_COLORS 표는 지웠다 — 아무도 안 읽는 채로 옛 팔레트의 붉은 값을
+#  들고 있었다. 상태의 생김새는 bar_style·배지 토큰이 쥔다. 4-0 · 4-3)
 
 MAX_FIRST_WEEK = 40  # 이보다 이른 업무는 첫 칸에 몰아 넣는다
 
@@ -161,14 +157,43 @@ def _first_week(open_date: dt.date, runs: list[TaskRun]) -> int:
 
 
 
+def due_of(run: TaskRun) -> dt.date | None:
+    """이 업무의 마감 — 마감이 비면 시작일을 하루짜리 마감으로 본다.
+
+    기한을 재는 곳(overdue_of · suggestions.late_in_base)이 같은 정의를 쓴다.
+    각자 `end or start` 를 다시 적으면 한쪽만 고쳐진다.
+    """
+    return run.end_date or run.start_date
+
+
+def overdue_by_date(run: TaskRun, today: dt.date) -> bool:
+    """날짜 계산만 — 기한이 지났는데 아직 끝나지 않았는가.
+
+    화면은 이것을 직접 쓰지 않고 `overdue_of` 를 쓴다. 따로 있는 이유는
+    **과거의 어느 시점**을 재는 자리(suggestions.late_in_base 가 폐회일
+    시점을 잰다) 때문이다 — 그쪽에 `overdue_of` 를 주면 기준 회차가
+    보관(is_archived)된 순간 무조건 False 가 되어, 지연 계열 제안이
+    조용히 죽는다. 보관은 드롭다운에서 치우는 표시지 그때 지연이
+    없었다는 뜻이 아니다.
+    """
+    end = due_of(run)
+    return bool(end and end < today and run.status != "완료")
+
+
 def overdue_of(run: TaskRun, today: dt.date) -> bool:
     """기한이 지났는데 아직 끝나지 않았는가 — '지연' 은 이 계산 하나에서 나온다.
 
     저장값이 아니다 (4-3). 저장해 두면 담당자가 손으로 눌러야만 붙어서,
     놓친 사람이 직접 신고해야 시스템이 알아차리는 구조가 된다.
+
+    **끝난 회차에서는 지연이 없다** (4-10 의 '종료된 회차'와 같은 결) —
+    지난 회차를 열면 모든 미완료가 기한 초과라, 바·점·배지·홈 지표·목록
+    칩이 온통 붉게 소리를 지른다. 끝난 회차의 「지연 N건」 은 재촉이 아니라
+    소음이다. 폐회일 당일까지는 그대로 잰다 (period.is_over 와 같은 경계).
     """
-    end = run.end_date or run.start_date
-    return bool(end and end < today and run.status != "완료")
+    if period.is_over(run.retreat, today):
+        return False
+    return overdue_by_date(run, today)
 
 
 # 배지의 CSS 클래스 — 이름은 4-0 의 상태 배지 토큰(--st-*)과 짝이다
@@ -251,10 +276,10 @@ def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
 
 
 def overdue_days_of(run: TaskRun, today: dt.date) -> int:
-    end = run.end_date or run.start_date
-    if not end or run.status == "완료" or end >= today:
+    # overdue_of 와 같은 경계 — 끝난 회차에서는 경과일도 세지 않는다
+    if not overdue_of(run, today):
         return 0
-    return (today - end).days
+    return (today - due_of(run)).days
 
 
 def has_started(run: TaskRun) -> bool:
@@ -421,6 +446,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
         background, border = paint["bar_background"], paint["bar_border"]
         return {
             "run_id": run.id,
+            # 회차 안에서 고정되는 번호 (4-14) — 회의에서 번호로 부른다
+            "no": run.run_no,
             "title": lib.title,
             "kind": lib.kind,
             # 보이는 상태 — 기한이 지났으면 '지연'. 저장값이 아니라 paint_of 의
