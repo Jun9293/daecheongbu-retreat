@@ -92,11 +92,15 @@ def test_s05_사이드바에_없는_것들():
 
 
 def test_s06_구조가_3장_순서다():
+    from app.domain.live import SCREEN_TITLE
+
     order = ["홈", "회의록", "수련회 준비", "목록", "보드", "달력",
-             "수련회 진행", "진행 화면", "봉사자 시간표", "재정", "예산", "지출",
+             "수련회 진행", SCREEN_TITLE, "봉사자 시간표", "재정", "예산", "지출",
              "알림", "체크리스트", "설정"]
     nav = SHELL[SHELL.index("<nav>") : SHELL.index("</nav>")]
     text = re.sub(r"<svg.*?</svg>", "", nav, flags=re.S)
+    # 총무팀 일정 라벨은 한 곳(domain.live)에서 나가는 변수다 (5장)
+    text = text.replace("{{ live_title }}", SCREEN_TITLE)
     pos = -1
     for label in order:
         at = text.find(label, pos + 1)

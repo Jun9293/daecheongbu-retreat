@@ -151,37 +151,71 @@ def test6_k04_새_회차를_열어도_부서_리더가_자기_지출을_만든�
         assert entry.department_id == new_hebron
 
 
+# 남은 부서 id 비교의 전수 — (파일, 줄, 식): 왜 남는지. 새 비교가 생기거나
+# 이 자리들이 움직이면 목록과 어긋나 k05 가 빨개진다 — 그때 다시 본다 (V-c).
+ID_비교_허용: dict[tuple[str, int, str], str] = {
+    # 키 없는 부서(구설계 데이터)의 되돌림 — None==None 통과 방지
+    ("app/domain/permissions.py", 47, "user_department_id == target_department_id"):
+        "키가 없을 때만 오는 id 되돌림 경로",
+    ("app/notifications.py", 86, "User.department_id == department_id"):
+        "department_members 의 키 없는 부서 되돌림",
+    ("app/routers/reviews.py", 60, "ReviewRequest.department_id == user.department_id"):
+        "키 없는 부서 소속의 받은 요청 조회 되돌림",
+    ("app/routers/reviews.py", 80, "user.department_id == target.id"):
+        "키 없는 부서 되돌림 (응답 권한)",
+    # 같은 회차 안의 데이터 행 집계·조인 — 사람 소속 판정이 아니다
+    ("app/domain/board.py", 471, "r.department_id == dept.id"):
+        "회차 안 run 을 부서 행별로 묶는 집계",
+    ("app/routers/expenses.py", 140, "ExpenseEntry.department_id == my_dept"):
+        "my_dept 는 키로 찾은 이번 회차 부서 행 id — 직전 입력값 집계",
+    ("app/routers/reviews.py", 56, "Department.id == ReviewRequest.department_id"):
+        "요청 행에 부서 행을 붙이는 조인",
+    ("app/routers/settings.py", 167, "User.department_id == d.id"):
+        "회차 부서별 인원수 집계 (키 없는 부서 되돌림 포함)",
+    ("app/routers/settings.py", 419, "Task.department_id == department_id"):
+        "옛 Task 표의 회차 데이터 집계",
+    ("app/routers/settings.py", 424, "ExpenseEntry.department_id == department_id"):
+        "회차 지출의 부서별 집계",
+}
+ID_비교_패턴 = re.compile(
+    r"[\w.]*department_id\s*==\s*[\w.()\[\]]+|[\w.]+\s*==\s*[\w.]*department_id")
+
+
+def _id_비교_전수() -> list[tuple[str, int, str]]:
+    """app/**/*.py 의 부서 id `==` 비교 전부 — (파일, 줄, 정규화한 식)."""
+    나온것 = []
+    for path in pathlib.Path(ROOT, "app").rglob("*.py"):
+        상대 = str(path.relative_to(ROOT)).replace("\\", "/")
+        for 줄번호, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            for hit in ID_비교_패턴.findall(line):
+                나온것.append((상대, 줄번호, " ".join(hit.split()).rstrip(")],:")))
+    return 나온것
+
+
 def test6_k05_소속_판정의_id_비교가_0곳이다():
     """키를 쓸 수 있는데 id 로 견주는 소속 판정이 없다 (2장).
 
-    남은 id 비교는 전부 **키 없는 부서(구설계 데이터)의 되돌림**이거나
-    같은 회차 안의 데이터 행 집계다 — 그 자리를 이름으로 적어 둔다.
-    새 id 비교가 생기면 이 목록에 없어서 빨개진다.
+    남은 id 비교는 전부 키 없는 부서 되돌림이거나 회차 안 데이터 집계·조인 —
+    그 자리를 파일·줄·이유로 적어 둔다. 새 비교가 생기면 목록에 없어 빨개진다.
     """
-    허용 = {
-        # 키 없는 부서만 행(id)으로 — None==None 통과 방지의 되돌림
-        ("app/notifications.py", "User.department_id == department_id"),
-        ("app/domain/permissions.py", "user_department_id == target_department_id"),
-        ("app/routers/reviews.py", "ReviewRequest.department_id == user.department_id"),
-        ("app/routers/reviews.py", "user.department_id == target.id"),
-        # 같은 회차 안의 데이터 행 집계·조인 — 사람 소속 판정이 아니다
-        ("app/domain/board.py", "r.department_id == dept.id"),
-        ("app/routers/expenses.py", "ExpenseEntry.department_id == my_dept"),
-        ("app/routers/reviews.py", "Department.id == ReviewRequest.department_id"),
-        ("app/routers/settings.py", "User.department_id == d.id"),
-        ("app/routers/settings.py", "Task.department_id == department_id"),
-        ("app/routers/settings.py", "ExpenseEntry.department_id == department_id"),
-    }
-    패턴 = re.compile(r"[\w.]*department_id\s*==\s*[\w.()\[\]]+|[\w.]+\s*==\s*[\w.]*department_id")
-    남은것 = []
-    for path in pathlib.Path(ROOT, "app").rglob("*.py"):
-        상대 = str(path.relative_to(ROOT)).replace("\\", "/")
-        for line in path.read_text(encoding="utf-8").split("\n"):
-            for hit in 패턴.findall(line):
-                hit = " ".join(hit.split()).rstrip(")],:")
-                if (상대, hit) not in 허용:
-                    남은것.append((상대, hit))
+    남은것 = [자리 for 자리 in _id_비교_전수() if 자리 not in ID_비교_허용]
     assert 남은것 == [], f"목록에 없는 부서 id 비교: {남은것}"
+    # 검사가 볼 것을 실제로 보고 있다 — 센 것이 0이면 성공이 아니라 실패 (11-3)
+    assert len(_id_비교_전수()) == len(ID_비교_허용)
+
+
+def test6_k05b_새_id_비교를_심으면_잡힌다(tmp_path):
+    """막는 코드의 막히는 쪽 — 가짜 id 비교 한 줄이 전수에 잡힌다 (1-c)."""
+    temp = ROOT / "app" / "__stage6_fake_tmp.py"
+    temp.write_text("ok = user.department_id == target.department_id\n", encoding="utf-8")
+    try:
+        걸린것 = [자리 for 자리 in _id_비교_전수()
+                if 자리[0] == "app/__stage6_fake_tmp.py"]
+        assert 걸린것 == [("app/__stage6_fake_tmp.py", 1,
+                        "user.department_id == target.department_id")]
+        assert 걸린것[0] not in ID_비교_허용          # 목록에 없으니 k05 가 빨개진다
+    finally:
+        temp.unlink()
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -249,22 +283,52 @@ def test6_g05_깨진_대응표는_통과가_아니라_멈춤이다(tmp_path, mon
         dev.실명이있나(_fake_db(tmp_path, "아무개"))
 
 
-def test6_g03_확인_안_된_새_이미지는_check_names_가_막는다(tmp_path):
+def test6_g03_확인_안_된_이미지는_check_names_가_막는다(tmp_path):
     cn = _load("check_names")
 
-    # 순수 함수 — 확인 파일에 없는 새 이미지가 걸린다 (막는 쪽)
-    assert cn.미확인이미지(["docs/review/새것.png"], "") == ["docs/review/새것.png"]
-    assert cn.미확인이미지(["docs/review/새것.png"], "docs/review/새것.png | 봤음") == []
+    # 순수 함수 — 확인 파일에 경로·해시가 둘 다 있어야 통과 (막는 쪽)
+    목록 = [("docs/review/새것.png", "abc123def456")]
+    assert cn.미확인이미지(목록, "") == ["docs/review/새것.png (해시 abc123def456)"]
+    assert cn.미확인이미지(목록, "docs/review/새것.png | abc123def456 | 봤음") == []
+    # **내용만 바뀌어도 걸린다** — 확인 파일의 해시가 옛것이면 확인 안 된 것 (1-a)
+    assert cn.미확인이미지(목록, "docs/review/새것.png | 000000000000 | 봤음") == [
+        "docs/review/새것.png (해시 abc123def456)"]
 
-    # 저장소 통합 — 임시 이미지를 만들면 새이미지() 가 잡는다
+    # 저장소 통합 — 임시 이미지를 만들면 이미지목록() 이 잡고 검사가 1 로 끝난다
     temp = ROOT / "docs" / "review" / "__stage6_test_tmp.png"
     temp.write_bytes(b"\x89PNG\r\n\x1a\n")
     try:
-        assert "docs/review/__stage6_test_tmp.png" in cn.새이미지()
+        경로들 = [상대 for 상대, _ in cn.이미지목록()]
+        assert "docs/review/__stage6_test_tmp.png" in 경로들
         assert cn.이미지검사() == 1                     # 막는 쪽 — 0 이 아니다
     finally:
         temp.unlink()
-    assert "docs/review/__stage6_test_tmp.png" not in cn.새이미지()
+    assert "docs/review/__stage6_test_tmp.png" not in [상대 for 상대, _ in cn.이미지목록()]
+
+    # 기존 이미지 전부가 확인 파일과 해시까지 일치한다 — 지금 상태가 통과다
+    assert cn.이미지검사() == 0
+
+
+def test6_g03b_막히는_쪽이_콘솔에서도_말을_한다():
+    """실패 안내문의 「—」 가 cp949 콘솔에서 UnicodeEncodeError 로 죽어
+    첫 줄만 찍히던 것 — 막는 검사가 말을 못 하면 막히는 쪽이 사람에게
+    안 보인다 (11-3). 파이프(cp949)로 실제 프로세스를 돌려 잰다."""
+    import os
+    import subprocess
+
+    temp = ROOT / "docs" / "review" / "__stage6_cp949_tmp.png"
+    temp.write_bytes(b"\x89PNG\r\n\x1a\n")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}
+    try:
+        r = subprocess.run(
+            [str(ROOT / ".venv" / "Scripts" / "python.exe"),
+             str(ROOT / "scripts" / "check_names.py")],
+            capture_output=True, cwd=ROOT, env=env, timeout=120)
+    finally:
+        temp.unlink()
+    assert r.returncode == 1                              # 막는 쪽 — 여전히 막는다
+    assert b"UnicodeEncodeError" not in r.stderr          # 죽지 않고
+    assert "__stage6_cp949_tmp".encode("cp949") in r.stdout   # 무엇이 막았는지 말한다
 
 
 def test6_g04_devserve_가_검사를_지나서만_뜬다():

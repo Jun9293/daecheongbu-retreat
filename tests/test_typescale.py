@@ -181,7 +181,7 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
     ".dmeta dd .mark",                                    # 호버 표식 ∨ · ✎
     ".dmeta dd .dates .sep", ".dmeta dd .dates .span",    # – 와 「기간 N일」
     ".relcard .rh .arrow", ".relcard .rh .n",             # 방향 기호와 건수
-    ".lfoot .caret", ".lfoot .sep",                       # ▸ 와 · 구분점
+    ".trow.lrow .caret",                                  # ▸ — 행 오른쪽 끝 (4-14)
     ".revform .lbl .opt2",                                # 라벨 옆 「(선택)」
     # 단계 5 — 재정 표와 로그인 전 화면
     ".fintbl th",                                         # 표 머리 라벨 — 값이 아래 (속성 라벨 자리)
