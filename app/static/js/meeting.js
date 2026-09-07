@@ -65,6 +65,15 @@ function 업무고르기(x) {
     <div class="mt-runlist">${rows}</div></details>`;
 }
 
+/* 이미 업무가 된 제안 — 단추 대신 그 업무로 가는 길. 만들었는데 어디
+   있는지 모르면 만들지 않은 것과 같다 (4-14 의 ?task=). */
+function 만든자리(x, 방금) {
+  return `<span class="mt-sug-made">${방금 ? '만들었습니다' : '이미 만들었습니다'} —
+    <a href="/tasks?task=${Number(x.made_run_id)}">${
+      x.made_run_no == null ? '' : `<span class="mt-no">${Number(x.made_run_no)}</span>`
+    }${esc(x.title || x.action)}</a></span>`;
+}
+
 function 줄(x) {
   const 머리 = `<p class="mt-do">${esc(x.action)}</p>`;
   const 근거 = `<p class="mt-sug-why">${esc(x.why)}</p>`;
@@ -88,13 +97,17 @@ function 줄(x) {
     const 곁 = [x.parent_title ? `「${x.parent_title}」 의 하위` : '',
                 x.department || ''].filter(Boolean).join(' · ');
     // 낱말 겹침 판은 제목을 다듬지 않아 title 이 없다 — 회의록 문장을
-    // 그대로 제목으로 쓰지 않는다(성적표가 짚은 그 모양). 그때는 보드로 안내
-    const 만들기 = canEdit && x.title
-      ? `<button type="button" data-apply-new
+    // 그대로 제목으로 쓰지 않는다(성적표가 짚은 그 모양). 그때는 보드로 안내.
+    // **이미 만든 것에는 단추를 내지 않는다** — 새로 고쳐도 그대로다.
+    // 서버가 (출처, 제목)으로 세므로 화면과 저장이 갈리지 않는다 (AC-a)
+    const 만들기 = x.made_run_id
+      ? 만든자리(x)
+      : (canEdit && x.title
+        ? `<button type="button" data-apply-new
            data-title="${esc(x.title)}"
            data-department="${esc(x.department || '')}"
            data-parent-run="${x.parent_run_id == null ? '' : Number(x.parent_run_id)}">업무로 만들기</button>`
-      : (x.title ? '' : `<span class="mt-sug-where">보드의 <b>+ 업무 추가</b> 에서</span>`);
+        : (x.title ? '' : `<span class="mt-sug-where">보드의 <b>+ 업무 추가</b> 에서</span>`));
     return `<div class="mt-sug-row is-new"><div class="mt-sug-main">
       <p class="mt-do"><i class="mt-kind">새 업무로 만들기</i>${esc(x.action)}</p>
       ${곁 ? `<p class="mt-where-to">${esc(곁)}</p>` : ''}
@@ -243,16 +256,18 @@ list.addEventListener('click', async e => {
       });
       if (!res.ok) throw new Error(res.status);
       const saved = await res.json();
-      row.classList.add('done');
-      // 만들었는데 어디 있는지 모르면 지금과 같다 — 드로어로 가는 길을 준다
-      row.querySelector('.mt-do').innerHTML =
-        `만들었습니다 — <a href="/tasks?task=${Number(saved.run_id)}">`
-        + `${saved.run_no != null ? `<span class="mt-no">${Number(saved.run_no)}</span>` : ''}`
-        + `${esc(saved.title)}</a>`
-        + (saved.dept_missed
-           ? ' <b>부서는 못 맞춰 비워 두었습니다</b> — 드로어에서 골라 주세요.'
-           : '');
+      // **새로 고친 뒤와 같은 모양이어야 한다.** 여기서 따로 그리면 방금
+      // 만든 줄과 다시 열어 본 줄이 달라 보인다 — 같은 조각을 쓴다
+      새단추.insertAdjacentHTML('afterend', 만든자리({
+        made_run_id: saved.run_id, made_run_no: saved.run_no, title: saved.title,
+      }, !saved.already));
       새단추.remove();
+      if (saved.dept_missed) {
+        row.querySelector('.mt-where-to, .mt-sug-why').insertAdjacentHTML(
+          'afterend',
+          '<p class="mt-dup">부서는 못 맞춰 <b>비워 두었습니다</b>'
+          + ' — 그 업무에서 골라 주세요.</p>');
+      }
     } catch (err) {
       새단추.disabled = false;
       새단추.textContent = '업무로 만들기';

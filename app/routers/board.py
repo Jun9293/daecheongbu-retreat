@@ -786,7 +786,11 @@ def add_new(
         raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
     dept_by_key = {d.key: d for d in retreat.departments}
     dept = dept_by_key.get(payload.department_key or "")
-    if not perm.can_edit_department_by_key(
+    # **부서가 적혀 있을 때만 키를 검사한다** — 회의록 길(전환·제안 반영)과
+    # 같은 규칙이다. 부서 없는 업무는 아직 누구 일인지 안 정해진 것이고,
+    # 그것을 만드는 데 관리자를 요구하면 「나중에 정하자」 를 적을 수 없다.
+    # 담당 부서는 드로어에서 나중에 고른다 (4-9).
+    if payload.department_key and not perm.can_edit_department_by_key(
         role=user.role,
         user_department_key=_dept_key_of(db, user),
         target_department_key=payload.department_key,

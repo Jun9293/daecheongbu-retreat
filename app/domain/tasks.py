@@ -29,9 +29,51 @@ from __future__ import annotations
 
 import datetime as dt
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import TASK_KINDS, Department, Retreat, TaskLibrary, TaskRun
+
+
+def 제목다듬기(title: str) -> str:
+    """저장될 제목 — 앞뒤 공백을 떼고 200자에서 자른다.
+
+    **다듬는 규칙도 한 곳이다.** 만들 때와 「이미 만들었나」 를 셀 때가
+    다르게 다듬으면, 같은 제목이 서로 다른 것으로 읽혀 두 번 만들어진다.
+    """
+    return title.strip()[:200]
+
+
+def made_from_meeting(db: Session, retreat: Retreat, meeting_id: int) -> dict:
+    """그 회의록에서 만들어진 이번 회차의 업무 — `{제목: run}`.
+
+    **저장하지 않고 셈한다.** 제안은 `Meeting.suggest_json` 에 통째로
+    들어 있고 본문이 바뀌면 새로 쓰이므로, 거기에 run_id 를 적어 두면
+    다시 읽는 순간 사라진다 — 그러면 단추가 되살아나 같은 업무가 하나
+    더 생긴다(막으려던 바로 그것). 출처의 정본은
+    `TaskRun.source_meeting_id` 하나이고(4-9 와 같은 원칙), 제목이 그
+    회의에서 그 제안의 이름이다.
+
+    **범위는 그 회의록에서 온 이번 회차의 업무 전부다** — 항목 전환으로
+    만든 것도 들고, 이번 회차에서 뺀 것(`included=False`)도 센다. 목적이
+    「같은 제목을 두 번 세우지 않는 것」 이라, 빼 둔 것이 있으면 새로
+    만들 것이 아니라 보드의 「+ 업무 추가」 로 되살리는 것이 맞다
+    (0장 — 뺀 것도 기록이다).
+    """
+    rows = db.scalars(
+        select(TaskRun)
+        .join(TaskLibrary, TaskLibrary.id == TaskRun.library_id)
+        .where(
+            TaskRun.retreat_id == retreat.id,
+            TaskRun.source_meeting_id == meeting_id,
+        )
+    )
+    # 같은 제목이 둘이면 **먼저 만든 것**을 가리킨다 — 나중 것으로 가면
+    # 링크가 옮겨 다닌다
+    나온것: dict = {}
+    for run in sorted(rows, key=lambda r: r.id):
+        나온것.setdefault(제목다듬기(run.library.title), run)
+    return 나온것
 
 
 def create_run(
@@ -58,7 +100,7 @@ def create_run(
     from app.domain import dweek
     from app.domain import library as lib_domain
 
-    title = title.strip()[:200]
+    title = 제목다듬기(title)
     if not title:
         raise ValueError("업무 이름을 입력해주세요.")
     if kind not in TASK_KINDS:

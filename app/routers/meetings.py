@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.domain import discussion
 from app.domain import permissions as perm
+from app.domain import suggest as suggest_mod
 from app.security import get_current_user, require_editor
 from app.templating import redirect, render
 
@@ -452,7 +453,7 @@ def 분석_한번(meeting_id: int) -> None:
             return
         meeting.suggest_state = "됨"
         meeting.suggest_json = _제안을_json(r.제안들)
-        meeting.suggest_note = f"{r.방식}|{r.말}"
+        meeting.suggest_note = suggest_mod.쪽지(r)   # 쓰는 곳도 한 곳 (6번)
         meeting.suggest_cost = r.원
         meeting.suggest_tokens = f"{r.입력토큰}/{r.출력토큰}"
         meeting.suggest_at = dt.datetime.now()
@@ -467,8 +468,8 @@ def 분석_한번(meeting_id: int) -> None:
 
 
 def 낱말로_물러섰나(meeting: Meeting) -> bool:
-    """지난번 결과가 낱말 겹침이었나. `suggest_note` 는 `방식|말` 이다."""
-    return (meeting.suggest_note or "").startswith("낱말|")
+    """지난번 결과가 낱말 겹침이었나 — 읽는 규칙은 suggest 한 곳이다."""
+    return suggest_mod.낱말로_물러섰나(meeting.suggest_note)
 
 
 def 다시_읽어야_하나(meeting: Meeting) -> bool:
@@ -589,9 +590,7 @@ def meeting_suggestions(
             and 다시_읽어야_하나(meeting):
         분석_걸어둔다(background, meeting, db)
 
-    방식, _, 말 = (meeting.suggest_note or "").partition("|")
-    if not 말:
-        방식, 말 = "", 방식
+    방식, 말 = suggest_mod.쪽지읽기(meeting.suggest_note)
 
     것들 = []
     if meeting.suggest_state == "됨" and meeting.suggest_json:
@@ -621,6 +620,11 @@ def meeting_suggestions(
     }
     남을것 = discussion_body(meeting)
     어디 = f"{날} 회의록"
+    # 새 업무 제안도 같은 결로 — **이미 만든 것은 단추 대신 그 업무로 가는
+    # 길**을 낸다 (AC-a). 저장하지 않고 출처+제목으로 센다 (domain/tasks)
+    from app.domain import tasks as tasks_domain
+
+    만든것 = tasks_domain.made_from_meeting(db, retreat, meeting.id)
 
     def 하자는말(x: dict) -> str:
         """**무엇을 하자는 것인지.** 왜 골랐는지가 아니라."""
@@ -638,6 +642,11 @@ def meeting_suggestions(
     항목 = []
     for x in 것들:
         run_id = x.get("run_id")
+        # 새 업무 제안이 이미 업무가 됐나 — 그 run 을 함께 낸다
+        만든run = (
+            만든것.get(tasks_domain.제목다듬기(x.get("title") or ""))
+            if x.get("kind") == "new" else None
+        )
         항목.append({
             "kind": x.get("kind"),
             # 하려는 일이 먼저다. 화면이 이것을 크게 그린다
@@ -658,6 +667,9 @@ def meeting_suggestions(
             # 누르기 전에 볼 수 있어야 한다
             "preview": 남을것 if x.get("kind") == "discussion" else None,
             "already": bool(run_id and run_id in 이미),
+            # 새 업무 제안 — 이미 만들었으면 그 업무 (단추 대신 링크)
+            "made_run_id": 만든run.id if 만든run else None,
+            "made_run_no": 만든run.run_no if 만든run else None,
         })
 
     return {
@@ -729,9 +741,7 @@ def apply_suggestion(
             raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
         runs.append(run)
 
-    방식, _, _말 = (meeting.suggest_note or "").partition("|")
-    if not _말:
-        방식 = ""
+    방식 = suggest_mod.쪽지읽기(meeting.suggest_note)[0]
     entry = DiscussionEntry(
         _legacy_run_id=runs[0].id,
         authored_at=meeting.meeting_date or dt.date.today(),
@@ -791,6 +801,11 @@ def apply_new_task(
     못 맞추면 부서 없이 만들고 **그렇다고 말한다** (조용히 다른 값이 되면
     화면에서 고른 것과 저장된 것이 갈린다, 5-1). 상위가 있으면 그 아래
     하위(sub)로 선다.
+
+    **두 번 만들지 않는다** (AC-a). 단추는 누른 뒤 사라지지만 새로
+    고치면 되살아나므로, 화면만으로는 막히지 않는다 — 서버가 그 회의록
+    에서 같은 제목으로 이미 만든 업무가 있는지 보고, 있으면 만들지 않고
+    **그 업무를 가리킨다.** 논의 반영의 `already` 와 같은 결이다.
     """
     from app.domain import tasks as tasks_domain
     from app.security import assert_can_edit_department
@@ -812,6 +827,17 @@ def apply_new_task(
         # 부서 줄에 서는 업무 — 항목 전환·보드와 같은 문 (키 비교)
         assert_can_edit_department(db, user, dept.id)
 
+    # **문을 지난 뒤에 본다.** 먼저 보면 같은 요청이 만들기 전엔 403,
+    # 만든 뒤엔 200(업무 이름·번호·부서)이 되어 **판정이 시점에 따라
+    # 갈린다.** 답을 주는 조건은 언제나 같아야 한다.
+    이미 = tasks_domain.made_from_meeting(db, retreat, meeting.id).get(
+        tasks_domain.제목다듬기(payload.title))
+    if 이미 is not None:
+        return {"ok": True, "already": True, "run_id": 이미.id,
+                "run_no": 이미.run_no, "title": 이미.library.title,
+                "department": 이미.department.name if 이미.department else None,
+                "dept_missed": False}
+
     try:
         lib, run = tasks_domain.create_run(
             db,
@@ -826,9 +852,7 @@ def apply_new_task(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
 
-    방식, _, _말 = (meeting.suggest_note or "").partition("|")
-    if not _말:
-        방식 = ""
+    방식 = suggest_mod.쪽지읽기(meeting.suggest_note)[0]
     log_activity(
         db,
         retreat_id=retreat.id,
@@ -841,7 +865,7 @@ def apply_new_task(
                      "고른방식": 방식 or "알 수 없음"},
         actor_type="claude",
     )
-    return {"ok": True, "run_id": run.id, "run_no": run.run_no,
+    return {"ok": True, "already": False, "run_id": run.id, "run_no": run.run_no,
             "title": lib.title,
             "department": dept.name if dept else None,
             # 이름을 못 맞췄으면 그렇다고 말한다 — 조용히 부서 없이 서면
