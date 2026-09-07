@@ -1,124 +1,166 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import empty %}
+{% extends "retreat_base.html" %}
 {% block title %}예산 · {{ retreat.name }}{% endblock %}
-{% block content %}
 
-<div class="page-head">
-  <h1>예산</h1>
-  <p class="sub">식대는 지원금액만 예산에서 집행된 것으로 집계됩니다. 초과분은 개인부담입니다.</p>
-</div>
+{% block body %}
+<main class="settingwrap finwrap">
+  <h2 class="pagetitle">예산</h2>
 
-<div class="stats">
-  <div class="stat accent"><div class="k">집행률</div><div class="v num">{{ summary.progress_pct }}<small>%</small></div></div>
-  <div class="stat"><div class="k">집행액</div><div class="v num">{{ summary.total_spent | num }}<small>원</small></div></div>
-  <div class="stat"><div class="k">잔액</div><div class="v num">{{ summary.total_remaining | num }}<small>원</small></div></div>
-  <div class="stat"><div class="k">예산 항목</div><div class="v num">{{ summary.categories|length }}</div></div>
-</div>
-
-<div class="card">
-  <div class="card-body">
-    <div class="row" style="justify-content:space-between;margin-bottom:7px">
-      <b class="num">{{ summary.total_spent | won }}</b>
-      <span class="muted num">예산 {{ summary.total_planned | won }}</span>
-    </div>
-    <div class="bar lg {% if summary.total_spent > summary.total_planned %}over{% endif %}">
-      <i style="width: {{ [summary.progress_pct, 100] | min }}%"></i>
-    </div>
-    {% if summary.uncategorized_spent %}
-    <div class="banner banner-warn" style="margin:12px 0 0">
-      {{ icon('alert', 17) }}
-      <span>예산 항목이 지정되지 않은 지출 {{ summary.uncategorized_spent | won }} 이 있습니다.
-        <a href="/expenses">지출 내역 확인</a></span>
-    </div>
-    {% endif %}
-    <div class="row" style="margin-top:12px">
-      <a class="btn btn-ghost btn-sm" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">{{ icon('download', 15) }}엑셀 내려받기</a>
-      <a class="btn btn-ghost btn-sm" href="/expenses">{{ icon('plus', 15) }}지출 등록</a>
-    </div>
+  {# 지표 — 숫자는 전부 summary 에서 (7-3). 여기서 세지 않는다 #}
+  <div class="kpis">
+    <div class="kpi"><div class="l">지출예산 총액</div>
+      <div class="v">{{ summary.total_planned|won }}</div></div>
+    <div class="kpi"><div class="l">결산(집행) 합</div>
+      <div class="v">{{ summary.total_spent|won }}</div>
+      <div class="d">집행률 {{ summary.progress_pct }}%</div></div>
+    <div class="kpi"><div class="l">총 수입</div>
+      <div class="v">{{ summary.total_income|won }}</div></div>
+    <div class="kpi"><div class="l">잔액</div>
+      <div class="v" {% if summary.balance < 0 %}style="color:var(--now)"{% endif %}>{{ summary.balance|won }}</div>
+      <div class="d">총 수입 − 총 지출예산</div></div>
   </div>
-</div>
 
-<div class="card">
-  <div class="card-head"><h2>항목별 집행 현황</h2></div>
-  <div class="card-body flush">
-    <div class="table-wrap">
-      <table>
+  <div class="fld">
+    <h3>지출 예산 <small class="cnt">{{ summary.categories|length }}항목</small>
+      <a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a></h3>
+    <div class="tblwrap">
+      <table class="fintbl">
         <thead>
           <tr>
-            <th>구분 › 항목 › 세부항목</th>
-            <th class="r">예산</th>
-            <th class="r">집행</th>
-            <th class="r">잔액</th>
-            <th style="min-width:110px">집행률</th>
+            <th>구분</th><th>항목</th><th>세부항목</th>
+            <th class="r">단가</th><th class="r">명수</th><th class="r">횟수</th>
+            <th class="r">예산금액</th><th class="r">비율</th>
+            <th class="r">결산금액</th><th class="r">차액</th><th class="r">집행률</th>
+            {% if is_admin(user) %}<th></th>{% endif %}
           </tr>
         </thead>
         <tbody>
-          {% for row in summary.categories %}
+          {% for group in summary.groups %}
+          {% for row in group.rows %}
+          {% set cat = row.category %}
           <tr>
-            <td>
-              {{ row.category.display_name }}
-              {% if is_admin(user) %}
-              <details class="inline">
-                <summary>수정</summary>
-                <form method="post" action="/budget/categories/{{ row.category.id }}/update">
-                  <div class="field"><input name="level1" value="{{ row.category.level1 }}" required placeholder="구분"></div>
-                  <div class="field"><input name="level2" value="{{ row.category.level2 }}" required placeholder="항목"></div>
-                  <div class="field"><input name="level3" value="{{ row.category.level3 or '' }}" placeholder="세부항목"></div>
-                  <div class="field"><input name="planned_amount" type="number" min="0" step="1000" value="{{ row.planned }}"></div>
-                  <div class="row"><button class="btn btn-sm" type="submit">저장</button></div>
-                </form>
-                <form method="post" action="/budget/categories/{{ row.category.id }}/delete" style="margin-top:6px"
-                      onsubmit="return confirm('이 예산 항목을 삭제할까요?')">
-                  <button class="btn btn-danger btn-sm" type="submit">삭제</button>
-                </form>
-              </details>
-              {% endif %}
-            </td>
-            <td class="r">{{ row.planned | num }}</td>
-            <td class="r">{{ row.spent | num }}</td>
-            <td class="r" {% if row.is_over_budget %}style="color:var(--danger);font-weight:700"{% endif %}>{{ row.remaining | num }}</td>
-            <td>
-              <div class="bar {% if row.is_over_budget %}over{% elif row.progress_pct >= 100 %}ok{% endif %}">
-                <i style="width: {{ [row.progress_pct, 100] | min }}%"></i>
-              </div>
-              <span class="muted tiny num">{{ row.progress_pct }}%</span>
-            </td>
+            <td>{{ cat.level1 }}</td><td>{{ cat.level2 }}</td><td>{{ cat.level3 or '' }}</td>
+            <td class="r mono">{{ cat.unit_price|num if cat.unit_price is not none else '' }}</td>
+            <td class="r mono">{{ cat.headcount if cat.headcount is not none else '' }}</td>
+            <td class="r mono">{{ cat.times if cat.times is not none else '' }}</td>
+            <td class="r mono">{{ row.planned|num }}</td>
+            <td class="r mono dim">{{ row.ratio_pct }}%</td>
+            <td class="r mono">{{ row.spent|num }}</td>
+            {# 차액 = 예산 − 결산. 음수(초과)는 붉다 — 100% 로 덮지 않는다 (7-3) #}
+            <td class="r mono{% if row.remaining < 0 %} overrun{% endif %}">{{ row.remaining|num }}</td>
+            <td class="r mono{% if row.is_over_budget %} overrun{% endif %}">{{ row.progress_pct }}%</td>
+            {% if is_admin(user) %}
+            <td class="r"><details class="rowedit"><summary>수정</summary>
+              <form method="post" action="/budget/categories/{{ cat.id }}/update" class="editform">
+                <input name="level1" value="{{ cat.level1 }}" placeholder="구분" required>
+                <input name="level2" value="{{ cat.level2 }}" placeholder="항목" required>
+                <input name="level3" value="{{ cat.level3 or '' }}" placeholder="세부항목">
+                <input name="unit_price" type="number" min="0" value="{{ cat.unit_price if cat.unit_price is not none else '' }}" placeholder="단가" data-calc="unit">
+                <input name="headcount" type="number" min="0" value="{{ cat.headcount if cat.headcount is not none else '' }}" placeholder="명수" data-calc="head">
+                <input name="times" type="number" min="0" value="{{ cat.times if cat.times is not none else '' }}" placeholder="횟수" data-calc="times">
+                <input name="planned_amount" type="number" min="0" value="{{ cat.planned_amount }}" placeholder="예산금액" data-calc="planned">
+                <button class="sbtn p" type="submit">저장</button>
+              </form>
+              <form method="post" action="/budget/categories/{{ cat.id }}/delete"
+                    onsubmit="return confirm('이 예산 항목을 삭제할까요?')">
+                <button class="sbtn" type="submit">삭제</button>
+              </form>
+            </details></td>
+            {% endif %}
           </tr>
-          {% else %}
-          <tr><td colspan="5">{{ empty('등록된 예산 항목이 없습니다', 'chart') }}</td></tr>
           {% endfor %}
-          <tr class="sum">
-            <td>합계</td>
-            <td class="r">{{ summary.total_planned | num }}</td>
-            <td class="r">{{ summary.total_spent | num }}</td>
-            <td class="r">{{ summary.total_remaining | num }}</td>
-            <td class="num">{{ summary.progress_pct }}%</td>
+          {# 구분별 소계 — 시트의 소계 행 (7-3). 값은 summary.groups 의 것 #}
+          <tr class="subtotal">
+            <td colspan="6">{{ group.name }} 소계</td>
+            <td class="r mono">{{ group.planned|num }}</td><td></td>
+            <td class="r mono">{{ group.spent|num }}</td>
+            <td class="r mono{% if group.remaining < 0 %} overrun{% endif %}">{{ group.remaining|num }}</td>
+            <td></td>{% if is_admin(user) %}<td></td>{% endif %}
           </tr>
+          {% endfor %}
+          <tr class="grand">
+            <td colspan="6">총계</td>
+            <td class="r mono">{{ summary.total_planned|num }}</td><td></td>
+            <td class="r mono">{{ summary.total_spent|num }}</td>
+            <td class="r mono{% if summary.total_remaining < 0 %} overrun{% endif %}">{{ summary.total_remaining|num }}</td>
+            <td class="r mono">{{ summary.progress_pct }}%</td>
+            {% if is_admin(user) %}<td></td>{% endif %}
+          </tr>
+          {% if summary.uncategorized_spent %}
+          <tr><td colspan="8" class="dim">(예산 항목 미지정 지출)</td>
+            <td class="r mono">{{ summary.uncategorized_spent|num }}</td><td></td><td></td>
+            {% if is_admin(user) %}<td></td>{% endif %}</tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
-  </div>
-</div>
 
-{% if is_admin(user) %}
-<details class="panel">
-  <summary>{{ icon('plus', 17) }}<span class="grow">예산 항목 추가</span></summary>
-  <div class="panel-body">
-    <form method="post" action="/budget/categories">
-      <div class="grid-2">
-        <div class="field"><label for="b-l1">구분</label><input id="b-l1" name="level1" required placeholder="예: 홍보"></div>
-        <div class="field"><label for="b-l2">항목</label><input id="b-l2" name="level2" required placeholder="예: 포스터"></div>
-      </div>
-      <div class="grid-2">
-        <div class="field"><label for="b-l3">세부항목 <span class="muted">· 선택</span></label><input id="b-l3" name="level3" placeholder="예: 인쇄비"></div>
-        <div class="field"><label for="b-amt">예산금액</label><input id="b-amt" name="planned_amount" type="number" min="0" step="1000" value="0"></div>
-      </div>
-      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}예산 항목 추가</button>
-    </form>
+    {% if is_admin(user) %}
+    <details class="addbox">
+      <summary>+ 예산 항목 추가</summary>
+      {# 세 칸을 채우면 예산금액이 **즉시** 계산되어 보인다 — 저장 전엔 DB 불변 (7-3) #}
+      <form method="post" action="/budget/categories" class="editform" id="cat-add">
+        <input name="level1" placeholder="구분 (예: 식비)" required>
+        <input name="level2" placeholder="항목 (예: 본행사 식사)" required>
+        <input name="level3" placeholder="세부항목">
+        <input name="unit_price" type="number" min="0" placeholder="단가" data-calc="unit">
+        <input name="headcount" type="number" min="0" placeholder="명수" data-calc="head">
+        <input name="times" type="number" min="0" placeholder="횟수" data-calc="times">
+        <input name="planned_amount" type="number" min="0" placeholder="예산금액 (직접 입력)" data-calc="planned">
+        <span class="calcnote" data-calc="note"></span>
+        <button class="sbtn p" type="submit">추가</button>
+      </form>
+    </details>
+    {% endif %}
   </div>
-</details>
-{% else %}
-<p class="muted">예산 항목의 추가·수정은 총무팀(관리자)만 할 수 있습니다.</p>
-{% endif %}
+
+  {# ── 수입 (7-3) — 잔액에만 쓴다. 홈 집행률 분모는 지출예산 총액이다 ── #}
+  <div class="fld">
+    <h3>수입 <small class="cnt">{{ summary.incomes|length }}건 · {{ summary.total_income|won }}</small></h3>
+    <div class="tblwrap">
+      <table class="fintbl">
+        <thead><tr><th>이름</th><th class="r">단가</th><th class="r">명수</th>
+          <th class="r">금액</th><th>비고</th>{% if is_admin(user) %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for income in summary.incomes %}
+          <tr>
+            <td>{{ income.name }}</td>
+            <td class="r mono">{{ income.unit_price|num if income.unit_price is not none else '' }}</td>
+            <td class="r mono">{{ income.headcount if income.headcount is not none else '' }}</td>
+            <td class="r mono">{{ income.amount|num }}</td>
+            <td class="dim">{{ income.note or '' }}</td>
+            {% if is_admin(user) %}
+            <td class="r"><form method="post" action="/budget/incomes/{{ income.id }}/delete"
+                  onsubmit="return confirm('이 수입 항목을 삭제할까요?')">
+              <button class="sbtn" type="submit">삭제</button></form></td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="dim">수입 항목이 없습니다 — 교개협 지원 · 수련회비 · 후원금 · 기관부담금 등을 적습니다.</td></tr>
+          {% endfor %}
+          <tr class="grand"><td>잔액 (총 수입 − 총 지출예산)</td><td></td><td></td>
+            <td class="r mono{% if summary.balance < 0 %} overrun{% endif %}">{{ summary.balance|num }}</td>
+            <td></td>{% if is_admin(user) %}<td></td>{% endif %}</tr>
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_admin(user) %}
+    <details class="addbox">
+      <summary>+ 수입 추가</summary>
+      <form method="post" action="/budget/incomes" class="editform">
+        <input name="name" placeholder="이름 (예: 수련회비)" required>
+        <input name="unit_price" type="number" min="0" placeholder="단가">
+        <input name="headcount" type="number" min="0" placeholder="명수">
+        <input name="amount" type="number" min="0" placeholder="금액 (단가·명수가 비면 직접)">
+        <input name="note" placeholder="비고">
+        <button class="sbtn p" type="submit">추가</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/budget.js') }}" defer></script>
 {% endblock %}

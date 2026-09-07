@@ -1707,6 +1707,75 @@ button.btn:disabled{opacity:.4;cursor:default}
 .bl .over{color:var(--now)}
 @media (max-width:820px){ .homecols{grid-template-columns:1fr} }
 
+/* ── 재정 (7장 · 단계 5) — 예산·지출이 함께 쓴다 ─────────────────────── */
+.finwrap .pagetitle{font-size:var(--fz-2xl);font-weight:700;margin:0 0 14px}
+.finwrap .fld{margin-top:18px}
+.finwrap .fld h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:var(--fz-lg)}
+.finwrap .cnt{font-weight:500;font-size:var(--fz-sm);color:var(--ink-2)}
+.finwrap .chip.xls{margin-left:auto}
+.tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--rule);border-radius:var(--card-r)}
+.fintbl{width:100%;border-collapse:collapse;font-size:var(--fz-md)}
+.fintbl th{text-align:left;color:var(--ink-3);font-weight:500;font-size:var(--fz-xs);
+  padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.fintbl td{padding:8px 10px;border-top:1px solid var(--rule);vertical-align:top}
+.fintbl tr:first-child td{border-top:0}
+.fintbl .r{text-align:right}
+.fintbl .mono{font-variant-numeric:tabular-nums}
+.fintbl .dim{color:var(--ink-2)}   /* 「미지정」·안내문 — 혼자 뜻을 지므로 보조 (4-0) */
+.fintbl .nowrap{white-space:nowrap}
+/* 차액이 음수(초과)면 붉다 — 100% 로 덮지 않는다 (7-3). 값은 --red-ink 하나 */
+.fintbl .overrun,.grouphead .overrun{color:var(--red-ink);font-weight:600;font-style:normal}
+.fintbl tr.subtotal td{background:var(--side);font-weight:600;border-top:1px solid var(--rule-2)}
+.fintbl tr.grand td{font-weight:700;border-top:2px solid var(--rule-2)}
+.rowedit summary{cursor:pointer;color:var(--ink-2);font-size:var(--fz-sm)}
+.editform{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.editform input,.editform select{font:inherit;font-size:var(--fz-sm);padding:5px 8px;
+  border:1px solid var(--rule-2);border-radius:6px;min-width:0;width:110px}
+.editform input[name="level1"],.editform input[name="level2"],.editform input[name="level3"],
+.editform input[name="name"],.editform input[name="note"]{width:150px}
+.editform input[readonly]{background:var(--side);color:var(--ink-2)}
+.calcnote{font-size:var(--fz-sm);color:var(--ink-2);align-self:center}
+.addbox{margin-top:10px}
+.addbox summary{cursor:pointer;font-size:var(--fz-md);color:var(--ink-2)}
+.addbox[open] summary{margin-bottom:6px}
+/* 지출 그룹 — 헤더의 셋(예산/집행/잔액)은 예산 페이지와 같은 summary 값 (7-4) */
+.expgroup .grouphead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:0 0 6px}
+.expgroup .grouphead b{font-size:var(--fz-lg)}
+.expgroup .gnum{font-size:var(--fz-sm);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.fintbl tr.otherdept{opacity:.6}       /* 타 부서 흐림 — 숨기지 않는다 (1장) */
+.ettl{font-weight:600}
+.enote{font-size:var(--fz-sm)}
+.mealchip{font-size:var(--fz-xs);background:var(--st-wait-bg);color:var(--st-wait-fg);
+  border-radius:5px;padding:1px 7px;margin-left:6px;font-weight:600}
+.rcpt{display:inline-block;font-size:var(--fz-sm);color:var(--ink-2);border:1px solid var(--rule-2);
+  border-radius:6px;padding:1px 8px;margin:4px 6px 0 0;text-decoration:none}
+.rcpt.memo{border-style:dashed}
+/* 지출 등록 폼 */
+.expform{display:flex;flex-direction:column;gap:10px;background:var(--card);
+  border:1px solid var(--rule);border-radius:var(--card-r);padding:14px 16px}
+.expform label{display:flex;flex-direction:column;gap:4px;font-size:var(--fz-sm);color:var(--ink-2)}
+.expform input,.expform select,.expform textarea{font:inherit;font-size:var(--fz-md);color:var(--ink);
+  padding:7px 9px;border:1px solid var(--rule-2);border-radius:6px}
+.expform .frow2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.expform .mealtoggle{flex-direction:row;align-items:center;gap:8px;font-size:var(--fz-md);color:var(--ink);
+  padding:9px 12px;border:1px solid var(--rule-2);border-radius:6px}
+.mealnote{background:var(--st-prog-bg);color:var(--st-prog-fg);border-radius:6px;
+  padding:8px 12px;font-size:var(--fz-md);margin:0}
+.mealnote.warn{background:var(--st-wait-bg);color:var(--st-wait-fg)}
+.expform button[type="submit"]{align-self:flex-start;padding:7px 16px;font-size:var(--fz-md)}
+@media (max-width:820px){ .expform .frow2{grid-template-columns:1fr} }
+
+/* ── 로그인 전 화면 (로그인 · 오류 · 회차 없음) — 껍데기는 한 벌, 사이드바만 없다 */
+.barewrap{display:flex;justify-content:center;padding:9vh 16px 40px}
+.barecard{background:var(--card);border:1px solid var(--rule);border-radius:10px;
+  padding:28px 26px;max-width:480px;width:100%}
+.barecard h1{font-size:var(--fz-2xl);margin:0 0 12px}
+.barecard p{font-size:var(--fz-base);line-height:1.8;margin:0 0 10px}
+.barecard.center{text-align:center}
+.barecard .bigcode{font-size:var(--fz-4xl);font-weight:800;letter-spacing:-.04em;color:var(--ink-3)}
+.barecard .sbtn{display:inline-block;text-decoration:none;margin-top:6px}
+.bareerr{background:var(--st-late-bg);color:var(--st-late-fg);border-radius:6px;padding:8px 12px}
+
 /* ── 목록 (4-14) — 행은 마법사 3단계와 같은 partial(taskrow)이다 */
 .tlist .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
 .tlist .chips + .chips{margin-top:8px}
@@ -1780,6 +1849,8 @@ body.dopen:has(.drawer.inline){padding-right:0}
 .pushcard .sub{color:var(--ink-2);font-size:var(--fz-sm)}
 .pushcard .pushbtns{margin-left:auto;display:flex;gap:6px}
 .nitem{padding:11px 16px;border-top:1px solid var(--rule)}
+/* 취소한 요청 — 지우지 않고 흐리게 남는다 (0장 · 단계 5 1-a) */
+.nitem.cancelled{opacity:.55}
 .nitem:first-child{border-top:none}
 .nitem.read{opacity:.55}
 .nitem .ntop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

@@ -39,12 +39,13 @@
   <div class="fld" style="margin-top:14px">
     <h3>수련회가 끝났습니다 — 정리할 것</h3>
     <div class="kpis" style="margin-top:10px">
+      {# 숫자 = 눌러 간 화면의 행 수 — 같은 함수(budget.refund_entries 등)다 (4-15) #}
       <div class="kpi"><div class="l">미지급 환급</div>
         <div class="v" {% if home.unpaid_refund_count %}style="color:var(--now)"{% endif %}>{{ home.unpaid_refund_count }}<small>건</small></div>
-        <div class="d"><a href="/refunds" style="text-decoration:underline">환급 대상자 보기</a></div></div>
+        <div class="d"><a href="/expenses?filter=refund" style="text-decoration:underline">환급 대상자 보기</a></div></div>
       <div class="kpi"><div class="l">영수증 없는 지출</div>
         <div class="v">{{ home.no_receipt_count }}<small>건</small></div>
-        <div class="d"><a href="/expenses" style="text-decoration:underline">지출 보기</a></div></div>
+        <div class="d"><a href="/expenses?filter=noreceipt" style="text-decoration:underline">지출 보기</a></div></div>
       <div class="kpi"><div class="l">미완료 업무</div>
         <div class="v">{{ home.open_task_count }}<small>건</small></div>
         <div class="d">정리 필요 · <a href="/tasks" style="text-decoration:underline">목록 보기</a></div></div>

@@ -1,184 +1,166 @@
-{% extends "base.html" %}
-{% from "partials/icons.html" import icon %}
-{% from "partials/macros.html" import dept_tag, empty %}
+{% extends "retreat_base.html" %}
 {% block title %}지출 · {{ retreat.name }}{% endblock %}
-{% block content %}
 
-<div class="page-head">
-  <h1>지출 내역</h1>
-  <p class="sub">식대는 인원수만 넣으면 지원금액과 개인부담액이 자동 계산됩니다.</p>
-</div>
+{% block body %}
+<main class="settingwrap finwrap">
+  <h2 class="pagetitle">지출</h2>
 
-<div class="chips">
-  <a href="/expenses" class="chip {% if not filters.meal_only and not filters.unpaid_only %}on{% endif %}">전체</a>
-  <a href="/expenses?meal_only=1" class="chip {% if filters.meal_only %}on{% endif %}">식대만</a>
-  <a href="/expenses?unpaid_only=1" class="chip {% if filters.unpaid_only %}on{% endif %}">미지급만</a>
-  <a href="/refunds" class="chip">{{ icon('wallet', 14) }}환급 대상자</a>
-  <a href="/export/expenses.xlsx?retreat_id={{ retreat.id }}" class="chip">{{ icon('download', 14) }}엑셀</a>
-</div>
+  {# 칩 — 환급 대상자는 별도 페이지가 아니라 이 목록의 필터다 (7-4).
+     홈 결산의 숫자와 같은 정의(budget.refund_entries 등 · 4-15) #}
+  <div class="chips">
+    <a class="chip{{ ' on' if filter == 'all' }}" href="/expenses">전체</a>
+    <a class="chip{{ ' on' if filter == 'meal' }}" href="/expenses?filter=meal">식대만</a>
+    <a class="chip{{ ' on' if filter == 'unpaid' }}" href="/expenses?filter=unpaid">미지급만</a>
+    <a class="chip{{ ' on' if filter == 'refund' }}" href="/expenses?filter=refund">환급 대상자</a>
+    <a class="chip{{ ' on' if filter == 'noreceipt' }}" href="/expenses?filter=noreceipt">영수증 없음</a>
+    <a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>
+  </div>
 
-<div class="stats">
-  <div class="stat accent"><div class="k">예산 집행액</div><div class="v num">{{ totals.settlement | num }}<small>원</small></div></div>
-  <div class="stat"><div class="k">영수증 총액</div><div class="v num">{{ totals.amount | num }}<small>원</small></div></div>
-  <div class="stat"><div class="k">식대 지원금</div><div class="v num">{{ totals.subsidy | num }}<small>원</small></div></div>
-  <div class="stat"><div class="k">개인부담</div><div class="v num">{{ totals.burden | num }}<small>원</small></div></div>
-</div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">예산 집행액</div><div class="v">{{ totals.settlement|won }}</div></div>
+    <div class="kpi"><div class="l">영수증 총액</div><div class="v">{{ totals.amount|won }}</div></div>
+    <div class="kpi"><div class="l">식대 지원금</div><div class="v">{{ totals.subsidy|won }}</div></div>
+    <div class="kpi"><div class="l">개인부담</div><div class="v">{{ totals.burden|won }}</div></div>
+  </div>
 
-{% if not is_readonly(user.role) %}
-<details class="panel" {% if not entries %}open{% endif %}>
-  <summary>{{ icon('plus', 17) }}<span class="grow">지출 등록</span>
-    <span class="tag">영수증번호 {{ next_receipt_number }}</span></summary>
-  <div class="panel-body">
-    <form method="post" action="/expenses/create" enctype="multipart/form-data" id="expense-form">
-      <div class="field">
-        <label class="check" style="padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-sm);width:100%">
-          <input type="checkbox" name="is_meal_expense" value="1" id="meal-toggle"
-                 data-cap="{{ retreat.meal_subsidy_per_person }}">
-          단체 식대(모임 식사비)입니다 — 1인당 {{ retreat.meal_subsidy_per_person | won }} 상한 자동 적용
-        </label>
-      </div>
+  {% if not is_readonly(user.role) %}
+  <details class="addbox" {% if not entry_count %}open{% endif %}>
+    <summary>+ 지출 등록 <small class="cnt">다음 영수증 번호 {{ next_receipt_number }}</small></summary>
+    <form method="post" action="/expenses/create" enctype="multipart/form-data" id="expense-form" class="expform">
+      <label class="mealtoggle">
+        <input type="checkbox" name="is_meal_expense" value="1" id="meal-toggle"
+               data-cap="{{ retreat.meal_subsidy_per_person }}">
+        단체 식대(모임 식사비)입니다 — 1인당 {{ retreat.meal_subsidy_per_person|won }} 상한 자동 적용
+      </label>
 
-      <div class="grid-2">
-        <div class="field">
-          <label for="e-cat">예산 항목</label>
-          <select id="e-cat" name="budget_category_id">
+      <div class="frow2">
+        <label>예산 항목
+          <select name="budget_category_id">
             <option value="">미지정</option>
-            {% for c in categories %}<option value="{{ c.id }}">{{ c.display_name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label for="e-dept">부서</label>
-          <select id="e-dept" name="department_id">
+            {% for row in summary.categories %}<option value="{{ row.category.id }}">{{ row.category.display_name }}</option>{% endfor %}
+          </select></label>
+        <label>부서
+          <select name="department_id">
             <option value="">부서 미지정</option>
             {% for d in departments %}
             <option value="{{ d.id }}" {% if d.id == meal_defaults.department_id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
-          </select>
-        </div>
+          </select></label>
       </div>
 
-      <div class="grid-2">
-        <div class="field"><label for="e-date">지출일자</label><input id="e-date" name="expense_date" type="date" value="{{ today }}"></div>
-        <div class="field"><label for="e-amount">금액 <span class="muted">· 영수증 총액</span></label>
-          <input id="e-amount" name="amount" type="number" min="0" step="10" required placeholder="0"></div>
+      <div class="frow2">
+        <label>지출일자 <input name="expense_date" type="date" value="{{ today }}"></label>
+        <label>금액 (영수증 총액) <input id="e-amount" name="amount" type="number" min="0" step="10" required placeholder="0"></label>
       </div>
 
       <div id="meal-fields" hidden>
-        <div class="grid-2">
-          <div class="field"><label for="e-head">식사 인원 수</label><input id="e-head" name="meal_headcount" type="number" min="0" placeholder="예: 12"></div>
-          <div class="field"><label for="e-label">세부 항목명</label><input id="e-label" name="level3b" value="{{ meal_defaults.level3b }}" placeholder="예: 모임 식사비-3"></div>
+        <div class="frow2">
+          <label>식사 인원 수 <input id="e-head" name="meal_headcount" type="number" min="0" placeholder="예: 12"></label>
+          <label>세부 항목명 <input name="level3b" value="{{ meal_defaults.level3b }}" placeholder="예: 모임 식사비-3"></label>
         </div>
-        <div class="field">
-          <label for="e-att">참석자 명단</label>
+        <label>참석자 명단
           <textarea id="e-att" name="meal_attendees"
-                    placeholder="이름을 띄어쓰기·쉼표·줄바꿈으로 구분 (예: 박민준 남시우 노서윤)">{{ meal_defaults.attendees }}</textarea>
-          <p class="muted" id="att-count" style="margin:5px 0 0"></p>
-        </div>
-        <div class="banner banner-info" id="meal-preview">
-          {{ icon('wallet', 17) }}<span>인원수와 금액을 입력하면 지원금액이 자동 계산됩니다.</span>
-        </div>
+                    placeholder="이름을 띄어쓰기·쉼표·줄바꿈으로 구분">{{ meal_defaults.attendees }}</textarea></label>
+        <p class="dim" id="att-count"></p>
+        <p class="mealnote" id="meal-preview"><span>인원수와 금액을 입력하면 지원금액이 자동 계산됩니다.</span></p>
       </div>
 
-      <div class="grid-2">
-        <div class="field"><label for="e-payer">지출자</label>
-          <input id="e-payer" name="payer_name" value="{{ meal_defaults.payer_name }}" placeholder="예: 박민준 / 수련회계좌"></div>
-        <div class="field"><label for="e-acct">지출자 계좌</label>
-          <input id="e-acct" name="payer_account" value="{{ meal_defaults.payer_account }}" placeholder="예: 국민 123456-01-123456"></div>
+      <div class="frow2">
+        <label>지출자 <input name="payer_name" value="{{ meal_defaults.payer_name }}" placeholder="이름 또는 수련회계좌"></label>
+        <label>지출자 계좌 <input name="payer_account" value="{{ meal_defaults.payer_account }}" placeholder="예: 국민 123456-01-123456"></label>
       </div>
 
-      <div class="field">
-        <label for="e-note">비고</label>
-        <input id="e-note" name="note" placeholder="추가 메모 (인원·명단은 위 전용 칸에 입력)">
-      </div>
+      <label>비고 <input name="note" placeholder="추가 메모 (인원·명단은 위 전용 칸에)"></label>
 
-      <div class="grid-2">
-        <div class="field">
-          <label for="e-receipt">영수증 파일 <span class="muted">· 이미지·PDF</span></label>
-          <input id="e-receipt" name="receipt" type="file" accept="image/*,.pdf">
-        </div>
-        <div class="field">
-          <label>지급 처리</label>
-          <label class="check" style="padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-sm);width:100%">
-            <input type="checkbox" name="paid" value="1"> 이미 지급 완료
-          </label>
-        </div>
+      <div class="frow2">
+        <label>영수증 파일 (이미지·PDF) <input name="receipt" type="file" accept="image/*,.pdf"></label>
+        <label>영수증 메모 <input name="receipt_memo" placeholder="예: 결산 파일에 별첨"></label>
       </div>
+      <label class="mealtoggle"><input type="checkbox" name="paid" value="1"> 이미 지급 완료</label>
 
-      <button class="btn btn-block" type="submit">{{ icon('plus', 17) }}지출 등록</button>
+      <button class="sbtn p" type="submit">지출 등록</button>
     </form>
-  </div>
-</details>
-{% endif %}
+  </details>
+  {% endif %}
 
-<div class="card">
-  <div class="card-head"><h2>{{ entries|length }}건</h2><span class="muted num">총 {{ totals.amount | won }}</span></div>
-  <div class="card-body flush">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>번호</th><th>항목</th><th>일자</th>
-            <th class="r">금액</th><th class="r">지원금액</th><th class="r">개인부담</th>
-            <th>지출자</th><th>지급</th><th></th>
-          </tr>
-        </thead>
+  {# 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 예산 페이지와 같은 summary 값 (7-4) #}
+  {% for group in groups %}
+  <div class="fld expgroup">
+    <div class="grouphead">
+      {% if group.row %}
+      <b>{{ group.row.category.display_name }}</b>
+      <span class="gnum">예산 {{ group.row.planned|won }} · 집행 {{ group.row.spent|won }} ·
+        <i class="{% if group.row.remaining < 0 %}overrun{% endif %}">잔액 {{ group.row.remaining|won }}</i></span>
+      {% else %}
+      <b class="dim">예산 항목 미지정</b>
+      {% endif %}
+    </div>
+    <div class="tblwrap">
+      <table class="fintbl">
+        <thead><tr>
+          <th>번호</th><th>항목 · 비고</th><th>일자</th>
+          <th class="r">금액</th><th class="r">지원금액</th><th class="r">개인부담</th>
+          <th>지출자</th><th>지급</th><th></th>
+        </tr></thead>
         <tbody>
-          {% for e in entries %}
-          <tr class="{% if is_other_dept(user, e.department_id) %}faded{% endif %}">
-            <td class="num">{{ e.receipt_number }}</td>
+          {% for e in group.entries %}
+          {# 타 부서 흐림은 부서 **키** 비교 (2장 · is_other_dept) #}
+          <tr{% if is_other_dept(user, e.department) %} class="otherdept"{% endif %}>
+            <td class="mono">{% for r in e.receipts %}{{ r.number }}{% if not loop.last %}, {% endif %}{% else %}<span class="dim">—</span>{% endfor %}</td>
             <td>
-              <div style="font-weight:600">
-                {% if e.budget_category %}{{ e.budget_category.display_name }}{% else %}<span class="muted">미지정</span>{% endif %}
-              </div>
-              {% if e.level3b %}<div class="muted tiny">{{ e.level3b }}</div>{% endif %}
-              <div class="row tight" style="margin-top:4px">
-                {% if e.department %}{{ dept_tag(e.department) }}{% endif %}
-                {% if e.is_meal_expense %}<span class="tag tag-warn">{{ icon('users') }}{{ e.meal_headcount or 0 }}명</span>{% endif %}
-              </div>
-              {% if e.note %}<div class="muted tiny" style="margin-top:3px">{{ e.note }}</div>{% endif %}
-              {% if e.receipt_file_url %}
-              <a class="tag tag-outline" href="{{ e.receipt_file_url }}" target="_blank" style="margin-top:4px">{{ icon('file') }}영수증</a>
+              <div class="ettl">{{ e.level3b or (e.budget_category.display_name if e.budget_category) or '미지정' }}
+                {% if e.is_meal_expense %}<span class="mealchip">{{ e.meal_headcount or 0 }}명</span>{% endif %}</div>
+              {% if e.note %}<div class="dim enote">{{ e.note }}</div>{% endif %}
+              {% for r in e.receipts %}
+                {% if r.stored_name %}<a class="rcpt" href="/uploads/{{ r.stored_name }}" target="_blank">영수증 {{ r.number }}</a>
+                {% elif r.memo %}<span class="rcpt memo">영수증 {{ r.number }} · {{ r.memo }}</span>{% endif %}
+              {% endfor %}
+              {% if can_edit_dept(user, e.department_id) %}
+              <details class="rowedit"><summary>영수증 붙이기</summary>
+                <form method="post" action="/expenses/{{ e.id }}/receipts" enctype="multipart/form-data" class="editform">
+                  <input name="receipt" type="file" accept="image/*,.pdf">
+                  <input name="memo" placeholder="또는 메모 (예: 결산 파일에 별첨)">
+                  <button class="sbtn" type="submit">붙이기</button>
+                </form>
+              </details>
               {% endif %}
             </td>
-            <td class="nowrap num">{{ e.expense_date | short_date }}</td>
-            <td class="r">{{ e.amount | num }}</td>
-            <td class="r">{{ e.subsidy_amount | num if e.is_meal_expense else e.amount | num }}</td>
-            <td class="r">
-              {% if e.is_meal_expense and e.personal_burden_amount %}
-              <span style="color:var(--warn);font-weight:650">{{ e.personal_burden_amount | num }}</span>
-              {% else %}<span class="muted">–</span>{% endif %}
-            </td>
-            <td class="nowrap">
-              {{ e.payer_name or '–' }}
-              {% if e.payer_account %}<div class="muted tiny">{{ e.payer_account }}</div>{% endif %}
-            </td>
+            <td class="mono nowrap">{{ e.expense_date|short_date }}</td>
+            <td class="r mono">{{ e.amount|num }}</td>
+            <td class="r mono">{{ (e.subsidy_amount if e.is_meal_expense else e.amount)|num }}</td>
+            <td class="r mono">{% if e.is_meal_expense and e.personal_burden_amount %}{{ e.personal_burden_amount|num }}{% else %}<span class="dim">–</span>{% endif %}</td>
+            <td class="nowrap">{{ e.payer_name or '–' }}
+              {% if e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
             <td>
               {% if can_edit_dept(user, e.department_id) %}
               <form method="post" action="/expenses/{{ e.id }}/paid">
-                <input type="hidden" name="redirect_to" value="/expenses">
-                <button class="btn btn-sm {% if e.paid %}btn-ok{% else %}btn-ghost{% endif %}" type="submit">
-                  {{ '지급완료' if e.paid else '미지급' }}
-                </button>
+                <input type="hidden" name="redirect_to" value="/expenses{{ '?filter=' ~ filter if filter != 'all' }}">
+                <button class="sbtn{{ ' p' if not e.paid }}" type="submit">{{ '지급완료' if e.paid else '미지급' }}</button>
               </form>
               {% else %}
-              <span class="tag {% if e.paid %}tag-ok{% endif %}">{{ '지급완료' if e.paid else '미지급' }}</span>
+              <span class="stbadge {{ 'done' if e.paid else 'wait' }}">{{ '지급완료' if e.paid else '미지급' }}</span>
               {% endif %}
-              {% if e.paid_date %}<div class="muted tiny num">{{ e.paid_date | short_date }}</div>{% endif %}
+              {% if e.paid_date %}<div class="dim enote mono">{{ e.paid_date|short_date }}</div>{% endif %}
             </td>
-            <td>
+            <td class="r">
               {% if can_edit_dept(user, e.department_id) %}
               <form method="post" action="/expenses/{{ e.id }}/delete" onsubmit="return confirm('이 지출을 삭제할까요?')">
-                <button class="btn btn-quiet btn-sm btn-icon" type="submit" aria-label="삭제">{{ icon('x', 15) }}</button>
+                <button class="sbtn" type="submit">삭제</button>
               </form>
               {% endif %}
             </td>
           </tr>
-          {% else %}
-          <tr><td colspan="9">{{ empty('등록된 지출이 없습니다', 'receipt') }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
-</div>
+  {% else %}
+  <div class="fld"><p class="dim">이 필터에 해당하는 지출이 없습니다.</p></div>
+  {% endfor %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/expenses.js') }}" defer></script>
 {% endblock %}

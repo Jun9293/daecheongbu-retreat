@@ -1,4 +1,9 @@
-"""지출 등록 / 식대 정산 / 환급 대상자 관리."""
+"""지출 (CLAUDE.md 7-4) — 예산 라인별 그룹 · 식대 정산 · 영수증 N개 · 환급 필터.
+
+그룹 헤더의 예산/집행/잔액은 domain.budget 의 summary 에서 온다 — 예산
+페이지와 같은 값이다. 「환급 대상자」 는 별도 페이지가 아니라 이 목록의
+필터(?filter=refund)다. 옛 /refunds 는 301 로 잇는다.
+"""
 
 from __future__ import annotations
 
@@ -8,18 +13,25 @@ import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import ALLOWED_UPLOAD_EXTS, MAX_UPLOAD_BYTES, UPLOAD_DIR
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
+from app.domain.budget import (
+    build_budget_summary,
+    entries_of,
+    is_refund_target,
+    next_receipt_number,
+)
 from app.domain.meal import calculate_meal_settlement
 from app.models import (
     BudgetCategory,
     Department,
     ExpenseEntry,
+    ExpenseReceipt,
     Retreat,
     User,
 )
@@ -27,6 +39,9 @@ from app.security import assert_can_edit_department, get_current_user, require_e
 from app.templating import redirect, render
 
 router = APIRouter()
+
+# 칩과 홈 결산이 같은 정의를 쓴다 (4-15) — 홈의 N = 그 필터 화면의 행 수
+FILTERS = ("all", "meal", "unpaid", "refund", "noreceipt")
 
 
 def _parse_date(raw: str | None) -> dt.date | None:
@@ -36,7 +51,7 @@ def _parse_date(raw: str | None) -> dt.date | None:
 
 
 def parse_attendees(raw: str) -> list[str]:
-    """비고에 텍스트로 적던 명단을 배열로 분리한다.
+    """비고에 텍스트로 적던 명단을 배열로 분리한다 (7-2).
 
     쉼표·줄바꿈·공백 어느 것으로 구분해도 받아준다.
     """
@@ -45,7 +60,8 @@ def parse_attendees(raw: str) -> list[str]:
     return [name for name in re.split(r"[,\n\r\t ]+", raw.strip()) if name]
 
 
-def _save_receipt(file: UploadFile | None) -> str | None:
+def _save_receipt_file(file: UploadFile | None) -> tuple[str, str] | None:
+    """영수증 파일을 임의 이름으로 저장한다 → (디스크 이름, 올린 이름)."""
     if file is None or not file.filename:
         return None
     ext = Path(file.filename).suffix.lower()
@@ -59,16 +75,31 @@ def _save_receipt(file: UploadFile | None) -> str | None:
         raise HTTPException(status_code=400, detail="영수증 파일은 10MB 이하만 업로드할 수 있습니다.")
     name = f"{secrets.token_hex(12)}{ext}"
     (UPLOAD_DIR / name).write_bytes(data)
-    return f"/uploads/{name}"
+    return name, file.filename
 
 
-def _next_receipt_number(db: Session, retreat: Retreat) -> int:
-    current = db.scalar(
-        select(func.max(ExpenseEntry.receipt_number)).where(
-            ExpenseEntry.retreat_id == retreat.id
-        )
+def _add_receipt(
+    db: Session,
+    retreat: Retreat,
+    entry: ExpenseEntry,
+    *,
+    file: UploadFile | None,
+    memo: str,
+) -> ExpenseReceipt | None:
+    """영수증 하나를 붙인다 — 파일이든 「결산 파일에 별첨」 같은 메모든 (7-4)."""
+    saved = _save_receipt_file(file)
+    memo = memo.strip()
+    if saved is None and not memo:
+        return None
+    receipt = ExpenseReceipt(
+        expense_id=entry.id,
+        number=next_receipt_number(db, retreat),
+        stored_name=saved[0] if saved else None,
+        original_name=saved[1] if saved else None,
+        memo=memo or None,
     )
-    return (current or 0) + 1
+    db.add(receipt)
+    return receipt
 
 
 def _departments(db: Session, retreat: Retreat) -> list[Department]:
@@ -81,18 +112,8 @@ def _departments(db: Session, retreat: Retreat) -> list[Department]:
     )
 
 
-def _categories(db: Session, retreat: Retreat) -> list[BudgetCategory]:
-    return list(
-        db.scalars(
-            select(BudgetCategory)
-            .where(BudgetCategory.retreat_id == retreat.id)
-            .order_by(BudgetCategory.sort_order, BudgetCategory.id)
-        )
-    )
-
-
 def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
-    """'모임 식사비-1, -2, -3...' 반복 입력을 줄이기 위한 직전 입력값 제안."""
+    """'모임 식사비-1, -2, -3...' 반복 입력을 줄이기 위한 직전 입력값 제안 (7-2)."""
     query = select(ExpenseEntry).where(
         ExpenseEntry.retreat_id == retreat.id, ExpenseEntry.is_meal_expense
     )
@@ -129,22 +150,47 @@ def _next_meal_label(previous: str | None) -> str:
 @router.get("/expenses")
 def expense_list(
     request: Request,
+    filter: str = "all",
     meal_only: int = 0,
     unpaid_only: int = 0,
-    department_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    query = select(ExpenseEntry).where(ExpenseEntry.retreat_id == retreat.id)
+    # 옛 쿼리 이름도 받는다 — 즐겨찾기가 조용히 전체 목록으로 떨어지면 안 된다
+    if filter not in FILTERS:
+        filter = "all"
     if meal_only:
-        query = query.where(ExpenseEntry.is_meal_expense)
+        filter = "meal"
     if unpaid_only:
-        query = query.where(ExpenseEntry.paid.is_(False))
-    if department_id:
-        query = query.where(ExpenseEntry.department_id == department_id)
+        filter = "unpaid"
 
-    entries = list(db.scalars(query.order_by(ExpenseEntry.id.desc())))
+    entries = entries_of(db, retreat)
+    if filter == "meal":
+        entries = [e for e in entries if e.is_meal_expense]
+    elif filter == "unpaid":
+        entries = [e for e in entries if not e.paid]
+    elif filter == "refund":
+        # 홈 결산의 「미지급 환급 N건」 과 같은 정의 — budget.refund_entries (4-15)
+        entries = [e for e in entries if is_refund_target(e) and not e.paid]
+    elif filter == "noreceipt":
+        entries = [e for e in entries if not e.receipts]
+
+    # 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 summary 의 그 항목 값이다 (7-4)
+    summary = build_budget_summary(db, retreat=retreat)
+    row_by_category = {row.category.id: row for row in summary.categories}
+    groups: list[dict] = []
+    seen: dict[int | None, dict] = {}
+    for e in entries:
+        key = e.budget_category_id
+        group = seen.get(key)
+        if group is None:
+            group = seen[key] = {
+                "row": row_by_category.get(key),  # None 이면 예산 항목 미지정
+                "entries": [],
+            }
+            groups.append(group)
+        group["entries"].append(e)
 
     return render(
         request,
@@ -153,17 +199,14 @@ def expense_list(
             "user": user,
             "retreat": retreat,
             "retreats": all_retreats(db),
-            "entries": entries,
+            "summary": summary,
+            "groups": groups,
+            "entry_count": len(entries),
             "departments": _departments(db, retreat),
-            "categories": _categories(db, retreat),
             "meal_defaults": _last_meal_defaults(db, retreat, user),
-            "next_receipt_number": _next_receipt_number(db, retreat),
+            "next_receipt_number": next_receipt_number(db, retreat),
             "today": dt.date.today().isoformat(),
-            "filters": {
-                "meal_only": meal_only,
-                "unpaid_only": unpaid_only,
-                "department_id": department_id,
-            },
+            "filter": filter,
             "totals": {
                 "amount": sum(e.amount for e in entries),
                 "subsidy": sum(e.subsidy_amount for e in entries if e.is_meal_expense),
@@ -172,6 +215,8 @@ def expense_list(
                 ),
                 "settlement": sum(e.settlement_amount for e in entries),
             },
+            "active_tab": "expenses",
+            "page_subtitle": "지출",
         },
     )
 
@@ -192,6 +237,7 @@ def create_expense(
     meal_attendees: str = Form(""),
     level3b: str = Form(""),
     receipt: UploadFile | None = File(None),
+    receipt_memo: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
@@ -230,7 +276,6 @@ def create_expense(
         level2=category.level2 if category else None,
         level3a=category.level3 if category else None,
         level3b=level3b.strip() or None,
-        receipt_number=_next_receipt_number(db, retreat),
         expense_date=_parse_date(expense_date) or dt.date.today(),
         amount=amount,
         department_id=dept_id,
@@ -239,7 +284,6 @@ def create_expense(
         paid=bool(paid),
         paid_date=_parse_date(paid_date),
         note=note.strip() or None,
-        receipt_file_url=_save_receipt(receipt),
         is_meal_expense=is_meal,
         meal_headcount=headcount,
         meal_attendee_names=attendees,
@@ -248,6 +292,8 @@ def create_expense(
         created_by_id=user.id,
     )
     db.add(entry)
+    db.flush()
+    added = _add_receipt(db, retreat, entry, file=receipt, memo=receipt_memo)
     db.commit()
     log_activity(
         db,
@@ -256,13 +302,45 @@ def create_expense(
         action="지출_등록",
         target_type="expense",
         target_id=entry.id,
-        summary=f"[{entry.receipt_number}] {amount:,}원"
+        summary=(f"[{added.number}] " if added else "")
+        + f"{amount:,}원"
         + (f" / 식대 {headcount}명 → 지원 {subsidy:,}원" if is_meal else ""),
     )
     message = "지출을 등록했습니다."
     if is_meal:
         message = f"식대 등록 완료 — 지원금액 {subsidy:,}원 / 개인부담 {burden:,}원"
     return redirect(f"/expenses?retreat_id={retreat.id}", message=message)
+
+
+@router.post("/expenses/{entry_id}/receipts")
+def add_receipt(
+    entry_id: int,
+    receipt: UploadFile | None = File(None),
+    memo: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """영수증을 하나 더 붙인다 — 지출 1건에 N개 (7-4)."""
+    entry = db.get(ExpenseEntry, entry_id)
+    if entry is None or entry.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
+    assert_can_edit_department(user, entry.department_id)
+
+    added = _add_receipt(db, retreat, entry, file=receipt, memo=memo)
+    if added is None:
+        raise HTTPException(status_code=400, detail="파일이나 메모 중 하나는 있어야 합니다.")
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="영수증_추가",
+        target_type="expense",
+        target_id=entry.id,
+        summary=f"[{added.number}] " + (added.original_name or added.memo or ""),
+    )
+    return redirect(f"/expenses?retreat_id={retreat.id}", message=f"영수증 {added.number}번을 붙였습니다.")
 
 
 @router.post("/expenses/{entry_id}/paid")
@@ -288,7 +366,7 @@ def toggle_paid(
         action="지급여부_변경",
         target_type="expense",
         target_id=entry.id,
-        summary=f"[{entry.receipt_number}] {'지급완료' if entry.paid else '미지급'}",
+        summary=f"[지출 {entry.id}] {'지급완료' if entry.paid else '미지급'}",
     )
     sep = "&" if "?" in redirect_to else "?"
     return redirect(
@@ -309,7 +387,6 @@ def delete_expense(
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
     assert_can_edit_department(user, entry.department_id)
 
-    receipt_number = entry.receipt_number
     db.delete(entry)
     db.commit()
     log_activity(
@@ -319,56 +396,15 @@ def delete_expense(
         action="지출_삭제",
         target_type="expense",
         target_id=entry_id,
-        summary=f"[{receipt_number}] 삭제",
+        summary=f"[지출 {entry_id}] 삭제",
     )
     return redirect(f"/expenses?retreat_id={retreat.id}", message="지출을 삭제했습니다.")
 
 
 @router.get("/refunds")
-def refund_list(
-    request: Request,
-    unpaid_only: int = 1,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    retreat: Retreat = Depends(get_current_retreat),
-):
-    """환급 대상자 리스트 — 결제자에게 얼마를 돌려줘야 하는지."""
-    query = select(ExpenseEntry).where(
-        ExpenseEntry.retreat_id == retreat.id,
-        ExpenseEntry.subsidy_amount > 0,
-    )
-    if unpaid_only:
-        query = query.where(ExpenseEntry.paid.is_(False))
-
-    entries = list(db.scalars(query.order_by(ExpenseEntry.id.desc())))
-
-    by_payer: dict[str, dict] = {}
-    for entry in entries:
-        key = f"{entry.payer_name or '(미지정)'}|{entry.payer_account or ''}"
-        row = by_payer.setdefault(
-            key,
-            {
-                "payer_name": entry.payer_name or "(미지정)",
-                "payer_account": entry.payer_account or "",
-                "total": 0,
-                "entries": [],
-            },
-        )
-        row["total"] += entry.subsidy_amount
-        row["entries"].append(entry)
-
-    return render(
-        request,
-        "refunds.html",
-        {
-            "user": user,
-            "retreat": retreat,
-            "retreats": all_retreats(db),
-            "groups": sorted(by_payer.values(), key=lambda r: -r["total"]),
-            "unpaid_only": unpaid_only,
-            "grand_total": sum(r["total"] for r in by_payer.values()),
-        },
-    )
+def old_refund_list():
+    """옛 환급 대상자 페이지 — 지출 목록의 필터가 그 자리다 (7-4)."""
+    return RedirectResponse("/expenses?filter=refund", status_code=301)
 
 
 @router.get("/uploads/{filename}")

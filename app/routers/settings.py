@@ -135,9 +135,8 @@ def settings_retreat_detail(
     # 지연은 저장된 status 가 아니라 날짜에서 계산한다 (4-10 · overdue_of)
     run_overdue = sum(1 for r in runs if board_domain.overdue_of(r, today))
 
+    # 남은 지출은 summary 의 것을 그대로 쓴다 (4-17) — 여기서 다시 세지 않는다
     budget = build_budget_summary(db, retreat=target)
-    # 남은 지출 = 지출이 한 건도 안 붙은 예산 항목 (4-17)
-    unspent = [row for row in budget.categories if row.spent == 0]
     expense_count, expense_sum = _expense_stats(db, target.id)
 
     program_count = db.scalar(
@@ -178,8 +177,8 @@ def settings_retreat_detail(
             "run_done": run_done,
             "run_overdue": run_overdue,
             "budget": budget,
-            "unspent_count": len(unspent),
-            "unspent_planned": sum(row.planned for row in unspent),
+            "unspent_count": budget.unspent_count,
+            "unspent_planned": budget.unspent_planned,
             "expense_count": expense_count,
             "expense_sum": expense_sum,
             "program_count": int(program_count),
