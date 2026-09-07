@@ -180,6 +180,8 @@ def test9_t03_인라인_결과_상자에도_사후_고지가_있다():
     inline_js = html[html.index("function showInline"):]
     assert "이전에 발급한 링크는 이제 쓸 수 없습니다" in inline_js
     assert "지금 링크는 못 쓰게 됩니다" in html            # 사전 confirm 도 그대로
-    # u= 를 만드는 곳이 없다
+    # u= 를 만드는 곳이 없다. **낱말 시험이라 주석의 &u= 에도 걸린다** —
+    # 가짜 빨강 쪽이라 안전해서 그대로 둔다(가짜 초록이 문제지 가짜
+    # 빨강은 사람을 그 자리로 데려간다). 걸리면 주석을 다르게 적으면 된다
     src = (ROOT / "app" / "routers" / "admin_users.py").read_text(encoding="utf-8")
     assert "&u=" not in src and 'params.get("u"' not in src
