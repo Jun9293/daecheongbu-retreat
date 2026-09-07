@@ -400,11 +400,14 @@ def test_마무리03_새로고침하면_링크가_다시_나오지_않는다(wit
 
     first = admin_client.get(location)
     assert "/invite/" in first.text
-    assert "한 번만 보입니다" in first.text
+    assert 'id="issued"' in first.text                 # 링크 배너가 떠 있다
 
     again = admin_client.get(location)                 # 새로고침
     assert "/invite/" not in again.text
-    assert "한 번만 보입니다" not in again.text
+    # 「한 번만 보입니다」 글자로 재지 않는다 — 그 문장은 인라인 발급 JS 의
+    # 문자열 리터럴에도 있어 늘 페이지 소스에 실린다 (10장: 글자를 찾는
+    # 시험은 코드와 설명을 못 가린다). 배너 요소의 유무로 잰다.
+    assert 'id="issued"' not in again.text
 
 
 def test_마무리03b_꺼내는_자리는_한_번만_준다():

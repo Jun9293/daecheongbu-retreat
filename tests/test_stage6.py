@@ -166,7 +166,7 @@ ID_비교_허용: dict[tuple[str, int, str], str] = {
     # 같은 회차 안의 데이터 행 집계·조인 — 사람 소속 판정이 아니다
     ("app/domain/board.py", 471, "r.department_id == dept.id"):
         "회차 안 run 을 부서 행별로 묶는 집계",
-    ("app/routers/expenses.py", 140, "ExpenseEntry.department_id == my_dept"):
+    ("app/routers/expenses.py", 143, "ExpenseEntry.department_id == my_dept"):
         "my_dept 는 키로 찾은 이번 회차 부서 행 id — 직전 입력값 집계",
     ("app/routers/reviews.py", 56, "Department.id == ReviewRequest.department_id"):
         "요청 행에 부서 행을 붙이는 조인",
