@@ -1,21 +1,28 @@
 {#
-  업무 한 줄 — **목록(4-14)과 마법사 3단계(6-6)가 같은 것을 씁니다.**
-  두 벌이면 행 모양이 두 곳에서 갈리고, 갈린 쪽을 아무도 눈치채지 못합니다.
+  업무 한 줄 — **목록(4-14)·마법사 3단계(6-6)·팀별 수집(/draft)이 같은 것을
+  씁니다.** 두 벌이면 행 모양이 두 곳에서 갈리고, 갈린 쪽을 아무도 눈치채지
+  못합니다. 행의 뼈대는 여기 한 벌이고, **칸의 내용은 화면이 채웁니다** —
+  목록은 담당자·마감·상태 배지, 마법사는 이력 막대·D-주차·시작일.
+  체크박스(box)는 마법사·수집만 켭니다.
 
-  화면마다 다른 것은 칸(cells)의 내용뿐입니다 — 목록은 담당자·마감·상태 배지,
-  마법사는 이력 막대·D-주차·시작일. 체크박스(box)는 마법사만 켭니다.
-
-  r: {title, cls?, attrs?, tags: [{cls,label}], why?, dept?, cells: [{cls, html}]}
+  r: {title, no?, cls?, attrs?, tags: [{cls,label}], why?, basis?, dept?,
+      meta: [{cls,html}]?, cells: [{cls, html}]}
+  — no 는 회차 안에서 고정되는 번호 (4-14). 제목 앞에 작게 붙습니다.
   — dept 키가 없으면 그 칸을 내지 않고, 값이 비면 「담당 없음」 입니다.
-  — cells 의 html 은 부른 쪽(파이썬/템플릿)이 만든 것이라 safe 로 넣습니다.
+  — meta 는 제목 **아래** 한 줄(목록의 부서·담당자·마감 자리), cells 는
+    행 오른쪽 칸입니다. html 은 부른 쪽이 만든 것이라 safe 로 넣습니다 —
     글자를 넣는 쪽이 |e 로 이스케이프할 책임을 집니다.
 #}
 {% macro taskrow(r, box=False) -%}
 <div class="trow{% if r.cls %} {{ r.cls }}{% endif %}"{% for k, v in (r.attrs or {}).items() %} {{ k }}="{{ v }}"{% endfor %}>
   {%- if box %}<span class="box"></span>{% endif -%}
-  <span class="main"><span class="nm">{{ r.title }}
+  <span class="main"><span class="nm">{% if r.no %}<span class="runno">{{ r.no }}</span>{% endif %}{{ r.title }}
     {%- for t in (r.tags or []) %}<span class="tag {{ t.cls }}">{{ t.label }}</span>{% endfor %}</span>
     {%- if r.why %}<span class="why">{{ r.why }}</span>{% endif -%}
+    {%- if r.basis %}<span class="basis">{{ r.basis }}</span>{% endif -%}
+    {%- if r.meta %}<span class="metaline">
+      {%- for c in r.meta %}<span class="{{ c.cls }}">{{ c.html|safe }}</span>{% endfor -%}
+    </span>{% endif -%}
   </span>
   {%- if 'dept' in r -%}
     <span class="tm">{% if r.dept %}<i style="background:{{ r.dept.color }}"></i>{{ r.dept.name }}{% else %}담당 없음{% endif %}</span>

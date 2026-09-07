@@ -44,26 +44,37 @@
       {{ department_name }}</span>
   </div>
 
+  {# 행은 목록·마법사와 같은 partial 이다 (partials/taskrow.html · 6-6 · 4-14) —
+     손으로 쓴 trow 마크업을 두면 셋째 벌이 되어 갈린 쪽을 아무도 눈치채지 못한다.
+     체크박스(box)와 on/off 상태만 이 화면의 것이다. #}
+  {% from "partials/taskrow.html" import taskrow, subrow %}
   <div class="lib" id="draftLib">
     {% for item in items %}
     <div class="tgroup">
-      <div class="trow{{ ' on' if item.selected else ' off' }}" data-i="{{ item.id }}">
-        <span class="box"></span>
-        <span class="main"><span class="nm">{{ item.title }}
-          <span class="tag {{ item.verdict.tone }}">{{ item.verdict.label }}</span>
-          {%- if item.always_required %}<span class="tag must">필수 지정</span>{% endif %}
-          {%- if item.sub_count %}<span class="tag sub">하위 {{ item.sub_count }}</span>{% endif %}</span>
-          {% if item.rationale %}<span class="why">{{ item.rationale }}</span>{% endif %}
-          <span class="basis">{{ item.verdict.basis }}</span></span>
-        <span class="dwlbl">D-{{ item.d_week }}주</span>
-        <span class="dtlbl">{{ item.start_date.month }}/{{ item.start_date.day }}</span>
-      </div>
+      {% set tags = [{'cls': item.verdict.tone, 'label': item.verdict.label}]
+           + ([{'cls': 'must', 'label': '필수 지정'}] if item.always_required else [])
+           + ([{'cls': 'sub', 'label': '하위 ' ~ item.sub_count}] if item.sub_count else []) %}
+      {{ taskrow({
+        'title': item.title,
+        'cls': 'on' if item.selected else 'off',
+        'attrs': {'data-i': item.id},
+        'tags': tags,
+        'why': item.rationale or none,
+        'basis': item.verdict.basis,
+        'cells': [
+          {'cls': 'dwlbl', 'html': 'D-' ~ item.d_week ~ '주'},
+          {'cls': 'dtlbl', 'html': item.start_date.month ~ '/' ~ item.start_date.day},
+        ],
+      }, box=True) }}
       {% for sub in item.children %}
-      <div class="subrow{{ '' if item.selected else ' off' }}">
-        <span class="branch">↳</span><span class="nm">{{ sub.title }}</span>
-        <span class="dwlbl">D-{{ sub.d_week }}주</span>
-        <span class="dtlbl">{{ sub.start_date.month }}/{{ sub.start_date.day }}</span>
-      </div>
+      {{ subrow({
+        'title': sub.title,
+        'cls': '' if item.selected else 'off',
+        'cells': [
+          {'cls': 'dwlbl', 'html': 'D-' ~ sub.d_week ~ '주'},
+          {'cls': 'dtlbl', 'html': sub.start_date.month ~ '/' ~ sub.start_date.day},
+        ],
+      }) }}
       {% endfor %}
     </div>
     {% endfor %}

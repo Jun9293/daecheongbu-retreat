@@ -33,6 +33,7 @@ function place(runId) {
   document.querySelectorAll('.lslot').forEach(s => {
     if (s.dataset.slot !== String(runId)) s.hidden = true;
   });
+  carets(runId);
   const slot = slotOf(runId);
   if (!slot) { dw.classList.remove('inline'); document.body.appendChild(dw); return; }
   const done = slot.closest('details.ldone');
@@ -40,6 +41,16 @@ function place(runId) {
   slot.hidden = false;
   slot.appendChild(dw);
   dw.classList.add('inline');
+}
+
+/* ▸/▾ — 접었다 펴는 것임이 보이게 (4-14). 펼쳐진 행의 캐럿만 ▾ 다. */
+function carets(openId) {
+  document.querySelectorAll('.lfoot').forEach(f => {
+    const on = openId != null && f.dataset.run === String(openId);
+    f.classList.toggle('open', on);
+    const c = f.querySelector('.caret');
+    if (c) c.textContent = on ? '▾' : '▸';
+  });
 }
 
 Drawer.init({
@@ -53,7 +64,17 @@ Drawer.init({
   onOpen(runId) { place(runId); writeUrl(runId); },
   onClose() {
     document.querySelectorAll('.lslot').forEach(s => { s.hidden = true; });
+    carets(null);
     writeUrl(null);
+  },
+  /* 제목을 고치면 행의 제목도 따라 바뀐다 — 번호는 그대로다 (4-14) */
+  onTitle(runId, title) {
+    const row = rowOf(runId);
+    const nm = row && row.querySelector('.nm');
+    if (!nm) return;
+    const no = nm.querySelector('.runno');
+    nm.textContent = title;
+    if (no) nm.prepend(no);
   },
   /* ?task= 로 들어오면 그 행이 펼쳐진 채 스크롤까지 (4-14). 스크롤은 여기서만 —
      행을 눌러 여는 것은 그 자리에서 보는 동작이라 화면을 움직이지 않는다. */
@@ -79,7 +100,7 @@ Drawer.init({
 
   /* ── 일부러 등록하지 않은 것 ──────────────────────────────────────
      빠뜨린 것과 구별되도록 적는다. call() 은 없는 핸들러를 조용히 건너뛴다. */
-  __unusedFor: 'f2eee996',
+  __unusedFor: 'af295bbc',
   __unused: {
     goTo: '목록에는 스크롤해서 갈 다른 자리가 없다. canGoTo:false 라 불리지도 않는다',
     link: '연결 강조는 보드의 바 사이에 선을 긋는 것이다. 목록 행에는 그을 선이 없다',
@@ -88,15 +109,23 @@ Drawer.init({
     onAssignee: '행의 담당자도 같다 — 페이지를 다시 그릴 때 서버가 채운다',
     onDepartment: '담당팀을 옮기면 행이 다른 부서 것이 된다 — 통째로 다시 그리는 것이 맞다. 기본값(새로고침)을 쓴다',
   },
+  // 목록 행은 관련팀을 그리지 않는다 — true 는 새로고침을 막으려는 것뿐이다
+  onRelatedTeams() { return true; },
 });
 
-/* 「상세 · 선행 작업 · 확인 요청」 — 눌린 행 아래에서 펼쳐진다.
-   같은 행을 다시 누르면 닫는다. */
+/* 「상세 · 선행 작업 · 확인 요청」 — 눌린 행 아래에서, 그 탭을 연 채로
+   펼쳐진다 (4-14). 같은 행의 같은 글자를 다시 누르면 닫는다. */
+let lastTab = null;
 list.addEventListener('click', e => {
   const btn = e.target.closest('.lopen');
   if (!btn) return;
   const runId = btn.dataset.open;
-  if (Drawer.isOpen() && String(Drawer.current()) === String(runId)) Drawer.close();
-  else Drawer.open(runId);
+  const tab = btn.dataset.tab || 'rules';
+  const sameRun = Drawer.isOpen() && String(Drawer.current()) === String(runId);
+  if (sameRun && lastTab === tab) { Drawer.close(); lastTab = null; return; }
+  if (sameRun) { Drawer.selectTab(tab); lastTab = tab; return; }
+  Drawer.open(runId);
+  Drawer.selectTab(tab);
+  lastTab = tab;
 });
 })();

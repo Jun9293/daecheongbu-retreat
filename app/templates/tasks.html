@@ -9,27 +9,40 @@
   여기서 상태를 다시 가르지 않는다 (4-3).
 #}
 
-{# 한 행의 칸들 — 담당자 · 마감(D±N) · 상태 배지. 완료에는 D±N 이 안 실려
-   온다(도메인이 뺀다). due 의 b-* 는 배지 이름을 기계적으로 이어 붙인 것.
-   배지 html 은 `~` 로 잇지 않는다 — Markup 이 섞이면 나머지 글자까지
-   이스케이프돼 태그가 글자 그대로 찍힌다. 값 둘은 도메인 상수라 안전하다. #}
+{# 한 행 — 제목(번호와 함께) 아래에 부서 칩 · 담당자 · 마감(D±N)이 붙고,
+   상태 배지는 오른쪽이다. 홈 행(4-15)과 같은 구조 — 칸을 행 오른쪽 끝에
+   두면 넓은 창에서 제목과 칸 사이가 수백 px 벌어져 행이 비어 보인다.
+   완료에는 D±N 이 안 실려 온다(도메인이 뺀다). due 의 b-* 는 배지 이름을
+   기계적으로 이어 붙인 것. 배지 html 은 `~` 로 잇지 않는다 — Markup 이
+   섞이면 나머지 글자까지 이스케이프돼 태그가 글자 그대로 찍힌다. #}
 {% macro lrow(row) %}
 {{ taskrow({
   'title': row.title,
+  'no': row.no,
   'cls': 'lrow' ~ (' dim' if row.dim else ''),
   'attrs': {'data-run': row.run_id},
-  'dept': row.dept,
-  'cells': [
-    {'cls': 'cell asg' ~ ('' if row.assignee else ' none'),
+  'meta': [
+    {'cls': 'deptchip depthue' if row.dept else 'deptchip',
+     'html': ('<i style="--c:%s"></i>%s'|format(row.dept.color, row.dept.name|e)) if row.dept else '담당 없음'},
+    {'cls': 'deptchip asg' ~ ('' if row.assignee else ' none'),
      'html': row.assignee|e if row.assignee else '담당자 없음'},
-    {'cls': 'cell due b-' ~ row.badge.cls,
+    {'cls': 'deptchip due b-' ~ row.badge.cls,
      'html': (row.end|short_date ~ (' · ' ~ row.dday if row.dday else '')) if row.end else '날짜 없음'},
+  ],
+  'cells': [
     {'cls': 'cell st',
      'html': '<span class="stbadge %s">%s</span>'|format(row.badge.cls, row.badge.label)},
   ],
 }) }}
+{# 접었다 펴는 것임이 보이게 ▸ 를 붙이고, 글자 셋은 각각 그 탭을 연 채로
+   펼친다 (4-14) — 상세→업무 규칙 · 선행 작업→연결 · 확인 요청→확인 요청 #}
 <div class="lfoot" data-run="{{ row.run_id }}">
-  <button type="button" class="lopen" data-open="{{ row.run_id }}">상세 · 선행 작업 · 확인 요청</button>
+  <span class="caret" aria-hidden="true">▸</span>
+  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="rules">상세</button>
+  <span class="sep">·</span>
+  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="rel">선행 작업</button>
+  <span class="sep">·</span>
+  <button type="button" class="lopen" data-open="{{ row.run_id }}" data-tab="review">확인 요청</button>
 </div>
 <div class="lslot" data-slot="{{ row.run_id }}" hidden></div>
 {% endmacro %}

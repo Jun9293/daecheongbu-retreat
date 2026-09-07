@@ -343,9 +343,11 @@ def discussion_body(meeting: Meeting) -> str:
     실제 저장이 **같은 함수**를 쓴다. 두 벌이 되면 보여준 것과 남는 것이
     갈리고, 갈린 쪽을 아무도 눈치채지 못한다.
     """
-    날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
-    출처 = f"[회의록 {날} · {meeting.title}] 에서 옮김"
-    return f"{출처}\n{(meeting.body or '').strip()}"
+    # 출처는 본문에 적지 않는다 — 정본은 source_meeting_id 하나다 (4-9).
+    # 첫 줄에 「[회의록 …] 에서 옮김」 을 넣던 시절이 있었는데, 칩(출처 링크)이
+    # 생기면서 같은 사실이 두 곳에 적히게 됐다. 그때 남은 58행의 본문은
+    # 그 회차의 기록이므로 손대지 않는다.
+    return (meeting.body or "").strip()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -627,6 +629,19 @@ def meeting_suggestions(
         "can_edit": not perm.is_readonly(user.role),
         "items": 항목,
         "failed": (meeting.suggest_state == "실패"),
+        # 제안 한 줄을 **여러 업무에** 걸 수 있다 (4-9) — 고를 목록.
+        # 번호(4-14)+제목으로 보인다 — 회의에서 부르는 그 번호다.
+        "runs": [
+            {"run_id": r.id, "no": r.run_no, "title": r.library.title}
+            for r in sorted(
+                db.scalars(
+                    select(TaskRun).where(
+                        TaskRun.retreat_id == retreat.id, TaskRun.included
+                    )
+                ),
+                key=lambda r: (r.run_no is None, r.run_no or 0, r.id),
+            )
+        ],
     }
 
 

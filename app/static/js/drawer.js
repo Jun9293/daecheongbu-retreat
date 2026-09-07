@@ -40,11 +40,13 @@
 (function () {
 'use strict';
 
+/* 칩의 점 색은 배지 글자 토큰과 같은 값이다 (4-0) — 지연이 셋째 붉은 값으로
+   갈라져 있던 것을 --red-ink 값으로 맞췄다. */
 const STATUS = {
-  '대기':   {label: '예정',   color: '#4A544F'},
-  '진행중': {label: '진행중', color: '#1668E3'},
-  '완료':   {label: '완료',   color: '#8B948F'},
-  '지연':   {label: '지연',   color: '#C8442E'},
+  '대기':   {label: '대기',   color: '#8A5A12'},
+  '진행중': {label: '진행중', color: '#4F46E5'},
+  '완료':   {label: '완료',   color: '#5F5E5A'},
+  '지연':   {label: '지연',   color: '#A33F38'},
 };
 /* 고를 수 있는 상태 — '지연' 은 없다. 저장값이 아니라 날짜에서 나오는
    계산값이라(4-3), 고르게 두면 같은 사실의 출처가 둘이 된다.
@@ -129,30 +131,46 @@ function renderDrawer() {
   if (d.can_edit) {
     $('statchip').onclick = e => { e.stopPropagation(); statMenu(e.currentTarget); };
   }
-  $('dtitle').textContent = d.title;
+  /* 제목 — 번호(회차 안 고정, 4-14)를 앞에 작게. 누르면 그 자리에서 고친다 (4-9). */
+  $('dtitle').innerHTML =
+    `${d.run_no ? `<span class="runno">${Number(d.run_no)}</span>` : ''}` +
+    `<span id="dtitletext"${d.can_edit ? ' class="editable" title="눌러서 고치기"' : ''}>${esc(d.title)}</span>`;
+  if (d.can_edit) $('dtitletext').onclick = () => startTitleEdit();
+
+  /* 머리 — 두 칸 정의 표 (4-9). 알약(pill)을 걷었다: 왼쪽 라벨은 보조색,
+     오른쪽 값은 잉크색이고 줄 사이는 헤어라인이다. 고칠 수 있는 값은 평소에
+     글자처럼 보이다가 호버할 때만 옅은 바탕과 ∨/연필이 뜬다. */
   const teams = (d.departments || []).map(t =>
     `<option value="${esc(t.key)}" data-color="${esc(t.color)}" ${t.key === d.department_key ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
   const people = (d.candidates || []).map(p =>
     `<option value="${p.id}" ${p.id === d.assignee_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const dot = (색) => `<i class="dot" style="background:${esc(색)}"></i>`;
+  const 기간줄 = (s, e) => {
+    if (!s) return '기간 없음';
+    const 한날 = !e || e === s;
+    return `${s.replaceAll('-', '.')}${한날 ? '' : ' – ' + (e.slice(0, 4) === s.slice(0, 4) ? e.slice(5).replace('-', '.') : e.replaceAll('-', '.'))}`
+      + ` · ${spanLabel(s, e)}`;
+  };
   $('dmeta').innerHTML =
-    `<dt>기간</dt><dd>${d.can_edit
-        ? `<span class="pill dates">
+    `<dt>기간</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
+        ? `<span class="dates">
              <input type="date" id="dstart" value="${d.start || ''}" aria-label="시작일">
-             <i class="sep"></i>
+             <i class="sep">–</i>
              <input type="date" id="dend" value="${d.end || d.start || ''}" aria-label="마감일">
-             <b class="span" id="dspan">${spanLabel(d.start, d.end)}</b></span>`
-        : `<span class="pill flat"><span class="mono">${
-             d.end && d.end !== d.start ? md(d.start) + ' → ' + md(d.end) : md(d.start)}</span>
-             <b class="span">${spanLabel(d.start, d.end)}</b></span>`}</dd>
-     <dt>담당팀</dt><dd>${d.can_edit
-        ? `<span class="pill person"><i class="dot" id="ddeptdot" style="background:${esc(d.department_color)}"></i>
-             <select id="ddept"><option value="">담당 없음</option>${teams}</select></span>`
-        : `<span class="pill flat person"><i class="dot" style="background:${esc(d.department_color)}"></i>${esc(d.department)}</span>`}</dd>
-     <dt>담당자</dt><dd>${d.can_edit
-        ? `<span class="pill person"><select id="dassignee"><option value="">지정 안 함</option>${people}</select></span>`
-        : `<span class="pill flat person">${esc(d.assignee || '지정 안 함')}</span>`}</dd>
-     <dt>상위</dt><dd>${d.parent_title ? esc(d.parent_title) : '—'}</dd>
-     <dt>관련팀</dt><dd>${d.related_departments.map(esc).join(', ') || '—'}</dd>`;
+             <b class="span" id="dspan">· ${spanLabel(d.start, d.end)}</b></span>`
+        : `<span class="mono">${기간줄(d.start, d.end)}</span>`}</dd>
+     <dt>담당팀</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
+        ? `<span class="vsel">${dot(d.department_color).replace('class="dot"', 'class="dot" id="ddeptdot"')}
+             <select id="ddept"><option value="">담당 없음</option>${teams}</select><i class="mark">∨</i></span>`
+        : `${dot(d.department_color)}${esc(d.department)}`}</dd>
+     <dt>담당자</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
+        ? `<span class="vsel"><select id="dassignee"><option value="">지정 안 함</option>${people}</select><i class="mark">∨</i></span>`
+        : esc(d.assignee || '지정 안 함')}</dd>
+     <dt>상위</dt><dd>${d.parent_title ? esc(d.parent_title) : '—'}<small class="fromlib">라이브러리에서</small></dd>
+     <dt>관련팀</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
+        ? `<button type="button" class="vbtn" id="dreledit">${
+             d.related_departments.map(esc).join(', ') || '—'}<i class="mark">✎</i></button>`
+        : (d.related_departments.map(esc).join(', ') || '—')}</dd>`;
 
   if (d.can_edit) {
     const start = $('dstart'), end = $('dend');
@@ -211,10 +229,15 @@ function renderDrawer() {
       // 툴팁 문장이 필요하고, 보드는 지금처럼 이름만 쓴다.
       call('onAssignee', d.run_id, saved.assignee, saved);
     };
+
+    // 관련팀 편집 (4-9) — 회차의 부서를 **키로** 여러 개 고른다 (2장)
+    const reledit = $('dreledit');
+    if (reledit) reledit.onclick = () => openRelatedPicker(d);
   }
 
   renderLog();
   renderRules();
+  renderReviews(d);
 
   let note = '';
   if (d.suggestion_rationale) note += `<div class="note"><b>CLAUDE 제안 근거</b>${esc(d.suggestion_rationale)}</div>`;
@@ -234,6 +257,136 @@ function spanLabel(start, end) {
   const a = new Date(start), b = new Date(end || start);
   const days = Math.round((b - a) / 864e5) + 1;
   return days > 1 ? days + '일' : '하루';
+}
+
+/* ── 제목 편집 (4-9) — Enter 저장 · Esc 취소 ─────────────────────────
+   제목은 라이브러리에 붙는다 — 회차를 넘어 같은 업무의 이름이다. */
+function startTitleEdit() {
+  const box = $('dtitletext');
+  if (!box || box.querySelector('input')) return;
+  const before = detail.title;
+  box.innerHTML = `<input type="text" class="titleedit" value="${esc(before)}" aria-label="업무 제목">`;
+  const input = box.querySelector('input');
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+
+  const 끝낸다 = () => { box.textContent = detail.title; };
+  input.onkeydown = async e => {
+    // **Esc 는 편집만 취소한다.** 전파를 막지 않으면 문서의 Escape 핸들러가
+    // 드로어까지 닫는다 — 패널 안의 조작은 패널을 닫지 않는다 (10장)
+    if (e.key === 'Escape') { e.stopPropagation(); 끝낸다(); return; }
+    if (e.key !== 'Enter') return;
+    const title = input.value.trim();
+    if (title === before) { 끝낸다(); return; }
+    const res = await fetch(`/board/task/${cur}/title`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title}),
+    });
+    if (!res.ok) {
+      alert((await res.json().catch(() => ({}))).detail || '제목을 바꾸지 못했습니다.');
+      input.focus();
+      return;
+    }
+    const saved = await res.json();
+    detail.title = saved.title;
+    끝낸다();
+    // 행·바·점의 라벨도 따라 바뀐다 — 화면이 자기 방식으로 갈아 끼운다
+    call('onTitle', cur, saved.title, saved);
+  };
+  input.onblur = 끝낸다;
+}
+
+/* ── 관련팀 편집 (4-9) — 부서 여러 개 체크, 키로 저장 (2장) ─────────── */
+function openRelatedPicker(d) {
+  const chosen = new Set(d.related_department_keys ||
+    (d.departments || []).filter(t => (d.related_departments || []).includes(t.name)).map(t => t.key));
+  const box = $('prepick');
+  box.innerHTML = `<div class="sheetbox">
+    <div class="sh"><b>관련팀 — 이 업무의 결과물을 받아야 다음 일을 하는 팀</b>
+      <button type="button" class="btn sm" data-close="1">닫기</button></div>
+    <p class="sechint" id="relpickwarn" hidden></p>
+    <div class="plist">${(d.departments || []).map(t =>
+      `<label><input type="checkbox" value="${esc(t.key)}" ${chosen.has(t.key) ? 'checked' : ''}>
+        <span><i class="dot" style="background:${esc(t.color)}"></i>${esc(t.name)}</span></label>`).join('')}</div>
+    <div class="sh end">
+      <button type="button" class="btn pri" id="relpicksave">저장</button>
+      <button type="button" class="btn" data-close="1">취소</button></div></div>`;
+  box.hidden = false;
+  box.onclick = e => {
+    if (e.target === box || e.target.closest('[data-close]')) box.hidden = true;
+  };
+  $('relpicksave').onclick = async () => {
+    const keys = [...box.querySelectorAll('input:checked')].map(i => i.value);
+    const res = await fetch(`/board/task/${cur}/related-departments`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keys}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const warn = $('relpickwarn');
+      warn.textContent = data.detail || '저장하지 못했습니다.';
+      warn.hidden = false;
+      return;
+    }
+    box.hidden = true;
+    detail.related_departments = data.related_departments;
+    detail.related_department_keys = data.related_department_keys;
+    renderDrawer();
+    // 고스트 바는 이 값에서 나온다 — 직접 고쳐 그렸다고 true 를 돌려준
+    // 화면만 새로고침을 건너뛴다 (담당팀 이동과 같은 규칙)
+    if (call('onRelatedTeams', cur) !== true) location.reload();
+  };
+}
+
+/* ── 확인 요청 (4-9 · 4-16) — 옛 task_detail 의 폼이 있던 자리 ──────── */
+function renderReviews(d) {
+  const rows = d.reviews || [];
+  $('revN').textContent = rows.length || '';
+
+  const form = $('drevform');
+  form.hidden = !d.can_edit;
+  if (d.can_edit) {
+    $('drevdepts').innerHTML = (d.departments || [])
+      .filter(t => t.key !== d.department_key)   // 자기 부서에 확인을 요청하지는 않는다
+      .map(t => `<label><input type="checkbox" value="${esc(t.key)}">
+        <span><i class="dot" style="background:${esc(t.color)}"></i>${esc(t.name)}</span></label>`)
+      .join('');
+    $('dreverr').hidden = true;
+    $('drevsend').onclick = async () => {
+      const keys = [...$('drevdepts').querySelectorAll('input:checked')].map(i => i.value);
+      const err = $('dreverr');
+      if (!keys.length) {
+        err.textContent = '확인받을 부서를 하나 이상 골라주세요.';
+        err.hidden = false;
+        return;
+      }
+      const res = await fetch(`/board/task/${cur}/review-request`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({department_keys: keys, message: $('drevmsg').value}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        err.textContent = data.detail || '보내지 못했습니다.';
+        err.hidden = false;
+        return;
+      }
+      err.hidden = true;
+      $('drevmsg').value = '';
+      detail.reviews = data.reviews;
+      renderReviews(detail);
+    };
+  }
+
+  $('drevlog').innerHTML = rows.length
+    ? rows.map(r => `<div class="revitem st-${r.status === '대기' ? 'wait' : (r.status === '승인' ? 'ok' : 'no')}">
+        <div class="top"><i class="dot" style="background:${esc(r.department_color)}"></i>
+          <b>${esc(r.department)}</b><span class="st">${esc(r.status)}</span>
+          <span class="d mono">${esc(r.at)}</span></div>
+        ${r.message ? `<div class="msg">${esc(r.message)}</div>` : ''}
+        ${r.responder ? `<div class="ans">${esc(r.responder)} — ${esc(r.status)}${
+            r.comment ? ` · ${esc(r.comment)}` : ''}</div>` : ''}
+      </div>`).join('')
+    : '<div class="empty">아직 보낸 확인 요청이 없습니다.</div>';
 }
 
 /* ── 연결된 업무: 선행 / 후속 / 관련 ────────────────────────────────
@@ -259,16 +412,20 @@ function renderRel(d) {
   const pre = d.prerequisites || [], dep = d.dependents || [], rel = d.related || [];
   $('relN').textContent = (pre.length + dep.length + rel.length) || '';
 
-  const section = (title, rows, hint, edit) => `<div class="relsec">
-    <h4>${title}<span class="n">${rows.length}</span>${
-      edit ? '<button class="edit" id="preedit">고치기</button>' : ''}</h4>
+  /* 세 묶음 카드 (4-9) — 머리 = 방향 표시 + 이름 + 건수 + 한 줄 설명.
+     방향이 다른 셋을 같은 무게의 목록으로 펼치면 무엇이 나를 막는지 안 읽힌다. */
+  const card = (arrow, name, rows, desc, hint, edit) => `<div class="relcard">
+    <div class="rh"><span class="arrow">${arrow}</span><b>${name}</b>
+      <span class="n">${rows.length}</span>${
+        edit ? '<button class="edit" id="preedit">고치기</button>' : ''}
+      <span class="desc">${desc}</span></div>
     ${rows.length ? rows.map(relItem).join('')
       : `<div class="relnone">${hint}</div>`}</div>`;
 
   $('drel').innerHTML =
-    section('선행 — 끝나야 시작할 수 있다', pre, '기다리는 업무 없음', d.can_edit) +
-    section('후속 — 나를 기다린다', dep, '나를 기다리는 업무 없음', false) +
-    section('관련 — 방향 없음', rel, '연결된 업무 없음', false) +
+    card('→', '선행', pre, '끝나야 시작할 수 있다', '기다리는 업무 없음', d.can_edit) +
+    card('←', '후속', dep, '나를 기다린다', '나를 기다리는 업무 없음', false) +
+    card('↔', '관련', rel, '방향 없음 — 서로 참고할 사이', '연결된 업무 없음', false) +
     `<div class="relnote">선후행은 회차가 아니라 <b>업무 자체</b>에 붙습니다 —
       업무 규칙과 같이 <b>다음 회차에도 그대로 적용됩니다.</b>
       후속은 저장하지 않고 선행의 역방향으로 계산합니다.</div>`;
@@ -1147,6 +1304,8 @@ window.Drawer = {
   },
   open: openDrawer,
   close: closeDrawer,
+  // 목록의 「상세 · 선행 작업 · 확인 요청」 이 각각 그 탭을 연 채로 펼친다 (4-14)
+  selectTab,
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,
   /* 드래그 직후인가. **쓰는 곳은 board.js 하나다** — 바를 끌어 옮긴 뒤의

@@ -49,6 +49,22 @@ function 미리보기(x) {
   </details>`;
 }
 
+/* 한 줄을 **여러 업무에** 걸 수 있다 (4-9) — 본문은 한 행, 걸린 곳은
+   업무마다 링크 행이다. 기본은 제안이 고른 하나가 체크된 상태이고,
+   업무는 번호 + 제목으로 보인다 (4-14).
+   `줄()` 보다 앞에 둔다 — 줄()~그린다() 사이는 사람이 읽는 문구의 어조를
+   재는 자리라(w2_01b) 코드의 부정 연산자가 섞이면 시험이 문구와 못 가른다. */
+let 전체업무 = [];
+function 업무고르기(x) {
+  if (!canEdit || !전체업무.length) return '';
+  const rows = 전체업무.map(r =>
+    `<label class="mt-pick"><input type="checkbox" value="${Number(r.run_id)}"
+       ${r.run_id === x.run_id ? 'checked' : ''}>
+     <span>${r.no != null ? `<span class="mt-no">${Number(r.no)}</span>` : ''}${esc(r.title)}</span></label>`).join('');
+  return `<details class="mt-runs"><summary>걸 업무 고르기 — 여러 곳에 걸 수 있습니다</summary>
+    <div class="mt-runlist">${rows}</div></details>`;
+}
+
 function 줄(x) {
   const 머리 = `<p class="mt-do">${esc(x.action)}</p>`;
   const 근거 = `<p class="mt-sug-why">${esc(x.why)}</p>`;
@@ -85,7 +101,7 @@ function 줄(x) {
         x.already ? '그래도 남기기' : '남기기'}</button>`
     : '';
   return `<div class="mt-sug-row" data-run="${x.run_id}"><div class="mt-sug-main">
-    ${머리}${이미}${근거}${출처}${미리보기(x)}</div>${단추}</div>`;
+    ${머리}${이미}${근거}${출처}${미리보기(x)}${업무고르기(x)}</div>${단추}</div>`;
 }
 
 function 지금읽기() {
@@ -97,6 +113,7 @@ function 지금읽기() {
 
 function 그린다(data) {
   const items = data.items || [];
+  전체업무 = data.runs || [];
   if (data.state === '기다림') {
     // **적는 동안은 안 부른다.** 저장할 때마다 부르면 오타를 고칠 때마다
     // 값이 나간다 — 다 적고 잠잠해지면 저절로 돈다
@@ -208,16 +225,21 @@ list.addEventListener('click', async e => {
   btn.disabled = true;
   btn.textContent = '남기는 중…';
   try {
+    // 고른 업무 전부에 건다 (4-9) — 본문 한 행 + 업무마다 링크 행.
+    // 체크한 것이 없으면 제안이 고른 하나로 물러선다.
+    const checked = [...row.querySelectorAll('.mt-runs input:checked')]
+      .map(i => Number(i.value));
+    const run_ids = checked.length ? checked : [Number(btn.dataset.apply)];
     const res = await fetch(`/meetings/${meetingId}/suggestions/apply`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({run_id: Number(btn.dataset.apply)}),
+      body: JSON.stringify({run_ids}),
     });
     if (!res.ok) throw new Error(res.status);
     const saved = await res.json();
     row.classList.add('done');
     // **되돌리는 길을 말해 준다** — 남긴 것을 지우려면 그 업무의 논의에서 한다
     row.querySelector('.mt-do').textContent =
-      `남겼습니다 — 「${saved.run_title}」 의 논의. 지우려면 그 업무의 논의 탭에서.`;
+      `남겼습니다 — 「${saved.run_title}」${run_ids.length > 1 ? ` 외 ${run_ids.length - 1}곳` : ''} 의 논의. 지우려면 그 업무의 논의 탭에서.`;
     btn.remove();
   } catch (err) {
     btn.disabled = false;

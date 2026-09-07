@@ -38,7 +38,7 @@
      data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
      data-status="{{ row.status }}">
   <div class="lc" data-go="{{ row.run_id }}">
-    <span class="nm">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
+    <span class="nm">{{ '↳ ' if row.ghost }}{% if row.no and not row.ghost %}<span class="runno">{{ row.no }}</span>{% endif %}{{ row.title }}</span>
     <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
     {%- if row.ghost %}
     <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>

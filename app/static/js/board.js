@@ -559,6 +559,24 @@ Drawer.init({
   onStatus: applyStatus,
   onDates: applySavedDates,
   onAssignee: applyAssignee,
+  /* 제목이 바뀌면 바의 라벨과 왼쪽 목록이 따라간다 — 라벨은 넘침을 다시
+     재야 한다(spill). 번호(runno)는 그대로다 (4-14). */
+  onTitle(runId, title) {
+    if (META[runId]) META[runId].title = title;
+    sheet.querySelectorAll(`.bar[data-run="${runId}"] .txt:not(.spill)`).forEach(t => {
+      t.textContent = (t.textContent.startsWith('↳ ') ? '↳ ' : '') + title;
+    });
+    sheet.querySelectorAll(`.row[data-run="${runId}"] .lc .nm`).forEach(nm => {
+      const no = nm.querySelector('.runno');
+      const ghost = nm.textContent.trimStart().startsWith('↳');
+      nm.textContent = (ghost ? '↳ ' : '') + title;
+      if (no) nm.prepend(no);
+    });
+    document.querySelectorAll(`.mrow[data-run="${runId}"] .nm`).forEach(nm => {
+      nm.textContent = title;
+    });
+    layoutLabels();
+  },
   isTaskClick: el => el.closest('.bar[data-run],[data-go]'),
   // 알림·달력에서 `?task=` 로 들어오면 그 자리로 옮기고 연다
   openFromUrl: run => {
@@ -579,11 +597,13 @@ Drawer.init({
      `onAssignee`). 그래서 계약이 바뀌면 여기가 안 맞아 빨개지고, 그때 아래
      목록을 처음부터 다시 읽는다. 3단계의 정적 주소 해시와 같은 수법이다 —
      **내용이 바뀌면 이름도 바뀌게 해서, 옛것을 조용히 쓰지 못하게 한다.** */
-  __unusedFor: 'f2eee996',
+  __unusedFor: 'af295bbc',
   __unused: {
     onOpen: '패널이 열릴 때는 할 일이 없다. 연결선은 afterLayout 이 240ms 뒤에 다시 그린다',
     onDepartment: '담당팀을 옮기면 업무가 다른 부서의 줄로 통째로 간다 (4-9). '
       + '행 구조가 바뀌는 것이라 부분 수정보다 다시 그리는 것이 맞다 — 기본값(새로고침)을 쓴다',
+    onRelatedTeams: '관련팀이 바뀌면 고스트 바가 다른 부서 줄에 생기고 없어진다 — '
+      + '행 구조가 바뀌는 것이라 담당팀 이동과 같이 기본값(새로고침)을 쓴다',
   },
 });
 

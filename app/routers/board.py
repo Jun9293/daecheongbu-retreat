@@ -218,6 +218,7 @@ def task_detail(
 
     return {
         "run_id": run.id,
+        "run_no": run.run_no,   # 회차 안에서 고정되는 번호 (4-14)
         "title": lib.title,
         "kind": lib.kind,
         "kind_label": lib.kind_label,
@@ -244,6 +245,10 @@ def task_detail(
             for k in (lib.related_department_keys or [])
             if k in dept_by_key
         ],
+        # 편집(4-9)은 키로 한다 (2장) — 이름만 주면 화면이 이름으로 키를 찾게 된다
+        "related_department_keys": [
+            k for k in (lib.related_department_keys or []) if k in dept_by_key
+        ],
         "related": related,
         "prerequisites": prerequisites,
         "dependents": dependents,
@@ -262,6 +267,8 @@ def task_detail(
             if other.id != run.id
         ],
         "discussions": _serialize_discussions(db, run, user),
+        # 이 업무의 확인 요청 이력 (4-9) — 보낸 것과 답이 함께 보인다
+        "reviews": _serialize_reviews(db, run),
         # 첨부는 회차별이라 run 에 붙는다 (CLAUDE.md 4-9). 상세 패널이
         # 탭을 열기 전에 개수를 보여줘야 해서 여기서 함께 내려보낸다.
         "attachments": attachments.serialize(db, user, run),
@@ -551,8 +558,14 @@ def add_discussion(
     )
     db.add(entry)
     db.flush()
-    # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9)
-    discussion.attach(db, entry, run)
+    # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9).
+    # **번복(후속)은 대체되는 기록이 걸린 곳을 그대로 물려받는다** — 한쪽에서만
+    # 번복하면 다른 쪽에는 번복 안 된 결정으로 남는다. 뗀 곳은 물려받지 않는다.
+    if supersedes is not None:
+        for attached_run in discussion.runs_of(db, target):
+            discussion.attach(db, entry, attached_run)
+    else:
+        discussion.attach(db, entry, run)
     db.commit()
     db.refresh(run)
 
@@ -715,13 +728,18 @@ def add_existing(
                         start_date=start,
                         end_date=end,
                         status="대기",
+                        # 회차를 연 뒤 더한 업무는 max+1 (4-14)
+                        run_no=lib_domain.next_run_no(db, retreat.id),
                     )
                 )
+                db.flush()
             else:                       # 미실행으로 남아 있던 기록을 되살린다
                 run.included = True
                 run.start_date, run.end_date = start, end
                 run.d_week = target.default_d_week
                 run.department_id = target_dept.id if target_dept else None
+                if run.run_no is None:  # 번호가 없던 옛 행이면 이때 받는다
+                    run.run_no = lib_domain.next_run_no(db, retreat.id)
         added += 1
     db.flush()
     # 회차를 연 뒤에 넣은 업무도 라이브러리의 선행이 이어져야 한다.
@@ -811,6 +829,7 @@ def add_new(
             start_date=start,
             end_date=end,
             status="대기",
+            run_no=lib_domain.next_run_no(db, retreat.id),   # max+1 (4-14)
         )
     )
     db.flush()
@@ -826,6 +845,182 @@ def add_new(
         summary=f"{title} ({start.isoformat()} ~ {end.isoformat()})",
     )
     return {"library_id": lib.id, "redirect": "/board"}
+
+
+def _serialize_reviews(db: Session, run: TaskRun) -> list[dict]:
+    """이 업무의 확인 요청 이력 — run_id 로 남은 것만 (옛 요청은 Task 표를
+    가리켜 run 으로 잇지 못한다)."""
+    from app.models import ReviewRequest
+
+    rows = db.scalars(
+        select(ReviewRequest)
+        .where(ReviewRequest.run_id == run.id)
+        .order_by(ReviewRequest.id.desc())
+    )
+    return [
+        {
+            "id": r.id,
+            "department": r.department.name if r.department else "",
+            "department_color": r.department.color if r.department else "#83827F",
+            "status": r.status,
+            "requester": r.requester_name,
+            "message": r.message,
+            "responder": r.responder_name,
+            "comment": r.response_comment,
+            "at": r.created_at.strftime("%m/%d") if r.created_at else "",
+        }
+        for r in rows
+    ]
+
+
+class TitleIn(BaseModel):
+    title: str
+
+
+@router.post("/board/task/{run_id}/title")
+def set_title(
+    run_id: int,
+    payload: TitleIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """제목을 그 자리에서 고친다 (4-9).
+
+    제목은 라이브러리에 붙는다 — 회차를 넘어 같은 업무의 이름이다. 지난
+    회차의 화면에도 새 이름이 보이지만, 그때의 실행 기록(날짜·상태)은
+    그대로다 (6-6 의 「지난 회차의 실행 기록 날짜는 건드리지 않는다」 와 같은 결).
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="제목을 비울 수 없습니다.")
+
+    before = run.library.title
+    if before != title:
+        run.library.title = title
+        db.commit()
+        log_activity(
+            db,
+            retreat_id=retreat.id,
+            actor=user,
+            action="업무_제목_변경",
+            target_type="task_run",
+            target_id=run.id,
+            summary=f"제목 변경: {before} → {title}",
+            before_value={"title": before},
+            after_value={"title": title},
+        )
+    paint = board_view.paint_of(run, dt.date.today())
+    # 화면들이 제 라벨을 갈아 끼울 수 있게 문장(툴팁)도 함께 낸다 — 조립 금지 (9장)
+    return {"title": title, "tooltip": paint["tooltip"]}
+
+
+class RelatedDeptsIn(BaseModel):
+    keys: list[str]
+
+
+@router.post("/board/task/{run_id}/related-departments")
+def set_related_departments(
+    run_id: int,
+    payload: RelatedDeptsIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """관련팀을 그 자리에서 고친다 (4-9). 부서는 **키**로 받는다 (2장).
+
+    관련팀은 라이브러리에 붙는다 — 다음 회차에도 그대로 따라간다.
+    보드의 고스트 바가 이 값에서 나오므로 보드는 다시 그린다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
+    valid = {d.key for d in retreat.departments if d.key}
+    unknown = [k for k in payload.keys if k not in valid]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"모르는 부서 키입니다: {', '.join(unknown)}")
+
+    lib = run.library
+    before = sorted(lib.related_department_keys or [])
+    after = sorted(set(payload.keys))
+    if before != after:
+        lib.related_department_keys = after
+        db.commit()
+        log_activity(
+            db,
+            retreat_id=retreat.id,
+            actor=user,
+            action="관련팀_변경",
+            target_type="task_run",
+            target_id=run.id,
+            summary=f"{lib.title}: 관련팀 {len(after)}곳",
+            before_value={"keys": before},
+            after_value={"keys": after},
+        )
+    dept_by_key = {d.key: d for d in retreat.departments}
+    return {
+        "related_department_keys": after,
+        "related_departments": [dept_by_key[k].name for k in after if k in dept_by_key],
+    }
+
+
+class ReviewRequestIn(BaseModel):
+    department_keys: list[str]
+    message: str = ""
+
+
+@router.post("/board/task/{run_id}/review-request")
+def request_review(
+    run_id: int,
+    payload: ReviewRequestIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """이 업무에 대한 확인 요청 (4-9) — 옛 task_detail 의 폼이 있던 자리다.
+
+    요청은 ReviewRequest 로 남고(run_id 로 업무를 가리킨다), 받는 부서
+    사람들의 알림 「받은 것」 과 내 「내가 보낸 요청」 에 뜬다 (4-16).
+    """
+    from app.routers.reviews import create_review_requests
+
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
+    dept_by_key = {d.key: d for d in retreat.departments if d.key}
+    # 모르는 키는 걸러서 진행하지 않고 **거절한다** (5-1 · related-departments 와
+    # 같은 규칙) — 셋 중 둘만 가면 보낸 사람은 셋 다 갔다고 믿는다
+    unknown = [k for k in payload.department_keys if k not in dept_by_key]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"이 회차에 없는 부서입니다: {', '.join(unknown)}",
+        )
+    ids = [dept_by_key[k].id for k in payload.department_keys]
+    if not ids:
+        raise HTTPException(status_code=400, detail="확인받을 부서를 하나 이상 골라주세요.")
+
+    created = create_review_requests(
+        db,
+        retreat=retreat,
+        requester=user,
+        department_ids=ids,
+        message=payload.message,
+        run=run,
+    )
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="확인요청_보냄",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{run.library.title} → {len(created)}개 부서",
+    )
+    return {"reviews": _serialize_reviews(db, run)}
 
 
 class RulesIn(BaseModel):

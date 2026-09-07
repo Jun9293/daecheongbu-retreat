@@ -22,13 +22,15 @@
     <div class="dkick" id="dkick"></div>
     <div class="dtitle" id="dtitle"></div>
     <dl class="dmeta" id="dmeta"></dl>
-    {# 드로어 폭(440px)에서 탭 다섯이 넘쳐 `논의 내역`·`연결된 업무` 를 줄였습니다.
-       **첨부파일이 맨 끝이라 잘리면 안 됩니다** — 줄일 곳은 가운데입니다. #}
+    {# 드로어 폭(440px)에서 탭이 넘치면 안 됩니다 — **첨부파일이 맨 끝이라
+       잘리면 안 되므로** 줄일 곳은 가운데입니다 (`논의 내역`→`논의` 등).
+       확인 요청 탭은 옛 task_detail 의 그 폼이 있던 자리입니다 (4-9 · 4-14). #}
     <div class="dtabs" id="dtabs">
       <button data-p="rules" aria-selected="true">업무 규칙</button>
       <button data-p="log" aria-selected="false">논의</button>
       <button data-p="cal" aria-selected="false">달력</button>
       <button data-p="rel" aria-selected="false">연결<span class="n" id="relN"></span></button>
+      <button data-p="review" aria-selected="false">확인 요청<span class="n" id="revN"></span></button>
       <button data-p="files" aria-selected="false">첨부파일<span class="n" id="fileN"></span></button>
     </div>
   </div>
@@ -70,6 +72,21 @@
       </div>
     </div>
     <div class="pane" id="p-rel"><div class="rel" id="drel"></div></div>
+    <!-- 확인 요청 (4-9) — 옛 task_detail 의 폼이 있던 자리. 보내면 그 부서
+         사람의 알림 「받은 것」 과 내 「내가 보낸 요청」 에 뜬다 (4-16) -->
+    <div class="pane" id="p-review">
+      <p class="panehint">관련 부서에 <b>확인을 요청</b>합니다. 요청은 그 부서
+        사람들의 알림으로 가고, 승인·반려 답이 여기와 알림에 남습니다.</p>
+      <div class="revform" id="drevform" hidden>
+        <div class="lbl">확인받을 부서</div>
+        <div class="revdepts" id="drevdepts"></div>
+        <div class="lbl">전할 말 <span class="opt2">(선택)</span></div>
+        <textarea id="drevmsg" placeholder="예: 문구가 이대로 나가도 되는지 봐 주세요"></textarea>
+        <div class="err" id="dreverr" hidden></div>
+        <div class="btns"><button type="button" class="pri" id="drevsend">확인 요청 보내기</button></div>
+      </div>
+      <div class="revlog" id="drevlog"></div>
+    </div>
     <!-- 첨부파일 — 회차별이다. 논의 내역과 같은 취급이고 업무 규칙과 다르다 (4-9) -->
     <div class="pane" id="p-files">
       {# 올리는 중 표시는 **목록 맨 위**입니다. 164MB 를 올리면 몇 분이 걸리는데

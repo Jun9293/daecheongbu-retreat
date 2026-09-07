@@ -332,6 +332,16 @@ Drawer.init({
   onStatus: applyStatus,
   onDates: applyDates,
   onAssignee: applyAssignee,
+  /* 제목이 바뀌면 점의 라벨과 툴팁이 따라간다 — 문장은 서버가 준다 (9장) */
+  onTitle(runId, title, saved) {
+    dots(runId).forEach(dot => {
+      const t = dot.querySelector('.cal-t');
+      if (t) t.textContent = title;
+      if (saved && saved.tooltip !== undefined) dot.title = saved.tooltip;
+    });
+  },
+  // 점은 관련팀을 그리지 않는다 — true 는 새로고침을 막으려는 것뿐이다
+  onRelatedTeams() { return true; },
   isTaskClick: el => el.closest('.cal-dot'),
   // 점을 누르면 마우스가 움직이지 않아 `mouseout` 이 뜨지 않는다 —
   // 비침이 켜진 채로 패널이 열린다. 열릴 때 지운다.
@@ -350,7 +360,7 @@ Drawer.init({
      `onAssignee`). 그래서 계약이 바뀌면 여기가 안 맞아 빨개지고, 그때 아래
      목록을 처음부터 다시 읽는다. 3단계의 정적 주소 해시와 같은 수법이다 —
      **내용이 바뀌면 이름도 바뀌게 해서, 옛것을 조용히 쓰지 못하게 한다.** */
-  __unusedFor: 'f2eee996',
+  __unusedFor: 'af295bbc',
   __unused: {
     goTo: '달력에는 스크롤해서 갈 자리가 없다. canGoTo:false 라 불리지도 않는다',
     link: '연결 강조는 보드의 바 사이에 선을 긋는 것이다. 점에는 그을 선이 없다',
