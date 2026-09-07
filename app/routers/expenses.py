@@ -133,8 +133,11 @@ def _my_department_id(db: Session, retreat: Retreat, user: User) -> int | None:
 def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
     """'모임 식사비-1, -2, -3...' 반복 입력을 줄이기 위한 직전 입력값 제안 (7-2)."""
     my_dept = _my_department_id(db, retreat, user)
+    # 취소된 행은 제안하지 않는다 (7-4) — 잘못 넣어 취소한 「모임 식사비-N」
+    # 이름이 다시 제안되면 같은 실수를 한 번 더 부른다
     query = select(ExpenseEntry).where(
-        ExpenseEntry.retreat_id == retreat.id, ExpenseEntry.is_meal_expense
+        ExpenseEntry.retreat_id == retreat.id, ExpenseEntry.is_meal_expense,
+        ExpenseEntry.canceled_at.is_(None),
     )
     if my_dept:
         query = query.where(ExpenseEntry.department_id == my_dept)

@@ -149,7 +149,9 @@
             <td class="nowrap">{{ e.payer_name or '–' }}
               {% if e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
             <td>
-              {% if can_edit_dept(user, e.department) %}
+              {# 취소된 행에는 지급 토글을 내지 않는다 (7-4) — 합계에 안 끼는
+                 행의 지급을 누르는 것은 뜻 없는 조작이다. 상태는 배지로만 #}
+              {% if can_edit_dept(user, e.department) and not e.canceled_at %}
               <form method="post" action="/expenses/{{ e.id }}/paid">
                 <input type="hidden" name="redirect_to" value="/expenses{{ '?filter=' ~ filter if filter != 'all' }}">
                 <button class="sbtn{{ ' p' if not e.paid }}" type="submit">{{ '지급완료' if e.paid else '미지급' }}</button>
