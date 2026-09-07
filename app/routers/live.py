@@ -125,7 +125,7 @@ def live_page(
                 department_key_of(db, user) or ""
             ) in live_domain.TEAM_PARTS,
             "active_tab": "live",
-            "page_subtitle": "수련회 진행",
+            "page_subtitle": live_domain.SCREEN_TITLE,
         },
     )
 

@@ -1,5 +1,5 @@
 {% extends "retreat_base.html" %}
-{% block title %}수련회 진행 · {{ retreat.name }}{% endblock %}
+{% block title %}{{ live_title }} · {{ retreat.name }}{% endblock %}
 
 {% block body %}
 {#
@@ -10,7 +10,7 @@
 #}
 {# 봉사팀 보기로 건너가는 자리 (5-8). 소속이 헤브론·코람데오면 그쪽이 기본이다. #}
 <div class="sheetbar">
-  <a class="tabish on" href="/live" aria-current="page">수련회 진행</a>
+  <a class="tabish on" href="/live" aria-current="page">{{ live_title }}</a>
   <a class="tabish" href="/live/staff">봉사팀 보기</a>
   {% if staff_default %}
   <span class="hint">봉사팀은 <b>봉사팀 보기</b>가 보기 편합니다.</span>

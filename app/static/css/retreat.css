@@ -1090,12 +1090,15 @@ button.btn:disabled{opacity:.4;cursor:default}
 .pgm[aria-current=true]{background:var(--side);box-shadow:inset 3px 0 0 var(--go)}
 .pgm .t{font-family:var(--mono);font-size:var(--fz-md);color:var(--ink-2);flex:none;width:42px;padding-top:1px}
 .pgm .b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.pgm .nm{font-size:var(--fz-lg);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 시간별 할 일은 잉크다 (5장) — 시각(.t)이 보조라 할 일이 앞에 온다.
+   전에는 지나간 프로그램(.done)이 보조색이라 회차가 끝나면 목록 전체가
+   흐려져 읽기 어려웠다 — 완료 표시는 오른쪽 숫자 칩(.ct)이 이미 한다 */
+.pgm .nm{font-size:var(--fz-lg);line-height:1.35;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--ink)}
 .pgm[aria-current=true] .nm{font-weight:500}
 .pgm .sub{font-size:var(--fz-sm);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pgm .ct{flex:none;font-size:var(--fz-sm);color:var(--ink-2);border:1px solid var(--rule);
   border-radius:10px;padding:2px 7px;margin-top:1px}
-.pgm.done .nm{color:var(--ink-2)}
 .pgm.done .ct{background:var(--sunk)}
 .pgm.live .ct{border-color:var(--now);color:var(--now-ink);font-weight:600}
 .pgm .flag{flex:none;font-family:var(--mono);font-size:var(--fz-xs);background:var(--now);color:#fff;
@@ -1134,8 +1137,12 @@ button.btn:disabled{opacity:.4;cursor:default}
 .filters button i{width:7px;height:7px;border-radius:50%;display:block;flex:none}
 .filters button[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
 
-.phase{margin-bottom:28px}
-.ph-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+/* 준비·진행·정리 구역 — 제목 띠(옅은 채움 + 600)와 구역 사이 여백으로
+   가른다 (5-2). 헤어라인 하나로는 안 갈렸다 — 현장에서 급히 훑는 화면이라
+   구역 경계가 한눈에 보여야 한다. 채움은 4-0 의 값(완료 배지 채움)만 쓴다 */
+.phase{margin-bottom:36px}
+.ph-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;
+  background:var(--st-done-bg);border-radius:6px;padding:7px 12px}
 .ph-h h2{font-size:var(--fz-lg);font-weight:600;display:flex;align-items:center;gap:8px}
 /* 구간 표시도 면을 채우지 않는다 — 점으로 알린다 (4-0) */
 .ph-h h2 .tag{font-family:var(--mono);font-size:var(--fz-xs);padding:2px 8px;border-radius:3px;
@@ -1388,6 +1395,10 @@ button.btn:disabled{opacity:.4;cursor:default}
 .calchips .chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:500}
 .calcount{margin-left:auto;font-size:var(--fz-md);color:var(--ink-2)}
 
+/* 달 전환의 자리 (4-13) — 옛 격자를 겹쳐 두고 둘을 함께 옮긴다.
+   overflow 는 전환 중에만 잠근다 — 평소에 잠그면 sticky·스크롤이 갇힌다 */
+#calswap{position:relative}
+#calswap.anim{overflow:hidden}
 .calwrap{flex:1;overflow:auto;padding:16px 20px 28px}
 .cal-grid{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
 .cal-wd{font-size:var(--fz-md);font-weight:500;color:var(--ink-2);padding:0 0 7px;
@@ -1488,8 +1499,9 @@ button.btn:disabled{opacity:.4;cursor:default}
 .mt-back{font-size:var(--fz-base);color:var(--ink-2);text-decoration:none}
 .mt-back:hover{color:var(--ink)}
 
+/* 본문에 최대 폭을 두지 않는다 (9장) — 이 화면만 900px 로 좁혀져 있었다 */
 .mt-new{margin:0 22px 18px;padding:14px;border:1px solid var(--rule);border-radius:6px;
-  display:flex;flex-direction:column;gap:8px;max-width:900px}
+  display:flex;flex-direction:column;gap:8px}
 .mt-new-row{display:flex;gap:8px;flex-wrap:wrap}
 .mt-new-row input[name=title]{flex:1;min-width:220px}
 .mt-new input,.mt-new textarea,.mt-one input,.mt-one textarea{
@@ -1499,7 +1511,7 @@ button.btn:disabled{opacity:.4;cursor:default}
   outline:none;border-color:var(--link)}
 .mt-new-foot{display:flex;justify-content:flex-end}
 
-.mt-list{margin:0 22px 24px;max-width:900px;border-top:1px solid var(--rule)}
+.mt-list{margin:0 22px 24px;border-top:1px solid var(--rule)}
 .mt-row{display:flex;align-items:baseline;gap:12px;padding:10px 8px;
   border-bottom:1px solid var(--rule);text-decoration:none;color:var(--ink)}
 .mt-row:hover{background:linear-gradient(var(--hover),var(--hover)),var(--paper)}
@@ -1512,7 +1524,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 .mt-row.mt-notion{box-shadow:inset 2px 0 0 var(--rule-2)}
 .mt-empty{margin:0 22px;color:var(--ink-2);font-size:var(--fz-base)}
 
-.mt-one{margin:0 22px 30px;max-width:900px;display:flex;flex-direction:column;gap:10px}
+.mt-one{margin:0 22px 30px;display:flex;flex-direction:column;gap:10px}
 .mt-one-title{font-size:var(--fz-2xl);font-weight:600;border:1px solid transparent!important;
   padding:6px 8px!important;margin-left:-8px}
 .mt-one-title:hover{border-color:var(--rule)!important}
@@ -1535,7 +1547,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 }
 
 /* 회의록 제안 (회의록 4단계). **고른 것만 반영된다** — 자동은 없다. */
-.mt-sug{margin:0 22px 40px;max-width:900px;border-top:1px solid var(--rule);padding-top:16px}
+.mt-sug{margin:0 22px 40px;border-top:1px solid var(--rule);padding-top:16px}
 .mt-sug h2{font-size:var(--fz-lg);font-weight:600;color:var(--ink)}
 .mt-sug-note{font-size:var(--fz-md);color:var(--ink-2);margin:4px 0 10px}
 .mt-sug-row{display:flex;align-items:center;gap:12px;padding:9px 8px;
@@ -1725,6 +1737,10 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fintbl .nowrap{white-space:nowrap}
 /* 차액이 음수(초과)면 붉다 — 100% 로 덮지 않는다 (7-3). 값은 --red-ink 하나 */
 .fintbl .overrun,.grouphead .overrun{color:var(--red-ink);font-weight:600;font-style:normal}
+/* 구분·항목 행 (7-3) — 자료 행과 갈리도록 옅은 채움. 4-0 의 값만 쓴다:
+   구분은 완료 배지의 채움(#EFEFED), 항목은 그보다 약한 사이드바 면 */
+.fintbl tr.l1row td{background:var(--st-done-bg);font-weight:600}
+.fintbl tr.l2row td{background:var(--side);font-weight:500}
 .fintbl tr.subtotal td{background:var(--side);font-weight:600;border-top:1px solid var(--rule-2)}
 .fintbl tr.grand td{font-weight:700;border-top:2px solid var(--rule-2)}
 .rowedit summary{cursor:pointer;color:var(--ink-2);font-size:var(--fz-sm)}
@@ -1735,14 +1751,28 @@ button.btn:disabled{opacity:.4;cursor:default}
 .editform input[name="name"],.editform input[name="note"]{width:150px}
 .editform input[readonly]{background:var(--side);color:var(--ink-2)}
 .calcnote{font-size:var(--fz-sm);color:var(--ink-2);align-self:center}
+/* 등록은 버튼으로 연다 (7-4) — 접힌 채 시작하고 저장·닫기로 접힌다 */
 .addbox{margin-top:10px}
-.addbox summary{cursor:pointer;font-size:var(--fz-md);color:var(--ink-2)}
-.addbox[open] summary{margin-bottom:6px}
+.addbox summary.addbtn-row{cursor:pointer;list-style:none;
+  display:flex;align-items:center;gap:10px}
+.addbox summary.addbtn-row::-webkit-details-marker{display:none}
+.addbox .btnlike{display:inline-flex;align-items:center;font-size:var(--fz-md);
+  font-weight:500;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule-2);border-radius:6px;padding:6px 12px}
+.addbox summary.addbtn-row:hover .btnlike{background:var(--hover)}
+.addbox[open] .btnlike{background:var(--ink);color:#fff;border-color:var(--ink)}
+.addbox[open] summary.addbtn-row{margin-bottom:8px}
+.addbox .formfoot{display:flex;gap:8px;align-items:center}
 /* 지출 그룹 — 헤더의 셋(예산/집행/잔액)은 예산 페이지와 같은 summary 값 (7-4) */
 .expgroup .grouphead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:0 0 6px}
 .expgroup .grouphead b{font-size:var(--fz-lg)}
 .expgroup .gnum{font-size:var(--fz-sm);color:var(--ink-2);font-variant-numeric:tabular-nums}
 .fintbl tr.otherdept{opacity:.6}       /* 타 부서 흐림 — 숨기지 않는다 (1장) */
+/* 취소된 지출 — 지우지 않고 흐리게 남긴다 (0장 · 7-4). 합계에서는 빠진다 */
+.fintbl tr.canceled{opacity:.45}
+.fintbl tr.canceled .ettl{text-decoration:line-through;text-decoration-color:var(--rule-2)}
+.cancelchip{font-size:var(--fz-xs);background:var(--st-done-bg);color:var(--st-done-fg);
+  border-radius:5px;padding:1px 7px;margin-left:6px;font-weight:600}
 .ettl{font-weight:600}
 .enote{font-size:var(--fz-sm)}
 .mealchip{font-size:var(--fz-xs);background:var(--st-wait-bg);color:var(--st-wait-fg);
@@ -1792,29 +1822,31 @@ button.btn:disabled{opacity:.4;cursor:default}
 .lcard{background:var(--card);border:1px solid var(--rule);border-radius:var(--card-r);
   margin-top:12px;overflow:hidden}
 /* 행 자체는 .trow (partials/taskrow.html) — 목록 변형만 여기 얹는다.
-   제목 아래 메타 줄(부서·담당자·마감), 오른쪽에 배지 — 홈 행과 같은 구조다.
-   칸을 행 오른쪽 끝에 두면 넓은 창에서 제목과 칸 사이가 수백 px 벌어져
-   행이 비어 보인다 (단계 4 · 0-c 에서 실측). */
-.trow.lrow{cursor:default;padding:10px 16px 2px;align-items:flex-start}
-.trow.lrow + .trow.lrow{border-top:1px solid var(--rule)}
+   이름 오른쪽에 메타(부서·담당자·마감), 행 오른쪽 끝에 배지와 캐럿 (4-14).
+   **이름을 누르면 펼쳐진다** — 버튼 줄은 없앴다. 좁은 화면(<820px)에서는
+   메타와 배지가 이름 아래로 내려간다. */
+.trow.lrow{cursor:default;padding:10px 16px;align-items:center}
+.trow.lrow + .trow.lrow,.lslot + .trow.lrow{border-top:1px solid var(--rule)}
 .trow.lrow.dim{opacity:.55}
-.trow.lrow .nm{font-weight:600;font-size:var(--fz-md)}
-.trow.lrow .metaline{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.trow.lrow .main{display:flex;align-items:center;gap:10px;min-width:0}
+.trow.lrow .nm{font-weight:600;font-size:var(--fz-md);cursor:pointer;flex:none;min-width:0}
+.trow.lrow .nm:hover{text-decoration:underline}
+.trow.lrow .metaline{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;
+  justify-content:flex-end}
 .trow.lrow .deptchip.none{color:var(--red-ink)}
 .trow.lrow .deptchip.due{font-family:var(--mono)}
 .trow.lrow .deptchip.b-late{background:var(--st-late-bg);color:var(--st-late-fg)}
-.trow.lrow .cell.st{flex:none;margin-left:auto}
+.trow.lrow .cell.st{flex:none}
+.trow.lrow .cell.caretc{flex:none;cursor:pointer}
+.trow.lrow .caret{font-size:var(--fz-xs);color:var(--ink-3)}
 /* 업무 번호 — 옆의 제목이 뜻을 다 진다 (4-14 · 4-0 의 장식 단) */
 .runno{font-family:var(--mono);font-size:var(--fz-xs);color:var(--ink-3);
   margin-right:7px;font-weight:500}
-.lfoot{padding:2px 16px 9px;border-bottom:1px solid var(--rule);
-  display:flex;align-items:center;gap:5px}
-.lfoot:last-child,.lslot + .lfoot{border-bottom:none}
-.lfoot .caret{font-size:var(--fz-xs);color:var(--ink-3);flex:none}
-.lfoot .sep{color:var(--ink-3);font-size:var(--fz-sm)}
-.lopen{border:none;background:none;font:inherit;font-size:var(--fz-sm);color:var(--ink-2);
-  cursor:pointer;padding:2px 0;display:inline-flex;align-items:center;gap:4px}
-.lopen:hover{color:var(--accent)}
+/* 부서 드롭다운 — 칩 줄 대신 하나. 값은 부서 키다 (2장) */
+.tlist .ldept{font:inherit;font-size:var(--fz-md);color:var(--ink);
+  border:1px solid var(--rule-2);border-radius:6px;background:var(--paper);
+  padding:4px 8px;max-width:220px}
+.tlist .lsort .chip .dirmark{font-family:var(--mono);font-size:var(--fz-xs)}
 .lslot{border-bottom:1px solid var(--rule);background:var(--paper)}
 .lempty{padding:22px 16px;color:var(--ink-2);font-size:var(--fz-md)}
 .ldone{margin-top:12px}
@@ -1824,6 +1856,15 @@ button.btn:disabled{opacity:.4;cursor:default}
 .ldone[open] > summary::before{content:'▾'}
 /* 완료 행 — 눈에 띄지 않게 (4-3). D±N 은 애초에 실려 오지 않는다 */
 .ldone .trow.lrow .nm{color:var(--ink-2);font-weight:500}
+
+@media (max-width:820px){
+  /* 좁은 화면 — 메타와 배지가 이름 아래로 내려간다 (4-14) */
+  .trow.lrow{flex-wrap:wrap;align-items:flex-start}
+  .trow.lrow .main{flex:1 1 100%;display:block}
+  .trow.lrow .metaline{margin-left:0;margin-top:4px;justify-content:flex-start}
+  .trow.lrow .cell.st{order:5}
+  .trow.lrow .cell.caretc{order:6;margin-left:auto}
+}
 
 /* 패널이 행 아래로 들어온 모습 (4-14) — 같은 패널, 자리만 다르다 */
 .drawer.inline{position:static;height:auto;width:auto;max-width:none;min-width:0;transform:none;

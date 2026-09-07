@@ -183,6 +183,10 @@ templates.env.globals["can_edit_dept"] = can_edit_dept
 templates.env.globals["is_other_dept"] = is_other_dept
 templates.env.globals["is_readonly"] = perm.is_readonly
 templates.env.globals["is_admin"] = lambda user: user is not None and perm.can_manage_retreat(user.role)
+# 총무팀 일정(진행 화면)의 이름 — 사이드바와 화면 제목이 같은 한 곳(domain.live)에서 (5장)
+from app.domain.live import SCREEN_TITLE as _live_title  # noqa: E402
+
+templates.env.globals["live_title"] = _live_title
 
 
 def _active_draft(context: dict) -> dict | None:

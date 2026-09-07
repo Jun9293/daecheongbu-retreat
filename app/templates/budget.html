@@ -2,7 +2,7 @@
 {% block title %}예산 · {{ retreat.name }}{% endblock %}
 
 {% block body %}
-<main class="settingwrap finwrap">
+<main class="setting finwrap">
   <h2 class="pagetitle">예산</h2>
 
   {# 지표 — 숫자는 전부 summary 에서 (7-3). 여기서 세지 않는다 #}
@@ -34,11 +34,20 @@
           </tr>
         </thead>
         <tbody>
+          {% set ncols = 12 if is_admin(user) else 11 %}
           {% for group in summary.groups %}
+          {# 구분 행 — 옅은 채움 + 600. 원본 시트의 구분·항목 단이 이 표의
+             구조인데, 전부 자료 행에 눌려 흰 바탕에 섞여 있었다 (7-3) #}
+          <tr class="l1row"><td colspan="{{ ncols }}">{{ group.name }}</td></tr>
+          {% set seen = namespace(l2=none) %}
           {% for row in group.rows %}
           {% set cat = row.category %}
+          {% if cat.level2 != seen.l2 %}{% set seen.l2 = cat.level2 %}
+          {# 항목 행 — 구분보다 약한 채움. 세부항목(자료) 행은 지금대로 #}
+          <tr class="l2row"><td></td><td colspan="{{ ncols - 1 }}">{{ cat.level2 }}</td></tr>
+          {% endif %}
           <tr>
-            <td>{{ cat.level1 }}</td><td>{{ cat.level2 }}</td><td>{{ cat.level3 or '' }}</td>
+            <td></td><td></td><td>{{ cat.level3 or '' }}</td>
             <td class="r mono">{{ cat.unit_price|num if cat.unit_price is not none else '' }}</td>
             <td class="r mono">{{ cat.headcount if cat.headcount is not none else '' }}</td>
             <td class="r mono">{{ cat.times if cat.times is not none else '' }}</td>

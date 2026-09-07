@@ -75,7 +75,7 @@
 
     <a class="g" href="/live"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-14 9z"/></svg>수련회 진행</a>
     <div class="subs">
-      <a class="n" href="/live" {% if active_tab == 'live' %}aria-current="page"{% endif %}>진행 화면</a>
+      <a class="n" href="/live" {% if active_tab == 'live' %}aria-current="page"{% endif %}>{{ live_title }}</a>
       <a class="n" href="/live/staff" {% if active_tab == 'staff' %}aria-current="page"{% endif %}>봉사자 시간표</a>
     </div>
 

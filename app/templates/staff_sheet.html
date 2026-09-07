@@ -8,10 +8,10 @@
   여기서는 그 칸들을 표로 놓기만 한다. 색·병합을 다시 계산하지 않는다.
 #}
 <div class="sheetbar">
-  <a class="tabish" href="/live?stay=1">수련회 진행</a>
+  <a class="tabish" href="/live?stay=1">{{ live_title }}</a>
   <a class="tabish on" href="/live/staff" aria-current="page">봉사팀 보기</a>
   <span class="sp"></span>
-  <span class="hint">읽는 표입니다 — 체크는 진행 화면에서 합니다.</span>
+  <span class="hint">읽는 표입니다 — 체크는 {{ live_title }}에서 합니다.</span>
   <a class="btn sm" href="/live/staff.xlsx">엑셀로 내려받기</a>
 </div>
 
@@ -56,9 +56,9 @@
 {% else %}
 <div class="empty-state">
   <h2>이 회차에 프로그램표가 없습니다.</h2>
-  <p>수련회 진행 화면에서 프로그램표를 넣거나 지난 회차에서 가져오면
+  <p>{{ live_title }} 화면에서 프로그램표를 넣거나 지난 회차에서 가져오면
      여기에 봉사자 시간표가 만들어집니다.</p>
-  <a class="btn" href="/live?stay=1">수련회 진행으로</a>
+  <a class="btn" href="/live?stay=1">{{ live_title }}으로</a>
 </div>
 {% endif %}
 {% endblock %}
