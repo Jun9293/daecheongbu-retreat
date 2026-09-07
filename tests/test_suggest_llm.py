@@ -26,7 +26,7 @@ from sqlalchemy import select
 from app import models
 from app.domain import llm as llm_mod
 from app.domain import suggest as S
-from tests.conftest import app_session
+from tests.conftest import app_session, mirror_discussion_links
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -227,10 +227,11 @@ def test_llm_07_논의_이력이_없으면_2차를_안_부른다(회차):
 
 def test_llm_07b_논의_이력이_있으면_2차를_부른다(회차):
     with app_session() as db:
-        db.add(models.DiscussionEntry(run_id=회차["run_ids"][1],
+        db.add(models.DiscussionEntry(_legacy_run_id=회차["run_ids"][1],
                                       authored_at=dt.date(2026, 5, 1),
                                       body="지난번에 스트랩 견적을 받았습니다"))
         db.commit()
+        mirror_discussion_links(db)    # 이력 조회는 링크 표를 읽는다 (4-9)
     기록 = []
     db, r, m = _열기(회차)
     try:

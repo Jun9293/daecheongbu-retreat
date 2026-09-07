@@ -95,16 +95,32 @@ def generate(
                 )
             )
         )
+        def late_in_base(run: TaskRun) -> bool:
+            """지난 회차에서 늦었는가 — 저장값이 아니라 계산이다 (4-3).
+
+            저장 '지연' 이 없어지면서 옛 `status == '지연'` 분기는 영원히
+            거짓이 됐다 — 그대로 두면 지연 계열 제안이 조용히 죽는다.
+            폐회 다음 날 기준으로 기한이 지난 미완료였거나, 끝났더라도 마감을
+            넘겨 끝난 것(completed_at > end_date)을 지연으로 본다.
+            """
+            from app.domain.board import overdue_of
+
+            ref = base_retreat.end_date or base_retreat.start_date
+            if ref is not None and overdue_of(run, ref + dt.timedelta(days=1)):
+                return True
+            end = run.end_date or run.start_date
+            return bool(run.completed_at and end and run.completed_at > end)
+
         for run in sorted(runs, key=lambda r: r.start_date or dt.date.min):
             title = run.library.title
             reversed_decision = any(
                 entry.supersedes_entry_id is not None for entry in run.discussions
             )
-            if run.status == "지연" and title in DELAY_TEMPLATES:
+            if late_in_base(run) and title in DELAY_TEMPLATES:
                 push(DELAY_TEMPLATES[title], f"지난 회차 「{title}」 지연")
             elif reversed_decision and title in SUPERSEDE_TEMPLATES:
                 push(SUPERSEDE_TEMPLATES[title], f"지난 회차 「{title}」 논의 번복")
-            elif run.status == "지연" and generic < MAX_GENERIC:
+            elif late_in_base(run) and generic < MAX_GENERIC:
                 last = run.discussions[-1].body if run.discussions else None
                 rationale = (
                     f"지난 회차 「{title}」이(가) 지연으로 끝났습니다."

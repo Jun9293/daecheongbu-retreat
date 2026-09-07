@@ -429,7 +429,7 @@ def simulate(db: Session, *, retreat: Retreat, until: dt.date,
 
 import json                                                # noqa: E402
 
-from app.models import DiscussionEntry                     # noqa: E402
+from app.models import DiscussionEntry, DiscussionEntryRun  # noqa: E402
 from app.domain import llm as llm_mod                      # noqa: E402
 from app.domain import meeting_import                      # noqa: E402
 
@@ -601,15 +601,21 @@ def _논의이력(db: Session, run_ids: list[int], 줄당: int = 400) -> str:
     번호 = [r for r in run_ids if isinstance(r, int)]
     if not 번호:
         return "(없음)"
-    행 = db.scalars(
-        select(DiscussionEntry)
-        .where(DiscussionEntry.run_id.in_(번호))
-        .order_by(DiscussionEntry.run_id, DiscussionEntry.authored_at)
+    # 걸린 곳은 링크 표에서 읽는다 (4-9) — 한 줄이 여러 업무에 걸릴 수 있으므로
+    # 같은 본문이 걸린 업무마다 한 번씩 나온다. 그게 맞다: 이력은 업무 단위다.
+    행 = db.execute(
+        select(DiscussionEntryRun.run_id, DiscussionEntry)
+        .join(DiscussionEntry, DiscussionEntry.id == DiscussionEntryRun.entry_id)
+        .where(
+            DiscussionEntryRun.run_id.in_(번호),
+            DiscussionEntryRun.detached_at.is_(None),
+        )
+        .order_by(DiscussionEntryRun.run_id, DiscussionEntry.authored_at)
     ).all()
     if not 행:
         return "(없음)"
-    return "\n".join(f"[{e.run_id}] {e.authored_at} — {(e.body or '')[:줄당]}"
-                     for e in 행)
+    return "\n".join(f"[{run_id}] {e.authored_at} — {(e.body or '')[:줄당]}"
+                     for run_id, e in 행)
 
 
 def _제안으로(답: dict, 논의: list[dict], rows: list[BoardRow],
@@ -746,10 +752,14 @@ def 분석(db: Session, *, retreat: Retreat, meeting: Meeting,
     번호들 = [x.get("run_id") for x in 후보 if isinstance(x.get("run_id"), int)]
     이력있는 = set()
     if 번호들:
+        # 걸린 곳은 링크 표에서 읽는다 (4-9)
         이력있는 = {
             r for (r,) in db.execute(
-                select(DiscussionEntry.run_id)
-                .where(DiscussionEntry.run_id.in_(번호들)).distinct())
+                select(DiscussionEntryRun.run_id)
+                .where(
+                    DiscussionEntryRun.run_id.in_(번호들),
+                    DiscussionEntryRun.detached_at.is_(None),
+                ).distinct())
         }
     부를까, 왜2 = _2차를_부르나(후보, 이력있는)
     논의 = [{"run_id": x.get("run_id"), "왜": x.get("왜") or ""} for x in 후보]

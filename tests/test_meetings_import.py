@@ -408,7 +408,7 @@ def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회�
         meeting_id = m.id
         # 아직 아무것도 안 골랐으므로 논의가 없다
         assert db.scalars(select(models.DiscussionEntry)
-                          .where(models.DiscussionEntry.run_id == run_id)).all() == []
+                          .where(models.DiscussionEntry._legacy_run_id == run_id)).all() == []
 
     보임 = 제안받기(admin_client, meeting_id)
     assert not 보임["failed"]
@@ -423,7 +423,7 @@ def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회�
 
     with app_session() as db:
         논의 = db.scalars(select(models.DiscussionEntry)
-                        .where(models.DiscussionEntry.run_id == run_id)).all()
+                        .where(models.DiscussionEntry._legacy_run_id == run_id)).all()
         assert len(논의) == 1, "고른 하나만 들어가야 한다"
         # 출처가 남는다
         assert "회의록" in 논의[0].body and "6월 회의" in 논의[0].body
@@ -481,7 +481,7 @@ def test_x_19c_아무것도_자동으로_반영되지_않는다(admin_client, �
 
     with app_session() as db:
         남은것 = db.scalars(select(models.DiscussionEntry)
-                          .where(models.DiscussionEntry.run_id == run_id)).all()
+                          .where(models.DiscussionEntry._legacy_run_id == run_id)).all()
     assert 남은것 == [], "보기만 했는데 논의가 남았다"
 
 
@@ -1238,7 +1238,7 @@ def test_w2_05b_보여준_것과_남는_것이_같다(회차와업무, admin_cli
                       json={"run_id": run_id})
     with app_session() as db:
         남은것 = db.scalars(select(models.DiscussionEntry)
-                          .where(models.DiscussionEntry.run_id == run_id)).all()
+                          .where(models.DiscussionEntry._legacy_run_id == run_id)).all()
     assert len(남은것) == 1
     assert 남은것[0].body == 미리, "보여준 것과 남는 것이 다르다"
 

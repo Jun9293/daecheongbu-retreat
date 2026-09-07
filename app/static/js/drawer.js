@@ -46,6 +46,11 @@ const STATUS = {
   '완료':   {label: '완료',   color: '#8B948F'},
   '지연':   {label: '지연',   color: '#C8442E'},
 };
+/* 고를 수 있는 상태 — '지연' 은 없다. 저장값이 아니라 날짜에서 나오는
+   계산값이라(4-3), 고르게 두면 같은 사실의 출처가 둘이 된다.
+   STATUS 에 '지연' 이 남은 것은 **보여주기** 위해서다 — 기한이 지난 업무의
+   칩은 서버가 계산한 '지연' 으로 뜬다. */
+const PICKABLE = ['대기', '진행중', '완료'];
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
 const $ = id => document.getElementById(id);
@@ -113,7 +118,9 @@ addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); close
 /* ── 본문 ── */
 function renderDrawer() {
   const d = detail;
-  const st = STATUS[d.status] || STATUS['대기'];
+  // 칩은 계산된 배지로 뜬다 (board.paint_of · 4-3) — 기한이 지났으면 '지연'.
+  // 서버가 배지를 안 실은 옛 응답이면 저장 상태로 물러선다.
+  const st = STATUS[(d.badge && d.badge.label) || d.status] || STATUS['대기'];
   $('dkick').innerHTML =
     `<span class="chip solid" style="--team:${esc(d.department_color)}">${esc(d.department)}</span>
      <span class="chip">${d.kind_label}</span>
@@ -776,8 +783,24 @@ function renderLog() {
     }).join('');
     // 날짜는 본문 위에 따로 둔다 — 옆에 붙이면 번호 매긴 목록의 첫 줄만 밀려
     // 둘째 줄부터와 왼쪽 끝이 어긋난다.
-    return `<div class="entry"><div class="ehead"><span class="d mono">${start.date}</span>` +
-      `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>${body}</div>`;
+    // **출처가 줄마다 붙는다** (4-9): 회의록에서 온 것은 「M/D 회의」(누르면
+    // 그 회의록), 사람이 쓴 것은 「직접 적음 · M/D」. 둘이 구별돼야 한다.
+    const src = start.source
+      ? `<a class="d src" href="/meetings/${Number(start.source.meeting_id)}">${esc(start.source.label)}</a>`
+      : `<span class="d mono">직접 적음${start.date ? ' · ' + esc(start.date) : ''}</span>`;
+    // **걸린 곳** (4-9): 한 곳뿐이면 아무것도 안 붙인다 — 대부분이 그럴 테니
+    // 화면이 조용하고, 여럿에 걸린 줄만 눈에 띈다.
+    const places = start.runs || [];
+    const placeRow = places.length > 1
+      ? `<div class="eplaces">${places.map(p => p.here
+          ? '<b class="here">여기</b>'
+          : `<button type="button" class="pl" data-goto-run="${Number(p.run_id)}">${esc(p.title)}</button>`).join('')}${
+          detail.can_edit && !start.carried
+            ? `<button type="button" class="pl detach" data-detach="${start.id}" title="이 업무에서만 뗍니다. 기록은 남습니다">여기서 떼기</button>`
+            : ''}</div>`
+      : '';
+    return `<div class="entry"><div class="ehead">${src}` +
+      `${last.author ? `<span class="who">${esc(last.author)}</span>` : ''}</div>${placeRow}${body}</div>`;
   };
 
   const roots = entries.filter(e => !e.replaces);
@@ -795,6 +818,24 @@ function renderLog() {
 /* 써 놓은 논의를 그 자리에서 고친다. 말을 바꾸는 것(취소선 + 후속 기록)과
    잘못 쓴 것을 바로잡는 것은 다르므로, 이건 오타·오기를 위한 자리다. */
 $('dlog').addEventListener('click', async e => {
+  // 걸린 다른 업무로 — 같은 패널이 그 업무를 다시 연다 (4-9)
+  const go = e.target.closest('[data-goto-run]');
+  if (go) { openDrawer(Number(go.dataset.gotoRun)); return; }
+
+  // 이 업무에서 뗀다 — 지우는 것이 아니다 (detachedAt). 마지막 한 곳은
+  // 서버가 막는다 (400) — 붙을 곳 없는 논의를 만들지 않는다.
+  const off = e.target.closest('[data-detach]');
+  if (off) {
+    const entry = detail.discussions.find(x => String(x.id) === String(off.dataset.detach));
+    const n = entry && entry.runs ? entry.runs.length : 0;
+    if (!confirm(`업무 ${n}곳에 걸린 논의입니다. 이 업무에서만 뗍니다 — 기록은 다른 곳에 남습니다.`)) return;
+    const res = await fetch(`/board/task/${cur}/discussion/${off.dataset.detach}/detach`, {method: 'POST'});
+    if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '떼지 못했습니다.'); return; }
+    detail.discussions = (await res.json()).discussions;
+    renderLog();
+    return;
+  }
+
   const open = e.target.closest('[data-edit]');
   if (open) { startEntryEdit(open.dataset.edit); return; }
 
@@ -820,6 +861,10 @@ function startEntryEdit(id) {
   const entry = detail.discussions.find(x => String(x.id) === String(id));
   const span = document.querySelector(`#dlog [data-entry="${id}"]`);
   if (!entry || !span) return;
+  // 여럿에 걸린 줄은 고치기 전에 말해 준다 (4-9) — 고치면 걸린 모든 업무에서
+  // 함께 바뀐다. 본문이 한 행이기 때문이다.
+  const n = entry.runs ? entry.runs.length : 0;
+  if (n > 1 && !confirm(`업무 ${n}곳에 걸린 논의입니다. 고치면 걸린 모든 업무에서 함께 바뀝니다.`)) return;
   span.innerHTML = `<textarea class="editbox">${esc(entry.body)}</textarea>
     <span class="editrow">
       <button class="pri" data-save-edit="${id}">저장</button>
@@ -885,8 +930,8 @@ function statMenu(btn) {
   const menu = $('statmenu'), r = btn.getBoundingClientRect();
   // 같은 배지를 다시 누르면 상태를 바꾸지 않고 목록만 닫는다
   if (menu.classList.contains('on')) { closeMenus(); return; }
-  menu.innerHTML = Object.entries(STATUS).map(([key, v]) =>
-    `<button data-s="${esc(key)}"><span class="cv" style="background:${esc(v.color)}"></span>${esc(v.label)}</button>`).join('');
+  menu.innerHTML = PICKABLE.map(key =>
+    `<button data-s="${esc(key)}"><span class="cv" style="background:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join('');
   menu.style.left = r.left + 'px';
   menu.style.top = (r.bottom + 4) + 'px';
   menu.classList.add('on');
@@ -911,7 +956,9 @@ async function setStatus(runId, status) {
   // `view.status` 가 상태를 들고 오므로 따로 넘기지 않는다 — 같은 값이
   // 두 자리에 있으면 어긋났을 때 어느 쪽이 맞는지 알 수 없다.
   call('onStatus', runId, view);
-  if (detail) { detail.status = status; renderDrawer(); }
+  // 배지도 서버가 준 것으로 — 기한이 지난 업무는 '완료' 를 벗어나는 순간
+  // 다시 '지연' 으로 떠야 한다. 화면이 계산하면 두 벌이 된다.
+  if (detail) { detail.status = status; detail.badge = view.badge; renderDrawer(); }
   refreshDiag(runId);
 }
 

@@ -29,8 +29,11 @@ TASK_STATUSES = ("대기", "진행중", "피드백요청", "완료", "지연")
 TASK_KINDS = ("main", "sub", "schedule")
 TASK_KIND_LABELS = {"main": "Main", "sub": "하위", "schedule": "일정"}
 
-# 보드에서 쓰는 상태 (TASK_STATUSES 중 '피드백요청'을 뺀 4개)
-RUN_STATUSES = ("대기", "진행중", "완료", "지연")
+# 보드에서 쓰는 상태 — 저장되는 것은 진척 셋뿐이다 (CLAUDE.md 4-3).
+# '지연' 은 저장하지 않는다: 기한 초과는 날짜에서 계산하고(board.overdue_of)
+# 배지·바의 지연 표현은 그 계산값으로 칠한다. 저장하면 같은 사실의 출처가
+# 둘이 되고, 놓친 사람이 직접 눌러야 시스템이 알아차리는 구조가 된다.
+RUN_STATUSES = ("대기", "진행중", "완료")
 
 
 def _now() -> dt.datetime:
@@ -771,9 +774,14 @@ class TaskRun(Base):
     retreat: Mapped[Retreat] = relationship()
     department: Mapped[Department | None] = relationship()
     assignee: Mapped[User | None] = relationship()
+    # 걸린 곳의 유일한 출처는 링크 표다 (4-9) — 이 관계도 링크 표를 지나며,
+    # 뗀 것(detached_at)은 나오지 않는다. DiscussionEntry.run_id 를 읽지 않는다.
     discussions: Mapped[list[DiscussionEntry]] = relationship(
-        back_populates="run",
-        cascade="all, delete-orphan",
+        secondary="discussion_entry_runs",
+        primaryjoin="and_(TaskRun.id == DiscussionEntryRun.run_id,"
+        " DiscussionEntryRun.detached_at.is_(None))",
+        secondaryjoin="DiscussionEntry.id == DiscussionEntryRun.entry_id",
+        viewonly=True,
         order_by="DiscussionEntry.authored_at, DiscussionEntry.id",
     )
     # 회차별이다 — 새 회차의 run 은 자기 파일을 처음부터 다시 쌓는다
@@ -798,8 +806,12 @@ class DiscussionEntry(Base):
     __tablename__ = "discussion_entries"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(
-        ForeignKey("task_runs.id", ondelete="CASCADE"), index=True
+    # 남기되 읽지 않는다 (4-9) — 걸린 곳의 유일한 출처는 DiscussionEntryRun 이다.
+    # **속성 이름을 바꿔 읽기를 구조로 막았다** — `entry.run_id` 는 AttributeError.
+    # 낡은 것을 조용히 쓰지 못하게 이름을 바꾸는, 이 저장소의 그 수법이다 (4-13).
+    # 새 행을 만들 때 첫 번째 걸린 곳을 적어 두는 것(쓰기)만 이 이름으로 한다.
+    _legacy_run_id: Mapped[int] = mapped_column(
+        "run_id", ForeignKey("task_runs.id", ondelete="CASCADE"), index=True
     )
     authored_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     body: Mapped[str] = mapped_column(Text)
@@ -812,9 +824,31 @@ class DiscussionEntry(Base):
     )
     # 이전 회차에서 참고용으로 따라온 기록 (기본은 접힌 상태로 보여준다)
     carried_from_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 출처 (4-9) — 회의록 제안 반영으로 들어온 것이면 그 회의록.
+    # 비어 있으면 사람이 직접 적은 것이다. ALTER 로 붙어 기존 행은 NULL.
+    source_meeting_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
-    run: Mapped[TaskRun] = relationship(back_populates="discussions")
+
+class DiscussionEntryRun(Base):
+    """논의 한 줄이 걸린 곳 — **유일한 출처다** (CLAUDE.md 4-9).
+
+    회의는 여러 업무를 한 자리에서 이야기하므로 한 줄이 여러 업무에 걸린다.
+    지우지 않고 떼기만 한다(detached_at) — 마지막 한 곳은 떼지 못한다.
+    """
+
+    __tablename__ = "discussion_entry_runs"
+    __table_args__ = (UniqueConstraint("entry_id", "run_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("discussion_entries.id", ondelete="CASCADE"), index=True
+    )
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("task_runs.id", ondelete="CASCADE"), index=True
+    )
+    attached_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    detached_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # ==========================================================================

@@ -24,6 +24,7 @@ from app.models import (
     MEETING_ITEM_KINDS,
     Department,
     DiscussionEntry,
+    DiscussionEntryRun,
     Meeting,
     MeetingItem,
     Retreat,
@@ -31,6 +32,7 @@ from app.models import (
     TaskRun,
     User,
 )
+from app.domain import discussion
 from app.domain import permissions as perm
 from app.security import get_current_user, require_editor
 from app.templating import redirect, render
@@ -555,13 +557,21 @@ def meeting_suggestions(
     # **이미 그 회의록에서 온 논의가 있으면 말한다.** 같은 것을 두 번 남기게
     # 두지 않는다 — 두 번 남으면 어느 것이 맞는지 알 수 없고, 지우는 길은
     # 그 업무의 논의 탭뿐이라 되돌리는 값이 비싸다.
+    # 걸린 곳은 링크 표에서, 출처는 source_meeting_id 에서 읽는다 (4-9) —
+    # 전에는 본문 첫 줄을 LIKE 로 맞춰 봤는데, 출처가 컬럼이 된 지금은
+    # 문장을 다시 읽을 이유가 없다. (컬럼이 생기기 전에 반영된 것은 운영에
+    # 0건이라 소급할 것도 없다 — 단계 3 실측.)
     날 = meeting.meeting_date.isoformat() if meeting.meeting_date else "날짜 없음"
-    표 = f"[회의록 {날}"
     이미 = {
-        e.run_id
-        for e in db.scalars(
-            select(DiscussionEntry).where(DiscussionEntry.body.like(표 + "%")))
-        if f"· {meeting.title}]" in (e.body or "")
+        run_id
+        for (run_id,) in db.execute(
+            select(DiscussionEntryRun.run_id)
+            .join(DiscussionEntry,
+                  DiscussionEntry.id == DiscussionEntryRun.entry_id)
+            .where(
+                DiscussionEntry.source_meeting_id == meeting.id,
+                DiscussionEntryRun.detached_at.is_(None),
+            ))
     }
     남을것 = discussion_body(meeting)
     어디 = f"{날} 회의록"
@@ -621,7 +631,10 @@ def meeting_suggestions(
 
 
 class SuggestionPick(BaseModel):
-    run_id: int
+    # 논의 한 줄이 여러 업무에 걸릴 수 있다 (4-9) — 본문은 한 행,
+    # 걸린 곳은 업무마다 링크 행 하나다. run_id 하나만 보내는 옛 모양도 받는다.
+    run_id: int | None = None
+    run_ids: list[int] = []
 
 
 @router.post("/{meeting_id}/suggestions/apply")
@@ -632,30 +645,44 @@ def apply_suggestion(
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    """고른 제안 하나를 그 업무의 논의로 남긴다.
+    """고른 제안 하나를 걸린 업무들의 논의로 남긴다.
 
-    **출처가 남는다.** 논의 본문 첫 줄에 어느 회의록에서 온 것인지 적고,
-    `ActivityLog` 에 `actor_type='claude'` 로 기록한다 — 나중에 골라 낼 수
-    있어야 한다 (옮기기의 `--undo` 와 같은 이유).
+    **본문은 한 행이다** (4-9). 업무 둘에 걸린 제안을 반영하면 DiscussionEntry
+    한 행 + 링크 행 둘이 남는다 — 두 행으로 나누면 한쪽만 고쳐진다.
+
+    **출처가 남는다.** `source_meeting_id` 가 그 회의록을 가리키고(화면의
+    「M/D 회의」 링크), `ActivityLog` 에 `actor_type='claude'` 로 기록한다 —
+    나중에 골라 낼 수 있어야 한다 (옮기기의 `--undo` 와 같은 이유).
     """
     meeting = _owned(db, meeting_id, retreat)
-    run = db.get(TaskRun, payload.run_id)
-    if run is None or run.retreat_id != retreat.id:
-        raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+    wanted = list(payload.run_ids or [])
+    if payload.run_id is not None and payload.run_id not in wanted:
+        wanted.insert(0, payload.run_id)
+    if not wanted:
+        raise HTTPException(status_code=400, detail="걸 업무를 하나 이상 골라주세요.")
+    runs = []
+    for run_id in wanted:
+        run = db.get(TaskRun, run_id)
+        if run is None or run.retreat_id != retreat.id:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+        runs.append(run)
 
     방식, _, _말 = (meeting.suggest_note or "").partition("|")
     if not _말:
         방식 = ""
     entry = DiscussionEntry(
-        run_id=run.id,
+        _legacy_run_id=runs[0].id,
         authored_at=meeting.meeting_date or dt.date.today(),
         # **미리보기와 같은 함수**를 쓴다. 두 벌이면 보여준 것과 남는 것이 갈린다
         body=discussion_body(meeting),
         author_id=user.id,
         author_name=user.name,
+        source_meeting_id=meeting.id,
     )
     db.add(entry)
     db.flush()
+    for run in runs:
+        discussion.attach(db, entry, run)
     log_activity(
         db,
         retreat_id=retreat.id,
@@ -666,10 +693,12 @@ def apply_suggestion(
         # **어떤 방식으로 고른 제안이었는지 남긴다.** 낱말로 물러선 것과
         # 문장을 읽고 고른 것이 둘 다 `actor_type='claude'` 라, 이것이
         # 없으면 나중에 구별되지 않는다 — 성적을 견줄 때 그 구별이 전부다
-        summary=f"{meeting.title} → {run.library.title} ({방식 or '알 수 없음'})",
-        after_value={"meeting_id": meeting.id, "run_id": run.id,
+        summary=f"{meeting.title} → "
+        f"{' · '.join(r.library.title for r in runs)} ({방식 or '알 수 없음'})",
+        after_value={"meeting_id": meeting.id, "run_ids": [r.id for r in runs],
                      "고른방식": 방식 or "알 수 없음"},
         actor_type="claude",
     )
     db.commit()
-    return {"ok": True, "entry_id": entry.id, "run_title": run.library.title}
+    return {"ok": True, "entry_id": entry.id,
+            "run_title": runs[0].library.title}

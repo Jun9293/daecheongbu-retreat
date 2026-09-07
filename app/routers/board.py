@@ -14,11 +14,12 @@ from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity, resolve_retreat
 from app.domain import board as board_view
 from app.domain import diagnosis
+from app.domain import discussion
 from app.domain import dweek
 from app.domain import library as lib_domain
 from app.domain import permissions as perm
 from app.domain.departments import department_key_of, short_name
-from app.models import DiscussionEntry, Retreat, TaskRun, User
+from app.models import DiscussionEntry, Meeting, Retreat, TaskRun, User
 from app.routers import attachments
 from app.security import get_current_user
 from app.templating import render
@@ -79,21 +80,61 @@ def _load_run(db: Session, retreat: Retreat, run_id: int) -> TaskRun:
     return run
 
 
-def _serialize_discussions(run: TaskRun, user: User | None = None) -> list[dict]:
-    replaced = {e.supersedes_entry_id for e in run.discussions if e.supersedes_entry_id}
-    return [
-        {
-            "id": entry.id,
-            "date": entry.authored_at.strftime("%m/%d") if entry.authored_at else "",
-            "body": entry.body,
-            "author": entry.author_name,
-            "superseded": entry.id in replaced,
-            "replaces": entry.supersedes_entry_id,
-            "carried": entry.carried_from_run_id is not None,
-            "can_edit": _can_edit_entry(user, entry),
-        }
-        for entry in run.discussions
-    ]
+def _serialize_discussions(db: Session, run: TaskRun, user: User | None = None) -> list[dict]:
+    """논의 목록. 걸린 곳(runs)과 출처(source)를 함께 싣는다 (4-9).
+
+    걸린 곳은 링크 표에서 읽는다(discussion.runs_of) — 한 곳뿐이면 화면이
+    아무것도 안 붙이고, 둘 이상이면 「여기」 와 나머지 업무 이름을 붙인다.
+    """
+    entries = run.discussions
+    replaced = {e.supersedes_entry_id for e in entries if e.supersedes_entry_id}
+    # 출처가 회의록인 것들의 회의 날짜 — 한 번에 모아 읽는다
+    meeting_ids = {e.source_meeting_id for e in entries if e.source_meeting_id}
+    meetings = {
+        m.id: m
+        for m in db.scalars(select(Meeting).where(Meeting.id.in_(meeting_ids)))
+    } if meeting_ids else {}
+
+    out = []
+    for entry in entries:
+        attached = discussion.runs_of(db, entry)
+        meeting = meetings.get(entry.source_meeting_id)
+        out.append(
+            {
+                "id": entry.id,
+                "date": entry.authored_at.strftime("%m/%d") if entry.authored_at else "",
+                "body": entry.body,
+                "author": entry.author_name,
+                "superseded": entry.id in replaced,
+                "replaces": entry.supersedes_entry_id,
+                "carried": entry.carried_from_run_id is not None,
+                "can_edit": _can_edit_entry(user, entry),
+                # 걸린 곳 — 지금 보는 업무는 here 로 표시된다
+                "runs": [
+                    {
+                        "run_id": r.id,
+                        "title": r.library.title,
+                        "here": r.id == run.id,
+                    }
+                    for r in attached
+                ],
+                # 출처 — 회의록에서 온 것이면 그 회의록으로 가는 길을 준다.
+                # 없으면 화면이 「직접 적음 · M/D」 로 그린다.
+                "source": (
+                    {
+                        "meeting_id": meeting.id,
+                        "label": (
+                            f"{meeting.meeting_date.month}/{meeting.meeting_date.day} 회의"
+                            if meeting.meeting_date
+                            else "회의"
+                        ),
+                    }
+                    if meeting is not None
+                    else None
+                ),
+            }
+        )
+    return out
 
 
 def _can_edit_entry(user: User | None, entry: DiscussionEntry) -> bool:
@@ -181,6 +222,8 @@ def task_detail(
         "kind": lib.kind,
         "kind_label": lib.kind_label,
         "status": run.status,
+        # 배지는 한 곳에서 만든다 (board.paint_of · 4-3) — 기한이 지났으면 '지연'
+        "badge": board_view.paint_of(run, dt.date.today())["badge"],
         "start": run.start_date.isoformat() if run.start_date else None,
         "end": (run.end_date or run.start_date).isoformat() if run.start_date else None,
         "d_week": run.d_week,
@@ -218,7 +261,7 @@ def task_detail(
             )
             if other.id != run.id
         ],
-        "discussions": _serialize_discussions(run, user),
+        "discussions": _serialize_discussions(db, run, user),
         # 첨부는 회차별이라 run 에 붙는다 (CLAUDE.md 4-9). 상세 패널이
         # 탭을 열기 전에 개수를 보여줘야 해서 여기서 함께 내려보낸다.
         "attachments": attachments.serialize(db, user, run),
@@ -280,8 +323,9 @@ def set_status(
         after_value={"status": payload.status},
     )
 
-    # **생김새는 한 곳에서 만든다** (board.paint_of). 보드의 바와 달력의 점은
-    # 규칙이 달라서(4-13) 둘 다 실어 보낸다 — 화면은 받아서 칠하기만 한다.
+    # **생김새는 한 곳에서 만든다** (board.paint_of). 바·점·배지는 이제 한
+    # 규칙이지만(4-3) 화면(JS)이 받는 이름 쌍(bar_*/dot_*)은 그대로다 —
+    # 화면은 받아서 칠하기만 한다.
     return JSONResponse(board_view.paint_of(run, dt.date.today()))
 
 
@@ -493,11 +537,12 @@ def add_discussion(
     supersedes = payload.supersedes_entry_id
     if supersedes is not None:
         target = db.get(DiscussionEntry, supersedes)
-        if target is None or target.run_id != run.id:
+        # 걸린 곳은 링크 표에서 본다 (4-9) — run_id 를 읽지 않는다
+        if target is None or run.id not in {r.id for r in discussion.runs_of(db, target)}:
             raise HTTPException(status_code=400, detail="대체할 기록을 찾을 수 없습니다.")
 
     entry = DiscussionEntry(
-        run_id=run.id,
+        _legacy_run_id=run.id,
         authored_at=dt.date.today(),
         body=body,
         author_id=user.id,
@@ -505,6 +550,9 @@ def add_discussion(
         supersedes_entry_id=supersedes,
     )
     db.add(entry)
+    db.flush()
+    # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9)
+    discussion.attach(db, entry, run)
     db.commit()
     db.refresh(run)
 
@@ -517,7 +565,7 @@ def add_discussion(
         target_id=run.id,
         summary=f"{run.library.title}: {body[:40]}",
     )
-    return {"discussions": _serialize_discussions(run, user)}
+    return {"discussions": _serialize_discussions(db, run, user)}
 
 
 # ---------------------------------------------------------------- 업무 추가
@@ -899,9 +947,7 @@ def edit_discussion(
 ):
     """써 놓은 논의를 고친다 — 오타나 잘못 적은 것을 바로잡는 용도다."""
     run = _load_run(db, retreat, run_id)
-    entry = db.get(DiscussionEntry, entry_id)
-    if entry is None or entry.run_id != run.id:
-        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+    entry = _entry_of(db, run, entry_id)
     if not _can_edit_entry(user, entry):
         raise HTTPException(status_code=403, detail="내가 쓴 기록만 고칠 수 있습니다.")
 
@@ -911,7 +957,7 @@ def edit_discussion(
 
     before = entry.body
     if before == body:
-        return {"discussions": _serialize_discussions(run, user)}
+        return {"discussions": _serialize_discussions(db, run, user)}
 
     entry.body = body
     db.commit()
@@ -927,4 +973,49 @@ def edit_discussion(
         before_value={"body": before},
         after_value={"body": body},
     )
-    return {"discussions": _serialize_discussions(run, user)}
+    return {"discussions": _serialize_discussions(db, run, user)}
+
+
+def _entry_of(db: Session, run: TaskRun, entry_id: int) -> DiscussionEntry:
+    """이 업무에 걸려 있는 논의 하나. 걸린 곳은 링크 표에서 본다 (4-9)."""
+    entry = db.get(DiscussionEntry, entry_id)
+    if entry is None or run.id not in {r.id for r in discussion.runs_of(db, entry)}:
+        raise HTTPException(status_code=404, detail="기록을 찾을 수 없습니다.")
+    return entry
+
+
+@router.post("/board/task/{run_id}/discussion/{entry_id}/detach")
+def detach_discussion(
+    run_id: int,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """논의를 이 업무에서 뗀다 — 지우지 않는다(detachedAt, 4-9).
+
+    마지막 한 곳은 떼지 못한다: 붙을 곳 없는 논의는 어느 화면에도 안 떠서,
+    있는데 아무도 못 보는 기록이 된다.
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
+    entry = _entry_of(db, run, entry_id)
+
+    try:
+        discussion.detach(db, entry, run)
+    except discussion.LastAttachmentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(run)
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="논의_떼기",
+        target_type="discussion_entry",
+        target_id=entry.id,
+        summary=f"{run.library.title} 에서 뗌: {entry.body[:30]}",
+        before_value={"run_id": run.id},
+    )
+    return {"discussions": _serialize_discussions(db, run, user)}

@@ -73,6 +73,8 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("meetings", "origin", "VARCHAR(20)"),
     ("meetings", "source_ref", "VARCHAR(200)"),
     ("meetings", "import_batch", "VARCHAR(40)"),
+    # 논의의 출처 (4-9). 기존 행은 NULL — 사람이 직접 적은 것으로 본다.
+    ("discussion_entries", "source_meeting_id", "INTEGER"),
 )
 
 
@@ -171,6 +173,87 @@ def _release_inactive_phones() -> None:
             )
 
 
+def _convert_stored_late() -> None:
+    """저장된 status='지연' 을 한 번 '대기' 로 되돌린다 (4-3).
+
+    '지연' 은 이제 저장값이 아니라 계산값이다(board.overdue_of) — 저장해 두면
+    같은 사실의 출처가 둘이 되고, 담당자가 손으로 눌러야만 붙는 표시가 판정처럼
+    읽힌다. 바꾼 것은 ActivityLog 에 남긴다 — 조용히 사라지면 나중에 "내가
+    눌러 둔 지연이 왜 없어졌지" 를 아무도 설명하지 못한다.
+
+    두 번 떠도 두 번 바꾸지 않는다 — 바꾸고 나면 '지연' 행이 없다.
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        rows = list(
+            conn.execute(
+                text("SELECT id, retreat_id FROM task_runs WHERE status = '지연'")
+            )
+        )
+        for run_id, retreat_id in rows:
+            conn.execute(
+                text("UPDATE task_runs SET status = '대기' WHERE id = :id"),
+                {"id": run_id},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO activity_logs"
+                    " (retreat_id, actor_type, action, target_type, target_id,"
+                    "  summary, before_value, after_value, created_at)"
+                    " VALUES (:retreat_id, 'user', '업무_상태_변경', 'task_run', :id,"
+                    "  '저장 지연 → 대기 (계산값으로 전환)',"
+                    "  :before, :after, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "retreat_id": retreat_id,
+                    "id": run_id,
+                    "before": '{"status": "지연"}',
+                    "after": '{"status": "대기"}',
+                },
+            )
+        if rows:
+            import logging
+
+            logging.getLogger("dcb.db").info(
+                "저장돼 있던 '지연' %d행을 '대기' 로 돌렸습니다 — 지연은 이제 날짜에서 계산합니다",
+                len(rows),
+            )
+
+
+def _link_discussion_runs() -> None:
+    """링크 행(DiscussionEntryRun)이 없는 논의만 runId 에서 한 번 옮긴다 (4-9).
+
+    걸린 곳의 유일한 출처는 링크 표다. 옛 행은 run_id 하나만 들고 있으므로
+    그 값으로 링크 행 하나를 만들어 준다. **여기가 DiscussionEntry.run_id 를
+    읽는 유일한 자리다** — 다른 곳은 전부 링크 표를 지난다.
+
+    두 번 떠도 두 번 옮기지 않는다 — 이미 링크가 있는 행은 건너뛴다.
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        moved = conn.execute(
+            text(
+                "INSERT INTO discussion_entry_runs (entry_id, run_id, attached_at)"
+                " SELECT e.id, e.run_id, CURRENT_TIMESTAMP FROM discussion_entries e"
+                " WHERE NOT EXISTS (SELECT 1 FROM discussion_entry_runs l"
+                "                   WHERE l.entry_id = e.id)"
+            )
+        ).rowcount
+        if moved:
+            import logging
+
+            logging.getLogger("dcb.db").info(
+                "논의 %d건에 걸린 곳 링크 행을 만들었습니다 (runId 에서 한 번 옮김)",
+                moved,
+            )
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (모델 등록)
 
@@ -178,3 +261,5 @@ def init_db() -> None:
     _catch_up_columns()
     _swap_phone_index()
     _release_inactive_phones()
+    _convert_stored_late()
+    _link_discussion_runs()

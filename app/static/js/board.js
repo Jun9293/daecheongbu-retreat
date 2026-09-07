@@ -495,7 +495,9 @@ function applySavedDates(runId, saved) {
    상태는 `view.status` 가 들고 온다 (`board.paint_of`). 인자로 또 받으면
    같은 값이 두 자리에 있게 되고, 둘이 어긋났을 때 어느 쪽이 맞는지 알 수 없다. */
 function applyStatus(runId, view) {
-  const status = view.status;
+  // 보이는 상태는 배지에서 온다 (board.paint_of · 4-3) — 기한이 지났으면
+  // '지연'. view.status 는 저장값이라 '지연' 을 들지 않는다.
+  const status = (view.badge && view.badge.label) || view.status;
   META[runId].status = status;
   sheet.querySelectorAll(`.bar[data-run="${runId}"]`).forEach(el => {
     el.closest('.row').dataset.status = status;

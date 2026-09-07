@@ -7,6 +7,7 @@ import pytest
 from app.domain import board as board_view
 from app.domain import library as lib
 from app.models import Department, DiscussionEntry, Retreat, TaskLibrary, TaskRun
+from tests.conftest import mirror_discussion_links
 
 
 def make_retreat(db, name, open_date, *, keys=("chongmuM", "sketch")):
@@ -272,12 +273,13 @@ def test_previous_discussions_are_carried_forward(db):
     previous = run(db, base, task)
     db.add(
         DiscussionEntry(
-            run_id=previous.id,
+            _legacy_run_id=previous.id,
             authored_at=dt.date(2026, 7, 26),
             body="스트랩 재고 때문에 100×140mm 로 확정",
         )
     )
     db.commit()
+    mirror_discussion_links(db)    # 따라오는 것도 링크 표를 읽는다 (4-9)
 
     new = lib.create_retreat(
         db,

@@ -46,12 +46,16 @@
   /* 글자색은 옅은 채움 위에서도 4.5:1 을 넘긴다 (9장) — 회차 목록에서
      배지가 혼자 뜻을 진다. 처음 값(#B7791F 등)은 3.3:1 이었다.
      지연 글자가 --now 보다 진한 것도 그래서다 — 뜻은 같고 명도만 다르다. */
+  /* 붉은 글자는 한 값이다 (4-0) — 지연 배지 글자와 기한 문구가 같은 것을
+     가리킨다. 전에는 거의 같은 값이 둘이었는데, 눈으로 구별이 안 되는
+     토큰 둘은 어느 쪽을 쓸지 매번 고르게 만든다. */
+  --red-ink:#A33F38;
   --st-wait-bg:#FBF3E4; --st-wait-fg:#8A5A12;
   --st-prog-bg:var(--accent-soft); --st-prog-fg:var(--accent);
-  --st-late-bg:#FBEDEC; --st-late-fg:#A33F38;
+  --st-late-bg:#FBEDEC; --st-late-fg:var(--red-ink);
   --st-done-bg:#EFEFED; --st-done-fg:#5F5E5A;
   --now:#C4554D;                        /* 지연 */
-  --now-tint:#FBF1F0; --now-ink:#A3423B;
+  --now-tint:#FBF1F0; --now-ink:var(--red-ink);
   --go:#4C8A5E; --warn:#9A6B12; --ai:#6B5BB5;
   /* 달력의 기간 비침 (4-13). **뜻이 있는 색 셋째**다.
      무채색으로 두었더니 안 보였다 — 옅어서만이 아니라, `.out`(이 달 밖) 칸이
@@ -1666,3 +1670,60 @@ button.btn:disabled{opacity:.4;cursor:default}
 .bl span:last-child{color:var(--ink-2)}
 .bl .over{color:var(--now)}
 @media (max-width:820px){ .homecols{grid-template-columns:1fr} }
+
+/* ── 목록 (4-14) — 행은 마법사 3단계와 같은 partial(taskrow)이다 */
+.tlist .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.tlist .chips + .chips{margin-top:8px}
+.tlist .chip{font:inherit;font-size:var(--fz-md);padding:5px 11px;border-radius:999px;
+  border:1px solid var(--rule-2);background:var(--card);color:var(--ink-2);cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.tlist .chip:hover{background:var(--hover);color:var(--ink)}
+.tlist .chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:500}
+.tlist .chip .cnt{font-size:var(--fz-xs);color:inherit;opacity:.75}
+.tlist .chip .swatch{width:8px;height:8px;border-radius:50%;background:var(--dept,#83827F);flex:none}
+.tlist .chipsep{width:1px;align-self:stretch;background:var(--rule-2);margin:2px 3px}
+.lcard{background:var(--card);border:1px solid var(--rule);border-radius:var(--card-r);
+  margin-top:12px;overflow:hidden}
+/* 행 자체는 .trow (partials/taskrow.html) — 목록 변형만 여기 얹는다 */
+.trow.lrow{cursor:default;padding:10px 16px 2px}
+.trow.lrow + .trow.lrow{border-top:1px solid var(--rule)}
+.trow.lrow.dim{opacity:.55}
+.trow.lrow .nm{font-weight:600;font-size:var(--fz-md)}
+.trow.lrow .tm{width:auto;min-width:78px}
+.trow.lrow .cell{font-size:var(--fz-sm);color:var(--ink-2);flex:none}
+.trow.lrow .cell.asg.none{color:var(--red-ink)}
+.trow.lrow .cell.due{font-family:var(--mono)}
+.trow.lrow .cell.due.b-late{color:var(--red-ink);font-weight:600}
+.lfoot{padding:2px 16px 9px;border-bottom:1px solid var(--rule)}
+.lfoot:last-child,.lslot + .lfoot{border-bottom:none}
+.lopen{border:none;background:none;font:inherit;font-size:var(--fz-sm);color:var(--ink-2);
+  cursor:pointer;padding:2px 0;display:inline-flex;align-items:center;gap:4px}
+.lopen:hover{color:var(--accent)}
+.lslot{border-bottom:1px solid var(--rule);background:var(--paper)}
+.lempty{padding:22px 16px;color:var(--ink-2);font-size:var(--fz-md)}
+.ldone{margin-top:12px}
+.ldone > summary{cursor:pointer;font-size:var(--fz-md);color:var(--ink-2);padding:6px 2px;
+  list-style:none;display:inline-flex;align-items:center;gap:6px}
+.ldone > summary::before{content:'▸';font-size:var(--fz-xs);color:var(--ink-3)}
+.ldone[open] > summary::before{content:'▾'}
+/* 완료 행 — 눈에 띄지 않게 (4-3). D±N 은 애초에 실려 오지 않는다 */
+.ldone .trow.lrow .nm{color:var(--ink-2);font-weight:500}
+
+/* 패널이 행 아래로 들어온 모습 (4-14) — 같은 패널, 자리만 다르다 */
+.drawer.inline{position:static;height:auto;width:auto;max-width:none;min-width:0;transform:none;
+  border-left:none;box-shadow:none;transition:none}
+.drawer.inline .grip{display:none}
+.drawer.inline .dbody{max-height:62vh}
+/* 인라인일 때는 본문을 옆으로 밀 이유가 없다 — 패널이 흐름 안에 있다 */
+body.dopen:has(.drawer.inline){padding-right:0}
+
+/* ── 논의의 걸린 곳 · 출처 (4-9) */
+.ehead .src{font-size:var(--fz-sm);color:var(--ink-2);text-decoration:underline;
+  text-underline-offset:2px}
+.eplaces{display:flex;gap:5px;flex-wrap:wrap;margin:2px 0 4px}
+.eplaces .here{font-size:var(--fz-xs);font-weight:600;color:var(--accent);
+  background:var(--accent-soft);border-radius:4px;padding:1px 7px}
+.eplaces .pl{border:1px solid var(--rule-2);background:var(--card);border-radius:4px;
+  font:inherit;font-size:var(--fz-xs);color:var(--ink-2);padding:1px 7px;cursor:pointer}
+.eplaces .pl:hover{background:var(--hover);color:var(--ink)}
+.eplaces .pl.detach:hover{color:var(--red-ink);border-color:var(--red-ink)}

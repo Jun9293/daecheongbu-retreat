@@ -177,3 +177,24 @@ def app_session() -> Session:
     from app.db import SessionLocal
 
     return SessionLocal()
+
+
+def mirror_discussion_links(db) -> None:
+    """링크 행이 없는 논의에 걸린 곳(DiscussionEntryRun)을 채운다 (4-9).
+
+    픽스처가 옛 모양(run_id 만)으로 논의를 만들면, 화면·판정은 링크 표만
+    읽으므로 그 논의가 안 보인다. 운영에서는 앱이 뜰 때
+    `app.db._link_discussion_runs` 가 같은 일을 한다 — 시험은 엔진이
+    제각각이라 세션을 받아 여기서 돌린다. 두 번 불러도 두 번 걸지 않는다.
+    """
+    from sqlalchemy import text
+
+    db.execute(
+        text(
+            "INSERT INTO discussion_entry_runs (entry_id, run_id, attached_at)"
+            " SELECT e.id, e.run_id, CURRENT_TIMESTAMP FROM discussion_entries e"
+            " WHERE NOT EXISTS (SELECT 1 FROM discussion_entry_runs l"
+            "                   WHERE l.entry_id = e.id)"
+        )
+    )
+    db.commit()

@@ -16,7 +16,7 @@ from sqlalchemy import select, text
 from app import models
 from app.domain import board as board_view
 from app.domain import diagnosis
-from tests.conftest import app_session
+from tests.conftest import app_session, mirror_discussion_links
 
 OPEN = dt.date(2026, 8, 21)
 CLOSE = dt.date(2026, 8, 23)
@@ -108,6 +108,9 @@ def board(admin_client):
 
 def _judge(run_title, board, *, today=TODAY):
     with app_session() as db:
+        # 픽스처가 옛 모양(run_id 만)으로 만든 논의에 걸린 곳 링크를 채운다 —
+        # 판정은 링크 표만 읽는다 (4-9). 운영에서는 앱이 뜰 때 같은 일을 한다.
+        mirror_discussion_links(db)
         retreat = db.get(models.Retreat, board["retreat_id"])
         run = db.get(models.TaskRun, board["runs"][run_title])
         return diagnosis.diagnose(db, retreat, run, today=today)
@@ -201,11 +204,14 @@ def test_03_상태를_안_눌러도_기한_초과로_잡힌다(board):
     assert any("5일 경과" in r["text"] for r in result.reasons)
 
 
-def test_03b_저장된_지연은_판정이_아니라_근거로만_나간다(board):
-    _set("포스터 제작", board, status="지연")
-    result = _judge("포스터 제작", board)
+def test_03b_저장_지연이_없어_출처가_하나다(board):
+    """저장 '지연' 은 4-3 에서 없어졌다 — 기한은 날짜에서만 나온다.
+    같은 사실("늦었다")의 출처가 근거에 둘 나오면 안 된다."""
+    result = _judge("포스터 제작", board)          # 마감 5/27 < 6/1 — 기한 초과
     assert result.verdict == diagnosis.GO          # 막는 요인이 없으므로
-    assert "담당자가 지연으로 표시함" in _texts(result)
+    기한근거 = [t for t in (r["text"] for r in result.reasons) if "경과" in t]
+    assert len(기한근거) == 1                       # 날짜 계산 한 줄뿐
+    assert "표시" not in _kinds(result)             # 수동 표시 근거가 없다
 
 
 # ── 4 ─────────────────────────────────────────────────────────────────
@@ -458,7 +464,7 @@ def test_상세_API_가_판정을_함께_싣는다(board, admin_client):
 
 def _entry(db, run_id, *, body, days_ago, today=TODAY, supersedes=None, carried=None):
     row = models.DiscussionEntry(
-        run_id=run_id,
+        _legacy_run_id=run_id,
         authored_at=today - dt.timedelta(days=days_ago),
         body=body,
         author_name="총무팀",
@@ -473,11 +479,13 @@ def _entry(db, run_id, *, body, days_ago, today=TODAY, supersedes=None, carried=
 # ── 보완 1 · 2 ────────────────────────────────────────────────────────
 
 
-def test_보완01_지연이고_started_at_이_없으면_미착수로_본다(board):
-    """'지연' 은 착수 여부를 알려주지 않는다 — 그게 started_at 을 만든 이유다."""
+def test_보완01_착수_보정은_진행중과_완료만_인정한다(board):
+    """모르는 것은 미착수 쪽에 둔다 — 문제를 감추지 않고 드러내는 방향 (4-10).
+    (저장 '지연' 이 있던 시절에는 그것을 미착수로 두는 판단이 여기 있었다 —
+    4-3 에서 저장값 자체가 없어졌다.)"""
     with app_session() as db:
         run = db.get(models.TaskRun, board["runs"]["장비 전달"])
-        run.status = "지연"
+        run.status = "대기"
         run.started_at = None
         db.commit()
         assert board_view.has_started(run) is False
@@ -490,13 +498,12 @@ def test_보완01_지연이고_started_at_이_없으면_미착수로_본다(boar
         assert board_view.has_started(run) is True
 
 
-def test_보완02_지연_미착수에_선행이_남으면_진행_불가다(board):
+def test_보완02_기한_넘긴_미착수에_선행이_남으면_진행_불가다(board):
     """기한 넘기고 선행도 안 끝났고 손도 안 댄 것 — 가장 위험한 조합이
-    '일부 진행 가능' 으로 읽히면 안 된다."""
-    _set("장비 전달", board, status="지연", started_at=None)
+    '일부 진행 가능' 으로 읽히면 안 된다. 기한 초과는 날짜에서 나온다 (4-3)."""
+    _set("장비 전달", board, status="대기", started_at=None)
     result = _judge("장비 전달", board)
     assert result.verdict == diagnosis.BLOCKED
-    assert "담당자가 지연으로 표시함" in _texts(result)
 
 
 # ── 보완 3 ────────────────────────────────────────────────────────────
@@ -610,10 +617,10 @@ def test_보완07_날짜가_지난_일정_선행은_막지_않는다(board):
 def test_보완08_하위_근거가_본_판정과_같은_함수를_쓴다(board):
     """(1)이나 (7)을 고쳐도 하위 근거가 안 따라오면 어긋난다."""
     with app_session() as db:
-        # 시안 확정(하위)이 장비 확인을 기다리게 하고, 지연·미착수로 둔다
+        # 시안 확정(하위)이 장비 확인을 기다리게 하고, 미착수로 둔다
         sub = db.get(models.TaskRun, board["runs"]["시안 확정"])
         sub.blocked_by_run_ids = [board["runs"]["장비 확인"]]
-        sub.status = "지연"
+        sub.status = "대기"
         sub.started_at = None
         db.commit()
 
@@ -682,7 +689,7 @@ def test_보완11_번복이_2회_이상일_때만_뜬다(board):
     with app_session() as db:
         second = db.scalars(
             select(models.DiscussionEntry).where(
-                models.DiscussionEntry.run_id == run_id,
+                models.DiscussionEntry._legacy_run_id == run_id,
                 models.DiscussionEntry.supersedes_entry_id.is_not(None),
             )
         ).first()
@@ -699,7 +706,7 @@ def test_보완12_마지막_논의_후_21일이_지나면_뜬다(board):
     assert "마지막 논의 후" not in _texts(_judge("포스터 제작", board))
 
     with app_session() as db:
-        db.query(models.DiscussionEntry).filter_by(run_id=run_id).delete()
+        db.query(models.DiscussionEntry).filter_by(_legacy_run_id=run_id).delete()
         _entry(db, run_id, body="시안 검토 중", days_ago=30)
         db.commit()
     result = _judge("포스터 제작", board)
@@ -750,7 +757,7 @@ def test_보완14_논의_신호는_판정을_바꾸지_않는다(board):
 
 def _clear_log(run_id):
     with app_session() as db:
-        db.query(models.DiscussionEntry).filter_by(run_id=run_id).delete()
+        db.query(models.DiscussionEntry).filter_by(_legacy_run_id=run_id).delete()
         db.commit()
 
 
@@ -766,7 +773,7 @@ def test_마무리01_authored_at_이_전부_None_이어도_패널이_열린다(b
         for body in ("날짜 없는 기록 1", "날짜 없는 기록 2"):
             db.add(
                 models.DiscussionEntry(
-                    run_id=run_id, authored_at=None, body=body, author_name="총무팀"
+                    _legacy_run_id=run_id, authored_at=None, body=body, author_name="총무팀"
                 )
             )
         db.commit()
@@ -788,7 +795,7 @@ def test_마무리02_일부만_None_이면_있는_것으로만_센다(board):
     with app_session() as db:
         db.add(
             models.DiscussionEntry(
-                run_id=run_id, authored_at=None, body="날짜 없음", author_name="총무팀"
+                _legacy_run_id=run_id, authored_at=None, body="날짜 없음", author_name="총무팀"
             )
         )
         _entry(db, run_id, body="40일 전 기록", days_ago=40)
@@ -808,19 +815,19 @@ def test_마무리03_authored_at_이_없어도_다른_신호는_나온다(board)
     _clear_log(run_id)
     with app_session() as db:
         first = models.DiscussionEntry(
-            run_id=run_id, authored_at=None, body="A안", author_name="총무팀"
+            _legacy_run_id=run_id, authored_at=None, body="A안", author_name="총무팀"
         )
         db.add(first)
         db.flush()
         second = models.DiscussionEntry(
-            run_id=run_id, authored_at=None, body="B안",
+            _legacy_run_id=run_id, authored_at=None, body="B안",
             author_name="총무팀", supersedes_entry_id=first.id,
         )
         db.add(second)
         db.flush()
         db.add(
             models.DiscussionEntry(
-                run_id=run_id, authored_at=None, body="C안",
+                _legacy_run_id=run_id, authored_at=None, body="C안",
                 author_name="총무팀", supersedes_entry_id=second.id,
             )
         )
@@ -835,7 +842,7 @@ def test_마무리03_authored_at_이_없어도_다른_신호는_나온다(board)
     with app_session() as db:
         db.add(
             models.DiscussionEntry(
-                run_id=run_id, authored_at=None, body="지난 회차",
+                _legacy_run_id=run_id, authored_at=None, body="지난 회차",
                 author_name="총무팀", carried_from_run_id=999,
             )
         )

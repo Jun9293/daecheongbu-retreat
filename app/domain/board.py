@@ -162,29 +162,34 @@ def _first_week(open_date: dt.date, runs: list[TaskRun]) -> int:
 
 
 def overdue_of(run: TaskRun, today: dt.date) -> bool:
-    """기한이 지났는데 아직 끝나지 않았는가.
+    """기한이 지났는데 아직 끝나지 않았는가 — '지연' 은 이 계산 하나에서 나온다.
 
-    저장된 status='지연' 을 보지 않는다. 그건 담당자가 손으로 눌러야만 붙는
-    표시라, 놓친 사람이 직접 신고해야 시스템이 알아차리는 구조가 된다.
+    저장값이 아니다 (4-3). 저장해 두면 담당자가 손으로 눌러야만 붙어서,
+    놓친 사람이 직접 신고해야 시스템이 알아차리는 구조가 된다.
     """
     end = run.end_date or run.start_date
     return bool(end and end < today and run.status != "완료")
 
 
+# 배지의 CSS 클래스 — 이름은 4-0 의 상태 배지 토큰(--st-*)과 짝이다
+BADGE_CLASSES = {"대기": "wait", "진행중": "prog", "완료": "done", "지연": "late"}
+
+
 def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
-    """한 업무가 **어떻게 보이는가**. 보드의 바와 달력의 점을 함께 만든다.
+    """한 업무가 **어떻게 보이는가**. 보드의 바 · 달력의 점 · 배지를 함께 만든다.
 
-    둘은 규칙이 다르다 — 보드의 바는 저장된 상태 그대로 칠하고, 달력의 점은
-    **기한이 지났으면 '지연' 으로 바꿔** 칠한다 (4-13). 그래서 한 값으로
-    합칠 수 없다. 그렇다고 화면마다 따로 계산하게 두면 두 벌이 되고,
-    **두 벌이 되면 반드시 어긋나며 어긋난 쪽을 아무도 눈치채지 못한다.**
-
-    실제로 어긋나 있었다: 달력이 마감일을 옮길 때 기한 초과를 화면에서
-    `iso < today` 로 다시 판단했는데, 색은 손대지 않아 **붉은 점을 미래로
-    옮겨도 붉게 남았다.**
+    화면마다 따로 계산하게 두면 두 벌이 되고, **두 벌이 되면 반드시 어긋나며
+    어긋난 쪽을 아무도 눈치채지 못한다.** 실제로 어긋나 있었다: 달력이
+    마감일을 옮길 때 기한 초과를 화면에서 `iso < today` 로 다시 판단했는데,
+    색은 손대지 않아 **붉은 점을 미래로 옮겨도 붉게 남았다.**
 
     그래서 규칙을 여기 한 곳에 두고, 날짜·상태를 바꾸는 API 가 이것을
     그대로 실어 보낸다. 화면은 받아서 칠하기만 한다.
+
+    '지연' 은 저장값이 아니라 계산값이다 (4-3) — 기한이 지났으면 바도 점도
+    배지도 '지연' 으로 칠한다. 전에는 바만 저장된 상태 그대로였는데, 저장
+    '지연' 이 없어지면서 바의 지연 표현도 이 계산에서 나온다. `bar_*` 와
+    `dot_*` 를 둘 다 남긴 것은 화면(JS)이 그 이름으로 받기 때문이다.
     """
     # `color_tag` 가 아니라 `color` 를 쓴다 — 색을 안 정한 부서에서 `color_tag`
     # 는 None 이고, 그대로 내보내면 화면이 `border-color: None` 을 받는다.
@@ -193,12 +198,10 @@ def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
     overdue = overdue_of(run, today)
     kind = run.library.kind
 
-    bar_bg, bar_border = bar_style(run.status, color, kind=kind, ghost=ghost)
-    # 기한이 지났는데 미완료면 붉게. 저장된 '지연' 이 아니라 날짜에서 계산한다 —
-    # 놓친 사람이 직접 눌러야 시스템이 알아차리는 구조를 만들지 않는다 (4-10)
-    dot_bg, dot_border = bar_style(
-        "지연" if overdue else run.status, color, kind=kind, ghost=ghost
-    )
+    # 보이는 상태 — 기한이 지났는데 미완료면 '지연'. 날짜에서 계산한다 (4-10).
+    shown = "지연" if overdue else run.status
+    bar_bg, bar_border = bar_style(shown, color, kind=kind, ghost=ghost)
+    dot_bg, dot_border = bar_bg, bar_border
     # **접두사 없는 쌍을 두지 않는다.** `background`/`border` 로 두면 그쪽이
     # 기본값처럼 보여서, 세 번째 화면이 생겼을 때 사람이 따져 보지 않고 집는다 —
     # 이번에 고친 버그가 정확히 그 모양이었다.
@@ -208,6 +211,9 @@ def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
         "color": color,
         "overdue": overdue,
         "overdue_days": days,
+        # 상태 배지 — **홈·목록·보드가 전부 이것을 쓴다** (4-3). 화면이 상태를
+        # 다시 분기하면 두 벌이 된다.
+        "badge": {"label": shown, "cls": BADGE_CLASSES[shown]},
         "bar_background": bar_bg,
         "bar_border": bar_border,
         "dot_background": dot_bg,
@@ -254,10 +260,10 @@ def overdue_days_of(run: TaskRun, today: dt.date) -> int:
 def has_started(run: TaskRun) -> bool:
     """착수했는가. started_at 이 없던 시절의 기존 행만 상태로 보정한다.
 
-    '지연' 은 착수 여부를 알려주지 않는다 — 그게 started_at 을 만든 이유다.
-    `!= "대기"` 로 보면 기한을 넘겼고 선행도 안 끝났고 손도 안 댄 업무,
-    즉 가장 위험한 조합이 '일부 진행 가능' 으로 읽힌다. 모르는 것은
-    미착수 쪽에 둔다 — 문제를 감추는 방향이 아니라 드러내는 방향이 안전하다.
+    인정하는 값은 '진행중'·'완료' 뿐이다. 모르는 것은 미착수 쪽에 둔다 —
+    문제를 감추는 방향이 아니라 드러내는 방향이 안전하다.
+    (저장 '지연' 이 있던 시절에는 그것을 미착수로 두는 판단이 여기 있었다.
+    지금은 저장값 자체가 없어 그 갈림이 사라졌다 — 4-3.)
     """
     if run.started_at is not None:
         return True
@@ -393,8 +399,6 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             # 사람이 눌러야만 알아차리는 구조를 없애기 위해서다.
             "overdue": overdue_of(run, today),
             "overdue_days": overdue_days_of(run, today),
-            # 사람이 손으로 남긴 '지연' 표시. 판정에는 넣지 않고 근거로만 쓴다.
-            "marked_late": run.status == "지연",
             "started": has_started(run),
             "related_department_keys": [
                 k for k in (lib.related_department_keys or []) if k in dept_by_key
@@ -419,7 +423,9 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "run_id": run.id,
             "title": lib.title,
             "kind": lib.kind,
-            "status": run.status,
+            # 보이는 상태 — 기한이 지났으면 '지연'. 저장값이 아니라 paint_of 의
+            # 계산값이다 (4-3). 화면의 지연 배지가 이 값에서 나온다.
+            "status": paint["badge"]["label"],
             "depth": depth,
             "ghost": ghost,
             "col_start": axis.column_of(start),
@@ -542,7 +548,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
         "meta": meta,
         "total": len(runs),
         "done": done,
-        "late": sum(1 for r in runs if r.status == "지연"),
+        # 저장된 상태가 아니라 날짜에서 계산한다 (4-10) — 저장 '지연' 은 없다 (4-3)
+        "late": sum(1 for r in runs if overdue_of(r, today)),
         "open_date": open_date,
         "close_date": close_date,
     }

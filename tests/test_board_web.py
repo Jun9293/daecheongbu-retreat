@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import board as board_view
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, mirror_discussion_links
 
 OPEN = dt.date(2026, 8, 21)
 
@@ -603,13 +603,14 @@ def test_지난_회차에서_따라온_기록은_고칠_수_없다(admin_client,
     run_id = board_data["runs"]["포스터 제작"]
     with app_session() as db:
         carried = models.DiscussionEntry(
-            run_id=run_id, authored_at=dt.date(2026, 7, 26),
+            _legacy_run_id=run_id, authored_at=dt.date(2026, 7, 26),
             body="스트랩 재고 때문에 100×140mm 로 확정",
             author_name="총무팀", carried_from_run_id=999,
         )
         db.add(carried)
         db.commit()
         carried_id = carried.id
+        mirror_discussion_links(db)    # 걸린 곳은 링크 표가 유일한 출처다 (4-9)
 
     detail = admin_client.get(f"/board/task/{run_id}").json()
     row = next(d for d in detail["discussions"] if d["id"] == carried_id)

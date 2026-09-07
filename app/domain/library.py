@@ -12,7 +12,7 @@ import datetime as dt
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.domain import dweek
+from app.domain import discussion, dweek
 from app.domain.departments import DEPARTMENT_MASTER
 from app.models import (
     Department,
@@ -641,15 +641,19 @@ def create_retreat(
         previous = base_runs.get(lib.id)
         if included and previous is not None:
             for entry in previous.discussions:
-                db.add(
-                    DiscussionEntry(
-                        run_id=run.id,
-                        authored_at=entry.authored_at,
-                        body=entry.body,
-                        author_name=entry.author_name,
-                        carried_from_run_id=previous.id,
-                    )
+                copied = DiscussionEntry(
+                    _legacy_run_id=run.id,
+                    authored_at=entry.authored_at,
+                    body=entry.body,
+                    author_name=entry.author_name,
+                    carried_from_run_id=previous.id,
+                    # 출처는 그 회차의 사실이므로 따라온다 (4-9)
+                    source_meeting_id=entry.source_meeting_id,
                 )
+                db.add(copied)
+                db.flush()
+                # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9)
+                discussion.attach(db, copied, run)
 
     # 2패스 — 라이브러리의 선행 관계를 이번 회차의 run 으로 옮긴다.
     # included 끼리만 잇는다. 보드는 included 인 run 만 싣기 때문에 미포함 run 을

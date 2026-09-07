@@ -890,9 +890,13 @@ def test_r03_기간을_바꿔도_다시_불러오지_않는다():
     js = read_js("calendar.js")
     assert "location.reload" not in js
     # **범위를 고를 때만** 다시 물어본다 (개수를 다시 세어야 한다).
-    # 상태·기간을 바꾸는 것으로는 화면을 갈아치우지 않는다
-    assert js.count("location.href") == 1
+    # 상태·기간을 바꾸는 것으로는 화면을 갈아치우지 않는다.
+    # 남은 한 곳은 달 partial 을 못 받았을 때의 물러섬 — 그것도 전체 페이지가
+    # 맞는 자리다(안 그러면 달이 조용히 안 넘어간다).
+    assert js.count("location.href") == 2
     assert "scopePick" in js[js.index("location.href") - 400:js.index("location.href")]
+    at = js.rindex("location.href")
+    assert "res.ok" in js[at - 200:at], "물러섬이 아닌 곳에서 전체 페이지를 부른다"
     # 숫자도 함께 맞춘다 — 외 N건 · 날짜 없는 업무 N건 · 위쪽 건수
     assert "recount" in js
     assert "cal-more" in js and "calundated" in js and "calcount" in js
@@ -980,25 +984,30 @@ def test_r2_02_미래에서_과거로_옮기면_붉어진다(admin_client, cal_d
 
 
 def test_r2_02b_보드의_바와_달력의_점을_함께_준다(admin_client, cal_data):
-    """둘은 규칙이 다르다 — 바는 저장된 상태대로, 점은 기한이 지나면 '지연'.
-    그래서 한 값으로 합칠 수 없고, 그렇다고 화면마다 계산하게 두면 두 벌이 된다."""
+    """바와 점은 이제 **한 규칙**이다 (4-3) — '지연' 이 저장값이던 시절에는
+    바만 저장 상태 그대로였는데, 저장값이 없어지면서 바도 점도 계산된
+    '지연' 으로 칠한다. 이름 쌍(bar_*/dot_*)은 화면(JS)이 받는 계약이라 남는다."""
+    from app.domain import board as board_domain
+
     run_id = cal_data["runs"]["오늘 업무"]
     past = (dt.date.today() - dt.timedelta(days=5)).isoformat()
     paint = _paint_run(admin_client, run_id, past, past)
 
     for key in ("bar_background", "bar_border", "dot_background", "dot_border",
-                "status", "overdue", "overdue_days", "color"):
+                "status", "overdue", "overdue_days", "color", "badge"):
         assert key in paint, f"{key} 가 없다"
     # **접두사 없는 쌍을 남기지 않는다.** 그쪽이 기본값처럼 보여서, 세 번째
     # 화면이 생겼을 때 사람이 따져 보지 않고 집는다 — 이번에 고친 버그가 그 모양이었다.
     assert "background" not in paint and "border" not in paint
 
-    # 기한이 지난 '대기' 업무: 바는 대기 색, 점은 지연 색
+    # 기한이 지난 '대기' 업무: 저장 상태는 대기, 배지·바·점은 전부 지연
     assert paint["status"] == "대기"
-    assert paint["bar_background"] != paint["dot_background"], \
-        "바와 점의 배경이 같으면 둘을 나눈 뜻이 없다"
-    assert paint["bar_border"] != paint["dot_border"], \
-        "바와 점의 테두리가 같으면 둘을 나눈 뜻이 없다"
+    assert paint["badge"] == {"label": "지연", "cls": "late"}
+    assert paint["bar_background"] == paint["dot_background"], \
+        "바와 점이 한 규칙이어야 한다 (4-3)"
+    assert paint["bar_border"] == paint["dot_border"]
+    late_bg, late_border = board_domain.BAR_LATE
+    assert paint["bar_background"] == late_bg and paint["bar_border"] == late_border
 
 
 def test_r2_02c_상태_변경도_같은_모양으로_돌려준다(admin_client, cal_data):
@@ -1025,7 +1034,8 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     # `/status` · `/dates` · `/assignee` 셋 다 생김새를 함께 낸다.
     # 담당자는 점에 안 적히지만 **툴팁에는 들어가서**, 안 실어 보내면 화면이
     # 옛 이름으로 문장을 다시 쓴다 — 실제로 그랬다.
-    assert router_src.count("paint_of(") == 3, "세 곳 모두 써야 한다"
+    # 넷째는 상세(task_detail)의 배지다 (4-3) — 칩도 같은 한 곳에서 나온다.
+    assert router_src.count("paint_of(") == 4, "세 API + 상세 배지, 네 곳이어야 한다"
     for path in ("/status", "/dates", "/assignee"):
         at = router_src.index('@router.post("/board/task/{run_id}' + path + '")')
         block = router_src[at : router_src.index("@router.", at + 10)]
@@ -1037,8 +1047,9 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     body = board_src[board_src.index("def build("):]
     assert "bar_style(" not in body, "보드 첫 렌더가 아직 bar_style 을 직접 부른다"
     assert "paint_of(run, today, ghost=ghost)" in body
-    # 정의 자체를 빼면 남는 것은 paint_of 안의 두 번뿐이다
-    assert board_src.count("bar_style(") == 3, "bar_style 을 부르는 곳이 늘었다"
+    # 정의 자체를 빼면 남는 것은 paint_of 안의 한 번뿐이다 —
+    # 바와 점이 한 규칙이 되면서(4-3) 두 번째 호출이 없어졌다
+    assert board_src.count("bar_style(") == 2, "bar_style 을 부르는 곳이 늘었다"
 
 
 # ── 3. 화면이 날짜를 견주지 않는다 ────────────────────────────────────
@@ -1736,7 +1747,8 @@ def test_w_17_계약이_바뀌면_도장이_안_맞는다():
     해서, 옛것을 조용히 쓰지 못하게 한다.**
     """
     want = contract_hash()
-    for name in ("calendar.js", "board.js"):
+    # 목록(tasks.js)도 같은 패널의 세 번째 화면이다 (4-14)
+    for name in ("calendar.js", "board.js", "tasks.js"):
         js = code_only(read_js(name))
         m = re.search(r"__unusedFor:\s*'([0-9a-f]{8})'", js)
         assert m, f"{name}: `__unusedFor` 도장이 없다"
@@ -1878,7 +1890,8 @@ def test_u_09_격자의_1일에_달이_함께_나온다(admin_client, cal_data):
 
 def test_u_10_주_목록의_1일도_같다(admin_client, cal_data):
     page = admin_client.get("/calendar?scope=all&month=2026-08-01").text
-    view = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
+    # 격자는 partial 로 나갔다 (4-13) — 전체 페이지와 /calendar/partial 이 같은 것
+    view = (ROOT / "app" / "templates" / "partials" / "calendar_grid.html").read_text(encoding="utf-8")
     assert "{{ cell.day_label }}<i>" in view, "주 목록이 아직 숫자만 쓴다"
     assert "{{ cell.day_label }}</span>" in view, "격자가 아직 숫자만 쓴다"
 
@@ -1928,8 +1941,8 @@ def test_u_12_툴팁을_조립하는_곳이_하나다():
     assert "dataset.department" not in js and "dataset.assignee" not in js
     assert "dot.title = p.tooltip" in js
 
-    # 매크로도 조립하지 않는다
-    view = (ROOT / "app" / "templates" / "calendar.html").read_text(encoding="utf-8")
+    # 매크로도 조립하지 않는다 — 점 매크로는 partials/caldot.html 한 벌이다
+    view = (ROOT / "app" / "templates" / "partials" / "caldot.html").read_text(encoding="utf-8")
     assert 'title="{{ dot.tooltip }}"' in view, "매크로가 아직 조각을 잇는다"
     assert "data-department=" not in view and "data-assignee=" not in view
 

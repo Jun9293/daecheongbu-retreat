@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.domain import escalation, period
+from app.domain import board, escalation, period
 from app.domain.departments import department_key_of
 from app.domain.board import overdue_of
 from app.domain.budget import BudgetSummary, build_budget_summary
@@ -45,6 +45,7 @@ class HomeView:
     week: list = field(default_factory=list)             # 미완료 · 오늘 뒤 7일 안 마감
     overdue_ids: set = field(default_factory=set)        # 행의 지연 배지도 계산값에서 (4-10)
     dim_ids: set = field(default_factory=set)            # 소속 외 행 — 부서는 **키로** 비교 (2장)
+    badges: dict = field(default_factory=dict)           # run_id → board.paint_of 의 badge (4-3)
 
     # ── 결산 홈 ──────────────────────────────────────────────────────
     unpaid_refund_count: int = 0     # 환급 대상(지원금 > 0)인데 미지급
@@ -124,6 +125,10 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
         ),
         key=_end_of,
     )
+    # 배지는 한 곳에서 만든다 (board.paint_of · 4-3) — 화면은 받아 그리기만 한다
+    view.badges = {
+        r.id: board.paint_of(r, today)["badge"] for r in view.my_today + view.week
+    }
 
     # 소속 외 흐림 — id 로 비교하면 새 회차가 열리는 순간 자기 부서까지 흐려진다 (2장).
     # 총무팀(admin)은 전부 선명하다 (9장의 소속 외 규칙과 같다)

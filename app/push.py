@@ -82,7 +82,8 @@ def send_digest(db: Session, digest) -> bool:
     payload = {
         "title": digest.title(),
         "body": digest.body(),
-        "link": f"/board?task={first.run_id}" if first else "/board",
+        # 알림을 누르면 목록으로 — 휴대폰에서 보드는 무겁다 (4-11 · 4-14)
+        "link": f"/tasks?task={first.run_id}" if first else "/tasks",
         "tag": f"digest:{digest.user_id}",
     }
     delivered, stale = False, []

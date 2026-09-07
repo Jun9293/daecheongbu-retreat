@@ -12,7 +12,7 @@ import datetime as dt
 from sqlalchemy.orm import Session
 
 import seed_library_data as L
-from app.domain import dweek
+from app.domain import discussion, dweek
 from app.models import (
     Department,
     DiscussionEntry,
@@ -204,16 +204,20 @@ def seed_current(
             raise ValueError(f"논의 내역의 업무를 라이브러리에서 찾을 수 없습니다: {title}")
         for date_iso, body, fix in entries:
             entry = DiscussionEntry(
-                run_id=run.id,
+                _legacy_run_id=run.id,
                 authored_at=_d(date_iso) if date_iso else None,
                 body=body,
                 author_name="총무팀",
             )
             db.add(entry)
             db.flush()
+            # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9).
+            # 여기만 빠지면 새로 시드한 DB 는 앱을 다시 켜기 전까지 논의가
+            # 어느 화면에도 안 보인다.
+            discussion.attach(db, entry, run)
             if fix:
                 follow = DiscussionEntry(
-                    run_id=run.id,
+                    _legacy_run_id=run.id,
                     authored_at=_d(date_iso) if date_iso else None,
                     body=fix,
                     author_name="총무팀",
@@ -221,6 +225,7 @@ def seed_current(
                 )
                 db.add(follow)
                 db.flush()
+                discussion.attach(db, follow, run)
     return runs
 
 

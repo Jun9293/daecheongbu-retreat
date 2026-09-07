@@ -258,7 +258,7 @@ def test_09_비활성화해도_기록과_작성자가_그대로다(admins):
         db.add(run)
         db.flush()
         entry = models.DiscussionEntry(
-            run_id=run.id, authored_at=dt.date(2026, 5, 25),
+            _legacy_run_id=run.id, authored_at=dt.date(2026, 5, 25),
             body="스케치팀과 의논함", author_id=admins["typo"],
             author_name="박민준")
         db.add(entry)

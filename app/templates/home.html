@@ -3,8 +3,10 @@
 
 {# 한 줄 = 제목 · 부서 칩 · 담당자 · 마감(D±N) · 상태 배지. 목록에 오는 것은
    전부 미완료라 완료에 D+N 이 붙을 자리가 없다 (0장 · 4-14 와 같은 규칙).
-   지연 배지는 저장된 status 가 아니라 날짜에서 나온 계산값이다 (4-10). #}
+   배지는 구조가 실어 보낸 것을 그대로 쓴다 (board.paint_of · 4-3) —
+   여기서 상태를 다시 가르지 않는다. #}
 {% macro taskrow(r) %}
+{% set b = home.badges[r.id] %}
 <div class="homerow {% if r.id in home.dim_ids %}dim{% endif %}">
   <div>
     <div class="t">{{ r.title }}</div>
@@ -16,9 +18,7 @@
       <span class="deptchip {% if r.id in home.overdue_ids %}duechip{% endif %}">{{ end|short_date }} · {{ end|dday(home.today) }}</span>
     </div>
   </div>
-  {% if r.id in home.overdue_ids %}<span class="stbadge late">지연</span>
-  {% elif r.status == '진행중' %}<span class="stbadge prog">진행중</span>
-  {% else %}<span class="stbadge wait">대기</span>{% endif %}
+  <span class="stbadge {{ b.cls }}">{{ b.label }}</span>
 </div>
 {% endmacro %}
 
@@ -58,8 +58,8 @@
   {# ── 보통 홈 (4-15) — 경고 띠는 0건이면 내지 않는다 #}
   {% if home.overdue_count %}
   <div class="homealert late">기한이 지난 할 일이 <b>&nbsp;{{ home.overdue_count }}건&nbsp;</b> 있습니다.
-    {# 지연 필터가 붙는 것은 단계 3 의 새 목록이다 — 그때 ?state= 로 잇는다 #}
-    <a href="/tasks" style="text-decoration:underline">목록에서 보기</a></div>
+    {# 목록의 지연 필터로 (4-15) — 지연 칩도 저장값이 아니라 날짜에서 나온다 #}
+    <a href="/tasks?state=late" style="text-decoration:underline">목록에서 보기</a></div>
   {% endif %}
   {% if home.unassigned_soon_count %}
   <div class="homealert wait">담당자 없이 기한이 1주일 이내인 할 일이 <b>&nbsp;{{ home.unassigned_soon_count }}건&nbsp;</b> 있습니다. 총무팀 확인이 필요합니다. <a href="/tasks" style="text-decoration:underline">목록에서 보기</a></div>
