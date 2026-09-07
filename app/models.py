@@ -323,7 +323,8 @@ class ActivityLog(Base):
     retreat_id: Mapped[int | None] = mapped_column(
         ForeignKey("retreats.id", ondelete="CASCADE"), nullable=True
     )
-    actor_type: Mapped[str] = mapped_column(String(20), default="user")  # user | claude
+    # user | claude | system ('system' 은 앱이 뜰 때 한 번 도는 전환 — 사람 행위가 아니다)
+    actor_type: Mapped[str] = mapped_column(String(20), default="user")
     actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
     action: Mapped[str] = mapped_column(String(50))
@@ -468,11 +469,10 @@ class FileVersion(Base):
     original_name: Mapped[str] = mapped_column(String(300))
     stored_name: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    # 링크 첨부 (4-9). **파일과 같은 표에 둔다** — 목록에서 섞여 보여야 하고,
-    # 나누면 "저건 어디 있더라" 를 두 번 찾게 된다. 담당자에게는 둘 다 자료다.
-    # 값이 있으면 링크, 없으면 파일이다. 링크일 때 original_name 은 파일 이름이
-    # 아니라 **설명**("무엇인가요")이고 stored_name 은 비어 있다.
-    url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    # (링크 첨부의 url 컬럼이 여기 잠깐 있었다 — 링크는 TaskAttachment 의 일이라
+    #  그쪽으로 갔고, 운영 표에는 이 컬럼이 만들어진 적이 없다. 모델에만 남으면
+    #  운영 DB 를 읽는 스크립트가 없는 컬럼을 SELECT 하다 넘어진다 —
+    #  단계 4 의 파일 이관에서 실제로 그랬다)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -492,6 +492,11 @@ class ReviewRequest(Base):
     retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
     task_id: Mapped[int | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True
+    )
+    # 새 요청이 가리키는 업무 (4-9 · 4-16). task_id 는 옛 Task 표 FK 라 남기되
+    # 새 요청은 이것을 쓴다. ALTER 로 붙어 기존 행은 NULL 이다.
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_runs.id"), nullable=True
     )
     file_asset_id: Mapped[int | None] = mapped_column(
         ForeignKey("file_assets.id", ondelete="CASCADE"), nullable=True
@@ -514,11 +519,14 @@ class ReviewRequest(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     task: Mapped[Task | None] = relationship()
+    run: Mapped["TaskRun | None"] = relationship()
     file_asset: Mapped[FileAsset | None] = relationship()
     department: Mapped[Department] = relationship()
 
     @property
     def subject(self) -> str:
+        if self.run is not None:            # 새 요청 — 업무(run)를 가리킨다
+            return self.run.library.title
         if self.task is not None:
             return self.task.title
         if self.file_asset is not None:
@@ -748,6 +756,10 @@ class TaskRun(Base):
     )
     # False 여도 행을 지우지 않는다. "이번엔 하지 않았다"는 것도 기록이다.
     included: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 회차 안에서 한 번 매기고 안 바뀌는 번호 (4-14) — 회의에서 「12번」 으로
+    # 부르는 손잡이다. 날짜를 옮겨도 번호는 그대로다. 새 run 은 그 회차의
+    # max+1, 새 회차는 1부터. ALTER 로 붙어 옛 행은 앱이 뜰 때 한 번 매긴다.
+    run_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     department_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True

@@ -180,6 +180,14 @@ def _add_runs(
         db.add(run)
         db.flush()
         runs[title] = run
+    # 번호는 회차 안에서 고정이다 (4-14) — 시작일 → id 순으로 1부터
+    ordered = sorted(
+        runs.values(),
+        key=lambda r: (r.start_date is None, r.start_date or dt.date.max, r.id),
+    )
+    for no, run in enumerate(ordered, start=1):
+        run.run_no = no
+    db.flush()
     return runs
 
 

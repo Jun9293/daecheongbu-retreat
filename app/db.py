@@ -75,6 +75,11 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("meetings", "import_batch", "VARCHAR(40)"),
     # 논의의 출처 (4-9). 기존 행은 NULL — 사람이 직접 적은 것으로 본다.
     ("discussion_entries", "source_meeting_id", "INTEGER"),
+    # 회차 안에서 고정되는 업무 번호 (4-14). 기존 행은 앱이 뜰 때 한 번 매긴다.
+    ("task_runs", "run_no", "INTEGER"),
+    # 확인 요청이 가리키는 업무 (4-9 · 4-16). task_id 는 옛 Task 표 FK 라
+    # 남기되 새 요청은 이것을 쓴다.
+    ("review_requests", "run_id", "INTEGER REFERENCES task_runs(id)"),
 )
 
 
@@ -200,11 +205,13 @@ def _convert_stored_late() -> None:
             )
             conn.execute(
                 text(
+                    # 사람이 한 일이 아니다 — actor 를 'system' 으로 남긴다.
+                    # 'user' 로 남기면 시스템 전환이 사람 행위 모양이 된다.
                     "INSERT INTO activity_logs"
-                    " (retreat_id, actor_type, action, target_type, target_id,"
-                    "  summary, before_value, after_value, created_at)"
-                    " VALUES (:retreat_id, 'user', '업무_상태_변경', 'task_run', :id,"
-                    "  '저장 지연 → 대기 (계산값으로 전환)',"
+                    " (retreat_id, actor_type, actor_name, action, target_type,"
+                    "  target_id, summary, before_value, after_value, created_at)"
+                    " VALUES (:retreat_id, 'system', '앱 시작', '업무_상태_변경',"
+                    "  'task_run', :id, '저장 지연 → 대기 (계산값으로 전환)',"
                     "  :before, :after, CURRENT_TIMESTAMP)"
                 ),
                 {
@@ -254,6 +261,55 @@ def _link_discussion_runs() -> None:
             )
 
 
+def _assign_run_numbers() -> None:
+    """번호(run_no)가 없는 run 을 회차별로 **시작일 → id 순으로** 한 번 매긴다 (4-14).
+
+    이미 번호가 있는 행은 절대 다시 매기지 않는다 — 번호는 회의에서 부르는
+    손잡이라 바뀌면 지난 회의록의 번호가 전부 낡는다. 새 run 은 만들 때
+    그 회차의 max+1 을 받는다(domain.library.next_run_no).
+    두 번 떠도 두 번 매기지 않는다 — 매기고 나면 번호 없는 행이 없다.
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        retreats = [
+            r[0]
+            for r in conn.execute(
+                text("SELECT DISTINCT retreat_id FROM task_runs WHERE run_no IS NULL")
+            )
+        ]
+        assigned = 0
+        for retreat_id in retreats:
+            start = conn.execute(
+                text("SELECT COALESCE(MAX(run_no), 0) FROM task_runs WHERE retreat_id=:r"),
+                {"r": retreat_id},
+            ).scalar_one()
+            rows = list(
+                conn.execute(
+                    text(
+                        "SELECT id FROM task_runs WHERE retreat_id=:r AND run_no IS NULL"
+                        " ORDER BY (start_date IS NULL), start_date, id"
+                    ),
+                    {"r": retreat_id},
+                )
+            )
+            for offset, (run_id,) in enumerate(rows, start=1):
+                conn.execute(
+                    text("UPDATE task_runs SET run_no=:n WHERE id=:id"),
+                    {"n": start + offset, "id": run_id},
+                )
+            assigned += len(rows)
+        if assigned:
+            import logging
+
+            logging.getLogger("dcb.db").info(
+                "업무 %d건에 번호(run_no)를 매겼습니다 — 회차별 시작일 → id 순, 한 번만",
+                assigned,
+            )
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (모델 등록)
 
@@ -263,3 +319,4 @@ def init_db() -> None:
     _release_inactive_phones()
     _convert_stored_late()
     _link_discussion_runs()
+    _assign_run_numbers()

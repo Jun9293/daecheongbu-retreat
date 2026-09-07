@@ -57,6 +57,7 @@ def _row(run: TaskRun, today: dt.date, *, dim_key: str | None) -> dict:
     dept = run.department
     return {
         "run_id": run.id,
+        "no": run.run_no,        # 회차 안에서 고정 (4-14) — 회의에서 번호로 부른다
         "title": run.library.title,
         "kind_label": run.library.kind_label,
         "dept": (

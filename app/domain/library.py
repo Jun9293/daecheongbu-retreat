@@ -119,6 +119,18 @@ def past_retreats(db: Session, *, exclude_id: int | None = None) -> list[Retreat
     return [r for r in rows if r.id != exclude_id]
 
 
+def next_run_no(db: Session, retreat_id: int) -> int:
+    """회차를 연 뒤 더한 업무의 번호 — 그 회차의 max+1 (4-14).
+
+    번호는 재사용하지 않는다 — 빠진 번호를 메우면 회의록의 「12번」 이
+    다른 업무를 가리키게 된다.
+    """
+    current = db.scalar(
+        select(func.max(TaskRun.run_no)).where(TaskRun.retreat_id == retreat_id)
+    )
+    return (current or 0) + 1
+
+
 def latest_retreat(db: Session, *, exclude_id: int | None = None) -> Retreat | None:
     rows = past_retreats(db, exclude_id=exclude_id)
     return rows[-1] if rows else None
@@ -654,6 +666,15 @@ def create_retreat(
                 db.flush()
                 # 걸린 곳의 유일한 출처는 링크 표다 — 만들 때 함께 건다 (4-9)
                 discussion.attach(db, copied, run)
+
+    # 번호는 회차 안에서 고정이다 (4-14) — 새 회차는 시작일 → id 순으로 1부터.
+    # 복제해 만들어도 번호는 이 회차의 것이다(지난 회차 번호를 물려받지 않는다).
+    ordered = sorted(
+        run_by_library.values(),
+        key=lambda r: (r.start_date is None, r.start_date or dt.date.max, r.id),
+    )
+    for no, run in enumerate(ordered, start=1):
+        run.run_no = no
 
     # 2패스 — 라이브러리의 선행 관계를 이번 회차의 run 으로 옮긴다.
     # included 끼리만 잇는다. 보드는 included 인 run 만 싣기 때문에 미포함 run 을
