@@ -780,6 +780,7 @@ def registered(name: str) -> tuple[set[str], dict[str, str]]:
     body = block[:unused_at] if unused_at >= 0 else block
     keys = set(re.findall(r"^  ([A-Za-z_]\w*):", body, re.M))
     keys |= set(re.findall(r"^  ([A-Za-z_]\w*),", body, re.M))   # 줄임 표기
+    keys |= set(re.findall(r"^  ([A-Za-z_]\w*)\(", body, re.M))  # 축약 메서드 — onTitle(runId) {
 
     excuses: dict[str, str] = {}
     if unused_at >= 0:
@@ -941,6 +942,19 @@ def _paint_run(admin_client, run_id, start, end):
     return res.json()
 
 
+def _ongoing(cal_data):
+    """회차를 실제 오늘 기준 진행 중으로 되돌린다.
+
+    아래 r2 계열과 u_12c 는 실제 `date.today()` 로 도는 HTTP 응답을 보는
+    시험이라 `today` 를 주입할 수 없고, 고정된 8월 회차는 실제 시간이 지나며
+    종료됐다 — 종료된 회차는 지연을 내지 않으므로(4-10 · overdue_of) 시험의
+    전제(진행 중 회차에서 마감을 오늘 앞뒤로 끌기)가 무너진다."""
+    with app_session() as db:
+        retreat = db.get(models.Retreat, cal_data["retreat_id"])
+        retreat.end_date = dt.date.today() + dt.timedelta(days=30)
+        db.commit()
+
+
 # ── 1 · 2. 서버가 색을 함께 돌려준다 ─────────────────────────────────
 #
 # **브라우저로만 보면 착각한다.** 과거끼리 옮겨 보고 "안 붉어졌다" 며
@@ -948,6 +962,7 @@ def _paint_run(admin_client, run_id, start, end):
 
 
 def test_r2_01_과거에서_미래로_옮기면_더_이상_붉지_않다(admin_client, cal_data):
+    _ongoing(cal_data)
     run_id = cal_data["runs"]["오늘 업무"]
     past = dt.date.today() - dt.timedelta(days=10)
     future = dt.date.today() + dt.timedelta(days=10)
@@ -967,6 +982,7 @@ def test_r2_01_과거에서_미래로_옮기면_더_이상_붉지_않다(admin_c
 def test_r2_02_미래에서_과거로_옮기면_붉어진다(admin_client, cal_data):
     from app.domain import board as board_domain
 
+    _ongoing(cal_data)
     run_id = cal_data["runs"]["오늘 업무"]
     future = dt.date.today() + dt.timedelta(days=10)
     past = dt.date.today() - dt.timedelta(days=3)
@@ -989,6 +1005,7 @@ def test_r2_02b_보드의_바와_달력의_점을_함께_준다(admin_client, ca
     '지연' 으로 칠한다. 이름 쌍(bar_*/dot_*)은 화면(JS)이 받는 계약이라 남는다."""
     from app.domain import board as board_domain
 
+    _ongoing(cal_data)
     run_id = cal_data["runs"]["오늘 업무"]
     past = (dt.date.today() - dt.timedelta(days=5)).isoformat()
     paint = _paint_run(admin_client, run_id, past, past)
@@ -1034,8 +1051,9 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     # `/status` · `/dates` · `/assignee` 셋 다 생김새를 함께 낸다.
     # 담당자는 점에 안 적히지만 **툴팁에는 들어가서**, 안 실어 보내면 화면이
     # 옛 이름으로 문장을 다시 쓴다 — 실제로 그랬다.
-    # 넷째는 상세(task_detail)의 배지다 (4-3) — 칩도 같은 한 곳에서 나온다.
-    assert router_src.count("paint_of(") == 4, "세 API + 상세 배지, 네 곳이어야 한다"
+    # 넷째는 상세(task_detail)의 배지 (4-3), 다섯째는 `/title` 의 툴팁이다 —
+    # 제목이 바뀌면 점의 툴팁 문장도 바뀌는데, 그 문장도 같은 한 곳에서 나온다.
+    assert router_src.count("paint_of(") == 5, "세 API + 상세 배지 + 제목, 다섯 곳이어야 한다"
     for path in ("/status", "/dates", "/assignee"):
         at = router_src.index('@router.post("/board/task/{run_id}' + path + '")')
         block = router_src[at : router_src.index("@router.", at + 10)]
@@ -1985,6 +2003,7 @@ def test_u_12b_담당자를_바꾸면_툴팁도_바뀐다(admin_client, cal_data
 def test_u_12c_상태를_바꿔도_기간과_지연_문구가_남는다(admin_client, cal_data):
     """`/status` 응답에는 날짜가 없다. 그것을 "비었다" 로 읽으면 멀쩡한
     기간이 지워지고, 문장에서 `· 기간 …` 이 조용히 빠진다."""
+    _ongoing(cal_data)
     run_id = cal_data["runs"]["지각한 업무"]
     view = admin_client.post(f"/board/task/{run_id}/status",
                              json={"status": "진행중"}).json()
@@ -2016,7 +2035,9 @@ def test_u_15_패널이_열리면_비침이_사라진다():
     """점을 클릭하면 마우스가 움직이지 않아 `mouseout` 이 뜨지 않는다."""
     js = code_only(read_js("calendar.js"))
     init = js[js.index("Drawer.init({"):]
-    init = init[: init.index("});")]
+    # 첫 `});` 로 자르면 축약 메서드 안의 forEach(...) 닫힘에 걸려 목록이
+    # 중간에서 끊긴다 — 최상위 닫힘은 줄 머리의 `});` 다
+    init = init[: init.index("\n});")]
     assert "onOpen: clearSpan" in init, "열릴 때 지우지 않는다"
 
 

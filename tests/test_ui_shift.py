@@ -185,9 +185,14 @@ def test_07_상세_패널의_속성_값이_평소엔_글자_호버시_배경이�
     meta = re.search(r"\.dmeta dt\{([^}]*)\}", CSS).group(1)
     assert "var(--ink-3)" in meta, "라벨이 흐림 색이 아니다"
 
-    pill = re.search(r"\n\.pill\{([^}]*)\}", CSS).group(1)
-    assert "border:1px solid transparent" in pill, "평소에 테두리가 보이면 입력 폼으로 읽힌다"
-    assert re.search(r"\.pill:hover\{background:var\(--hover\)\}", CSS)
+    # 값 칸은 정의 표의 `dd.edit` 다 (단계 4 — 알약을 걷었다. 4-9).
+    # 평소엔 글자처럼 보이고 마우스를 올렸을 때만 배경이 든다 — 같은 물음이다.
+    edit = re.search(r"\.dmeta dd\.edit\{([^}]*)\}", CSS).group(1)
+    assert "border:" not in edit and "background" not in edit, \
+        "평소에 테두리·배경이 보이면 입력 폼으로 읽힌다"
+    assert re.search(
+        r"\.dmeta dd\.edit:hover,\.dmeta dd\.edit:focus-within\{background:var\(--hover\)\}",
+        CSS)
 
     # 제목 25px/600
     title = re.search(r"\.dtitle\{([^}]*)\}", CSS).group(1)

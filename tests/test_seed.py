@@ -26,10 +26,16 @@ def _seed(client):
     seed_module.seed(demo=True)
 
 
+# /files 화면은 UI 개편 단계 4 에서 지웠다 (14장) — 데모 FileAsset 행과 디스크
+# 파일은 남고(0장 첫 원칙), 업무 첨부로 옮기는 것은 `scripts/migrate_files.py` 다.
+# 그래서 여기서는 HTTP 가 아니라 **행과 디스크가 맞는지**를 본다. 내려받기·삭제
+# 시험은 지운 기능의 시험이라 함께 지웠다 — 첨부의 그것은 `test_attachments.py` 에 있다.
+
+
 def test_데모_파일_버전은_실제로_디스크에_존재한다(client):
     _seed(client)
 
-    from app.routers.files import ASSET_DIR
+    from app.config import ASSET_DIR
 
     with app_session() as db:
         versions = list(db.scalars(select(models.FileVersion)))
@@ -42,7 +48,7 @@ def test_데모_파일_버전은_실제로_디스크에_존재한다(client):
 def test_데모_파일의_기록된_크기가_실제_크기와_같다(client):
     _seed(client)
 
-    from app.routers.files import ASSET_DIR
+    from app.config import ASSET_DIR
 
     with app_session() as db:
         versions = list(db.scalars(select(models.FileVersion)))
@@ -56,57 +62,22 @@ def test_데모_파일의_기록된_크기가_실제_크기와_같다(client):
     assert mismatched == [], f"크기가 실제와 다른 기록: {mismatched}"
 
 
-def test_데모_파일을_실제로_내려받을_수_있다(client):
-    _seed(client)
-    login_as(client, ADMIN_PHONE)
-
-    with app_session() as db:
-        # 세션 밖에서 lazy load 가 되지 않으므로 필요한 값만 미리 꺼낸다
-        targets = [
-            (asset.id, asset.title, version.version_no)
-            for asset in db.scalars(select(models.FileAsset))
-            for version in asset.versions
-        ]
-
-    assert targets, "데모 파일이 없습니다."
-    for asset_id, title, version_no in targets:
-        response = client.get(f"/files/{asset_id}/download/{version_no}")
-        assert response.status_code == 200, (
-            f"{title} v{version_no} 내려받기 실패 ({response.status_code})"
-        )
-        assert len(response.content) > 0
-
-
 def test_데모_파일_버전마다_내용이_다르다(client):
-    """v1 과 v2 가 같은 파일을 가리키면 버전 이력이 의미가 없다."""
+    """v1 과 v2 가 같은 파일을 가리키면 버전 이력이 의미가 없다 —
+    이관(migrate_files)이 두 버전을 같은 내용의 첨부 두 개로 만들게 된다."""
     _seed(client)
-    login_as(client, ADMIN_PHONE)
+
+    from app.config import ASSET_DIR
 
     with app_session() as db:
         poster = db.scalars(
             select(models.FileAsset).where(models.FileAsset.title == "수련회 포스터")
         ).one()
-        version_numbers = sorted(v.version_no for v in poster.versions)
+        stored = [v.stored_name for v in
+                  sorted(poster.versions, key=lambda v: v.version_no)]
 
-    contents = [
-        client.get(f"/files/{poster.id}/download/{no}").content for no in version_numbers
-    ]
+    contents = [(ASSET_DIR / name).read_bytes() for name in stored]
     assert len(set(contents)) == len(contents), "버전별 파일 내용이 중복됩니다."
-
-
-def test_데모_파일을_삭제해도_오류가_나지_않는다(client):
-    _seed(client)
-    login_as(client, ADMIN_PHONE)
-
-    with app_session() as db:
-        asset = db.scalars(select(models.FileAsset)).first()
-        asset_id = asset.id
-
-    response = client.post(f"/files/{asset_id}/delete", follow_redirects=True)
-
-    assert response.status_code == 200
-    with app_session() as db:
-        assert db.get(models.FileAsset, asset_id) is None
 
 
 # ================================================================ 화면 규모
@@ -154,9 +125,10 @@ def test_모든_주요_화면이_실제_데이터에서_정상_렌더링된다(c
     # /schedule 은 301 로 /live/staff 에 잇고(14장), /more 는 설정 › 점검이
     # 맡는다 (4-17). TestClient 는 리다이렉트를 따라가므로 /schedule 이 남아
     # 있는 것이 곧 「옛 링크가 살아 있다」 는 검사다.
+    # /files 는 지웠다 (단계 4). /reviews 는 301 을 따라가 알림으로 열린다 (4-16)
     paths = [
         "/", "/schedule", "/tasks", "/budget", "/expenses", "/refunds",
-        "/settings/retreats", "/notifications", "/reviews", "/files", "/checklists",
+        "/settings/retreats", "/notifications", "/reviews", "/checklists",
         "/meetings", "/settings",
     ]
     for path in paths:

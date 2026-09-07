@@ -257,147 +257,12 @@ def test_이미_처리된_요청은_다시_처리되지_않는다(admin_client, 
 
 
 # ================================================================ 파일
-
-
-PNG = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
-    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-)
-
-
-def _upload_file(admin_client, dept_id, title="수련회 포스터"):
-    admin_client.post(
-        "/files/create",
-        data={"title": title, "department_id": str(dept_id), "note": "1차 시안"},
-        files={"upload": ("poster_v1.png", PNG, "image/png")},
-        follow_redirects=True,
-    )
-    with app_session() as db:
-        return db.scalars(select(models.FileAsset).where(models.FileAsset.title == title)).one()
-
-
-def test_파일을_올리면_v1로_등록된다(admin_client):
-    _, depts = _setup(admin_client)
-    asset = _upload_file(admin_client, depts[0].id)
-
-    with app_session() as db:
-        versions = db.scalars(
-            select(models.FileVersion).where(models.FileVersion.file_asset_id == asset.id)
-        ).all()
-
-    assert asset.status == "작업중"
-    assert len(versions) == 1
-    assert versions[0].version_no == 1
-    assert versions[0].original_name == "poster_v1.png"
-
-
-def test_새_버전을_올리면_이력이_쌓이고_최신이_바뀐다(admin_client):
-    _, depts = _setup(admin_client)
-    asset = _upload_file(admin_client, depts[0].id)
-
-    admin_client.post(
-        f"/files/{asset.id}/versions",
-        data={"note": "2차 수정"},
-        files={"upload": ("poster_v2.png", PNG, "image/png")},
-        follow_redirects=True,
-    )
-
-    with app_session() as db:
-        refreshed = db.get(models.FileAsset, asset.id)
-        assert len(refreshed.versions) == 2
-        assert refreshed.latest.version_no == 2
-        assert refreshed.latest.note == "2차 수정"
-
-
-def test_파일을_내려받을_수_있다(admin_client):
-    _, depts = _setup(admin_client)
-    asset = _upload_file(admin_client, depts[0].id)
-
-    response = admin_client.get(f"/files/{asset.id}/download/1")
-
-    assert response.status_code == 200
-    assert response.content == PNG
-
-
-def test_파일_확인_요청이_승인되면_파일_상태도_승인이_된다(admin_client, client):
-    _, depts = _setup(admin_client)
-    hongbo, chanyang = depts
-    _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
-    asset = _upload_file(admin_client, hongbo.id)
-
-    admin_client.post(
-        f"/files/{asset.id}/review-request",
-        data={"department_ids": [str(chanyang.id)], "message": "확인 부탁"},
-        follow_redirects=True,
-    )
-    with app_session() as db:
-        assert db.get(models.FileAsset, asset.id).status == "검토요청"
-        review = db.scalars(select(models.ReviewRequest)).one()
-
-    login_as(client, "01033334444")
-    client.post(
-        f"/reviews/{review.id}/respond", data={"decision": "승인"}, follow_redirects=True
-    )
-
-    with app_session() as db:
-        assert db.get(models.FileAsset, asset.id).status == "승인"
-
-
-def test_승인된_파일에_새_버전을_올리면_다시_작업중이_된다(admin_client, client):
-    _, depts = _setup(admin_client)
-    hongbo, chanyang = depts
-    _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
-    asset = _upload_file(admin_client, hongbo.id)
-    admin_client.post(
-        f"/files/{asset.id}/review-request",
-        data={"department_ids": [str(chanyang.id)]},
-        follow_redirects=True,
-    )
-    with app_session() as db:
-        review = db.scalars(select(models.ReviewRequest)).one()
-    login_as(client, "01033334444")
-    client.post(f"/reviews/{review.id}/respond", data={"decision": "승인"}, follow_redirects=True)
-
-    admin_client.post(
-        f"/files/{asset.id}/versions",
-        data={"note": "수정본"},
-        files={"upload": ("poster_v2.png", PNG, "image/png")},
-        follow_redirects=True,
-    )
-
-    with app_session() as db:
-        assert db.get(models.FileAsset, asset.id).status == "작업중"
-
-
-def test_허용되지_않는_파일_형식은_거부한다(admin_client):
-    _, depts = _setup(admin_client)
-
-    response = admin_client.post(
-        "/files/create",
-        data={"title": "악성", "department_id": str(depts[0].id)},
-        files={"upload": ("bad.exe", b"MZ", "application/octet-stream")},
-    )
-
-    assert response.status_code == 400
-    with app_session() as db:
-        assert db.scalars(select(models.FileAsset)).all() == []
-
-
-def test_타부서_파일에는_새_버전을_올릴_수_없다(admin_client, client):
-    _, depts = _setup(admin_client)
-    hongbo, chanyang = depts
-    _make_user(admin_client, "박찬양", "010-3333-4444", "dept_lead", chanyang.id)
-    asset = _upload_file(admin_client, hongbo.id)
-
-    login_as(client, "01033334444")
-    response = client.post(
-        f"/files/{asset.id}/versions",
-        data={"note": "몰래"},
-        files={"upload": ("x.png", PNG, "image/png")},
-    )
-
-    assert response.status_code == 403
+#
+# 작업 파일 화면(/files)은 UI 개편 단계 4 에서 지웠다 (14장) — 파일은 업무
+# 첨부(4-9)가 그 자리다. 올리기·버전·내려받기·형식 거부는 첨부파일 시험
+# (`test_attachments.py`)이 지키고, 남은 FileAsset 행의 이관은
+# `test_stage4.py::test4_fm01` 이 지킨다. 여기 있던 일곱 시험은 지운 기능의
+# 시험이라 함께 지웠다 — 확인 요청의 승인·반려 흐름은 위 절이 그대로 지킨다.
 
 
 # ================================================================ 체크리스트
@@ -611,8 +476,10 @@ def test_Phase2_화면들이_모두_정상적으로_열린다(admin_client):
     _setup(admin_client)
     _create_categories(admin_client, DEFAULT_CATEGORIES)
 
-    # /more 는 지웠다 — 설정 › 점검(4-17)이 그 자리다
-    for path in ["/settings/checkup", "/notifications", "/reviews", "/files", "/checklists", "/meetings"]:
+    # /more 는 지웠다 — 설정 › 점검(4-17)이 그 자리다.
+    # /files 도 지웠다(단계 4) — 업무 첨부(4-9)가 그 자리다.
+    # /reviews 는 301 → /notifications 을 따라가 200 이면 된다 (4-16)
+    for path in ["/settings/checkup", "/notifications", "/reviews", "/checklists", "/meetings"]:
         response = admin_client.get(path)
         assert response.status_code == 200, f"{path} → {response.status_code}"
 
@@ -624,7 +491,7 @@ def test_열람전용_계정은_Phase2_기능도_편집할_수_없다(admin_clie
 
     login_as(client, "01055556666")
 
-    assert client.get("/files").status_code == 200  # 열람은 가능
+    assert client.get("/notifications").status_code == 200  # 열람은 가능
     assert (
         client.post(
             "/checklists/create", data={"name": "몰래", "items": "x"}

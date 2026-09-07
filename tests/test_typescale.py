@@ -157,7 +157,7 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
 흐려도_되는곳 = {
     ".sidenav .wip", ".ctl label", ".row.team .lc .caret", ".row.team .lc .ct",
     ".bar.ghost .txt.spill", ".bar.ghost", ".mgroup > h3 .n", ".dmeta dt",
-    ".pill .span", ".dtabs .n", ".log s", ".dclose", ".fitem .more",
+    ".dtabs .n", ".log s", ".dclose", ".fitem .more",
     ".fitem.link .ext", ".linkform .lbl", ".upnow .top .x", ".field label",
     ".card h3 .n", ".tchip .x", ".libsec > h3 .n", ".libsec > h3 em",
     ".subrow .branch", ".editbtn", ".trow.off .nm", ".draftrow .n", ".retired",
@@ -172,6 +172,17 @@ def test_ts_06_칸_높이도_함께_올렸고_이유가_적혔다():
     ".sidenav .pick .caret",
     # 목록의 완료 접힘 캐럿(▸) — 옆의 「완료 N건 보기」 가 뜻을 다 진다 (단계 3)
     ".ldone > summary::before",
+    # 단계 4 — 드로어 머리 정의 표·연결 카드·목록 행·확인 요청·회의록 고르기.
+    # 전부 옆의 값이 뜻을 다 지는 장식이다: 번호는 옆의 제목이(4-14),
+    # 「라이브러리에서」·「(선택)」 은 옆의 값·라벨이, 「기간 N일」 은 옆의
+    # 시작–마감이 지고, 나머지는 글자가 아니라 기호다(– · 화살표 · ▸ · 구분점).
+    ".dtitle .runno", ".runno", ".mt-pick .mt-no",       # 번호 (옆이 제목)
+    ".dmeta dd .fromlib",                                 # 상위 값 옆 「라이브러리에서」
+    ".dmeta dd .mark",                                    # 호버 표식 ∨ · ✎
+    ".dmeta dd .dates .sep", ".dmeta dd .dates .span",    # – 와 「기간 N일」
+    ".relcard .rh .arrow", ".relcard .rh .n",             # 방향 기호와 건수
+    ".lfoot .caret", ".lfoot .sep",                       # ▸ 와 · 구분점
+    ".revform .lbl .opt2",                                # 라벨 옆 「(선택)」
 }
 
 

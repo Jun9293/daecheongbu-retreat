@@ -425,9 +425,12 @@ def test_x_19_고른_것만_반영되고_출처가_남는다(admin_client, 회�
         논의 = db.scalars(select(models.DiscussionEntry)
                         .where(models.DiscussionEntry._legacy_run_id == run_id)).all()
         assert len(논의) == 1, "고른 하나만 들어가야 한다"
-        # 출처가 남는다
-        assert "회의록" in 논의[0].body and "6월 회의" in 논의[0].body
-        assert "2026-06-01" in 논의[0].body
+        # 출처의 정본은 `source_meeting_id` 하나다 (1-d) — 본문에 「[회의록 …]
+        # 에서 옮김」 첫 줄을 **더 넣지 않는다.** 두 곳에 적으면 한쪽만 고쳐진다.
+        # 화면의 「어디서 왔나」 는 이 id 로 그린다 (4-9 의 출처 줄).
+        assert 논의[0].source_meeting_id == meeting_id
+        assert "에서 옮김" not in 논의[0].body
+        assert 논의[0].body == 회차와업무["title"] + " 일정 논의"
 
         기록 = db.scalars(select(models.ActivityLog)
                         .where(models.ActivityLog.action == "회의록_제안_반영")).all()
@@ -1219,7 +1222,8 @@ def test_w2_05_누르기_전에_남을_문장을_볼_수_있다(회차와업무,
     assert 논의
     for x in 논의:
         assert x["preview"], "남을 문장이 없다"
-        assert "회의록" in x["preview"] and "에서 옮김" in x["preview"]
+        # 출처 첫 줄은 넣지 않는다 — 정본은 source_meeting_id 하나다 (4-9)
+        assert "에서 옮김" not in x["preview"]
 
     # **미리보기와 실제 저장이 같은 함수를 쓴다** — 두 벌이면 갈린다
     본문 = (ROOT / "app" / "routers" / "meetings.py").read_text(encoding="utf-8")

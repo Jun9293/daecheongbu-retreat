@@ -313,20 +313,44 @@ def test_h10_소속_외_흐림은_부서_키로_가른다(admin_client, home_dat
     assert any(t != "헤브론 이번 주" for t in dim_titles)
 
 
-# ---------------------------------------------------------------- 1-d. 옛 알림함 한 줄
+# ---------------------------------------------------------------- 1-d. 확인 요청과 알림 페이지
 
 
-def test_h09_알림함_상단_확인_요청_줄은_0건이면_없다(admin_client, home_data):
+def test_h09_확인_요청은_받은_것_목록에_서고_0건이면_조용하다(
+        admin_client, client, home_data):
+    """옛 알림함의 상단 「답 기다리는 확인 요청 N건」 줄은 화면과 함께
+    사라졌다 (4-16) — 요청은 받은 것 목록의 **사람 발신** 항목이고, 답하는
+    폼이 그 자리에 있다. 0건이면 아무 흔적이 없다."""
     page = admin_client.get("/notifications").text
     assert "답 기다리는 확인 요청" not in page
+    assert 'class="sender human"' not in page
+    assert 'href="/reviews"' not in page          # 옛 화면으로 가는 길도 없다
+
+    from app.routers.reviews import create_review_requests
 
     with app_session() as db:
         retreat = db.get(models.Retreat, home_data["retreat_id"])
         dept = db.scalars(select(models.Department).where(
             models.Department.retreat_id == retreat.id)).first()
-        db.add(models.ReviewRequest(
-            retreat_id=retreat.id, department_id=dept.id, status="대기"))
+        admin = db.scalars(select(models.User).where(
+            models.User.role == "admin")).first()
+        dept_id = dept.id
+        # 요청자는 자기 알림을 받지 않으므로(exclude_user_id) 받는 사람을 만든다
+        member = models.User(name="총무 팀원", phone_number="01088880001",
+                             role="member", department_id=dept_id)
+        db.add(member)
+        db.flush()
+        reviews = create_review_requests(
+            db, retreat=retreat, requester=admin,
+            department_ids=[dept_id], message="확인 부탁")
         db.commit()
-    page = admin_client.get("/notifications").text
-    assert "답 기다리는 확인 요청 1건" in page
-    assert 'href="/reviews"' in page
+        review_id = reviews[0].id
+
+    login_as(client, "01088880001")
+    client.get(f"/board?retreat_id={home_data['retreat_id']}")
+    page = client.get("/notifications").text
+    assert 'class="sender human"' in page          # 사람 발신 배지
+    assert f'action="/reviews/{review_id}/respond"' in page   # 그 자리에서 답한다
+    # 「답을 기다리는 것」 칩으로도 걸린다
+    pending = client.get("/notifications?chip=pending").text
+    assert f'action="/reviews/{review_id}/respond"' in pending

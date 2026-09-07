@@ -288,7 +288,9 @@ def test_l04_목록의_상세는_드로어_한_벌이다(admin_client, world):
     # 정적 주소는 내용 해시가 붙는다 (11-2) — 이름만 본다
     assert re.search(r"js/drawer\.[0-9a-f]*\.?js", page)
     assert re.search(r"js/tasks\.[0-9a-f]*\.?js", page)
-    assert "상세 · 선행 작업 · 확인 요청" in page
+    # 단계 4에서 글자 셋이 각각 그 탭을 여는 단추가 됐다 (4-14) — 셋 다 있어야 한다
+    for word, tab in (("상세", "rules"), ("선행 작업", "rel"), ("확인 요청", "review")):
+        assert f'data-tab="{tab}">{word}</button>' in page, word
     # tasks.js 는 제 주소를 만들지 않는다 — 요청은 전부 drawer.js 가
     # 보드와 같은 주소(/board/task/…)로 보낸다
     tjs = _read("app", "static", "js", "tasks.js")

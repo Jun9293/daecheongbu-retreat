@@ -449,9 +449,10 @@ def test_09_상세_패널에서_선행_후속_관련이_구분된다(libs, admin
     # 연결된 업무 목록은 **상세 패널** 안에 있다. 패널은 보드와 달력이
     # 같이 쓰는 한 벌이라 board.js 가 아니라 drawer.js 에 있다 (4-13).
     js = _js("drawer.js")
-    assert "선행 — 끝나야 시작할 수 있다" in js
-    assert "후속 — 나를 기다린다" in js
-    assert "관련 — 방향 없음" in js
+    # 구획 제목이 세 카드가 됐다 (4-9 · 단계 4) — 방향 표시 + 이름 + 한 줄 설명
+    assert "'→', '선행', pre, '끝나야 시작할 수 있다'" in js
+    assert "'←', '후속', dep, '나를 기다린다'" in js
+    assert "'↔', '관련', rel, '방향 없음 — 서로 참고할 사이'" in js
     assert "다음 회차에도 그대로 적용됩니다" in js
     assert "data-act=\"open\"" in js and "data-act=\"move\"" in js   # 열기/이동 유지
 
