@@ -150,8 +150,9 @@ def 번호변형들(표기: str) -> list[str]:
 
 
 def 표기들() -> list[str]:
-    """찾아야 할 표기 전부 — 이름·장소(긴 것부터) + 번호의 변형들.
-    순서에 기대지 말 것 — 번호 변형 꼬리는 길이순이 아니다."""
+    """찾아야 할 표기 전부. **순서에 기대지 말 것** — 이름·장소는 load_map
+    이 긴 표기부터 정렬해 주지만, 뒤에 붙는 번호 변형은 길이순이 아니다.
+    찾기에는 순서가 무관하다 (바꾸기는 이 목록이 아니라 load_map 을 쓴다)."""
     names, phones, _장소 = load_map()
     번호쪽: list[str] = []
     for a, _ in phones:
@@ -274,10 +275,19 @@ def swap(text: str, *, doc: bool = False, names=None, phones=None) -> tuple[str,
     changed = 0
 
     for real, fake in phones:
-        replacement = DOC_PHONE if doc else fake
-        if real in text:
-            changed += text.count(real)
-            text = text.replace(real, replacement)
+        # **변형(숫자·3-4-4·공백)도 바꾼다** — 원표기만 바꾸면 3-4-4 실번호가
+        # check_names 에는 걸리는데 미리보기·--apply 에는 안 나와서, 사람이
+        # 손으로 고치며 "왜 안 나오나" 를 겪는다 (Z-a). 이름과 달리 번호는
+        # 치환해도 낱말이 깨질 위험이 없다 — 숫자 경계가 곧 낱말 경계다.
+        # 바꿀 값은 같은 자리의 가명 변형(모양 보존: 3-4-4 는 3-4-4 로).
+        # 가명 쪽 변형 수가 다르면 숫자-그대로 형으로 물러선다.
+        가변형 = 번호변형들(fake)
+        for i, 형 in enumerate(번호변형들(real)):
+            replacement = DOC_PHONE if doc else (
+                가변형[i] if i < len(가변형) else 가변형[0])
+            if 형 in text:
+                changed += text.count(형)
+                text = text.replace(형, replacement)
 
     for real, fake in names:
         # `M` 접미사는 이름의 일부로 함께 넘어간다 (이름M → 가명M)
