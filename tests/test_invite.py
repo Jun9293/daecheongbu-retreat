@@ -411,8 +411,8 @@ def test_마무리03_새로고침하면_링크가_다시_나오지_않는다(wit
 
 
 def test_마무리03b_꺼내는_자리는_한_번만_준다():
-    key = invites.stash("비밀-원문")
-    assert invites.take(key) == "비밀-원문"
+    key = invites.stash("비밀-원문", "그 사람")
+    assert invites.take(key) == ("비밀-원문", "그 사람")   # 원문과 이름이 한 키에
     assert invites.take(key) is None
     assert invites.take("없는키") is None
     assert invites.take(None) is None

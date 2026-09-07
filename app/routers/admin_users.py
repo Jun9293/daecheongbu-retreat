@@ -132,18 +132,13 @@ def users_page(
             # **완성된 주소로 넘긴다.** 앱은 127.0.0.1 에만 열려 있어서
             # request.base_url 은 바깥 주소가 아니다 — 그걸 복사해 보내면
             # 받는 사람 브라우저에서 열리지 않는다 (11-2)
+            # 원문과 이름은 **한 키에 묶여** 나온다 — 이름을 따로(u=) 실으면
+            # 주소를 손봤을 때 「B 님의 링크」 아래 A 의 링크가 뜰 자리가 생긴다
             "issued_url": (
-                invites.invite_url(raw)
-                if (raw := invites.take(request.query_params.get("k"))) else None
+                invites.invite_url(taken[0])
+                if (taken := invites.take(request.query_params.get("k"))) else None
             ),
-            # 누구의 링크인지 배너가 말한다 — 이름 없이 링크만 뜨면 열아홉 명에게
-            # 연달아 보낼 때 방금 복사한 것이 누구 것인지 화면이 답하지 못한다
-            "issued_for": (
-                person.name
-                if raw and (uid := request.query_params.get("u", "")).isdigit()
-                and len(uid) < 10        # 터무니없는 수로 SQLite 바인딩이 죽지 않게
-                and (person := db.get(User, int(uid))) else None
-            ),
+            "issued_for": (taken[1] or None) if taken else None,
             "no_departments": not choices,
         },
     )
@@ -192,8 +187,8 @@ def create_user(
     )
     raw = invites.issue(db, user=person, actor=user)
     # 원문 대신 **한 번 쓰면 사라지는 키**만 싣는다 — 주소창·방문 기록·접속 로그
-    # 어디에도 링크가 남지 않게 하기 위해서다. u= 는 배너가 이름을 말하기 위한 것.
-    return redirect(f"/admin/users?k={invites.stash(raw)}&u={person.id}")
+    # 어디에도 링크가 남지 않게 하기 위해서다. 이름도 같은 키에 묶여 간다.
+    return redirect(f"/admin/users?k={invites.stash(raw, person.name)}")
 
 
 def _clean_phone(raw: str) -> str:
@@ -319,7 +314,7 @@ def issue_invite(
     만드는 것은 화면이든 스크립트(create_admin.py)든 **invites.issue 하나**다 —
     두 길로 만들면 하나만 고쳐진다. 화면의 JS 가 부르면(inline=1) JSON 으로
     그 자리에 돌려주고, JS 가 없으면 리다이렉트로 맨 위 배너에 띄운다 —
-    이때 누구의 링크인지(u=)를 같이 실어 배너가 이름을 말하게 한다.
+    원문과 이름은 stash 한 키에 묶여 배너로 간다 — 어긋날 자리가 없다.
     """
     person = db.get(User, user_id)
     if person is None:
@@ -345,7 +340,7 @@ def issue_invite(
             # 링크 원문이 담긴 응답이다 — 어디에도 저장될 이유가 없다
             headers={"Cache-Control": "no-store"},
         )
-    return redirect(f"/admin/users?k={invites.stash(raw)}&u={person.id}")
+    return redirect(f"/admin/users?k={invites.stash(raw, person.name)}")
 
 
 @router.post("/admin/users/{user_id}/revoke")

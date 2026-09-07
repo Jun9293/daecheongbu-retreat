@@ -161,24 +161,30 @@ _handoff: dict[str, tuple[str, dt.datetime]] = {}
 
 
 def _sweep_handoff(now: dt.datetime) -> None:
-    for key in [k for k, (_, at) in _handoff.items()
+    for key in [k for k, (_, _, at) in _handoff.items()
                 if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS]:
         _handoff.pop(key, None)
     while len(_handoff) > _HANDOFF_MAX:
         _handoff.pop(next(iter(_handoff)), None)
 
 
-def stash(raw: str) -> str:
-    """원문을 담아 두고 **꺼낼 키**를 돌려준다."""
+def stash(raw: str, name: str = "") -> str:
+    """원문과 **누구의 것인지**를 함께 담아 두고 꺼낼 키를 돌려준다.
+
+    이름을 따로(u=) 실으면 링크와 이름이 어긋날 자리가 생긴다 — 주소를
+    손보면 「B 님의 링크」 아래 A 의 링크가 뜬다. 한 키에 묶어 두면
+    take 한 번에 둘 다 나오므로 그 자리가 없다.
+    """
     now = _now()
     _sweep_handoff(now)
     key = secrets.token_urlsafe(9)
-    _handoff[key] = (raw, now)
+    _handoff[key] = (raw, name, now)
     return key
 
 
-def take(key: str | None) -> str | None:
-    """한 번만 꺼내진다. 두 번째부터는 None — 새로고침해도 다시 보이지 않는다."""
+def take(key: str | None) -> tuple[str, str] | None:
+    """(원문, 이름). 한 번만 꺼내진다. 두 번째부터는 None —
+    새로고침해도 다시 보이지 않는다."""
     if not key:
         return None
     now = _now()
@@ -186,7 +192,7 @@ def take(key: str | None) -> str | None:
     found = _handoff.pop(key, None)
     if found is None:
         return None
-    raw, at = found
+    raw, name, at = found
     if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS:
         return None
-    return raw
+    return raw, name
