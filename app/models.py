@@ -250,6 +250,9 @@ class ExpenseEntry(Base):
     created_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # 지출은 지우지 않는다 (0장 — 4-9 에서 업무의 삭제 단추를 막은 그 원칙).
+    # 취소 표시만 한다: 행은 흐리게 남고 합계·집행률·영수증 총액에서 빠진다 (7-4)
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     retreat: Mapped[Retreat] = relationship(back_populates="expenses")
     budget_category: Mapped[BudgetCategory | None] = relationship(back_populates="expenses")

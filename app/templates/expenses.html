@@ -2,7 +2,7 @@
 {% block title %}지출 · {{ retreat.name }}{% endblock %}
 
 {% block body %}
-<main class="settingwrap finwrap">
+<main class="setting finwrap">
   <h2 class="pagetitle">지출</h2>
 
   {# 칩 — 환급 대상자는 별도 페이지가 아니라 이 목록의 필터다 (7-4).
@@ -24,8 +24,12 @@
   </div>
 
   {% if not is_readonly(user.role) %}
-  <details class="addbox" {% if not entry_count %}open{% endif %}>
-    <summary>+ 지출 등록 <small class="cnt">다음 영수증 번호 {{ next_receipt_number }}</small></summary>
+  {# 등록은 **버튼으로 연다** (7-4) — 늘 접힌 채 시작한다. 전에는 필터에
+     걸린 행이 0건이면 저절로 펼쳐져 목록을 보러 온 화면이 입력 폼이 됐다.
+     다음 영수증 번호는 버튼 옆에 그대로 보인다. #}
+  <details class="addbox" id="addbox">
+    <summary class="addbtn-row"><span class="btnlike">+ 지출 등록</span>
+      <small class="cnt">다음 영수증 번호 {{ next_receipt_number }}</small></summary>
     <form method="post" action="/expenses/create" enctype="multipart/form-data" id="expense-form" class="expform">
       <label class="mealtoggle">
         <input type="checkbox" name="is_meal_expense" value="1" id="meal-toggle"
@@ -84,7 +88,10 @@
       </div>
       <label class="mealtoggle"><input type="checkbox" name="paid" value="1"> 이미 지급 완료</label>
 
-      <button class="sbtn p" type="submit">지출 등록</button>
+      <div class="formfoot">
+        <button class="sbtn p" type="submit">지출 등록</button>
+        <button class="sbtn" type="button" id="exp-close">닫기</button>
+      </div>
     </form>
   </details>
   {% endif %}
@@ -110,12 +117,16 @@
         </tr></thead>
         <tbody>
           {% for e in group.entries %}
-          {# 타 부서 흐림은 부서 **키** 비교 (2장 · is_other_dept) #}
-          <tr{% if is_other_dept(user, e.department) %} class="otherdept"{% endif %}>
+          {# 타 부서 흐림은 부서 **키** 비교 (2장 · is_other_dept).
+             취소된 행은 흐리게 남는다 — 지우지 않는다 (0장 · 7-4) #}
+          {% set rowcls = (('otherdept ' if is_other_dept(user, e.department) else '')
+                           ~ ('canceled' if e.canceled_at else ''))|trim %}
+          <tr{% if rowcls %} class="{{ rowcls }}"{% endif %}>
             <td class="mono">{% for r in e.receipts %}{{ r.number }}{% if not loop.last %}, {% endif %}{% else %}<span class="dim">—</span>{% endfor %}</td>
             <td>
               <div class="ettl">{{ e.level3b or (e.budget_category.display_name if e.budget_category) or '미지정' }}
-                {% if e.is_meal_expense %}<span class="mealchip">{{ e.meal_headcount or 0 }}명</span>{% endif %}</div>
+                {% if e.is_meal_expense %}<span class="mealchip">{{ e.meal_headcount or 0 }}명</span>{% endif %}
+                {% if e.canceled_at %}<span class="cancelchip">취소됨</span>{% endif %}</div>
               {% if e.note %}<div class="dim enote">{{ e.note }}</div>{% endif %}
               {% for r in e.receipts %}
                 {% if r.stored_name %}<a class="rcpt" href="/uploads/{{ r.stored_name }}" target="_blank">영수증 {{ r.number }}</a>
@@ -149,9 +160,11 @@
               {% if e.paid_date %}<div class="dim enote mono">{{ e.paid_date|short_date }}</div>{% endif %}
             </td>
             <td class="r">
+              {# 지우지 않는다 (0장) — 취소 표시만 하고 같은 단추로 되살린다 (7-4) #}
               {% if can_edit_dept(user, e.department) %}
-              <form method="post" action="/expenses/{{ e.id }}/delete" onsubmit="return confirm('이 지출을 삭제할까요?')">
-                <button class="sbtn" type="submit">삭제</button>
+              <form method="post" action="/expenses/{{ e.id }}/cancel"
+                    {% if not e.canceled_at %}onsubmit="return confirm('이 지출을 취소할까요? 행은 흐리게 남고 합계에서 빠집니다.')"{% endif %}>
+                <button class="sbtn" type="submit">{{ '되살리기' if e.canceled_at else '취소' }}</button>
               </form>
               {% endif %}
             </td>

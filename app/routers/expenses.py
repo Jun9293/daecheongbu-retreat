@@ -185,15 +185,28 @@ def expense_list(
         filter = "unpaid"
 
     entries = entries_of(db, retreat)
+    # 취소된 행은 「전체」 에만 흐리게 남는다 (7-4) — 나머지 필터는 챙길 일의
+    # 목록이라, 안 쓴 돈이 끼면 홈의 숫자와도 갈린다
     if filter == "meal":
-        entries = [e for e in entries if e.is_meal_expense]
+        entries = [e for e in entries if e.is_meal_expense and e.canceled_at is None]
     elif filter == "unpaid":
-        entries = [e for e in entries if not e.paid]
+        entries = [e for e in entries if not e.paid and e.canceled_at is None]
     elif filter == "refund":
         # 홈 결산의 「미지급 환급 N건」 과 같은 정의 — budget.refund_entries (4-15)
-        entries = [e for e in entries if is_refund_target(e) and not e.paid]
+        entries = [e for e in entries
+                   if is_refund_target(e) and not e.paid and e.canceled_at is None]
     elif filter == "noreceipt":
-        entries = [e for e in entries if not e.receipts]
+        entries = [e for e in entries if not e.receipts and e.canceled_at is None]
+
+    # 취소된 행은 합계에 넣지 않는다 (7-4) — 「전체」 에서 행은 보여도
+    # 숫자는 실제로 쓴 돈이어야 한다
+    live = [e for e in entries if e.canceled_at is None]
+    totals = {
+        "amount": sum(e.amount for e in live),
+        "subsidy": sum(e.subsidy_amount for e in live if e.is_meal_expense),
+        "burden": sum(e.personal_burden_amount for e in live if e.is_meal_expense),
+        "settlement": sum(e.settlement_amount for e in live),
+    }
 
     # 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 summary 의 그 항목 값이다 (7-4)
     summary = build_budget_summary(db, retreat=retreat)
@@ -226,14 +239,7 @@ def expense_list(
             "next_receipt_number": next_receipt_number(db, retreat),
             "today": dt.date.today().isoformat(),
             "filter": filter,
-            "totals": {
-                "amount": sum(e.amount for e in entries),
-                "subsidy": sum(e.subsidy_amount for e in entries if e.is_meal_expense),
-                "burden": sum(
-                    e.personal_burden_amount for e in entries if e.is_meal_expense
-                ),
-                "settlement": sum(e.settlement_amount for e in entries),
-            },
+            "totals": totals,
             "active_tab": "expenses",
             "page_subtitle": "지출",
         },
@@ -262,6 +268,13 @@ def create_expense(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     dept_id = int(department_id) if department_id else None
+    # 부서는 **이 지출의 회차** 행이어야 한다 (2장) — 키 비교 도입으로 「내
+    # 키의 아무 회차 부서 행」 이 권한을 통과하므로, 다른 회차의 행 id 가
+    # 붙으면 목록·집계가 그 부서를 못 찾는다. 걸러서 진행하지 않고 거절한다
+    if dept_id is not None:
+        dept = db.get(Department, dept_id)
+        if dept is None or dept.retreat_id != retreat.id:
+            raise HTTPException(status_code=400, detail="이 회차의 부서가 아닙니다.")
     assert_can_edit_department(db, user, dept_id)
 
     if amount < 0:
@@ -394,30 +407,41 @@ def toggle_paid(
     )
 
 
-@router.post("/expenses/{entry_id}/delete")
-def delete_expense(
+@router.post("/expenses/{entry_id}/cancel")
+def toggle_canceled(
     entry_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
 ):
+    """지출은 지우지 않는다 (0장) — 취소 표시를 토글한다.
+
+    옛 「삭제」 단추가 행을 실제로 지웠는데, 4-9 에서 업무의 삭제 단추를 막은
+    원칙과 정면으로 부딪힌다. 취소된 행은 흐리게 남고 합계·집행률·영수증
+    총액에서 빠지며(7-4), 잘못 눌렀으면 같은 단추로 되살린다.
+    """
     entry = db.get(ExpenseEntry, entry_id)
     if entry is None or entry.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
     assert_can_edit_department(db, user, entry.department_id)
 
-    db.delete(entry)
+    if entry.canceled_at is None:
+        entry.canceled_at = dt.datetime.now()
+        action, message = "지출_취소", "지출을 취소했습니다. 행은 흐리게 남고 합계에서 빠집니다."
+    else:
+        entry.canceled_at = None
+        action, message = "지출_되살림", "지출을 되살렸습니다."
     db.commit()
     log_activity(
         db,
         retreat_id=retreat.id,
         actor=user,
-        action="지출_삭제",
+        action=action,
         target_type="expense",
         target_id=entry_id,
-        summary=f"[지출 {entry_id}] 삭제",
+        summary=f"[지출 {entry_id}] {action.split('_')[1]}",
     )
-    return redirect(f"/expenses?retreat_id={retreat.id}", message="지출을 삭제했습니다.")
+    return redirect(f"/expenses?retreat_id={retreat.id}", message=message)
 
 
 @router.get("/refunds")

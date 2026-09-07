@@ -74,13 +74,17 @@ def settings_page(
 
 
 def _expense_stats(db: Session, retreat_id: int) -> tuple[int, int]:
+    """회차 상세·목록의 「지출 완료 N건 · X원」 — 취소된 행은 넣지 않는다 (7-4).
+
+    summary 는 원천에서 빼는데 이 둘만 품으면 같은 화면의 두 숫자가 갈린다 —
+    「지출 완료」 라는 이름이라 취소 행을 세면 말 그대로 틀린다.
+    """
+    live = (ExpenseEntry.retreat_id == retreat_id, ExpenseEntry.canceled_at.is_(None))
     count = db.scalar(
-        select(func.count()).select_from(ExpenseEntry).where(ExpenseEntry.retreat_id == retreat_id)
+        select(func.count()).select_from(ExpenseEntry).where(*live)
     ) or 0
     total = db.scalar(
-        select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(
-            ExpenseEntry.retreat_id == retreat_id
-        )
+        select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(*live)
     ) or 0
     return int(count), int(total)
 

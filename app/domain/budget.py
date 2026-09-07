@@ -134,8 +134,15 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
             .order_by(BudgetCategory.sort_order, BudgetCategory.id)
         )
     )
+    # 취소된 지출은 집행에 넣지 않는다 (7-4) — 행은 목록에 흐리게 남지만
+    # 합계·집행률은 실제로 쓴 돈만 말해야 한다
     expenses = list(
-        db.scalars(select(ExpenseEntry).where(ExpenseEntry.retreat_id == retreat.id))
+        db.scalars(
+            select(ExpenseEntry).where(
+                ExpenseEntry.retreat_id == retreat.id,
+                ExpenseEntry.canceled_at.is_(None),
+            )
+        )
     )
     incomes = list(
         db.scalars(
@@ -207,11 +214,14 @@ def is_refund_target(entry: ExpenseEntry) -> bool:
 
 
 def refund_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
-    """환급 대상 — 개인이 대신 낸 것 중 아직 안 돌려준 것 (미지급)."""
+    """환급 대상 — 개인이 대신 낸 것 중 아직 안 돌려준 것 (미지급).
+
+    취소된 지출은 아니다 — 안 쓴 돈을 돌려줄 일이 없다 (7-4).
+    """
     return [
         e
         for e in entries_of(db, retreat)
-        if is_refund_target(e) and not e.paid
+        if is_refund_target(e) and not e.paid and e.canceled_at is None
     ]
 
 
@@ -219,9 +229,11 @@ def no_receipt_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
     """영수증이 한 건도 안 붙은 지출 — 결산 홈의 「영수증 없는 지출」 (4-15).
 
     기준은 ExpenseReceipt 0건이다. 옛 receipt_file_url 이 아니다 — 그 컬럼은
-    남기되 읽지 않는다 (7-4).
+    남기되 읽지 않는다 (7-4). 취소된 지출은 세지 않는다 — 결산에 안 들어갈
+    행의 영수증을 챙기라는 경고는 잡음이다.
     """
-    return [e for e in entries_of(db, retreat) if not e.receipts]
+    return [e for e in entries_of(db, retreat)
+            if not e.receipts and e.canceled_at is None]
 
 
 def next_receipt_number(db: Session, retreat: Retreat) -> int:

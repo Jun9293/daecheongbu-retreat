@@ -74,6 +74,14 @@
       payerInput.value = payerFill.dataset.value;
     });
   }
+  // 등록 폼 「닫기」 — 저장하면 페이지가 새로 그려져 접힌 채 시작한다 (7-4)
+  var expClose = document.getElementById('exp-close');
+  if (expClose) {
+    expClose.addEventListener('click', function () {
+      var box = document.getElementById('addbox');
+      if (box) box.removeAttribute('open');
+    });
+  }
   [amountInput, headInput].forEach(function (el) {
     if (el) el.addEventListener('input', updatePreview);
   });

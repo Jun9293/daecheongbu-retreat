@@ -29,7 +29,9 @@ def export_expenses(
     retreat: Retreat = Depends(get_current_retreat),
 ):
     summary = build_budget_summary(db, retreat=retreat)
-    entries = entries_of(db, retreat)
+    # 취소된 지출은 결산 파일에 넣지 않는다 (7-4) — summary 가 이미 빼고
+    # 세므로, 행만 남기면 파일 안에서 합계와 행이 서로 안 맞는다
+    entries = [e for e in entries_of(db, retreat) if e.canceled_at is None]
     buffer = budget_xlsx.write(summary, entries)
 
     filename = f"{retreat.name}_지출내역.xlsx"

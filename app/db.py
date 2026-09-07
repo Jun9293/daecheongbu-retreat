@@ -85,6 +85,8 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("budget_categories", "unit_price", "INTEGER"),
     ("budget_categories", "headcount", "INTEGER"),
     ("budget_categories", "times", "INTEGER"),
+    # 지출 취소 표시 (7-4) — 지우지 않는다 (0장). NULL 이면 산 행이다.
+    ("expense_entries", "canceled_at", "DATETIME"),
 )
 
 
