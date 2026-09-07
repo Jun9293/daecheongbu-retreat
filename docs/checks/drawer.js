@@ -110,10 +110,62 @@
       .some(b => b.textContent.includes('삭제'));
     results.push((!del ? '✓' : '✗') + ' 삭제 단추 없음');
     if (del) errors.push('삭제 단추가 있다');
+
+    // 행의 칸 넷이 **보인다** — HTML 존재가 아니라 그려진 상태다 (단계 4).
+    // offsetParent 와 크기, 그리고 빈 글자가 아님을 함께 본다.
+    {
+      const row = document.querySelector('.trow.lrow');
+      const cells = [['부서/담당 없음', '.metaline .deptchip'],
+                     ['담당자', '.metaline .asg, .metaline .deptchip:nth-child(2)'],
+                     ['마감', '.metaline .due'],
+                     ['배지', '.stbadge']];
+      const bad = [];
+      for (const [name, sel] of cells) {
+        const el = row && row.querySelector(sel);
+        const r = el && el.getBoundingClientRect();
+        const visible = !!(el && el.offsetParent && r.width > 0 && r.height > 0
+          && el.textContent.trim());
+        if (!visible) bad.push(name);
+      }
+      results.push((bad.length === 0 ? '✓' : '✗')
+        + ` 행에 칸 넷(부서·담당자·마감·배지)이 보임${bad.length ? ' — 안 보임: ' + bad.join(', ') : ''}`);
+      if (bad.length) errors.push('행의 칸이 화면에 안 보임: ' + bad.join(', '));
+    }
+
+    // ▸/▾ — 접었다 펴는 것임이 보인다 (4-14)
+    {
+      const cur = new URLSearchParams(location.search).get('task');
+      const foot = document.querySelector(`.lfoot[data-run="${cur}"]`);
+      const openCaret = foot && foot.querySelector('.caret')?.textContent === '▾';
+      const others = [...document.querySelectorAll('.lfoot')].filter(f => f !== foot);
+      const rest = others.every(f => f.querySelector('.caret')?.textContent === '▸');
+      results.push((openCaret && rest ? '✓' : '✗') + ' 펼친 행만 ▾, 나머지는 ▸');
+      if (!(openCaret && rest)) errors.push('▸/▾ 토글이 상태를 안 보여줌');
+    }
   }
 
   results.push((document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules' ? '✓' : '✗')
     + ' 처음 열면 업무 규칙 탭');
+
+  // 제목 편집 (4-9) — Esc 는 **편집만** 취소한다. 전파가 새면 문서의 Escape
+  // 핸들러가 드로어까지 닫는다 — 패널 안의 조작은 패널을 닫지 않는다 (10장)
+  if (!document.querySelector('#statchip[disabled]') && $('dtitletext')) {
+    const beforeTitle = $('dtitletext').textContent;
+    await check('제목 편집 열기', () => $('dtitletext').click());
+    const tinput = document.querySelector('#dtitletext input.titleedit');
+    results.push((tinput ? '✓' : '✗') + ' 제목 입력칸이 열림');
+    if (!tinput) errors.push('제목 입력칸이 열리지 않음');
+    if (tinput) {
+      await check('제목 편집 중 Esc (편집만 취소)', () => {
+        tinput.dispatchEvent(new KeyboardEvent('keydown',
+          {key: 'Escape', bubbles: true, cancelable: true}));
+      });
+      const restored = $('dtitletext').textContent === beforeTitle
+        && !document.querySelector('#dtitletext input');
+      results.push((restored ? '✓' : '✗') + ' Esc 뒤 제목이 원래대로 (드로어는 그대로)');
+      if (!restored) errors.push('Esc 가 제목 편집을 취소하지 못함');
+    }
+  } else results.push('· 고칠 수 없는 업무라 제목 편집은 건너뜀');
 
   await check('탭 — 논의', () => $('dtabs').querySelector('[data-p="log"]').click());
   results.push((shown($('daddlog')) ? '✓' : '✗') + ' 논의 입력칸이 화면에 보임');
@@ -128,6 +180,33 @@
   }
   await check('탭 — 달력', () => $('dtabs').querySelector('[data-p="cal"]').click());
   await check('탭 — 연결', () => $('dtabs').querySelector('[data-p="rel"]').click());
+
+  // 연결 탭 — 세 묶음 카드가 → 선행 · ← 후속 · ↔ 관련 순서다 (4-9)
+  {
+    const heads = [...document.querySelectorAll('#drel .relcard .rh')]
+      .map(h => (h.querySelector('.arrow')?.textContent || '') + (h.querySelector('b')?.textContent || ''));
+    const ok = heads.join(',') === '→선행,←후속,↔관련';
+    results.push((ok ? '✓' : '✗') + ` 연결 카드 셋이 순서대로 (${heads.join(' · ') || '없음'})`);
+    if (!ok) errors.push('연결 카드가 세 묶음이 아니거나 순서가 다름');
+  }
+
+  // 확인 요청 (4-9) — 보내는 폼과 이력. 실제로 하나 보내 본다.
+  await check('탭 — 확인 요청', () => $('dtabs').querySelector('[data-p="review"]').click());
+  {
+    const canEdit = !document.querySelector('#statchip[disabled]');
+    const formOk = canEdit ? shown($('drevform')) : !shown($('drevform'));
+    results.push((formOk ? '✓' : '✗') + ` 확인 요청 폼 (편집 ${canEdit ? '가능' : '불가'})`);
+    if (!formOk) errors.push('확인 요청 폼이 권한과 어긋남');
+    const firstDept = $('drevdepts') && $('drevdepts').querySelector('input');
+    if (canEdit && firstDept) {
+      const before = document.querySelectorAll('#drevlog .revitem').length;
+      firstDept.checked = true;
+      await check('확인 요청 보내기', () => $('drevsend').click(), {wait: 900});
+      const after = document.querySelectorAll('#drevlog .revitem').length;
+      results.push((after > before ? '✓' : '✗') + ` 보낸 요청이 이력에 남음 (${before} → ${after})`);
+      if (after <= before) errors.push('확인 요청이 이력에 안 남음');
+    } else results.push('· 고를 부서가 없거나 편집 불가라 보내기는 건너뜀');
+  }
 
   // 첨부파일 — 회차별. 탭을 옮기는 것도 '패널 안의 조작'이라 같은 기준으로 본다.
   await check('탭 — 첨부파일', () => $('dtabs').querySelector('[data-p="files"]').click());

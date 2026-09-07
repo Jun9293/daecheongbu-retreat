@@ -195,16 +195,21 @@ select{font:inherit;font-size:13px;padding:4px 7px;border:1px solid var(--rule-2
 .chip.stat .cv{width:7px;height:7px;border-radius:50%}
 /* 제목 — 노션의 페이지 제목 크기 */
 .dtitle{font-size:25px;font-weight:600;line-height:1.3;letter-spacing:-.02em}
-/* 속성 — 라벨(88px, 흐림) + 값. 값은 평소에 글자처럼 보이다가
-   마우스를 올리면 배경이 뜬다 (테두리를 상시 그리면 입력 폼으로 읽힌다). */
+/* 머리 — 두 칸 정의 표 (4-9). 알약을 걷었다: 왼쪽 라벨 보조색 13px ·
+   오른쪽 값 잉크 14px, 줄 사이 헤어라인. 고칠 수 있는 값은 호버할 때만
+   옅은 바탕과 오른쪽 끝 표식(∨/연필)이 뜬다. */
 .dmeta{margin-top:16px;display:grid;grid-template-columns:88px minmax(0,1fr);
-  gap:2px 4px;font-size:13.5px;align-items:center}
-.dmeta dt{color:var(--ink-3);font-size:13px;padding:5px 0 5px 2px}
-.dmeta dd{color:var(--ink);min-width:0}
-.pill{display:inline-flex;align-items:center;gap:6px;border-radius:4px;padding:3px 5px;
-  max-width:100%;transition:background .1s}
-.pill:hover{background:var(--hover)}
-.pill i{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+  column-gap:4px;font-size:14px;align-items:stretch}
+.dmeta dt{color:var(--ink-3);font-size:13px;padding:7px 0 7px 2px;
+  border-bottom:1px solid var(--rule);display:flex;align-items:center}
+.dmeta dd{color:var(--ink);min-width:0;padding:5px 4px;border-bottom:1px solid var(--rule);
+  display:flex;align-items:center;gap:6px}
+.dmeta dt:last-of-type,.dmeta dd:last-of-type{border-bottom:none}
+.dmeta dd i.dot{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+.dmeta dd.edit{border-radius:4px}
+.dmeta dd.edit:hover{background:var(--hover)}
+.dmeta dd .mark{margin-left:auto;font-style:normal;font-size:12px;color:var(--ink-3);opacity:0}
+.dmeta dd.edit:hover .mark{opacity:1}
 /* 탭 — 밑줄 없는 글자, 활성만 아래 선 */
 .dtabs{display:flex;gap:16px;margin-top:20px}
 .dtabs button{font:inherit;font-size:13.5px;padding:6px 1px 9px;border:none;
@@ -446,7 +451,7 @@ const TEAMS=[
  {id:'saechingu',n:'9 새친구팀',s:'새친구',c:'#A98A1E'},
 ];
 const TC=Object.fromEntries(TEAMS.map(t=>[t.id,t]));
-const STATUS={done:{l:'완료',c:'#9B9A97'},wip:{l:'진행중',c:'#4F46E5'},todo:{l:'예정',c:'#787774'},late:{l:'지연',c:'#C4554D'}};
+const STATUS={done:{l:'완료',c:'#9B9A97'},wip:{l:'진행중',c:'#4F46E5'},todo:{l:'대기',c:'#787774'},late:{l:'지연',c:'#C4554D'}};
 
 const DATA={
 chongmuM:[
@@ -972,11 +977,11 @@ function open(title){
   document.getElementById('dtitle').textContent=title;
   const rels=[...(REL[title]||[])].filter(n=>IX[n]);
   document.getElementById('dmeta').innerHTML=
-    `<dt>기간</dt><dd><span class="pill mono">${x.e?fmt(x.s)+' → '+fmt(x.e):fmt(x.s)}</span></dd>
-     <dt>담당팀</dt><dd><span class="pill"><i style="background:${c}"></i>${TC[x.team].n}</span></dd>
-     <dt>담당자</dt><dd><span class="pill">${x.who||'지정 안 함'}</span></dd>
-     <dt>상위</dt><dd><span class="pill">${x.parent||'—'}</span></dd>
-     <dt>관련팀</dt><dd><span class="pill">${(x.ghost||[]).map(g=>TC[g].n).join(', ')||'—'}</span></dd>`;
+    `<dt>기간</dt><dd class="edit"><span class="mono">${x.e?fmt(x.s)+' – '+fmt(x.e):fmt(x.s)}</span><i class="mark">∨</i></dd>
+     <dt>담당팀</dt><dd class="edit"><i class="dot" style="background:${c}"></i>${TC[x.team].n}<i class="mark">∨</i></dd>
+     <dt>담당자</dt><dd class="edit">${x.who||'지정 안 함'}<i class="mark">∨</i></dd>
+     <dt>상위</dt><dd>${x.parent||'—'}<small style="font-size:12px;color:var(--ink-3);margin-left:6px">라이브러리에서</small></dd>
+     <dt>관련팀</dt><dd class="edit">${(x.ghost||[]).map(g=>TC[g].n).join(', ')||'—'}<i class="mark">✎</i></dd>`;
   document.getElementById('dlog').innerHTML=(LOG[title]||[['—','아직 기록된 논의가 없습니다.']])
     .map(([d,a,b])=>`<div class="entry"><span class="d">${d}</span>${a}${b?`<span class="fix">${b}</span>`:''}</div>`).join('');
   document.getElementById('relN').textContent=rels.length||'';
