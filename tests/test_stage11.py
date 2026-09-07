@@ -14,7 +14,6 @@ import datetime as dt
 import importlib.util
 import json
 import pathlib
-import re
 import sqlite3
 
 from sqlalchemy import select
@@ -123,18 +122,56 @@ def test11_t03_옛_Task_로_전환됐던_항목은_다시_만들지_않는다(ad
 # ════════════════════════════════════════════════════════════════════
 
 
+def 생성자리(src: str, 이름: str = "Task") -> list[int]:
+    """`이름(` 생성 호출이 선 줄들 — **주석·문자열을 걷어내고** 본다.
+
+    글자를 찾는 시험은 코드와 설명을 못 가린다(10장 — 네 번 당한 자리).
+    토큰으로 보면 주석에 「옛 Task() 를 만들지 않는다」 라고 적어도 안
+    걸리고, 실제 생성 호출만 걸린다. class 정의는 앞 토큰이 class 라
+    제외한다. test_stage12 의 「만드는 곳은 한 곳」 grep 도 이것을 쓴다."""
+    import io
+    import tokenize
+
+    줄들: list[int] = []
+    toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
+    for i, t in enumerate(toks):
+        if t.type != tokenize.NAME or t.string != 이름:
+            continue
+        앞 = toks[i - 1] if i else None
+        뒤 = toks[i + 1] if i + 1 < len(toks) else None
+        if 앞 is not None and 앞.type == tokenize.NAME and 앞.string == "class":
+            continue
+        if 뒤 is not None and 뒤.type == tokenize.OP and 뒤.string == "(":
+            줄들.append(t.start[0])
+    return 줄들
+
+
+def _옛Task생성자리(src: str) -> list[int]:
+    return 생성자리(src, "Task")
+
+
 def test11_g01_옛_Task_를_만드는_코드가_앱에_없다():
     """0-a 전수는 둘이었다 — app/routers/meetings.py 의 전환 라우트와
-    seed.py 의 데모 시드. 라우트는 이 판에서 TaskRun 으로 바뀌어 앱 런타임
-    경로는 0곳이다. seed.py 는 화면에서 닿지 않는 개발용 데모 자료라
-    남긴다 — 옛 표의 행은 남긴다 (0장)."""
+    seed.py 의 데모 시드. 라우트는 TaskRun 으로 바뀌어 앱 런타임 경로는
+    0곳이다. seed.py 는 화면에서 닿지 않는 개발용 데모 자료라 남긴다 —
+    옛 표의 행은 남긴다 (0장)."""
     나쁜곳 = []
     for p in (ROOT / "app").rglob("*.py"):
-        src = p.read_text(encoding="utf-8")
-        for 번호, 줄 in enumerate(src.split("\n"), 1):
-            if re.search(r"(?<!class )\bTask\(", 줄):
-                나쁜곳.append(f"{p.name}:{번호}")
+        for 번호 in _옛Task생성자리(p.read_text(encoding="utf-8")):
+            나쁜곳.append(f"{p.name}:{번호}")
     assert 나쁜곳 == [], f"옛 Task 를 만드는 곳: {나쁜곳}"
+
+
+def test11_g02_주석과_문자열은_걸리지_않고_생성은_걸린다():
+    """막는 검사의 세 벌(11-3) — 막혀야 할 것(생성 호출)이 막히고,
+    막히면 안 되는 것(주석·문자열·class 정의)이 통과하고, 검사가 실제로
+    보고 있다(빈 소스는 0)."""
+    주석뿐 = "# 옛 Task() 를 만들지 않는다\n말 = '여기 Task( 는 글자다'\n"
+    assert _옛Task생성자리(주석뿐) == []
+    assert _옛Task생성자리("class Task(Base):\n    pass\n") == []
+    걸림 = _옛Task생성자리("# Task( 설명\nt = Task(retreat_id=1)\n")
+    assert 걸림 == [2]
+    assert _옛Task생성자리("t = models.Task(x)\n") == [1]
 
 
 # ════════════════════════════════════════════════════════════════════
