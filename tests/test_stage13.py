@@ -149,23 +149,36 @@ def test13_f04_정렬_단추가_상태_칩보다_작다():
 
 def test13_r01_안_여는_자리_목록이지_여는_자리_목록이_아니다():
     """새 요소가 생기면 **열림 쪽이 기본**이어야 한다 — 그러려면 코드가
-    「무엇이 열리는가」 가 아니라 「무엇이 안 열리는가」 를 적어야 한다."""
+    「무엇이 열리는가」 가 아니라 「무엇이 안 열리는가」 를 적어야 한다.
+
+    **낱말만 잰다** — 행을 눌러 실제로 열리는지는 브라우저에서만 잴 수
+    있어 `docs/checks/drawer.js` 의 목록 항목이 잰다(「행의 빈 곳(메타)을
+    눌러도 열림」·「상태 칸을 눌러도 그 행이 안 열림」). 여기서는 **규칙이
+    어느 모양으로 적혀 있는지**를 본다 — 여는 자리를 세어 두면 칸이 하나
+    늘 때마다 그 목록을 고쳐야 하고, 안 고치면 그 칸만 조용히 죽는다.
+    """
     js = (JS / "tasks.js").read_text(encoding="utf-8")
     assert "안여는곳" in js
-    assert ".stbadge" in js                       # 상태 배지는 예외 (0-b)
+    assert ".cell.st" in js                       # 상태 칸은 예외 (0-b · 4번)
     # 이름·캐럿만 여는 옛 규칙이 남아 있지 않다
     코드 = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
     코드 = re.sub(r"//[^\n]*", "", 코드)
     assert "'.nm, .caretc'" not in 코드
-    # 커서도 행 전체에 (3-b)
+    # 커서도 행 전체에 (3-b) — 상태 칸은 그 자리의 커서다
     assert "cursor:pointer" in _decl(".trow.lrow")
-    assert "cursor:default" in _decl(".trow.lrow .stbadge")
+    assert "cursor:default" in _decl(".trow.lrow .cell.st")
+    assert "cursor:pointer" in _decl(".trow.lrow .cell.st.pick")
 
 
 def test13_r01b_행_안은_바깥이_아니다():
     """여는 자리인지와 「바깥 클릭인지」 는 다른 물음이다. 안 여는
-    자리(상태 배지)를 눌렀다고 열려 있던 패널이 닫히면, 아무 일도 안
-    하려던 손이 보던 것을 잃는다 — 점검에서 실제로 그렇게 걸렸다."""
+    자리(상태 칸)를 눌렀다고 열려 있던 패널이 닫히면, 아무 일도 안
+    하려던 손이 보던 것을 잃는다 — 점검에서 실제로 그렇게 걸렸다.
+
+    **낱말만 잰다** — 두 판정이 한 몸인지는 코드 모양의 문제라 여기서
+    보고, 실제로 안 닫히는지는 `docs/checks/drawer.js` 의 목록 항목이
+    브라우저에서 잰다(그때 이 고장이 잡혔다).
+    """
     js = (JS / "tasks.js").read_text(encoding="utf-8")
     코드 = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
     코드 = re.sub(r"//[^\n]*", "", 코드)
@@ -179,7 +192,9 @@ def test13_r02_점검_스크립트가_행_전체를_여는_자리로_본다():
     chk = (ROOT / "docs" / "checks" / "drawer.js").read_text(encoding="utf-8")
     assert "'.trow.lrow .nm'" not in chk          # 옛 여는 자리
     assert "행의 빈 곳(메타)을 눌러도 열림" in chk
-    assert "상태 배지를 눌러도 그 행이 안 열림" in chk
+    # 상태 칸은 안 여는 자리이고 그 자리에서 메뉴가 뜬다 (4-14 · 14판)
+    assert "를 눌러도 그 행이 안 열림" in chk
+    assert "메뉴가 권한과 어긋남" in chk
 
 
 # ════════════════════════════════════════════════════════════════════

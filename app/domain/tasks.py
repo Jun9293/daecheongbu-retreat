@@ -54,11 +54,14 @@ def made_from_meeting(db: Session, retreat: Retreat, meeting_id: int) -> dict:
     `TaskRun.source_meeting_id` 하나이고(4-9 와 같은 원칙), 제목이 그
     회의에서 그 제안의 이름이다.
 
-    **범위는 그 회의록에서 온 이번 회차의 업무 전부다** — 항목 전환으로
-    만든 것도 들고, 이번 회차에서 뺀 것(`included=False`)도 센다. 목적이
-    「같은 제목을 두 번 세우지 않는 것」 이라, 빼 둔 것이 있으면 새로
-    만들 것이 아니라 보드의 「+ 업무 추가」 로 되살리는 것이 맞다
-    (0장 — 뺀 것도 기록이다).
+    **범위는 그 회의록에서 온 이번 회차의 「지금 있는」 업무다.**
+
+    - 항목 전환으로 만든 것도 **센다** — 같은 회의록·같은 제목이면 같은
+      업무다. 안 세면 제안을 눌러 같은 이름이 목록에 둘 선다
+    - 이번 회차에서 **뺀 것(`included=False`)은 세지 않는다** — 목록에
+      없는 것을 가리키면(4-14 는 included 만 낸다) 「이미 만들었습니다」
+      의 링크를 눌러도 갈 곳이 없다. 그건 거짓말이 된다. 되살리는 길은
+      보드의 「+ 업무 추가」 다
     """
     rows = db.scalars(
         select(TaskRun)
@@ -66,6 +69,7 @@ def made_from_meeting(db: Session, retreat: Retreat, meeting_id: int) -> dict:
         .where(
             TaskRun.retreat_id == retreat.id,
             TaskRun.source_meeting_id == meeting_id,
+            TaskRun.included,
         )
     )
     # 같은 제목이 둘이면 **먼저 만든 것**을 가리킨다 — 나중 것으로 가면

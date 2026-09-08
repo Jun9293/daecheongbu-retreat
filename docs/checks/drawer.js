@@ -709,17 +709,31 @@
         results.push((opened ? '✓' : '✗') + ' 행의 빈 곳(메타)을 눌러도 열림');
         if (!opened) errors.push('행의 빈 곳을 눌러도 안 열린다');
       }
-      // 상태 배지는 **안 여는 자리** — 눌러도 아무 일이 없어야 한다
+      // 상태 칸은 **안 여는 자리**이고, 대신 그 자리에서 상태 메뉴가 뜬다
+      // (4-14). 배지 안쪽과 칸의 가장자리가 같은 자리여야 한다 — 몇 px
+      // 차이로 열림과 메뉴가 갈리면 같은 곳을 눌렀는데 다른 일이 난다
       const closedRow = [...document.querySelectorAll('.trow.lrow')]
         .filter(r => shown(r) && !r.classList.contains('open'))[0];
-      const badge = closedRow && closedRow.querySelector('.stbadge');
-      if (badge) {
-        const before = new URLSearchParams(location.search).get('task');
-        badge.click();
-        await sleep(400);
-        const 그대로 = new URLSearchParams(location.search).get('task') === before;
-        results.push((그대로 ? '✓' : '✗') + ' 상태 배지를 눌러도 그 행이 안 열림');
-        if (!그대로) errors.push('상태 배지가 행을 열었다');
+      const stcell = closedRow && closedRow.querySelector('.cell.st');
+      const menu = $('statmenu');
+      if (stcell) {
+        const 고를수있나 = stcell.classList.contains('pick');
+        for (const [어디, el] of [['배지', stcell.querySelector('.stbadge') || stcell],
+                                 ['칸의 가장자리', stcell]]) {
+          const before = new URLSearchParams(location.search).get('task');
+          el.click();
+          await sleep(400);
+          const 안열림 = new URLSearchParams(location.search).get('task') === before;
+          results.push((안열림 ? '✓' : '✗') + ` 상태 ${어디}를 눌러도 그 행이 안 열림`);
+          if (!안열림) errors.push(`상태 ${어디}가 행을 열었다`);
+          const 떴나 = !!(menu && menu.classList.contains('on'));
+          const 맞나 = 고를수있나 ? 떴나 : !떴나;
+          results.push((맞나 ? '✓' : '✗')
+            + ` 상태 ${어디} → 메뉴 ${떴나 ? '뜸' : '안 뜸'}`
+            + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`);
+          if (!맞나) errors.push(`상태 ${어디}의 메뉴가 권한과 어긋남`);
+          if (떴나) { document.body.click(); await sleep(250); }
+        }
       }
     }
     // 같은 행을 다시 누르면 닫힌다 (토글)

@@ -237,7 +237,11 @@ def test4_d01_출처는_source_meeting_id_하나다(admin_client, world):
 
 
 def test4_e01_셋째_붉은_값이_없다():
-    """드로어 STATUS 의 지연 점은 CSS 토큰 값(--red-ink)과 같다 (4-0)."""
+    """드로어 STATUS 의 지연 점은 CSS 토큰 값(--red-ink)과 같다 (4-0).
+
+    **낱말만 잰다** — 다만 여기서 재는 것은 **값**이다(색·라벨). 값은
+    파일에 적힌 그것이 곧 결과라, 낱말과 동작이 갈릴 자리가 없다.
+    """
     js = _read("app", "static", "js", "drawer.js")
     assert "#C8442E" not in js
     assert re.search(r"'지연':\s*\{label: '지연',\s*color: '#A33F38'\}", js)

@@ -1288,8 +1288,22 @@ def test_s_06c_onStatus_는_view_하나만_받는다():
 
 
 def test_s_06b2_담당팀_응답에_reload_가_없다(admin_client, cal_data):
-    body = (ROOT / "app" / "routers" / "board.py").read_text(encoding="utf-8")
-    assert '"reload": True' not in body
+    """**응답을 실제로 받아 본다.** 전에는 라우터 소스에
+    `'"reload": True' not in body` 였는데, 그건 그 글자가 없다는 말이지
+    응답에 그 값이 없다는 말이 아니었다 — 다른 이름으로 넣으면 조용히
+    지나간다 (10장 「글자를 찾는 시험」).
+
+    JS 쪽은 낱말로 남는다 — 「새로고침을 안 한다」 는 **일어나지 않는
+    일**이라 브라우저 없이는 잴 수 없다. `docs/checks/drawer.js` 의 달력
+    항목(보던 달·칩이 그대로인가)이 그것을 브라우저에서 잰다.
+    """
+    with app_session() as db:
+        run = db.scalars(select(models.TaskRun)).first().id
+        dept = db.scalars(select(models.Department)).first().id
+    res = admin_client.post(f"/board/task/{run}/department", json={"department_id": dept})
+    assert res.status_code == 200
+    assert "reload" not in res.json(), "담당팀 응답이 새로고침을 시킨다"
+
     for name in ("board.js", "calendar.js", "drawer.js"):
         assert ".reload" not in code_only(read_js(name)).replace("location.reload", "")
 
@@ -1508,7 +1522,13 @@ def test_t_09_외_N건_안의_점에서도_동작한다():
 
 def test_t_10_좁은_화면에서는_비추지_않는다():
     """주 목록에는 날짜 격자가 없고 마우스도 없다 — 탭으로 흉내 내면
-    점을 누르려다 띠가 뜬다 (4-13)."""
+    점을 누르려다 띠가 뜬다 (4-13).
+
+    **낱말만 잰다** — 좁은 화면에서 마우스를 올려 보는 것은 브라우저에서만
+    되고 pytest 는 화면을 못 본다(10장). 여기서는 그 판단이 코드에 적혀
+    있는지만 보고, 실제로 안 비치는지는 `docs/checks/drawer.js` 의 달력
+    항목이 잰다.
+    """
     js = code_only(read_js("calendar.js"))
     assert "matchMedia('(min-width: 821px)')" in js
     body = js[js.index("function showSpan("):]
