@@ -187,6 +187,60 @@ def test17_a02_11_3_이_두_계정을_말한다():
     assert "두 계정" in 자리 and "부서 리더" in 자리
 
 
+def test17_a02b_두_계정이_세_자리에_다_적혀_있다():
+    """11-3 에만 있으면 드로어 얘기를 찾으러 4-13 을 편 사람은 못 본다.
+    붙여넣는 스크립트의 머리도 마찬가지다 (검토가 짚음)."""
+    문서 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    자리 = 문서[문서.index("`docs/checks/drawer.js` 를 세 화면(보드·달력·목록)"):][:400]
+    assert "두 계정" in 자리 and "부서 리더" in 자리
+    글 = (ROOT / "docs" / "checks" / "drawer.js").read_text(encoding="utf-8")
+    머리 = 글[: 글.index("(async () => {")]
+    assert "두 계정" in 머리 and "건너뜀" in 머리
+
+
+def test17_a02c_조건을_달지_않는다():
+    """「상세 패널을 건드렸으면」 은 …할 때만 꼴이다 — 그 점검은 목록의
+    안 여는 자리·상태 칸 CSS 처럼 **상세 패널로 안 읽히는 자리**를
+    정확히 잰다 (검토-원칙 7)."""
+    문서 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    자리 = 문서[문서.index("### 2. 재시작하고"):]
+    자리 = 자리[:자리.index("### 3.")]
+    # **조건이 규칙으로 남아 있지 않은지**를 본다 — 「조건을 두지
+    # 않습니다」 라고 적으려면 그 말을 인용하게 되므로(10장), 인용이
+    # 아니라 **명령문으로 남았는지**를 잰다
+    assert "조건을 두지 않습니다" in 자리
+    명령 = [줄 for 줄 in 자리.splitlines()
+          if "상세 패널을 건드렸으면" in 줄 and "조건을" not in 줄]
+    assert 명령 == [], f"조건이 규칙으로 남아 있다: {명령}"
+
+
+def test17_a04_죽어_있는_칸은_안_누른다():
+    """`statchip` 은 고칠 수 없는 계정에서도 지워지지 않고 `disabled` 로
+    남는다 — 그냥 누르면 아무 이벤트도 안 나고 「안 닫혔다」 가 언제나
+    참이라 **✓ 가 그냥 붙는다** (검토가 짚음).
+
+    **낱말만 잰다** — 실제 건너뜀 수는 브라우저에서 잰다(최근.md)."""
+    글 = (ROOT / "docs" / "checks" / "drawer.js").read_text(encoding="utf-8")
+    자리 = 글[글.index("const 눌러본다"):][:700]
+    assert "!el.disabled" in 자리
+    # 첨부 올리는 자리도 같은 길을 지난다 — 전에는 조용히 ✓ 였다
+    assert "await 눌러본다('첨부파일 — 올리는 자리 클릭', 'ddrop');" in 글
+
+
+def test17_a05_어느_계정인지_어림하지_않는다():
+    """화면이 역할을 글자로 말한다(`ROLE_LABELS`). 「지금 고칠 수 있나」
+    로 어림하면 부서 리더가 자기 부서 업무를 첫 자리에서 열 때
+    **자기 계정을 다시 권한다** (검토가 짚음).
+
+    **낱말만 잰다** — 실제로 어느 계정을 권하는지는 브라우저에서
+    두 계정으로 돌려 봤다(최근.md 4장)."""
+    글 = (ROOT / "docs" / "checks" / "drawer.js").read_text(encoding="utf-8")
+    자리 = 글[글.index("const 역할"):][:400]
+    assert ".sidefoot .who small" in 자리
+    껍데기 = (ROOT / "app" / "templates" / "retreat_base.html").read_text(encoding="utf-8")
+    assert "ROLE_LABELS" in 껍데기 and "sidefoot" in 껍데기
+
+
 def test17_a03_글검사_출력에_넘김_수가_있다():
     """새 검사도 같은 규칙을 지킨다 — 넘김이 자라는 것이 보여야 한다."""
     환경 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
