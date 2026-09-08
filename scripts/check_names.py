@@ -50,6 +50,9 @@ import pathlib
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import 넘김  # noqa: E402
+
 # 콘솔이 cp949 여도 안내문이 죽지 않아야 한다 — 막는 검사가 말을 못 하면
 # 막히는 쪽이 사람에게 안 보인다 (11-3). 못 적는 글자는 ? 로 바꾼다.
 # (실패 경로의 「—」 가 cp949 에 없어 첫 줄만 찍고 트레이스백으로 죽었다)
@@ -85,7 +88,7 @@ def 가린다(이름: str) -> str:
     return 이름[0] + "◯" * (len(이름) - 1)
 
 
-def 넘긴것() -> set:
+def 넘긴것() -> tuple[set, list[tuple[int, str]]]:
     """**넘기는 것은 이름이 아니라 낱말이다.**
 
     전에는 **이름을 통째로** 넘겼다. 그러면 회의록에서 홀로 선 그 이름도
@@ -94,18 +97,11 @@ def 넘긴것() -> set:
 
     4-0 의 `흐려도_되는곳` 과 같은 방식이다 — 규칙을 끄는 것이 아니라
     넘길 자리를 이름으로 적어 두는 것이다.
+
+    **읽는 규칙은 `scripts/넘김.py` 하나다** — 세 검사가 같은 모양을
+    저마다 읽고 있었다.
     """
-    if not 넘긴목록.exists():
-        return set()
-    나온것 = set()
-    for 줄 in 넘긴목록.read_text(encoding="utf-8").splitlines():
-        줄 = 줄.strip()
-        if not 줄 or 줄.startswith("#"):
-            continue
-        칸 = [x.strip() for x in 줄.split("|")]
-        if len(칸) >= 2 and 칸[0] and 칸[1]:
-            나온것.add(칸[0])
-    return 나온것
+    return 넘김.읽는다(넘긴목록)
 
 
 def 남은곳() -> set:
@@ -398,7 +394,7 @@ def 찾는다(실명: list[str], 파일들: list[pathlib.Path],
     `남은것` 을 주면 «아직 안 고친 자리»(`이름-남은곳.txt`)에 든 것을
     그쪽으로 옮겨 담는다 — 결과에서는 빠지되 **세어서 말하기 위해서**다.
     """
-    넘김 = 넘긴것()
+    넘길낱말, _ = 넘긴것()
     남은자리 = 남은곳() if 남은것 is not None else set()
     나온것 = []
     for p in 파일들:
@@ -434,7 +430,7 @@ def 찾는다(실명: list[str], 파일들: list[pathlib.Path],
                     # (`◯◯M으로` · `9명 ◯◯◯ ◯◯◯`). 위치로 가르면
                     # 잡던 것을 놓친다. 가르는 축은 **길이**다.
                     짧은데붙었나 = len(이름) == 1 and 덩어리 != 이름
-                    if not 짧은데붙었나 and 덩어리 not in 넘김:
+                    if not 짧은데붙었나 and 덩어리 not in 넘길낱말:
                         한줄 = (상대, 번호, 이름, 줄.strip(), 덩어리)
                         if (상대, 번호) in 남은자리:
                             남은것.append(한줄)
@@ -468,6 +464,13 @@ def main() -> int:
         print(f"   {_anon.MAP_PATH} 의 모양을 확인해 주세요.")
         return 2
 
+    # **이유 없는 넘김은 넘김이 아니다** (scripts/넘김.py) — 조용히
+    # 버리면 적은 사람은 넘긴 줄 알고 검사는 안 넘긴 채로 돈다
+    넘길낱말, 이유없음 = 넘긴것()
+    if 이유없음:
+        넘김.말한다(넘긴목록, 이유없음)
+        return 2
+
     파일들 = 볼파일(args)
     남은것: list = []
     나온것 = 찾는다(실명, 파일들, 남은것)
@@ -499,6 +502,8 @@ def main() -> int:
                   f"{len(본['안본말'])}개: {' · '.join(본['안본말'])}")
 
     print(f"실명 {len(실명)}개로 파일 {len(파일들)}개를 봤습니다.")
+    # **넘김이 자라는 것 자체가 보여야 한다** (scripts/넘김.py)
+    print(f"   낱말 {len(넘길낱말)}개는 {넘긴목록.name} 에 이유와 함께 넘겨 두었습니다.")
     if not 나온것:
         print("걸린 것이 없습니다.")
         남은말()

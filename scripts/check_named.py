@@ -49,6 +49,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import 넘김  # noqa: E402
+
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
@@ -69,18 +72,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 토큰꼴 = re.compile(r"--[a-z][\w-]*$")
 
 
-def 넘긴것() -> set[str]:
-    if not 넘김목록.exists():
-        return set()
-    나온것 = set()
-    for 줄 in 넘김목록.read_text(encoding="utf-8").splitlines():
-        줄 = 줄.strip()
-        if not 줄 or 줄.startswith("#"):
-            continue
-        칸 = [x.strip() for x in 줄.split("|")]
-        if len(칸) >= 2 and 칸[0] and 칸[1]:
-            나온것.add(칸[0])
-    return 나온것
+def 넘긴것() -> tuple[set[str], list[tuple[int, str]]]:
+    """**읽는 규칙은 `scripts/넘김.py` 하나다** (그 파일의 이유)."""
+    return 넘김.읽는다(넘김목록)
 
 
 def 이름들() -> dict[str, str]:
@@ -161,10 +155,10 @@ def 저장소글() -> tuple[set[str], str, str]:
 
 
 def 없는것(이름: dict[str, str], 경로: set[str], 글: str, 모양: str) -> list[tuple[str, str]]:
-    넘김 = 넘긴것()
+    넘길것, _ = 넘긴것()
     나온것 = []
     for t, 축 in sorted(이름.items()):
-        if t in 넘김:
+        if t in 넘길것:
             continue
         if 축 == "경로":
             # **앞머리를 세어 두지 않는다** (10장). 14장 표는 `partials/
@@ -219,6 +213,13 @@ def main() -> int:
         print("!! 문서에서 읽은 이름이 0개입니다 — 검사가 아무것도 안 보고 있습니다.")
         return 2
 
+    # **이유 없는 넘김은 넘김이 아니다.** 조용히 버리면 적은 사람은
+    # 넘긴 줄 알고 검사는 안 넘긴 채로 돈다 (scripts/넘김.py)
+    넘길것, 이유없음 = 넘긴것()
+    if 이유없음:
+        넘김.말한다(넘김목록, 이유없음)
+        return 2
+
     if args.목록:
         for 축 in ("경로", "식별자", "선택자", "토큰"):
             것들 = sorted(t for t, a in 이름.items() if a == 축)
@@ -230,6 +231,9 @@ def main() -> int:
     경로, 글, 모양 = 저장소글()
     빠진것 = 없는것(이름, 경로, 글, 모양)
     print(f"문서가 이름한 {len(이름)}개(경로·식별자·선택자·토큰)를 저장소에서 찾았습니다.")
+    # **넘김이 자라는 것 자체가 보여야 한다** — 줄어들 일이 없는 목록은
+    # 찍어 두지 않으면 아무도 그 크기를 모른다
+    print(f"   그중 {len(넘길것)}개는 {넘김목록.name} 에 이유와 함께 넘겨 두었습니다.")
     if not 빠진것:
         print("문서에만 있는 이름이 없습니다.")
         return 0

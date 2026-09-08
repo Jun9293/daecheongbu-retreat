@@ -38,6 +38,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import 넘김  # noqa: E402
+
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
@@ -92,19 +95,13 @@ def 읽는다() -> list[tuple[str, str]]:
     return 쌍
 
 
-def 넘긴것() -> set[str]:
-    """그 말을 **설명하려고** 담는 자리 — 파일 단위로 넘긴다."""
-    if not 넘김목록.exists():
-        return set()
-    나온것 = set()
-    for 줄 in 넘김목록.read_text(encoding="utf-8").splitlines():
-        줄 = 줄.strip()
-        if not 줄 or 줄.startswith("#"):
-            continue
-        칸 = [x.strip() for x in 줄.split("|")]
-        if len(칸) >= 2 and 칸[0] and 칸[1]:
-            나온것.add(칸[0])
-    return 나온것
+def 넘긴것() -> tuple[set[str], list[tuple[int, str]]]:
+    """그 말을 **설명하려고** 담는 자리 — 파일 단위로 넘긴다.
+
+    **읽는 규칙은 `scripts/넘김.py` 하나다** — 세 검사가 같은 모양을
+    저마다 읽고 있었고, 셋 다 이유 없는 줄을 조용히 버렸다.
+    """
+    return 넘김.읽는다(넘김목록)
 
 
 def 볼파일() -> list[pathlib.Path]:
@@ -112,7 +109,7 @@ def 볼파일() -> list[pathlib.Path]:
         ["git", "-c", "core.quotepath=false", "ls-files"],
         cwd=ROOT, capture_output=True,
     ).stdout.decode("utf-8")
-    넘김 = 넘긴것()
+    넘김, _ = 넘긴것()
     나온것 = []
     for 이름 in (x.strip() for x in 출.split("\n")):
         if not 이름 or 이름 in 넘김:
@@ -171,9 +168,15 @@ def main() -> int:
         print(f"\n낡은 말 {len({a for a, _ in 쌍})}가지 · 표기 {len(쌍)}개")
         return 0
 
+    넘길것, 이유없음 = 넘긴것()
+    if 이유없음:
+        넘김.말한다(넘김목록, 이유없음)
+        return 2
+
     파일들 = 볼파일()
     걸린것 = 찾는다(쌍, 파일들)
     print(f"낡은 표기 {len(쌍)}개로 파일 {len(파일들)}개를 봤습니다.")
+    print(f"   파일 {len(넘길것)}개는 {넘김목록.name} 에 이유와 함께 넘겨 두었습니다.")
     if not 걸린것:
         print("옛말이 없습니다.")
         return 0
