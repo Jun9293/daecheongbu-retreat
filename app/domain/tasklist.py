@@ -52,7 +52,8 @@ def _sort_key(run: TaskRun):
     return (start is None, start or dt.date.max, run.id)
 
 
-def _row(run: TaskRun, today: dt.date, *, dim_key: str | None) -> dict:
+def _row(run: TaskRun, today: dt.date, *, dim_key: str | None,
+         can_edit=None) -> dict:
     paint = board.paint_of(run, today)
     end = run.end_date or run.start_date
     done = run.status == "완료"
@@ -77,6 +78,9 @@ def _row(run: TaskRun, today: dt.date, *, dim_key: str | None) -> dict:
         # 소속 외는 숨기지 않고 흐리게 (1장) — 부서는 키로 비교한다 (2장).
         # dim_key 가 없으면(총무팀 등) 전부 선명하다 — 홈과 같은 규칙 (4-15)
         "dim": bool(dim_key and (dept.key if dept else None) != dim_key),
+        # 행 배지에서 상태를 바로 바꿀 수 있는가 (4-14) — **보드·드로어와
+        # 같은 문**이다. 못 바꾸는 사람에게는 누를 것처럼 보이지 않는다
+        "can_edit": True if can_edit is None else bool(can_edit(run)),
     }
 
 
@@ -91,6 +95,7 @@ def build(
     dept: str = "",
     sort: str = "date",
     dir: str = "asc",
+    can_edit=None,
 ) -> ListView:
     """my_key 는 소속 외 흐림의 기준, dim 은 그 흐림을 켤지다.
 
@@ -145,7 +150,8 @@ def build(
     if state:
         picked = [r for r in picked if badge_of[r.id] == state]
 
-    rows = [_row(r, today, dim_key=my_key if dim else None) for r in picked]
+    rows = [_row(r, today, dim_key=my_key if dim else None, can_edit=can_edit)
+            for r in picked]
     return ListView(
         rows=[r for r in rows if r["badge"]["cls"] != "done"],
         done_rows=[r for r in rows if r["badge"]["cls"] == "done"],

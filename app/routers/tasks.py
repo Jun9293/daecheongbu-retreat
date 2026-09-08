@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat
+from app.domain import permissions as perm
 from app.domain import tasklist
 from app.domain.departments import department_key_of
 from app.models import Retreat, User
@@ -60,6 +61,14 @@ def tasks_page(
         my_key=my_key,
         # 총무팀은 전부 선명하게 — 홈·옛 화면과 같은 규칙 (4-15 · 9장)
         dim=user.role != "admin",
+        # 행 배지에서 상태를 바꿀 수 있는가 — **보드가 쓰는 그 문**이다
+        # (2장: 부서는 키로). 상태를 바꾸는 것은 어차피 서버가 다시
+        # 보므로, 여기서 다른 규칙을 쓰면 화면과 저장이 갈린다
+        can_edit=lambda run: perm.can_edit_department_by_key(
+            role=user.role,
+            user_department_key=my_key,
+            target_department_key=(run.department.key if run.department else None),
+        ),
         state=state,
         dept=dept,
         sort=sort,

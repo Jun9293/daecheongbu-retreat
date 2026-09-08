@@ -23,11 +23,12 @@ const rowOf = id => document.querySelector(`.trow[data-run="${CSS.escape(String(
    고치면 그 칸만 조용히 죽는다 (10장 「자리를 세어 두지 않습니다」).
 
    여기 드는 것은 **그 자리에서 다른 일을 하는 것**뿐이다 —
-   · 상태 배지: 드로어에서 상태를 바꾸는 그 칩(#statchip)과 같은 것이라,
-     누르면 상태를 고치려는 손이다. 패널이 열리는 것은 그 손의 답이 아니다
+   · 상태 칸(`.cell.st`): 누르면 **드로어의 그 상태 메뉴**가 뜬다.
+     배지만이 아니라 칸 전체다 — 배지 바깥 몇 px 에서 열림과 메뉴가
+     갈리면 같은 곳을 눌렀는데 다른 일이 일어난다
    · 링크·단추·입력칸: 자기 일이 있는 것들. 지금 행에는 없지만 생기면
      저절로 예외가 된다(이름을 더 적을 필요가 없다) */
-const 안여는곳 = '.stbadge, a, button, input, select, textarea, label, [contenteditable]';
+const 안여는곳 = '.cell.st, a, button, input, select, textarea, label, [contenteditable]';
 
 /* 눌린 곳이 여는 자리면 그 행 — 아니면 null */
 function 여는자리(el) {
@@ -142,6 +143,20 @@ Drawer.init({
    (4-14). 이름만 여는 자리였을 때는 행의 대부분이 죽은 면이었다: 누를 것이
    보이는데 아무 일도 안 일어나면 사람은 두 번 누르고 만다.
    예외는 위 `안여는곳` 뿐이고, 같은 행을 다시 누르면 닫는다. */
+/* 상태 칸을 누르면 **드로어의 상태 메뉴**가 그 자리에 뜬다 (4-14).
+   새 메뉴를 만들지 않는다 — 고를 수 있는 상태와 색·라벨이 두 벌이 되면
+   갈린 쪽을 아무도 눈치채지 못한다. 못 바꾸는 행(`.pick` 없음)은
+   지금까지처럼 표시일 뿐이라 아무 일도 안 한다. */
+list.addEventListener('click', e => {
+  const 칸 = e.target.closest('.cell.st.pick');
+  if (!칸) return;
+  const row = 칸.closest('.trow.lrow');
+  if (!row) return;
+  // 전파를 막지 않는다 — 드로어의 바깥 클릭 판정이 이 자리를 알고 있다
+  // (`originOf` 의 statchip). 여기서 막으면 그 판단이 두 곳이 된다
+  Drawer.statusMenu(칸.querySelector('.stbadge') || 칸, row.dataset.run);
+});
+
 list.addEventListener('click', e => {
   const row = 여는자리(e.target);
   if (!row) return;

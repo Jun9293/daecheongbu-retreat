@@ -1065,6 +1065,17 @@ function closeMenus() {
   $('statmenu').classList.remove('on');
 }
 
+/* **스크롤하면 닫는다.** 메뉴는 `position:fixed` 라 화면에 붙어 있는데,
+   목록은 그 아래에서 스크롤한다(드로어의 칩은 고정 패널 안이라 이 일이
+   없었다). 그대로 두면 **메뉴만 남아 안 보이는 행의 상태를 바꾸게 된다.**
+   창 크기가 바뀌는 것도 같다 — 잡아 둔 자리가 뜻을 잃는다. */
+addEventListener('scroll', () => {
+  if ($('statmenu').classList.contains('on')) closeMenus();
+}, true);
+addEventListener('resize', () => {
+  if ($('statmenu').classList.contains('on')) closeMenus();
+});
+
 $('drel').onclick = e => {
   const act = e.target.closest('[data-act]');
   if (act) {
@@ -1083,20 +1094,40 @@ $('drel').onclick = e => {
 };
 
 /* ── 상태 변경 ── */
-function statMenu(btn) {
+/* **어느 업무의 상태든 이 메뉴 하나로 고른다** (4-14). 목록의 행 배지도
+   같은 것을 부른다 — 새 메뉴를 만들면 고를 수 있는 상태(PICKABLE)와
+   색·라벨이 두 벌이 되고, 갈린 쪽을 아무도 눈치채지 못한다.
+   `runId` 를 안 주면 지금 열려 있는 업무다(드로어의 칩). */
+function statMenu(btn, runId) {
   const menu = $('statmenu'), r = btn.getBoundingClientRect();
+  const 대상 = runId == null ? cur : runId;
   // 같은 배지를 다시 누르면 상태를 바꾸지 않고 목록만 닫는다
-  if (menu.classList.contains('on')) { closeMenus(); return; }
+  if (menu.classList.contains('on') && menu.dataset.run === String(대상)) {
+    closeMenus(); return;
+  }
+  menu.dataset.run = String(대상);
   menu.innerHTML = PICKABLE.map(key =>
     `<button data-s="${esc(key)}"><span class="cv" style="background:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join('');
-  menu.style.left = r.left + 'px';
-  menu.style.top = (r.bottom + 4) + 'px';
+  // **화면 밖으로 나가지 않는다.** 드로어의 칩은 440px 패널 왼쪽 위라
+  // 늘 아래·안쪽이었는데, 목록의 상태 칸은 **행 오른쪽 끝**이고 마지막
+  // 행이면 아래도 없다. 가로·세로 둘 다 잡는다 — 한쪽만 잡으면 나머지
+  // 한쪽으로 넘친다(그 자리를 검토가 짚었다). 값은 실제 크기에서 잰다
   menu.classList.add('on');
+  const 폭 = menu.offsetWidth || 150, 높 = menu.offsetHeight || 150;
+  const 안에 = (v, 끝) => Math.max(4, Math.min(v, 끝 - 4));
+  menu.style.left = 안에(r.left, innerWidth - 폭) + 'px';
+  // 아래에 자리가 없으면 위로, **그러고도 넘치면 화면 안으로 민다** —
+  // 스크롤하는 것이 창이 아니라 안쪽 상자일 때 누른 칸이 창 아래
+  // 한참 밑에 있을 수 있다(목록이 그렇다). 그때 위아래만 뒤집으면
+  // 메뉴가 여전히 화면 밖이라 **누른 사람은 아무 일도 안 일어난 줄 안다**
+  const 아래 = r.bottom + 4;
+  menu.style.top = 안에(아래 + 높 > innerHeight ? r.top - 높 - 4 : 아래,
+                       innerHeight - 높) + 'px';
   menu.onclick = async e => {
     const b = e.target.closest('[data-s]');
     if (!b) return;
     closeMenus();
-    await setStatus(cur, b.dataset.s);
+    await setStatus(대상, b.dataset.s);
   };
 }
 
@@ -1115,8 +1146,19 @@ async function setStatus(runId, status) {
   call('onStatus', runId, view);
   // 배지도 서버가 준 것으로 — 기한이 지난 업무는 '완료' 를 벗어나는 순간
   // 다시 '지연' 으로 떠야 한다. 화면이 계산하면 두 벌이 된다.
-  if (detail) { detail.status = status; detail.badge = view.badge; renderDrawer(); }
-  refreshDiag(runId);
+  // **열려 있는 업무일 때만 패널을 고친다** — 목록의 행 배지로 다른
+  // 업무를 바꿀 수 있게 되면서(4-14), 열린 것과 바꾼 것이 다를 수 있다
+  if (detail && String(detail.run_id) === String(runId)) {
+    detail.status = status;
+    detail.badge = view.badge;
+    renderDrawer();
+    refreshDiag(runId);
+  } else if (detail) {
+    // **다른 업무를 바꿔도 열려 있는 판정은 흔들린다** — 바꾼 것이
+    // 열린 업무의 선행이면 「진행 불가 — 선행 미완료」 가 그대로 남는다
+    // (4-10). 판정은 상태에서 나오므로 열린 쪽을 다시 받는다
+    refreshDiag(detail.run_id);
+  }
 }
 
 /* 상태를 바꾸면 **판정도 바뀐다.** 상태는 판정에 들어가는 값이므로
@@ -1236,7 +1278,9 @@ function originOf(target) {
   return {
     drawer: at('#drawer'),
     statmenu: at('#statmenu'),
-    statchip: at('#statchip'),
+    // **상태 메뉴를 여는 자리** — 드로어의 칩과 목록 행의 상태 칸(4-14).
+    // 여기를 모르면 메뉴가 뜨자마자 「바깥 클릭」 으로 닫힌다
+    statchip: at('#statchip') || at('.cell.st.pick'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
@@ -1306,6 +1350,9 @@ window.Drawer = {
   close: closeDrawer,
   // 목록이 행을 눌러 열며 업무 규칙 탭을 고를 때 쓴다 (4-14)
   selectTab,
+  /* 목록의 행 배지가 부른다 (4-14) — **드로어의 그 메뉴 그대로**다.
+     새 메뉴를 만들면 고를 수 있는 상태와 색·라벨이 두 벌이 된다. */
+  statusMenu: (el, runId) => statMenu(el, runId),
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,
   /* 드래그 직후인가. **쓰는 곳은 board.js 하나다** — 바를 끌어 옮긴 뒤의

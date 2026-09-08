@@ -1848,9 +1848,13 @@ button.btn:disabled{opacity:.4;cursor:default}
    버튼 줄은 없앴다. 좁은 화면(<820px)에서는 메타와 배지가 이름 아래로
    내려간다. */
 /* **행 전체가 여는 자리다** (4-14) — 커서도 행 전체에 pointer. 예외
-   (안 여는 자리)에만 그 자리의 커서를 되돌린다 — tasks.js 의 `안여는곳` */
+   (안 여는 자리)에만 그 자리의 커서를 되돌린다 — tasks.js 의 `안여는곳`.
+   상태 칸은 **상태 메뉴를 여는 자리**라 pointer 그대로이고, 바꿀 수
+   없는 사람에게는 누를 것처럼 보이지 않는다(커서·호버 없음) */
 .trow.lrow{cursor:pointer;padding:10px 16px;align-items:center}
-.trow.lrow .stbadge{cursor:default}
+.trow.lrow .cell.st{cursor:default}
+.trow.lrow .cell.st.pick{cursor:pointer;border-radius:6px}
+.trow.lrow .cell.st.pick:hover{background:var(--hover)}
 .trow.lrow + .trow.lrow,.lslot + .trow.lrow{border-top:1px solid var(--rule)}
 .trow.lrow.dim{opacity:.55}
 .trow.lrow .main{display:flex;align-items:center;gap:10px;min-width:0}
@@ -1872,11 +1876,13 @@ button.btn:disabled{opacity:.4;cursor:default}
   border:1px solid var(--rule-2);border-radius:6px;background:var(--paper);
   padding:4px 8px;max-width:220px}
 /* 정렬은 **상태 칩보다 한 급 아래**다 — 무엇을 볼지가 먼저고 순서는
-   그다음이다. 크기는 배지가 쓰는 장식 단(--fz-xs)을 그대로 쓴다: 눈금
-   밖 값을 새로 만들지 않는다 (4-0). **장식 단에 두는 예외**이고 그
-   이유는 4-0 에 적혀 있다 — 목록이 곧 그 뜻을 보여주는 조작 라벨이다.
-   자리는 tests/test_typescale.py 의 `장식이어도_되는곳` 에 있다 */
-.tlist .lsort .chip{font-size:var(--fz-xs);padding:3px 9px}
+   그다음이다. **보조 단(13px)이고 장식 단(12px)이 아니다**: 「날짜」·
+   「이름」 은 옆에 뜻을 대신 져 줄 값이 없어 혼자 뜻을 진다 — 4-0 의
+   14px 하한 자리다. **예외를 만들지 않는다: 예외는 다음 예외의 근거가
+   된다** — 대신 4-0 에 보조 급의 하한(13px)을 두었다. 급은 크기 한
+   단으로만 낮춘다: 색까지 옅게 했더니 흐림 자리 규칙(4-0)에 걸렸고,
+   **혼자 뜻을 지는 글자에는 보조 이상을 쓴다**가 그 답이었다 */
+.tlist .lsort .chip{font-size:var(--fz-sm);padding:3px 9px}
 .tlist .lsort .chip .dirmark{font-family:var(--mono);font-size:var(--fz-xs)}
 .lslot{border-bottom:1px solid var(--rule);background:var(--paper)}
 .lempty{padding:22px 16px;color:var(--ink-2);font-size:var(--fz-md)}
