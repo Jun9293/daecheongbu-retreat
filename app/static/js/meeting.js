@@ -68,10 +68,17 @@ function 업무고르기(x) {
 /* 이미 업무가 된 제안 — 단추 대신 그 업무로 가는 길. 만들었는데 어디
    있는지 모르면 만들지 않은 것과 같다 (4-14 의 ?task=). */
 function 만든자리(x, 방금) {
-  return `<span class="mt-sug-made">${방금 ? '만들었습니다' : '이미 만들었습니다'} —
-    <a href="/tasks?task=${Number(x.made_run_id)}">${
+  const 링크 = `<a href="/tasks?task=${Number(x.made_run_id)}">${
       x.made_run_no == null ? '' : `<span class="mt-no">${Number(x.made_run_no)}</span>`
-    }${esc(x.title || x.action)}</a></span>`;
+    }${esc(x.title || x.action)}</a>`;
+  // **뺀 업무면 새로 만들지 않고 되살린다** — 새로 만들면 같은 제목의
+  // 라이브러리가 둘이 되어 실행 이력이 갈린다 (6-2 · 12장)
+  if (x.made_excluded) {
+    return `<span class="mt-sug-made">빼 둔 업무입니다 — ${링크}`
+      + (canEdit ? ` <button type="button" data-restore="${Number(x.made_run_id)}">되살리기</button>` : '')
+      + `</span>`;
+  }
+  return `<span class="mt-sug-made">${방금 ? '만들었습니다' : '이미 만들었습니다'} — ${링크}</span>`;
 }
 
 function 줄(x) {
@@ -238,6 +245,30 @@ list.addEventListener('click', async e => {
       await fetch(`/meetings/${meetingId}/suggestions/rerun`, {method: 'POST'});
     } catch (err) { /* 아래에서 다시 물어본다 */ }
     불러온다();
+    return;
+  }
+  const 되살리기 = e.target.closest('[data-restore]');
+  if (되살리기) {
+    const row = 되살리기.closest('.mt-sug-row');
+    되살리기.disabled = true;
+    되살리기.textContent = '되살리는 중…';
+    try {
+      const res = await fetch(`/meetings/${meetingId}/suggestions/restore`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({run_id: Number(되살리기.dataset.restore)}),
+      });
+      if (!res.ok) throw new Error(res.status);
+      const saved = await res.json();
+      const 자리 = row.querySelector('.mt-sug-made');
+      자리.outerHTML = 만든자리({
+        made_run_id: saved.run_id, made_run_no: saved.run_no, title: saved.title,
+      }, false);
+    } catch (err) {
+      되살리기.disabled = false;
+      되살리기.textContent = '되살리기';
+      // 조용히 삼키지 않는다 (5-0)
+      row.querySelector('.mt-sug-why').textContent = '되살리지 못했습니다. 다시 눌러 주세요.';
+    }
     return;
   }
   const 새단추 = e.target.closest('[data-apply-new]');

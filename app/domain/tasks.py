@@ -54,14 +54,16 @@ def made_from_meeting(db: Session, retreat: Retreat, meeting_id: int) -> dict:
     `TaskRun.source_meeting_id` 하나이고(4-9 와 같은 원칙), 제목이 그
     회의에서 그 제안의 이름이다.
 
-    **범위는 그 회의록에서 온 이번 회차의 「지금 있는」 업무다.**
+    **범위는 그 회의록에서 온 이번 회차의 업무 전부다** — 항목 전환으로
+    만든 것도, 이번 회차에서 뺀 것(`included=False`)도 센다.
 
-    - 항목 전환으로 만든 것도 **센다** — 같은 회의록·같은 제목이면 같은
-      업무다. 안 세면 제안을 눌러 같은 이름이 목록에 둘 선다
-    - 이번 회차에서 **뺀 것(`included=False`)은 세지 않는다** — 목록에
-      없는 것을 가리키면(4-14 는 included 만 낸다) 「이미 만들었습니다」
-      의 링크를 눌러도 갈 곳이 없다. 그건 거짓말이 된다. 되살리는 길은
-      보드의 「+ 업무 추가」 다
+    - 전환으로 만든 것을 안 세면 제안을 눌러 **같은 이름이 목록에 둘**
+      선다 — 같은 회의록·같은 제목이면 같은 업무다
+    - **뺀 것도 센다.** 안 세면 제안을 다시 눌러 새로 만들게 되는데,
+      `create_run` 은 늘 새 라이브러리 행을 만들므로 **같은 제목의
+      라이브러리가 둘**이 되고 6-2 의 실행 이력이 두 줄로 갈린다.
+      「목록에 없는 것을 가리킨다」 는 문제는 화면이 푼다 — 그 제안에
+      「빼 둔 업무입니다」 와 **되살리기**를 낸다 (4-14 · 12장)
     """
     rows = db.scalars(
         select(TaskRun)
@@ -69,7 +71,6 @@ def made_from_meeting(db: Session, retreat: Retreat, meeting_id: int) -> dict:
         .where(
             TaskRun.retreat_id == retreat.id,
             TaskRun.source_meeting_id == meeting_id,
-            TaskRun.included,
         )
     )
     # 같은 제목이 둘이면 **먼저 만든 것**을 가리킨다 — 나중 것으로 가면

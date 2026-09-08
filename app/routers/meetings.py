@@ -670,6 +670,10 @@ def meeting_suggestions(
             # 새 업무 제안 — 이미 만들었으면 그 업무 (단추 대신 링크)
             "made_run_id": 만든run.id if 만든run else None,
             "made_run_no": 만든run.run_no if 만든run else None,
+            # 이번 회차에서 뺀 업무면 그렇다고 말하고 **되살리기**를 낸다
+            # — 새로 만들면 같은 제목의 라이브러리가 둘이 되어 실행
+            # 이력이 갈린다 (6-2 · 12장)
+            "made_excluded": bool(만든run and not 만든run.included),
         })
 
     return {
@@ -871,3 +875,48 @@ def apply_new_task(
             # 이름을 못 맞췄으면 그렇다고 말한다 — 조용히 부서 없이 서면
             # 화면에서 본 것과 저장된 것이 갈린다
             "dept_missed": bool(payload.department and dept is None)}
+
+
+class 되살릴것(BaseModel):
+    run_id: int
+
+
+@router.post("/{meeting_id}/suggestions/restore")
+def restore_run(
+    meeting_id: int,
+    payload: 되살릴것,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """이번 회차에서 뺐던 업무를 **되살린다** (`included=True`).
+
+    제안을 다시 눌러 새로 만들면 `create_run` 이 늘 새 라이브러리 행을
+    만들어 **같은 제목이 둘**이 되고, 6-2 의 실행 이력이 두 줄로
+    갈린다. 뺀 것도 기록이므로(0장) 지우지 않고 되살린다.
+
+    권한은 그 업무의 부서를 편집할 수 있는 사람 — 보드·전환과 같은 문이다.
+    """
+    from app.security import assert_can_edit_department
+
+    meeting = _owned(db, meeting_id, retreat)
+    run = db.get(TaskRun, payload.run_id)
+    if run is None or run.retreat_id != retreat.id \
+            or run.source_meeting_id != meeting.id:
+        raise HTTPException(status_code=404, detail="그 회의록에서 만든 업무가 아닙니다.")
+    if run.department is not None:
+        assert_can_edit_department(db, user, run.department_id)
+    if not run.included:
+        run.included = True
+        log_activity(
+            db,
+            retreat_id=retreat.id,
+            actor=user,
+            action="업무_되살림",
+            target_type="task_run",
+            target_id=run.id,
+            summary=f"{run.library.title} (회의록 제안에서)",
+        )
+        db.commit()
+    return {"ok": True, "run_id": run.id, "run_no": run.run_no,
+            "title": run.library.title}
