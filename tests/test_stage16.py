@@ -57,8 +57,11 @@ def test16_s03_읽는_곳이_하나다():
     """③ 검사가 볼 것을 보고 있나 — 세 검사가 **같은 함수**를 부른다.
     저마다 읽으면 한쪽만 고쳐지고, 실제로 셋이 같은 결함을 갖고 있었다.
 
+    **목록을 여기 적어 두지 않는다** — 글검사가 부르는 것 전부를 본다.
+    적어 두면 검사가 하나 늘 때 그것만 이 축을 안 지난다 (10장).
+
     **낱말만 잰다** — 실제로 같은 결과를 내는지는 s01·s02 가 잰다."""
-    for 이름 in ("check_stale", "check_named", "check_names"):
+    for 이름 in _load("글검사").검사들:
         글 = (SCRIPTS / f"{이름}.py").read_text(encoding="utf-8")
         코드 = re.sub(r'"""[\s\S]*?"""', "", 글)
         코드 = re.sub(r"#[^\n]*", "", 코드)
@@ -73,7 +76,7 @@ def test16_s04_넘김_수가_출력에_찍힌다():
     # **콘솔 인코딩을 못 박는다.** 윈도우 콘솔은 cp949 라 그대로 받으면
     # 글자가 깨져, 있는 말을 없다고 말한다 (있는 것을 없다고 하는 그 모양)
     환경 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    for 이름 in ("check_stale", "check_named", "check_names"):
+    for 이름 in _load("글검사").검사들:
         r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
                             str(SCRIPTS / f"{이름}.py")],
                            cwd=ROOT, capture_output=True, env=환경)
@@ -89,19 +92,20 @@ def test16_s04_넘김_수가_출력에_찍힌다():
 def test16_g01_한_자리가_셋을_다_부른다():
     """11-3 이 셋을 이름으로 적어 두면 넷째가 생길 때 그 검사만 조용히
     안 돈다. 더할 곳은 `검사들` 한 줄이다."""
-    검사 = _load("검사")
+    검사 = _load("글검사")
     # **`==` 로 못박지 않는다.** 넷째를 더하면 CLAUDE.md 는 그대로여도
     # 이 시험이 빨개져, 고칠 자리가 문서에서 시험으로 한 칸 옮겨갈
     # 뿐이다 (11-3 「재는 것은 박고 잰 것은 박지 않는다」 — 검토가 짚음).
     # 빠지면 안 되는 것만 박는다: 지우는 것은 막히고 더하는 것은 자유
-    assert {"check_names", "check_stale", "check_named"} <= set(검사.검사들)
+    assert {"check_names", "check_stale", "check_named",
+            "check_counts"} <= set(검사.검사들)
     for 이름 in 검사.검사들:
         assert (SCRIPTS / f"{이름}.py").exists(), f"{이름} 이 없다"
 
 
 def test16_g02_하나라도_빨가면_전체가_빨갛다(monkeypatch, capsys):
     """막는 쪽. 모아서 내는 값이 「마지막 것」 이면 앞의 실패가 묻힌다."""
-    검사 = _load("검사")
+    검사 = _load("글검사")
     monkeypatch.setattr(검사, "검사들", ("가", "나", "다"))
     monkeypatch.setattr(검사, "돌린다", lambda 이름: 1 if 이름 == "나" else 0)
     assert 검사.main() == 1
@@ -112,7 +116,7 @@ def test16_g02_하나라도_빨가면_전체가_빨갛다(monkeypatch, capsys):
 def test16_g03_끝까지_돈다(monkeypatch):
     """첫 실패에서 멈추면 한 번에 하나씩만 알게 되어 고치고 다시 돌리기를
     되풀이한다."""
-    검사 = _load("검사")
+    검사 = _load("글검사")
     돈것 = []
     monkeypatch.setattr(검사, "검사들", ("가", "나", "다"))
     monkeypatch.setattr(검사, "돌린다", lambda 이름: (돈것.append(이름), 1)[1])
@@ -122,7 +126,7 @@ def test16_g03_끝까지_돈다(monkeypatch):
 
 def test16_g04_전부_통과하면_0이다(monkeypatch):
     """뚫리는 쪽."""
-    검사 = _load("검사")
+    검사 = _load("글검사")
     monkeypatch.setattr(검사, "검사들", ("가", "나"))
     monkeypatch.setattr(검사, "돌린다", lambda 이름: 0)
     assert 검사.main() == 0
@@ -140,11 +144,11 @@ def test16_g04b_파이프로_넘겨도_머리가_제자리다():
 
     환경 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
-                        str(SCRIPTS / "검사.py")],
+                        str(SCRIPTS / "글검사.py")],
                        cwd=ROOT, capture_output=True, env=환경)
     출력 = r.stdout.decode("utf-8", "replace")
-    자리 = [출력.index(f"━━━ {이름} ━━━") for 이름 in
-          ("check_names", "check_stale", "check_named", "모아서")]
+    자리 = [출력.index(f"━━━ {이름} ━━━")
+          for 이름 in (*_load("글검사").검사들, "모아서")]
     assert 자리 == sorted(자리), "머리가 순서대로 안 나온다 (flush 안 함)"
     # 첫 검사의 출력이 그 머리 **뒤**에 온다 — 앞에 오면 뒤섞인 것이다
     assert 출력.index("실명") > 자리[0]
@@ -154,7 +158,7 @@ def test16_g05_11_3_이_그_한_자리를_부른다():
     """문서가 셋을 이름으로 세어 두면 넷째가 생길 때 갈린다 (10장)."""
     글 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     자리 = 글[글.index("### 1. 커밋하고 푸시한다"):][:2000]
-    assert "scripts/검사.py" in 자리
+    assert "scripts/글검사.py" in 자리
 
 
 # ════════════════════════════════════════════════════════════════════
