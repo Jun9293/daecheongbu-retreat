@@ -709,23 +709,40 @@
         results.push((opened ? '✓' : '✗') + ' 행의 빈 곳(메타)을 눌러도 열림');
         if (!opened) errors.push('행의 빈 곳을 눌러도 안 열린다');
       }
-      // 상태 칸은 **안 여는 자리**이고, 대신 그 자리에서 상태 메뉴가 뜬다
-      // (4-14). 배지 안쪽과 칸의 가장자리가 같은 자리여야 한다 — 몇 px
-      // 차이로 열림과 메뉴가 갈리면 같은 곳을 눌렀는데 다른 일이 난다
-      const closedRow = [...document.querySelectorAll('.trow.lrow')]
-        .filter(r => shown(r) && !r.classList.contains('open'))[0];
-      const stcell = closedRow && closedRow.querySelector('.cell.st');
+      /* 상태 칸 — **바꿀 수 있을 때만** 안 여는 자리다 (4-14).
+         배지 안쪽과 칸의 가장자리가 같은 자리여야 한다: 몇 px 차이로
+         열림과 메뉴가 갈리면 같은 곳을 눌렀는데 다른 일이 난다.
+
+         **못 바꾸는 사람의 그 칸은 행의 다른 곳과 같아서 행을 연다.**
+         예외는 「누르면 뭔가 되는 것」 이지 「누를 수 없는 사람에게도
+         예외」 가 아니다. 전에는 여기가 권한과 무관하게 「안 열려야
+         한다」 고 적혀 있었는데, 그러면 **관리자로 돌 때만 우연히
+         통과하고** 부서 리더 화면에서는 맞는 동작이 ✗ 로 나온다. */
+      const 칸있는행 = 고를수 => [...document.querySelectorAll('.trow.lrow')]
+        .filter(r => shown(r) && !r.classList.contains('open'))
+        .find(r => { const c = r.querySelector('.cell.st');
+                     return c && c.classList.contains('pick') === 고를수; });
       const menu = $('statmenu');
-      if (stcell) {
-        const 고를수있나 = stcell.classList.contains('pick');
+      for (const 고를수있나 of [true, false]) {
+        const row = 칸있는행(고를수있나);
+        const stcell = row && row.querySelector('.cell.st');
+        if (!stcell) {
+          results.push(`· 이 계정에는 ${고를수있나 ? '바꿀 수 있는' : '못 바꾸는'}`
+            + ' 상태 칸이 없어 건너뜀');
+          continue;
+        }
         for (const [어디, el] of [['배지', stcell.querySelector('.stbadge') || stcell],
                                  ['칸의 가장자리', stcell]]) {
           const before = new URLSearchParams(location.search).get('task');
           el.click();
           await sleep(400);
-          const 안열림 = new URLSearchParams(location.search).get('task') === before;
-          results.push((안열림 ? '✓' : '✗') + ` 상태 ${어디}를 눌러도 그 행이 안 열림`);
-          if (!안열림) errors.push(`상태 ${어디}가 행을 열었다`);
+          const 열렸나 = new URLSearchParams(location.search).get('task') !== before;
+          // 바꿀 수 있으면 안 열려야 하고, 못 바꾸면 행처럼 열려야 한다
+          const 맞나열림 = 고를수있나 ? !열렸나 : 열렸나;
+          results.push((맞나열림 ? '✓' : '✗')
+            + ` 상태 ${어디} → 행 ${열렸나 ? '열림' : '안 열림'}`
+            + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`);
+          if (!맞나열림) errors.push(`상태 ${어디}의 열림이 권한과 어긋남`);
           const 떴나 = !!(menu && menu.classList.contains('on'));
           const 맞나 = 고를수있나 ? 떴나 : !떴나;
           results.push((맞나 ? '✓' : '✗')
@@ -733,6 +750,7 @@
             + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`);
           if (!맞나) errors.push(`상태 ${어디}의 메뉴가 권한과 어긋남`);
           if (떴나) { document.body.click(); await sleep(250); }
+          if (열렸나) { Drawer.close(); await sleep(300); }
         }
       }
     }

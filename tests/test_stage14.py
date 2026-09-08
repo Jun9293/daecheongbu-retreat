@@ -147,8 +147,12 @@ def 배선낱말시험(files=None) -> list[tuple[str, str, str]]:
     """
     import ast
 
-    배선 = re.compile(r"""["'](\.[\w.-]+|\#[\w-]+|addEventListener|click|"""
-                     r"""pointerdown|closest\()["']""")
+    # **닫는 따옴표를 요구하지 않는다.** 실제 시험은
+    # `"addEventListener('scroll'"` 처럼 조각으로 찾는데, 양끝을 다
+    # 요구하면 그런 시험이 통째로 빠진다 — 이 판이 새로 쓴 둘이
+    # 그렇게 빠져 있었다(검토가 짚음)
+    배선 = re.compile(r"""["'](\.[\w.-]+|\#[\w-]+|addEventListener|"""
+                     r"""pointerdown|closest\()""")
     나온것 = []
     for p in sorted(files if files is not None else (ROOT / "tests").glob("test_*.py")):
         src = p.read_text(encoding="utf-8")
@@ -245,16 +249,21 @@ def test14_b01_배지에서_바꾸면_목록_보드_드로어가_같은_배지�
     assert 보드["badge"] == 배지
 
 
-def test14_b02_상태_칸은_행을_열지_않는다():
-    """막는 쪽. 상태 칸은 「안 여는 자리」 이고, 대신 그 자리에서 메뉴가
-    뜬다 — 두 손이 한 자리에서 부딪히지 않는다.
+def test14_b02_바꿀_수_있는_상태_칸만_행을_안_연다():
+    """막는 쪽. **바꿀 수 있는** 상태 칸만 「안 여는 자리」 이고, 그
+    자리에서 메뉴가 뜬다 — 두 손이 한 자리에서 부딪히지 않는다.
+    못 바꾸는 칸은 예외가 아니라 행의 다른 곳과 같다 (4-14).
 
     **낱말만 잰다** — 실제로 눌러 보는 것은 `docs/checks/drawer.js` 의
-    목록 항목이다(그쪽이 브라우저에서 돈다)."""
+    목록 항목이다(그쪽이 브라우저에서 돌고, 권한 둘을 나눠 잰다)."""
     js = (ROOT / "app" / "static" / "js" / "tasks.js").read_text(encoding="utf-8")
     코드 = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
     코드 = re.sub(r"//[^\n]*", "", 코드)
-    assert "'.cell.st" in 코드 or '".cell.st' in 코드      # 안 여는 자리에 든다
+    # **앞자리 일치로 재지 않는다** — `.cell.st` 로 물으면 좁힌 것을
+    # 되돌려도 초록이라 구별하지 못하는 검사가 된다 (검토가 짚음)
+    assert ".cell.st.pick" in 코드
+    안여는곳 = [줄 for 줄 in 코드.split("\n") if "안여는곳 =" in 줄][0]
+    assert ".cell.st," not in 안여는곳, "못 바꾸는 칸까지 예외로 둔다"
     assert "Drawer.statusMenu(" in 코드                    # 그 자리에서 메뉴
     assert "statMenu" not in 코드, "목록이 제 메뉴를 만든다"
 
