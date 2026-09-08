@@ -144,7 +144,7 @@ def test_05_부서_색이_면을_채우지_않고_점과_테두리에만_쓰인�
     # 화면 쪽도 팀 색 틴트로 면을 채우지 않는다
     assert "--teamt" not in BOARD and "--rowt" not in BOARD and "--lct" not in BOARD
     assert "var(--teamt" not in CSS and "var(--rowt" not in CSS and "var(--lct" not in CSS
-    # 왼쪽 점 · 진행중 마개 · 부서 칩의 점 — 팀 색이 오는 세 자리
+    # 왼쪽 점 · 진행중 마개 · 부서 칩의 점 — 팀 색이 오는 자리들
     assert re.search(r"\.row\.team \.lc \.sw\{[^}]*border-radius:50%", CSS)
     assert ".bar.진행중::after" in CSS and "background:var(--team" in CSS
     assert ".chip.solid::before" in CSS
