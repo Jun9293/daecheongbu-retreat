@@ -177,8 +177,19 @@
   } else results.push('· 고칠 수 없는 업무라 제목 편집은 건너뜀');
 
   await check('탭 — 논의', () => $('dtabs').querySelector('[data-p="log"]').click());
-  results.push((shown($('daddlog')) ? '✓' : '✗') + ' 논의 입력칸이 화면에 보임');
-  if (!shown($('daddlog'))) errors.push('논의 입력칸이 보이지 않음');
+  /* **권한으로 갈라서 잰다.** 논의 입력칸은 늘 열려 있어야 하지만(4-9)
+     그것은 **고칠 수 있는 사람에게** 그렇다. 고칠 수 없는 업무를 연
+     계정에서 「안 보인다」 를 고장으로 세면, 맞는 동작이 ✗ 로 난다 —
+     상태 칸에서 배운 그 자리다(4-14). 못 고치는 쪽은 **안 보이는 것이
+     맞다**로 뒤집어 잰다. */
+  {
+    const canEdit = !document.querySelector('#statchip[disabled]');
+    const 보임 = shown($('daddlog'));
+    const 맞나 = canEdit ? 보임 : !보임;
+    results.push((맞나 ? '✓' : '✗')
+      + ` 논의 입력칸이 ${보임 ? '보임' : '안 보임'} (고칠 수 ${canEdit ? '있음' : '없음'})`);
+    if (!맞나) errors.push('논의 입력칸이 권한과 어긋남');
+  }
 
   await check('탭 — 업무 규칙', () => $('dtabs').querySelector('[data-p="rules"]').click());
   if ($('drulesopen')) {
@@ -277,16 +288,27 @@
     results.push((!shown($('dlinkform')) ? '✓' : '✗') + ' 취소하면 폼이 닫힘');
   } else results.push('· 고칠 수 없는 업무라 링크 붙이기는 건너뜀');
 
+  /* **없는 것을 누르지 않는다.** 고칠 수 없는 업무를 연 계정에서는
+     담당자·담당팀·시작일 칸이 아예 안 그려진다 — 그냥 누르면 검사가
+     `null.click()` 으로 **죽고**, 그러면 그 계정에서는 아무것도 안
+     재진다(2026-09-08 판에서 부서 리더로 돌리자 보드가 그렇게 멈췄다).
+     안 재는 것은 안 재는 것으로 적는다 — 건너뜀 수에 들어간다. */
+  const 눌러본다 = async (라벨, id) => {
+    const el = $(id);
+    if (el && shown(el)) return check(라벨, () => el.click());
+    results.push(`· ${라벨} — 이 계정에는 그 칸이 없어 건너뜀`);
+  };
+
   await check('탭 — 논의 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click());
-  await check('상태 배지 열기', () => $('statchip').click());
-  await check('상태 배지 다시 눌러 닫기', () => $('statchip').click());
-  await check('담당자 드롭다운', () => $('dassignee').click());
-  await check('담당팀 드롭다운', () => $('ddept').click());
-  await check('시작일 칸', () => $('dstart').click());
-  await check('논의 입력칸', () => $('dbody').click());
-  await check('대체 체크박스', () => $('dsuper').click());
-  await check('대체 체크박스 해제', () => $('dsuper').click());
-  await check('논의 취소 버튼', () => $('dcancelnew').click());
+  await 눌러본다('상태 배지 열기', 'statchip');
+  await 눌러본다('상태 배지 다시 눌러 닫기', 'statchip');
+  await 눌러본다('담당자 드롭다운', 'dassignee');
+  await 눌러본다('담당팀 드롭다운', 'ddept');
+  await 눌러본다('시작일 칸', 'dstart');
+  await 눌러본다('논의 입력칸', 'dbody');
+  await 눌러본다('대체 체크박스', 'dsuper');
+  await 눌러본다('대체 체크박스 해제', 'dsuper');
+  await 눌러본다('논의 취소 버튼', 'dcancelnew');
 
   const pen = document.querySelector('#dlog .editline');
   if (pen) {
@@ -820,10 +842,29 @@
      실제로 관리자 계정으로만 돌리면 「못 바꾸는 상태 칸」 두 쌍이 한
      번도 안 재지는데 점수는 만점이었다 (11-3 의 「센 것이 0이면 성공이
      아니라 실패」 와 같은 자리 — 검토가 짚었다). */
-  const 건너뜀 = results.filter(r => String(r).startsWith('·')).length;
-  if (건너뜀) results.push(`· 이 계정에서 안 재진 항목 ${건너뜀}개`
-    + ' — 권한이 다른 계정으로 한 번 더 돌려 보세요');
+  // 첫 줄은 「돌린 화면」 표시라 뺀다. 그리고 **항목 수는 이 줄을 붙이기
+  // 전 값**이다 — 요약이 항목 수를 늘리면 판마다 수가 달라 보인다
+  const 잰것 = results.length;
+  const 건너뜀 = results.slice(1).filter(r => String(r).startsWith('·')).length;
+  /* **어느 계정으로 다시 돌아야 하는지까지 말한다.** 「N개 건너뜀」 만
+     내면 다음 사람은 그것을 보고도 무엇을 해야 할지 모른다 — 관리자로
+     돌면 모든 행이 「바꿀 수 있음」 이라 못 바꾸는 쪽이 안 재진다. */
+  if (건너뜀) {
+    /* **어느 계정으로 도는지는 「지금 고칠 수 있나」 로 안다.** 목록에는
+       상태 칸이 있어 `pick` 유무로 알 수 있지만 보드·달력에는 그 칸이
+       없다 — 빈 배열에 `every` 는 참이라 **부서 리더로 돌면서도
+       「부서 리더로 돌려 보세요」** 라고 말했다. 열려 있는 패널이
+       고칠 수 있는 것인지를 함께 본다. */
+    const 칸들 = [...document.querySelectorAll('.cell.st')];
+    const 고칠수있음 = !document.querySelector('#statchip[disabled]');
+    const 관리자 = 칸들.length ? 칸들.every(c => c.classList.contains('pick'))
+                             : 고칠수있음;
+    results.push(`· 이 계정에서 안 재진 항목 ${건너뜀}개 — `
+      + (관리자 ? '**부서 리더** 계정으로 한 번 더 돌려 보세요'
+               : '**관리자** 계정으로 한 번 더 돌려 보세요')
+      + ' (한 계정으로는 권한 두 쪽을 다 못 잽니다)');
+  }
   console.table(results);
   return {화면: where, 통과: errors.length === 0, 실패: errors,
-          항목수: results.length, 건너뜀, 항목: results};
+          항목수: 잰것, 건너뜀, 항목: results};
 })()
