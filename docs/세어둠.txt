@@ -33,3 +33,4 @@ scripts/import_meetings.py | 옮겨 올 노션 자료에 형광펜이 몇 군데
 scripts/check_counts.py | 이 검사 자신. 무엇을 잡는지 설명하려면 그 말을 적게 된다
 tests/test_stage17.py | 이 검사의 시험. 세는 말을 심어 걸리는지 재는 자리다
 tests/test_stage13.py | 「그 말을 놓쳤다」 를 재는 시험이라 그 표현을 단언문에 적는다
+tests/test_stage18.py | 자릿수(수가 바로 붙는 것)와 자리 수(한글 수 뒤)를 가르는 시험이라, 양쪽 보기를 나란히 적지 않으면 무엇을 재는지 알 수 없다
