@@ -19,11 +19,16 @@
 | 축 | 모양 | 어디서 찾나 |
 |---|---|---|
 | 경로 | `app/domain/tasks.py` · `templates/tasks.html` | git 이 아는 파일 목록(앞에 `app/` 등이 생략됐을 수 있다) |
-| 식별자 | `create_run` · `보조급자리` · `paint_of()` | 추적 중인 글 파일의 내용 |
+| 식별자 | `create_run` · `보조급자리` · `paint_of()` | **코드 파일만** (문서는 안 본다 — 아래) |
 | 선택자 | `.cell.st.pick` · `#statmenu` | CSS·JS·템플릿 |
+| 토큰 | `--fz` · `--ink-2` | CSS·JS·템플릿, 없으면 코드(명령줄 스위치와 생김새가 같다) |
 
 **산문은 안 봅니다.** 백틱은 강조에도 쓰여서(`지연`·`대기`) 전부 보면
 넘김 목록만 늘다가 아무도 안 읽습니다 (4-11 · 옛말.md 의 그 판단과 같다).
+다만 **한 낱말 한글을 통째로 버리지는 않습니다** — 이 저장소가 실제로
+쓰는 이름이 그 모양이라(`안여는곳`·`보조급자리`) 버리면 이 축이 정작
+우리가 바꾸는 이름을 못 봅니다. 강조로 쓴 것은 대개 코드에도 있어 그냥
+지나갑니다.
 
 넘기는 것은 `docs/이름-넘김.txt` 에 **왜 넘기는지와 함께** 적습니다 —
 지운 화면(`app.css`)처럼 **없는 것이 맞는 이름**이 그것입니다.
@@ -56,17 +61,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # **식별자를 찾는 곳은 코드뿐이다** — 아래 `저장소글` 의 이유
 코드꼴 = {".py", ".js", ".css", ".html", ".bat", ".json", ".ini",
         ".yml", ".yaml", ".cfg", ".toml"}
-# 경로가 이 앞머리들 중 하나를 생략하고 적혀 있을 수 있다 (14장 표가 그렇다)
-앞머리 = ("", "app/", "app/static/", "app/templates/", "docs/", "docs/mockups/",
-        "scripts/", "tests/", "app/static/js/", "app/static/css/")
-
 경로꼴 = re.compile(r"[\w./가-힣-]+\.(?:py|js|css|html|md|txt|bat|json|ini|yml|yaml)$")
 선택자꼴 = re.compile(r"[.#][A-Za-z][\w-]*(?:[.#][\w-]+)*$")
 식별자꼴 = re.compile(r"[A-Za-z가-힣_][\w가-힣_]*(?:\.[\w가-힣_]+)*(?:\(\))?$")
-# **캠멜은 8장의 데이터 모델 표기다** (`assigneeName` · `TaskRun.startedAt`).
-# 코드는 스네이크라 글자 그대로는 없고, 그건 문서가 정한 표기법이지 낡은
-# 이름이 아니다 — 그 표기를 검사에 넣으면 넘김 목록이 모델 필드로 찬다.
-캠멜꼴 = re.compile(r"[a-z][A-Za-z0-9]*[A-Z]")
+# CSS 토큰(`--fz` · `--ink-2`)은 모양 파일에서 찾는다. `--실행` 같은 명령줄
+# 스위치와 생김새가 같아서, **모양에 있으면 토큰이고 없으면 스위치다**
+토큰꼴 = re.compile(r"--[a-z][\w-]*$")
 
 
 def 넘긴것() -> set[str]:
@@ -86,9 +86,15 @@ def 넘긴것() -> set[str]:
 def 이름들() -> dict[str, str]:
     """{이름: 축} — 문서가 이름한 코드 모양.
 
-    **8장의 데이터 모델은 캠멜 표기다**(`assigneeName`). 코드는 스네이크라
-    글자 그대로는 없고, 그건 문서가 정한 표기법이지 낡은 이름이 아니다 —
-    그 블록은 통째로 건너뛴다.
+    **8장의 데이터 모델(캠멜 표기)은 코드블록 안에 있어 이미 빠진다** —
+    처음에는 캠멜을 따로 걸렀는데, 그러면 `originOf`·`statMenu`·`putFile`
+    처럼 **본문이 이름한 진짜 함수**가 함께 빠졌다(검토가 짚음). 코드는
+    스네이크라던 짐작도 이 저장소에는 안 맞는다 — JS 가 절반이다.
+
+    **한 낱말 한글도 본다.** `안여는곳`·`보조급자리`·`쪽지읽기` 처럼 이
+    저장소가 실제로 쓰는 이름이 그 모양이라, 빼면 **이 축이 정작 우리가
+    바꾸는 이름을 못 본다.** 대신 `지연`·`대기` 같은 강조는 **코드에
+    있으면 통과**하므로 실제로 걸리는 것만 넘김에 적으면 된다.
     """
     글 = 문서.read_text(encoding="utf-8")
     # 8장 데이터 모델 코드블록 (``` 로 감싼 것) 은 표기법이 다르다
@@ -96,23 +102,21 @@ def 이름들() -> dict[str, str]:
     나온것: dict[str, str] = {}
     for t in re.findall(r"`([^`\n]{2,90})`", 글):
         t = t.strip()
-        if " " in t or t.startswith("-"):        # 산문·명령줄 스위치
+        if " " in t:                                  # 산문
             continue
         if re.fullmatch(r"#[0-9A-Fa-f]{3,8}", t):     # 색 값
             continue
         if any(c in t for c in "?&=<>{}*'\"[]:,"):    # 주소·조각·예시
             continue
-        if 경로꼴.fullmatch(t):
+        if 토큰꼴.fullmatch(t):
+            나온것.setdefault(t, "토큰")
+        elif t.startswith("-"):                       # 명령줄 스위치
+            continue
+        elif 경로꼴.fullmatch(t):
             나온것.setdefault(t, "경로")
         elif 선택자꼴.fullmatch(t) and not t[1:].isdigit():
             나온것.setdefault(t, "선택자")
         elif 식별자꼴.fullmatch(t) and not t.isdigit():
-            # **한 낱말 한글은 대개 산문이다** — `지연`·`대기` 처럼 강조로
-            # 쓴다. 밑줄·점·괄호가 있거나 영문이 섞였을 때만 이름으로 본다
-            if re.fullmatch(r"[가-힣]+", t):
-                continue
-            if 캠멜꼴.search(t.split(".")[-1].rstrip("()")):
-                continue                       # 8장의 모델 표기
             나온것.setdefault(t, "식별자")
     return 나온것
 
@@ -124,11 +128,17 @@ def 코드파일(경로: set[str]) -> list[pathlib.Path]:
     「있다」 가 되어, 이 검사가 잡으려던 바로 그것(문서에만 남은 이름)을
     못 잡는다 — 실제로 지워진 이름 하나가 **옛말 목록에 적혀 있다는
     이유로** 통과했다.
+
+    **자기 자신은 뺀다.** 이 파일은 자기가 무엇을 보는지 설명하려고
+    보기로 든 이름들을 담고 있어서, 그 이름이 코드에서 사라져도
+    **자기 설명 덕분에 통과한다** — 10장의 「도구는 자기가 금지하는 것을
+    설명하려고 담게 된다」 가 방향만 뒤집힌 자리다.
     """
     나온것 = []
+    나 = pathlib.Path(__file__).resolve()
     for 이름 in sorted(경로):
         p = ROOT / 이름
-        if p.suffix.lower() in 코드꼴 and p.exists():
+        if p.suffix.lower() in 코드꼴 and p.exists() and p.resolve() != 나:
             나온것.append(p)
     return 나온것
 
@@ -157,7 +167,19 @@ def 없는것(이름: dict[str, str], 경로: set[str], 글: str, 모양: str) -
         if t in 넘김:
             continue
         if 축 == "경로":
-            if any((앞 + t) in 경로 for 앞 in 앞머리):
+            # **앞머리를 세어 두지 않는다** (10장). 14장 표는 `partials/
+            # drawer.html` 처럼 앞을 줄여 적으므로 어딘가 생략된 것을
+            # 받아야 하는데, 폴더 목록을 손으로 적어 두면 폴더가 하나
+            # 늘 때마다 멀쩡한 파일이 「없다」 로 걸린다 — 실제로
+            # `docs/review/` 가 빠져 있어 있는 파일이 넘김에 적혔다.
+            # **`/` 경계에서 끝나는 파일이 있으면 있는 것이다**
+            if t in 경로 or any(p.endswith("/" + t) for p in 경로):
+                continue
+        elif 축 == "토큰":
+            # `--fz` 는 CSS 토큰이고 `--실행` 은 명령줄 스위치다. 생김새가
+            # 같아 나눌 수 없지만 **나눌 필요도 없다** — 둘 중 무엇이든
+            # 저장소 어딘가(모양 또는 코드)에 있으면 있는 것이다
+            if t in 모양 or t in 글:
                 continue
         elif 축 == "선택자":
             if t in 모양:
@@ -169,7 +191,17 @@ def 없는것(이름: dict[str, str], 경로: set[str], 글: str, 모양: str) -
             # `check_dev_db.제외칸` 처럼 **어디의 무엇**으로 적은 것은
             # 마지막 토막이 그 파일에 있으면 된 것이다 — 코드에는 모듈
             # 이름을 붙여 쓰지 않는다
-            if "." in 벗긴것 and 벗긴것.rsplit(".", 1)[-1] in 글:
+            토막 = 벗긴것.rsplit(".", 1)[-1]
+            if "." in 벗긴것 and 토막 in 글:
+                continue
+            # **8장의 표기는 캠멜이고 코드는 스네이크다** (`assigneeName`
+            # ↔ `assignee_name`). 그건 문서가 정한 표기법이지 낡은 이름이
+            # 아니므로, 스네이크로 바꿔 한 번 더 본다. 캠멜을 통째로
+            # 건너뛰던 때는 `originOf`·`statMenu` 같은 **본문이 이름한
+            # 진짜 함수**가 함께 빠져 이 축이 정작 우리가 바꾸는 이름을
+            # 못 봤다 (검토가 짚음)
+            스네이크 = re.sub(r"(?<!^)(?=[A-Z])", "_", 토막).lower()
+            if 스네이크 != 토막 and 스네이크 in 글:
                 continue
         나온것.append((t, 축))
     return 나온것
@@ -188,7 +220,7 @@ def main() -> int:
         return 2
 
     if args.목록:
-        for 축 in ("경로", "식별자", "선택자"):
+        for 축 in ("경로", "식별자", "선택자", "토큰"):
             것들 = sorted(t for t, a in 이름.items() if a == 축)
             print(f"\n{축} {len(것들)}개")
             for t in 것들:
@@ -197,7 +229,7 @@ def main() -> int:
 
     경로, 글, 모양 = 저장소글()
     빠진것 = 없는것(이름, 경로, 글, 모양)
-    print(f"문서가 이름한 {len(이름)}개(경로·식별자·선택자)를 저장소에서 찾았습니다.")
+    print(f"문서가 이름한 {len(이름)}개(경로·식별자·선택자·토큰)를 저장소에서 찾았습니다.")
     if not 빠진것:
         print("문서에만 있는 이름이 없습니다.")
         return 0

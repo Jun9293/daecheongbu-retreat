@@ -107,6 +107,29 @@ def test15_n04_지금은_0곳이다():
     assert r.returncode == 0, r.stdout.decode("utf-8", "replace")[-1500:]
 
 
+def test15_n06_알려진_이름이_알려진_축으로_모인다():
+    """③ 검사가 볼 것을 보고 있나 (11-3) — **수집 단계**를 잰다.
+
+    n01·n02 는 `없는것()` 에 dict 를 손으로 넣으므로 정규식이 상해도
+    초록이다(검토가 짚음). 개수 문턱(0개)만으로는 363이 3이 되어도
+    지나간다 — `test14_t02` 가 `>= 3` 을 버린 그 이유가 여기 그대로
+    남아 있었다. 그래서 **문서가 실제로 이름한 것을 축까지 견준다.**
+    """
+    named = _load("check_named")
+    이름 = named.이름들()
+    바라는것 = {
+        "app/domain/tasks.py": "경로",
+        "partials/drawer.html": "경로",      # 앞을 줄여 적은 자리
+        "create_run": "식별자",
+        "보조급자리": "식별자",              # 한 낱말 한글도 본다
+        "originOf": "식별자",                # 캠멜이라고 버리지 않는다
+        ".cell.st.pick": "선택자",
+        "--fz": "토큰",
+    }
+    틀린것 = {t: (이름.get(t), 축) for t, 축 in 바라는것.items() if 이름.get(t) != 축}
+    assert 틀린것 == {}, f"수집이 샜다 (지금 축, 바라는 축): {틀린것}"
+
+
 def test15_n05_아무것도_안_보면_실패한다(tmp_path, monkeypatch):
     """센 것이 0이면 성공이 아니라 실패다 (11-3)."""
     named = _load("check_named")
@@ -163,7 +186,10 @@ def test15_m02_메뉴가_화면_안에_묶인다():
 
 def test15_m03_스크롤하면_닫는다():
     """`position:fixed` 라 메뉴만 화면에 남으면 안 보이는 행의 상태를
-    바꾸게 된다 (W-3)."""
+    바꾸게 된다 (W-3).
+
+    **낱말만 잰다** — 실제로 스크롤해서 닫히는지는 브라우저의 일이라
+    돌고 있는 서버에서 손으로 쟀다(최근.md 3장의 표)."""
     코드 = _코드(JS / "drawer.js")
     assert "addEventListener('scroll'" in 코드
     assert "addEventListener('resize'" in 코드
