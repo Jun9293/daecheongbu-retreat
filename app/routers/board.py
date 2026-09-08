@@ -1,4 +1,4 @@
-"""준비 단계 보드 (CLAUDE.md 4장)."""
+"""수련회 준비 — 보드 (CLAUDE.md 4장)."""
 
 from __future__ import annotations
 

@@ -153,7 +153,7 @@ def seed(demo: bool = False) -> None:
         }
 
         if not demo:
-            # 실제 이력만 — 준비 단계 보드와 세팅 마법사가 쓰는 것이 전부 여기 있다.
+            # 실제 이력만 — 수련회 준비(보드)와 세팅 마법사가 쓰는 것이 전부 여기 있다.
             seed_library.seed_all(db, retreat)
             db.commit()
             print(f"'{D.RETREAT_NAME}' 을(를) 만들었습니다. (실제 이력만)")
@@ -434,7 +434,7 @@ def seed(demo: bool = False) -> None:
 
         db.commit()
 
-        # 업무 라이브러리 + 지난 회차 실행 이력 (준비 단계 보드 · 세팅 마법사)
+        # 업무 라이브러리 + 지난 회차 실행 이력 (수련회 준비 · 세팅 마법사)
         seed_library.seed_all(db, retreat, demo=True)
 
     print(f"'{D.RETREAT_NAME}' 데이터를 만들었습니다.")

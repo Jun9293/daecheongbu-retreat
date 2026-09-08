@@ -1,4 +1,4 @@
-/* 준비 단계 보드 — 시각 스펙 docs/mockups/retreat-board-v4.html
+/* 수련회 준비 — 보드 — 시각 스펙 docs/mockups/retreat-board-v4.html
    서버가 그린 보드 위에서 필터 · 연결 강조 · 바 끌기를 담당한다.
 
    **상세 패널은 여기 없다.** `static/js/drawer.js` 한 벌을 보드와 달력이

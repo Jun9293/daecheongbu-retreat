@@ -25,7 +25,7 @@ from app.db import Base
 
 TASK_STATUSES = ("대기", "진행중", "피드백요청", "완료", "지연")
 
-# 준비 단계 보드의 업무 분류 (CLAUDE.md 4-2)
+# 수련회 준비 — 보드의 업무 분류 (CLAUDE.md 4-2)
 TASK_KINDS = ("main", "sub", "schedule")
 TASK_KIND_LABELS = {"main": "Main", "sub": "하위", "schedule": "일정"}
 
@@ -744,7 +744,7 @@ class MeetingItem(Base):
 
 
 # ==========================================================================
-# 준비 단계 보드 — 업무 라이브러리(영속) + 회차별 실행 기록
+# 수련회 준비 — 업무 라이브러리(영속) + 회차별 실행 기록
 # CLAUDE.md 6-1: TaskLibrary ──< TaskRun >── Retreat
 # ==========================================================================
 
