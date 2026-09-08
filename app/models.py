@@ -54,10 +54,12 @@ class Retreat(Base):
         Integer, default=DEFAULT_MEAL_SUBSIDY_PER_PERSON
     )
     # **참으로 만드는 길이 아직 없다.** 화면에도 스크립트에도 회차를
-    # 보관하는 자리가 없어서, 이 값을 보는 세 곳(`period.is_over` ·
-    # `deps` 의 회차 고르기 · `notify`)은 지금 늘 거짓 가지로 간다.
-    # 종료 판정은 폐회일이 대신하고 있다 (4-10). 지우지 않는 이유는
-    # 「지난 회차를 목록에서 내린다」 가 아직 할 일로 남아서다
+    # 보관하는 자리가 없어서, 이 값을 보는 곳은 지금 늘 거짓 가지로
+    # 간다 — 종료 판정은 폐회일이 대신하고 있다 (4-10).
+    # **자리를 세어 두지 않는다**(10장): `is_archived` 로 찾으면
+    # 나오고, `main.py` 의 정기 점검 루프처럼 눈에 안 띄는 자리도
+    # 있다. 지우지 않는 이유는 「지난 회차를 목록에서 내린다」 가
+    # 아직 할 일로 남아서다
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
@@ -463,6 +465,12 @@ class PushSubscription(Base):
     auth: Mapped[str] = mapped_column(String(100))
     user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    # **일시 실패를 여기 남기려 했으나 채우는 곳이 아직 없다.**
+    # 4-11 은 전송 결과를 셋으로 나눈다고 정해 두었는데(성공 / 일시
+    # 실패(구독 유지) / 만료(구독 삭제)), 지금 `RETRY` 는 구독을 그대로
+    # 두고 **흔적을 남기지 않는다** — 문서를 읽은 사람은 셋이 구분되어
+    # 저장된다고 믿지만 실제로 남는 것은 둘뿐이다. 되살릴 때 지우는
+    # 한 줄(`push.py`)만 있고 넣는 줄이 없다 (검토가 짚었다)
     last_failed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     user: Mapped[User] = relationship()
@@ -801,8 +809,10 @@ class TaskLibrary(Base):
     rules: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
-    # **채우는 길이 아직 없다.** 읽는 곳은 아홉인데(전부 `is_(None)`
-    # 로 거른다) 쓰는 곳이 없어서 지금은 아무것도 안 걸러진다.
+    # **채우는 길이 아직 없다.** 읽는 곳은 여럿인데(대개 `is_(None)`
+    # 로 거르고, 값이 있는지 묻는 분기도 있다) 쓰는 곳이 없어서 지금은
+    # 아무것도 안 걸러진다. **자리를 세어 두지 않는다**(10장) —
+    # `archived_at` 으로 찾으면 나오고 라이브러리 밖에도 있다.
     # 라이브러리 항목을 접는 화면이 생기면 그때 실제로 쓰인다 —
     # 0장이 「아무것도 삭제하지 않는다」 이므로 지우기가 아니라 이 칸이
     # 그 자리다

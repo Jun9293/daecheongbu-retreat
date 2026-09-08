@@ -814,7 +814,16 @@
     } else results.push('· 기간을 가진 점이 없거나 좁은 화면이라 건너뜀');
   }
 
+  /* **안 잰 것을 안 잰 것으로 낸다.** `·` 로 시작하는 줄은 건너뛴
+     항목이고 errors 를 늘리지 않는다 — 그래서 「92/92」 가 「전부 쟀고
+     전부 통과」 로 읽히는데, 실은 「빨간 것이 없다」 일 뿐이다.
+     실제로 관리자 계정으로만 돌리면 「못 바꾸는 상태 칸」 두 쌍이 한
+     번도 안 재지는데 점수는 만점이었다 (11-3 의 「센 것이 0이면 성공이
+     아니라 실패」 와 같은 자리 — 검토가 짚었다). */
+  const 건너뜀 = results.filter(r => String(r).startsWith('·')).length;
+  if (건너뜀) results.push(`· 이 계정에서 안 재진 항목 ${건너뜀}개`
+    + ' — 권한이 다른 계정으로 한 번 더 돌려 보세요');
   console.table(results);
   return {화면: where, 통과: errors.length === 0, 실패: errors,
-          항목수: results.length, 항목: results};
+          항목수: results.length, 건너뜀, 항목: results};
 })()

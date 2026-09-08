@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""커밋 전에 도는 검사 **전부** — 부르는 자리는 여기 하나다 (11-3).
+"""커밋 전에 도는 **글 검사** 전부 — 부르는 자리는 여기 하나다 (11-3).
+
+11-3 1단계에는 사람이 하는 것도 남아 있습니다(`git status` 로 `data/`·
+`testdata/`·`link.txt` 훑기 등). **「전부」 라고 넓게 말하면 문이 다
+닫힌 것으로 읽히므로** 여기서 도는 것은 「글을 보는 검사」 라고
+적습니다 — 검토-원칙 7 의 반대편입니다.
 
 ## 왜 하나로 모으는가
 
@@ -37,12 +42,21 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 여기 = pathlib.Path(__file__).resolve().parent
 ROOT = 여기.parent
 
-# **여기에 더하면 11-3 은 그대로다.** 그것이 이 파일의 이유다
+# **여기에 더하면 11-3 은 그대로다.** 그것이 이 파일의 이유다.
+#
+# `check_dev_db` 는 여기 없다 — 그건 devserve 앞의 입구이고 보는 것이
+# 커밋 내용이 아니라 **개발 DB** 다(11-2). 커밋 문에 끼우면 「커밋할
+# 것이 깨끗한데 개발 DB 때문에 빨갛다」 가 된다
 검사들 = ("check_names", "check_stale", "check_named")
 
 
 def 돌린다(이름: str) -> int:
-    print(f"\n━━━ {이름} ━━━")
+    # **flush 한다.** 부모의 stdout 은 파이프·리다이렉트일 때 블록
+    # 버퍼가 되고 자식은 그 fd 에 바로 쓴다 — 안 비우면 머리 셋이 맨
+    # 뒤로 몰려 「check_names 는 아무 말도 안 했다」 로 읽힌다.
+    # 11-3 이 이 결과를 보고에 적으라고 하는데, 보고에 붙일 때가 바로
+    # 파이프로 넘기는 때다 (검토가 짚었다)
+    print(f"\n━━━ {이름} ━━━", flush=True)
     r = subprocess.run([sys.executable, str(여기 / f"{이름}.py")], cwd=ROOT)
     return r.returncode
 

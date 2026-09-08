@@ -109,10 +109,10 @@ def 볼파일() -> list[pathlib.Path]:
         ["git", "-c", "core.quotepath=false", "ls-files"],
         cwd=ROOT, capture_output=True,
     ).stdout.decode("utf-8")
-    넘김, _ = 넘긴것()
+    넘길것, _ = 넘긴것()
     나온것 = []
     for 이름 in (x.strip() for x in 출.split("\n")):
-        if not 이름 or 이름 in 넘김:
+        if not 이름 or 이름 in 넘길것:
             continue
         p = ROOT / 이름
         if p.suffix.lower() in 글파일 and p.exists():
