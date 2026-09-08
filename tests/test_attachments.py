@@ -602,7 +602,10 @@ def test_c21_링크가_파일과_한_목록에_섞인다(admin_client, task_data
 
 def test_c22_링크가_점선과_화살표로_구분된다(admin_client, task_data):
     """같아 보이면 안 된다 — 링크는 우리 서버에 없어서 지워지거나 권한이
-    막히면 안 열리는데, 그건 우리가 어쩔 수 없다."""
+    막히면 안 열리는데, 그건 우리가 어쩔 수 없다.
+
+    **낱말만 잰다** — 점선과 화살표가 실제로 그려지는지는 브라우저의
+    일이라 `docs/checks/drawer.js` 의 첨부 탭 항목이 잰다."""
     js = _js("drawer.js")
     assert "fitem link" in js or "' link'" in js
     assert "↗" in js

@@ -1132,7 +1132,9 @@ def test_r2_06_되돌아오면_그_업무의_안내만_지운다():
 
 def test_r2_07_치워_둔_것은_숫자에_들어가지_않는다():
     """화면에 없는 것이 숫자에 들어가면 `외 N건` 과 위쪽 건수가 눈에 보이는
-    것과 어긋난다."""
+    것과 어긋난다.
+
+    **낱말만 잰다** — 실제 숫자가 맞는지는 화면을 부르는 시험들이 잰다."""
     js = code_only(read_js("calendar.js"))
     block = js[js.index("function recount()"):]
     block = block[: block.index("\n}\n")]
@@ -1501,6 +1503,8 @@ def test_t_06_오늘_테두리와_지연_점이_덮이지_않는다():
 
 
 def test_t_07_달을_걸치면_격자_안쪽만_칠한다():
+    """**낱말만 잰다** — 띠가 실제로 칠해지는 것은 브라우저의 일이라
+    `docs/checks/drawer.js` 의 달력 항목이 잰다 (4-13)."""
     js = code_only(read_js("calendar.js"))
     body = js[js.index("function showSpan("):]
     body = body[: body.index("\n}")]
