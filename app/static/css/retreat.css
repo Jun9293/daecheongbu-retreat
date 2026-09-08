@@ -1,5 +1,5 @@
 /* ==========================================================================
-   준비 단계 보드 · 세팅 마법사 — 시각 스펙: docs/mockups/*.html
+   수련회 준비(보드) · 세팅 마법사 — 시각 스펙: docs/mockups/*.html
    글로 적기 어려운 배치·간격·상태 표현은 목업이 기준이다.
 
    무채색 기조 (CLAUDE.md 4장 UI 방향).
@@ -1852,7 +1852,8 @@ button.btn:disabled{opacity:.4;cursor:default}
    상태 칸은 **상태 메뉴를 여는 자리**라 pointer 그대로이고, 바꿀 수
    없는 사람에게는 누를 것처럼 보이지 않는다(커서·호버 없음) */
 .trow.lrow{cursor:pointer;padding:10px 16px;align-items:center}
-.trow.lrow .cell.st{cursor:default}
+/* 바꿀 수 없는 사람에게 상태 칸은 **행의 다른 곳과 같다** — 눌러도
+   메뉴는 안 뜨고 행이 열린다. 커서를 되돌리지 않는 이유가 그것이다 */
 .trow.lrow .cell.st.pick{cursor:pointer;border-radius:6px}
 .trow.lrow .cell.st.pick:hover{background:var(--hover)}
 .trow.lrow + .trow.lrow,.lslot + .trow.lrow{border-top:1px solid var(--rule)}

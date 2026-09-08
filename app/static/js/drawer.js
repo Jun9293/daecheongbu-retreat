@@ -129,7 +129,10 @@ function renderDrawer() {
      <button class="chip stat" id="statchip" ${d.can_edit ? '' : 'disabled'}>
        <span class="cv" style="background:${esc(st.color)}"></span>${esc(st.label)}${d.can_edit ? ' ▾' : ''}</button>`;
   if (d.can_edit) {
-    $('statchip').onclick = e => { e.stopPropagation(); statMenu(e.currentTarget); };
+    // **전파를 막지 않는다** — 바깥 클릭 판정이 이 자리를 안다
+    // (`originOf` 의 statchip). 목록의 상태 칸이 그 길을 쓰는데 드로어의
+    // 칩만 다른 길이면, 같은 메뉴를 여는 두 자리의 규약이 갈린다
+    $('statchip').onclick = e => statMenu(e.currentTarget);
   }
   /* 제목 — 번호(회차 안 고정, 4-14)를 앞에 작게. 누르면 그 자리에서 고친다 (4-9). */
   $('dtitle').innerHTML =

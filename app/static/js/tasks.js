@@ -23,12 +23,15 @@ const rowOf = id => document.querySelector(`.trow[data-run="${CSS.escape(String(
    고치면 그 칸만 조용히 죽는다 (10장 「자리를 세어 두지 않습니다」).
 
    여기 드는 것은 **그 자리에서 다른 일을 하는 것**뿐이다 —
-   · 상태 칸(`.cell.st`): 누르면 **드로어의 그 상태 메뉴**가 뜬다.
-     배지만이 아니라 칸 전체다 — 배지 바깥 몇 px 에서 열림과 메뉴가
-     갈리면 같은 곳을 눌렀는데 다른 일이 일어난다
+   · 상태 칸 중 **바꿀 수 있는 것**(`.cell.st.pick`): 누르면 드로어의
+     그 상태 메뉴가 뜬다. 배지만이 아니라 칸 전체다 — 배지 바깥 몇 px
+     에서 열림과 메뉴가 갈리면 같은 곳을 눌렀는데 다른 일이 일어난다.
+     **`pick` 이 없으면 예외가 아니다** — 예외는 「누르면 뭔가 되는 것」
+     이지 「누를 수 없는 사람에게도 예외」 가 아니다. 못 바꾸는 사람에게
+     그 칸은 행의 다른 곳과 같아서 행을 연다
    · 링크·단추·입력칸: 자기 일이 있는 것들. 지금 행에는 없지만 생기면
      저절로 예외가 된다(이름을 더 적을 필요가 없다) */
-const 안여는곳 = '.cell.st, a, button, input, select, textarea, label, [contenteditable]';
+const 안여는곳 = '.cell.st.pick, a, button, input, select, textarea, label, [contenteditable]';
 
 /* 눌린 곳이 여는 자리면 그 행 — 아니면 null */
 function 여는자리(el) {
