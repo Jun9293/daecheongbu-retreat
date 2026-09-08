@@ -53,6 +53,11 @@ class Retreat(Base):
     meal_subsidy_per_person: Mapped[int] = mapped_column(
         Integer, default=DEFAULT_MEAL_SUBSIDY_PER_PERSON
     )
+    # **참으로 만드는 길이 아직 없다.** 화면에도 스크립트에도 회차를
+    # 보관하는 자리가 없어서, 이 값을 보는 세 곳(`period.is_over` ·
+    # `deps` 의 회차 고르기 · `notify`)은 지금 늘 거짓 가지로 간다.
+    # 종료 판정은 폐회일이 대신하고 있다 (4-10). 지우지 않는 이유는
+    # 「지난 회차를 목록에서 내린다」 가 아직 할 일로 남아서다
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
@@ -796,6 +801,11 @@ class TaskLibrary(Base):
     rules: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    # **채우는 길이 아직 없다.** 읽는 곳은 아홉인데(전부 `is_(None)`
+    # 로 거른다) 쓰는 곳이 없어서 지금은 아무것도 안 걸러진다.
+    # 라이브러리 항목을 접는 화면이 생기면 그때 실제로 쓰인다 —
+    # 0장이 「아무것도 삭제하지 않는다」 이므로 지우기가 아니라 이 칸이
+    # 그 자리다
     archived_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     parent: Mapped[TaskLibrary | None] = relationship(remote_side="TaskLibrary.id")

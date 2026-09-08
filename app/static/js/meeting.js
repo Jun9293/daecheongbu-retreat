@@ -71,8 +71,13 @@ function 만든자리(x, 방금) {
   const 링크 = `<a href="/tasks?task=${Number(x.made_run_id)}">${
       x.made_run_no == null ? '' : `<span class="mt-no">${Number(x.made_run_no)}</span>`
     }${esc(x.title || x.action)}</a>`;
-  // **뺀 업무면 새로 만들지 않고 되살린다** — 새로 만들면 같은 제목의
-  // 라이브러리가 둘이 되어 실행 이력이 갈린다 (6-2 · 12장)
+  /* **뺀 업무면 새로 만들지 않고 되살린다** — 새로 만들면 같은 제목의
+     라이브러리가 둘이 되어 실행 이력이 갈린다 (6-2 · 12장).
+
+     **이 가지는 지금 코드로는 안 뜬다.** 회차를 연 뒤 업무를 빼는 길이
+     아직 없어서 `made_excluded` 가 늘 거짓이다 — 시험이 DB 를 직접
+     고쳐 재고 있다(test15_r01~r03). 「왜 안 뜨지」 로 시간을 쓰지
+     않도록 적어 둔다. 빼기가 생기면 그때 실제로 뜬다 (12장) */
   if (x.made_excluded) {
     return `<span class="mt-sug-made">빼 둔 업무입니다 — ${링크}`
       + (canEdit ? ` <button type="button" data-restore="${Number(x.made_run_id)}">되살리기</button>` : '')
