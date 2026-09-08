@@ -917,7 +917,10 @@ def test_r03b_숫자를_더하지_않고_세어서_다시_적는다():
 
 def test_r12_calbar_가_없어도_죽지_않는다():
     """이 파일은 패널이 있는 화면이면 어디서든 실릴 수 있다. 그때 `.calbar`
-    가 없다고 상태 변경이 통째로 멈추면 안 된다."""
+    가 없다고 상태 변경이 통째로 멈추면 안 된다.
+
+    **낱말만 잰다** — 실제로 안 죽는지는 `docs/checks/drawer.js` 가
+    보드·목록(범위 막대가 없는 화면)에서 잰다."""
     js = read_js("calendar.js")
     for guarded in ("bar?.dataset.onlyOpen", "bar?.dataset.perDay"):
         assert guarded in js, f"{guarded} 가 ?. 로 막혀 있지 않다"
@@ -1512,7 +1515,10 @@ def test_t_07_달을_걸치면_격자_안쪽만_칠한다():
 
 
 def test_t_09_외_N건_안의_점에서도_동작한다():
-    """문서에 한 번만 걸어 두면 나중에 펼쳐지는 점도 그대로 잡힌다."""
+    """문서에 한 번만 걸어 두면 나중에 펼쳐지는 점도 그대로 잡힌다.
+
+    **낱말만 잰다** — 마우스를 올려 띠가 뜨는 것은 브라우저에서만
+    일어난다(`docs/checks/drawer.js` 의 달력 판이 그 자리를 본다)."""
     js = code_only(read_js("calendar.js"))
     assert "document.addEventListener('mouseover'" in js
     assert ".cal-dot[data-start]" in js
@@ -1681,7 +1687,10 @@ def test_w_11_immutable_이_그대로_붙는다(admin_client):
 
 def test_w_11b_서비스워커가_해시_붙는_것을_미리_받지_않는다():
     """틀린 주소가 하나라도 있으면 `addAll` 이 통째로 실패하고 **서비스워커가
-    설치되지 않는다** — 그러면 푸시도 함께 죽는다."""
+    설치되지 않는다** — 그러면 푸시도 함께 죽는다.
+
+    **낱말만 잰다** — 설치가 실제로 되는지는 브라우저가 잰다(배포 뒤
+    휴대폰에서 구독이 되는지로 확인한다 — 4-11)."""
     sw = read_js("sw.js")
     at = sw.index("const ASSETS")
     line = sw[at : sw.index("\n", at)]

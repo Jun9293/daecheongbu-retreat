@@ -159,15 +159,19 @@ def test13_r01_안_여는_자리_목록이지_여는_자리_목록이_아니다(
     """
     js = (JS / "tasks.js").read_text(encoding="utf-8")
     assert "안여는곳" in js
-    assert ".cell.st" in js                       # 상태 칸은 예외 (0-b · 4번)
+    # 예외는 **바꿀 수 있는** 상태 칸뿐이다 — 못 바꾸는 사람에게는 그
+    # 칸도 행의 다른 곳과 같다(4-14). 넓게 두면 그 사람에게만 행
+    # 오른쪽 끝이 죽은 면이 되고 화면에는 아무 표시도 나지 않는다
+    assert ".cell.st.pick" in js
     # 이름·캐럿만 여는 옛 규칙이 남아 있지 않다
     코드 = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
     코드 = re.sub(r"//[^\n]*", "", 코드)
     assert "'.nm, .caretc'" not in 코드
-    # 커서도 행 전체에 (3-b) — 상태 칸은 그 자리의 커서다
+    # 커서도 행 전체에 (3-b) — 바꿀 수 있는 칸만 그 자리의 커서다
     assert "cursor:pointer" in _decl(".trow.lrow")
-    assert "cursor:default" in _decl(".trow.lrow .cell.st")
     assert "cursor:pointer" in _decl(".trow.lrow .cell.st.pick")
+    assert "cursor" not in _decl(".trow.lrow .cell.st"), \
+        "못 바꾸는 칸에 따로 커서를 주면 행과 다르게 보인다"
 
 
 def test13_r01b_행_안은_바깥이_아니다():

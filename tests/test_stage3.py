@@ -605,6 +605,8 @@ def test_f01_전체_페이지와_partial_이_같은_것을_그린다(admin_clien
 
 
 def test_f02_달_넘기기가_격자만_갈아_끼운다():
+    """**낱말만 잰다** — 달이 실제로 미끄러지고 드로어가 살아 있는지는
+    `docs/checks/drawer.js` 의 달력 판이 브라우저에서 잰다 (4-13)."""
     js = _read("app", "static", "js", "calendar.js")
     assert "/calendar/partial" in js
     assert "replaceState" in js

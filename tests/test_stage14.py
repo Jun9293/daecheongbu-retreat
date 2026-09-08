@@ -131,24 +131,36 @@ def test14_s05_지금_저장소에는_0곳이다():
 # ════════════════════════════════════════════════════════════════════
 
 
-def 배선낱말시험() -> list[tuple[str, str, str]]:
+def 배선낱말시험(files=None) -> list[tuple[str, str, str]]:
     """JS 의 **여는/거는 배선**(선택자·이벤트)을 낱말로 재는 시험 전부.
 
     화면·API 를 실제로 부르는 것은 뺀다 — 그건 동작을 잰다. 남는 것이
     「그 낱말이 있으니 그렇게 동작할 것이다」 라고 믿는 시험이고,
     10장이 **다섯 번 당했다**고 적어 둔 자리다.
+
+    **파일을 여는 것이 헬퍼여도 본다.** 처음에는 시험 본문에 `read_text`
+    가 직접 있어야 봤는데, 그러면 **헬퍼로만 읽는 시험이 조용히 빠진다** —
+    실제로 다음 판이 헬퍼 하나를 쓰자마자 넷이 한꺼번에 빠졌다(봐둘것
+    AE-f 가 예고한 그 자리). 그래서 그 파일에서 글을 읽는 헬퍼 이름을
+    먼저 모으고, 그것을 부르는 시험도 함께 본다. 어느 파일을 여는지는
+    **시험 쪽**에 적히므로(`JS / "drawer.js"`) 그 조건은 그대로 둔다.
     """
     import ast
 
     배선 = re.compile(r"""["'](\.[\w.-]+|\#[\w-]+|addEventListener|click|"""
                      r"""pointerdown|closest\()["']""")
     나온것 = []
-    for p in sorted((ROOT / "tests").glob("test_*.py")):
+    for p in sorted(files if files is not None else (ROOT / "tests").glob("test_*.py")):
         src = p.read_text(encoding="utf-8")
-        for fn in [n for n in ast.walk(ast.parse(src))
-                   if isinstance(n, ast.FunctionDef) and n.name.startswith("test")]:
+        tree = ast.parse(src)
+        함수 = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        읽는헬퍼 = {fn.name for fn in 함수 if not fn.name.startswith("test")
+                 and "read_text" in (ast.get_source_segment(src, fn) or "")}
+        for fn in [n for n in 함수 if n.name.startswith("test")]:
             seg = ast.get_source_segment(src, fn) or ""
-            if "read_text" not in seg or ".js" not in seg:
+            열었나 = ".js" in seg and (
+                "read_text" in seg or any(f"{h}(" in seg for h in 읽는헬퍼))
+            if not 열었나:
                 continue
             if any(w in seg for w in ("client.", "app_session", "TestClient")):
                 continue
@@ -171,10 +183,31 @@ def test14_t01_낱말만_재는_시험은_왜_남는지_적혀_있다():
         "「**낱말만 잰다** — 동작은 …가 잰다」 를 적으세요: " + str(안적힌것))
 
 
-def test14_t02_그_표시를_찾는_눈이_실제로_있다():
-    """③ 검사가 볼 것을 보고 있나 (11-3) — 센 것이 0이면 성공이 아니다."""
-    목록 = 배선낱말시험()
-    assert len(목록) >= 3, f"낱말 시험을 {len(목록)}개만 봤다 — 찾는 눈이 좁다"
+def test14_t02_그_표시를_찾는_눈이_실제로_있다(tmp_path):
+    """③ 검사가 볼 것을 보고 있나 (11-3) — 센 것이 0이면 성공이 아니다.
+
+    **개수로 재지 않는다.** `>= 3` 으로 두었더니 열 중 일곱이 사라져도
+    초록이었다. 대신 **심어서 잰다** — 낱말 시험 모양을 심으면 잡히고,
+    화면을 실제로 부르는 시험은 안 잡힌다. 숫자를 문서에 박지 않는 것과
+    같은 자리다(10장).
+    """
+    심은것 = tmp_path / "test_심은것.py"
+    심은것.write_text(
+        "from pathlib import Path\n"
+        "def _코드(p):\n"
+        "    return Path(p).read_text(encoding='utf-8')\n"
+        "def test_낱말로만_잰다():\n"
+        "    assert '.cell.st' in _코드('app/static/js/tasks.js')\n"
+        "def test_화면을_부른다(admin_client):\n"
+        "    src = _코드('app/static/js/tasks.js')\n"
+        "    assert '.cell.st' in src and admin_client.get('/tasks').ok\n",
+        encoding="utf-8")
+    잡힌것 = {n for _f, n, _s in 배선낱말시험([심은것])}
+    assert "test_낱말로만_잰다" in 잡힌것, "헬퍼로 읽는 낱말 시험을 못 본다"
+    assert "test_화면을_부른다" not in 잡힌것, "동작을 재는 시험까지 잡는다"
+
+    # 지금 저장소에도 실제로 있다 — 아무것도 안 보면 t01 이 늘 초록이다
+    assert 배선낱말시험(), "저장소에서 낱말 시험을 하나도 못 봤다"
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -284,9 +317,14 @@ def test14_b05_칸의_패딩도_같은_자리다():
 # ════════════════════════════════════════════════════════════════════
 
 
-def test14_m01_뺀_업무와_제목이_같으면_단추가_다시_뜬다(admin_client):
-    """`included=false` 는 목록에 없다 (4-14) — 가리키면 눌러도 갈 곳이
-    없다. 그러면 「이미 만들었습니다」 가 거짓말이 된다."""
+def test14_m01_뺀_업무도_센다(admin_client):
+    """**이 시험은 한 번 뒤집혔다.** 처음에는 「뺀 것은 안 센다」 였다 —
+    목록에 없는 것을 가리키면 눌러도 갈 곳이 없다는 이유였다. 그런데
+    안 세면 제안을 다시 눌러 **같은 제목의 라이브러리가 둘**이 되고
+    6-2 의 실행 이력이 두 줄로 갈린다(더 비싸고, 갈렸다는 자국도 안
+    남는다). 「가리킬 곳이 없다」 는 화면이 푼다 — 「빼 둔 업무입니다」
+    와 되살리기 (12장 · test15_r01~r03).
+    """
     _세팅(admin_client)
     meeting, _, _ = _회의와_항목(admin_client, None)
     admin_client.post(f"/meetings/{meeting.id}/suggestions/apply-new",
@@ -301,13 +339,13 @@ def test14_m01_뺀_업무와_제목이_같으면_단추가_다시_뜬다(admin_c
     with app_session() as db:
         retreat = db.scalars(select(models.Retreat)).first()
         만든것 = tasks_domain.made_from_meeting(db, retreat, meeting.id)
-    assert "빼 둘 업무" not in 만든것
+    assert 만든것.get("빼 둘 업무") is not None
 
-    # 그래서 다시 만들 수 있다 — 새 run 이 선다
+    # 그래서 다시 눌러도 새로 만들지 않는다
     res = admin_client.post(f"/meetings/{meeting.id}/suggestions/apply-new",
                             json={"title": "빼 둘 업무"})
-    assert res.status_code == 200 and res.json()["already"] is False
-    assert res.json()["run_id"] != run.id
+    assert res.status_code == 200 and res.json()["already"] is True
+    assert res.json()["run_id"] == run.id
 
 
 def test14_m02_항목_전환으로_만든_것도_센다(admin_client):
