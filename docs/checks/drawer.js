@@ -31,6 +31,12 @@
  * 나타난 이유가 「그 클릭이 드로어를 닫아서」 이면 그건 검사가 못 잰
  * 것이 아니라 **화면이 무너진 것**이라 ✗ 로 나옵니다.
  *
+ * **자가시험 — 검사가 볼 것을 실제로 보는지 검사가 스스로 증명합니다.**
+ * 갈래마다 고장을 하나씩 심었다 걷어내며 그것이 ✗ 로 나오는지 잽니다.
+ * 평소 점검과 따로 돌아 평소가 느려지지 않습니다 — 붙여넣기 **전에**
+ * `window.__자가시험 = 1;` 을 실행하세요. **이 파일을 고친 판에서는
+ * 반드시 돌립니다** (11-3 2단계). 자세한 것은 파일 끝의 그 자리에.
+ *
  * 무엇을 보는가 — 각 조작이 '되는가'만이 아니라, 그 뒤에도 주변이 그대로인가.
  *   · 드로어가 열려 있는가 (패널 안의 버튼은 패널을 닫지 않는다)
  *   · 보던 자리가 그대로인가 (보드는 부서 그룹, 달력은 보던 달과 칩)
@@ -38,6 +44,7 @@
  * 보임/숨김은 속성이 아니라 offsetParent 로 판정한다 — el.hidden 은 거짓말을 한다.
  */
 (async () => {
+const 점검 = async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const $ = id => document.getElementById(id);
   const dw = $('drawer');
@@ -294,8 +301,14 @@
     }
   }
 
-  results.push((document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules' ? '✓' : '✗')
-    + ' 처음 열면 업무 규칙 탭');
+  /* **✗ 를 찍으면 반드시 센다.** 이 줄은 `errors.push` 가 없어서
+     4-9 의 「열면 업무 규칙이 먼저 보입니다」 가 깨져도 `통과: true` 였다 —
+     ✗ 가 화면에만 뜨고 결과에는 안 남는 자리다(검토가 셋을 짚었다). */
+  {
+    const 규칙탭 = document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules';
+    results.push((규칙탭 ? '✓' : '✗') + ' 처음 열면 업무 규칙 탭');
+    if (!규칙탭) errors.push('처음 열었는데 업무 규칙 탭이 아님');
+  }
 
   // 제목 편집 (4-9) — Esc 는 **편집만** 취소한다. 전파가 새면 문서의 Escape
   // 핸들러가 드로어까지 닫는다 — 패널 안의 조작은 패널을 닫지 않는다 (10장)
@@ -390,13 +403,26 @@
     results.push((last ? '✓' : '✗') + ` 첨부파일이 탭 맨 끝 (${tabs.join(' · ')})`);
     if (!last) errors.push('첨부파일 탭이 맨 끝이 아님');
 
-    // 드로어 폭에서 탭 다섯이 넘치지 않는가 — **첨부파일이 잘리면 안 된다**
-    const bar = $('dtabs'), fit = bar.scrollWidth <= bar.clientWidth + 1;
-    const lastTab = [...bar.querySelectorAll('button')].pop();
-    const inside = lastTab.getBoundingClientRect().right <= bar.getBoundingClientRect().right + 1;
-    results.push((fit && inside ? '✓' : '✗')
-      + ` 탭 다섯이 드로어 폭에 들어감 (${bar.scrollWidth}px / ${bar.clientWidth}px)`);
-    if (!(fit && inside)) errors.push('탭이 넘쳐 첨부파일이 잘림');
+    // 드로어 폭에서 탭이 넘치지 않는가 — **첨부파일이 잘리면 안 된다**
+    // (수를 적지 않는다 — 탭이 하나 늘면 그 수부터 낡는다: 10장)
+    const bar = $('dtabs');
+    /* **그려진 뒤에 잰다.** 드로어가 열리는 전환 중에는 폭이 0 이라
+       `scrollWidth <= clientWidth` 가 언제나 거짓이고 「넘쳤다」 로 나온다 —
+       화면이 아니라 **검사가 흔들린 것**이다. 실제로 페이지를 새로 연 뒤
+       첫 판에서만 ✗ 가 났고 (157px / 0px), 같은 페이지에서 다시 돌리면
+       드로어가 이미 열려 있어 통과했다. `열렸다()` 는 「불러오기가 끝났나」
+       를 보지 **폭이 자리를 잡았나**를 보지 않는다.
+       끝내 안 그려지면 그건 못 잰 것이지 넘친 것이 아니다 (머리말). */
+    if (!await 될때까지('탭이 드로어 폭에 들어감', () => bar.clientWidth > 0)) {
+      results.push('? 탭이 드로어 폭에 들어감 — 못 쟀음 (탭 바가 아직 안 그려짐)');
+    } else {
+      const fit = bar.scrollWidth <= bar.clientWidth + 1;
+      const lastTab = [...bar.querySelectorAll('button')].pop();
+      const inside = lastTab.getBoundingClientRect().right <= bar.getBoundingClientRect().right + 1;
+      results.push((fit && inside ? '✓' : '✗')
+        + ` 탭이 드로어 폭에 들어감 (${bar.scrollWidth}px / ${bar.clientWidth}px)`);
+      if (!(fit && inside)) errors.push('탭이 넘쳐 첨부파일이 잘림');
+    }
 
     // 올리는 자리는 탭 안에 있다. 고칠 수 없는 업무라면 없는 것이 맞다.
     const canEdit = !document.querySelector('#statchip[disabled]');
@@ -439,7 +465,9 @@
     if (!nameErr) errors.push('설명 없이 붙음');
     await 누른다('링크 붙이기 취소', $('dlinkcancel'),
       {until: () => !shown($('dlinkform'))});
-    results.push((!shown($('dlinkform')) ? '✓' : '✗') + ' 취소하면 폼이 닫힘');
+    const 닫힘 = !shown($('dlinkform'));
+    results.push((닫힘 ? '✓' : '✗') + ' 취소하면 폼이 닫힘');
+    if (!닫힘) errors.push('링크 붙이기 폼이 취소해도 안 닫힘');
   } else results.push('· 고칠 수 없는 업무라 링크 붙이기는 건너뜀');
 
   await check('탭 — 논의 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click(),
@@ -505,8 +533,13 @@
        판정이 안 왔다는 뜻이라 ✗ 로 셀 일이 아니다. */
     await check('진단 다시 분석', () => { $('dgTtl').textContent = ''; $('dgR').click(); },
       {until: () => $('dgTtl').textContent.trim()});
-    results.push(($('dgTtl').textContent.trim() ? '✓' : '✗')
-      + ` 다시 분석 뒤 판정 유지 (${$('dgTtl').textContent.trim()})`);
+    /* **여기는 ✗ 가 아니다.** 바로 위 주석이 「안 채워지면 못 쟀음이고
+       ✗ 로 셀 일이 아니다」 라고 적어 두었는데 코드가 ✗ 를 찍고 있었다 —
+       파일이 자기와 어긋난 자리다(검토가 짚었다). 판정이 안 오면 위의
+       `check` 가 이미 「못 쟀음」 으로 냈다. */
+    const 판정 = $('dgTtl').textContent.trim();
+    results.push(판정 ? `✓ 다시 분석 뒤 판정 유지 (${판정})`
+                     : '? 다시 분석 뒤 판정 — 못 쟀음 (판정이 안 왔다)');
   }
 
   // 반대편도 확인 — 규칙이 과하게 걸려 정작 닫혀야 할 때 안 닫히면 안 된다.
@@ -1092,4 +1125,125 @@
   console.table(results);
   return {화면: where, 통과: errors.length === 0, 실패: errors,
           항목수: 잰것, 건너뜀, 못쟀음, 항목: results};
+};
+
+/* ── 자가시험 — 고장을 심어서 검사를 검사한다 ───────────────────────
+   「못 쟀음」 이 진짜 회귀를 숨기고 있던 것을 한 번 **손으로** 심어서
+   잡았다. 그런데 그 심기를 남기지 않으면 **다음 입구는 못 잡는다** —
+   검사가 볼 것을 실제로 보는지는 검사 자신이 증명해야 한다
+   (11-3 「막는 코드에는 막히는 쪽 시험이 함께 있다」 의 셋째 축).
+
+   갈래마다 고장을 하나씩 심었다 걷어내며 그것이 **✗ 로 나오는지** 잰다.
+   ✗ 가 아니라 「못 쟀음」 이나 통과로 나오면 **자가시험이 실패**한다 —
+   그 자리가 검사가 새는 입구다 (봐둘것 AH-b).
+
+   **평소 점검과 따로 돈다.** 갈래 수만큼 점검을 다시 돌리므로 평소에
+   켜 두면 그만큼 느려진다. 켜는 법 — 이 파일을 붙여넣기 **전에**
+
+       window.__자가시험 = 1;
+
+   **언제 돌리나 — 점검 스크립트를 고친 판에서는 반드시** (11-3 2단계).
+
+   심을 수 없는 갈래가 셋 있고, ✗ 가 아닌 것이 그쪽의 정답이다.
+     · 건너뜀(죽은·없는 요소)  — 심으면 `·` 가 늘 뿐이다. 그게 맞다
+     · 못 쟀음(주변은 멀쩡한데 기다린 것이 안 나타남) — ✗ 가 아닌 것이 정의다.
+       다만 **주변이 무너진 채로 못 쟀을 때 ✗ 인지**는 ① 이 함께 잰다
+     · 치명(드로어가 안 열림) — 항목이 아예 안 만들어져 ✗ 가 나올 자리가 없다 */
+const 스타일 = css => {
+  const s = document.createElement('style');
+  s.textContent = css;
+  document.head.appendChild(s);
+  return () => s.remove();
+};
+/* **캡처에서 막는다.** 앱은 요소의 `onclick` 이나 window 의 버블 핸들러로
+   듣는데, document 캡처에서 전파를 끊으면 둘 다 안 닿는다 — 앱 코드를
+   건드리지 않고 「눌러도 아무 일이 없다」 를 만드는 가장 얇은 길이다. */
+const 캡처막기 = 골라 => {
+  const f = e => { if (e.target instanceof Element && 골라(e.target)) e.stopPropagation(); };
+  document.addEventListener('click', f, true);
+  return () => document.removeEventListener('click', f, true);
+};
+
+const 고장들 = [
+  {갈래: '① 주변 붕괴', 고장: '드로어 안을 누르면 패널이 닫힌다',
+   나와야: '드로어가 닫힘',
+   심는다: () => {
+     const f = e => {
+       if (e.target instanceof Element && e.target.closest('#drawer')) Drawer.close();
+     };
+     document.addEventListener('click', f, true);
+     return () => document.removeEventListener('click', f, true);
+   }},
+  {갈래: '② 조작이 안 먹음', 고장: '제목을 눌러도 편집칸이 안 열린다',
+   나와야: '제목 입력칸이 열리지 않음',
+   못심음: 항목 => 항목.some(r => String(r).includes('제목 편집은 건너뜀')),
+   심는다: () => 캡처막기(el => el.closest('#dtitletext'))},
+  {갈래: '③ 화면 구조', 고장: '첨부파일 탭이 맨 끝이 아니다',
+   나와야: '첨부파일 탭이 맨 끝이 아님',
+   심는다: () => {
+     const bar = document.getElementById('dtabs');
+     const 끝 = [...bar.querySelectorAll('button')].pop();
+     bar.insertBefore(끝, bar.firstChild);
+     return () => bar.appendChild(끝);
+   }},
+  {갈래: '④ 권한과 어긋남', 고장: '고칠 수 있는데 논의 입력칸이 안 보인다',
+   나와야: '논의 입력칸이 권한과 어긋남',
+   못심음: 항목 => 항목.some(r => String(r).includes('논의 입력칸이') && String(r).includes('고칠 수 없음')),
+   심는다: () => 스타일('#daddlog{display:none!important}')},
+  {갈래: '⑤ 닫혀야 할 때 안 닫힘', 고장: '여백 클릭이 드로어까지 닿지 않는다',
+   나와야: '빈 영역 클릭으로 닫히지 않음',
+   못심음: 항목 => 항목.some(r => String(r).includes('빈 칸이 없어')),
+   // 업무를 여는 자리와 머리·사이드바는 살려 둔다 — 그것까지 막으면
+   // 드로어가 아예 안 열려 **치명**이 되고, 심은 고장을 잴 수가 없다
+   심는다: () => 캡처막기(el => !el.closest(
+     '#drawer,#statmenu,.bar[data-run],.cal-dot,.trow,header,.toolbar,.calbar,.sidenav'))},
+  {갈래: '⑥ 계산된 스타일·자리', 고장: '탭이 드로어 폭을 넘쳐 첨부파일이 잘린다',
+   나와야: '탭이 넘쳐 첨부파일이 잘림',
+   심는다: () => 스타일(
+     '#dtabs button{padding-left:44px!important;padding-right:44px!important}')},
+];
+
+const 자가시험 = async () => {
+  /* **재는 것이 있는지 먼저 본다.** 이미 빨간 판에서 심으면, 나온 ✗ 가
+     내가 심은 것인지 원래 있던 것인지 갈 수 없다 (점검 자신의 ③ 과 같은 자리). */
+  const 깨끗 = await 점검();
+  if (깨끗.치명) return {자가시험: false, 치명: 깨끗.치명};
+  if (깨끗.실패.length) return {자가시험: false, 실패: 깨끗.실패,
+    까닭: '심기 전부터 ✗ 가 있습니다 — 그것을 먼저 고치세요'};
+
+  const 표 = [];
+  let 놓친갈래 = 0, 못심은갈래 = 0;
+  for (const g of 고장들) {
+    if (g.못심음 && g.못심음(깨끗.항목)) {
+      못심은갈래++;
+      표.push({갈래: g.갈래, 심은고장: g.고장,
+               나온것: '· 못 심음 — 이 계정·화면에는 그 자리가 없다'});
+      continue;
+    }
+    const 걷어낸다 = g.심는다();
+    let 판;
+    try { 판 = await 점검(); } finally { 걷어낸다(); }
+    const 실패 = (판.실패 || []).map(String);
+    const 잡혔나 = 실패.some(x => x.includes(g.나와야));
+    if (!잡혔나) 놓친갈래++;
+    표.push({갈래: g.갈래, 심은고장: g.고장,
+             나온것: 잡혔나 ? '✗ — 잡음'
+               : (판.못쟀음 || []).length ? '? 못 쟀음으로 샘 — 검사가 새는 입구다'
+               : '통과로 지나감 — 검사가 새는 입구다',
+             실패수: 실패.length, 못쟀음수: (판.못쟀음 || []).length});
+  }
+  console.table(표);
+  /* **센 것이 0 이면 성공이 아니라 실패다** (11-3). 못 심은 갈래만
+     늘어나면 「놓친 갈래 0」 이 되는데, 그건 다 잡았다는 뜻이 아니라
+     **아무것도 안 재 봤다**는 뜻이다 — 실명 검사가 29개 중 0개를 보며
+     초록을 내던 그 모양이다. */
+  const 잰갈래 = 고장들.length - 못심은갈래;
+  if (!잰갈래) console.warn('자가시험 — 이 계정·화면에서는 심을 수 있는 갈래가 하나도 없습니다');
+  return {자가시험: 놓친갈래 === 0 && 잰갈래 > 0, 화면: 깨끗.화면, 갈래: 표,
+          잰갈래, 놓친갈래, 못심은갈래,
+          깨끗한판: {항목수: 깨끗.항목수, 건너뜀: 깨끗.건너뜀,
+                   못쟀음: 깨끗.못쟀음.length}};
+};
+
+return window.__자가시험 ? 자가시험() : 점검();
 })()
