@@ -63,7 +63,8 @@
 머리에 날짜가 있으면 통째로 지나갑니다** — 넓은 줄 알고 쓰세요.
 
 넘기는 것은 `docs/세어둠.txt` 에 **왜 세어도 되는지와 함께** 적습니다 —
-읽는 규칙은 `scripts/넘김.py` 하나입니다(이유 없는 줄은 넘김이 아닙니다).
+읽는 규칙은 `scripts/넘김.py` 하나입니다 — 거기 적힌 조건을
+못 채운 줄은 넘김이 아닙니다.
 
     .venv\\Scripts\\python.exe scripts/check_counts.py
     .venv\\Scripts\\python.exe scripts/check_counts.py --목록
@@ -110,9 +111,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def 볼파일() -> list[pathlib.Path]:
-    넘길것, 이유없음 = 넘김.읽는다(넘김목록)
-    if 이유없음:
-        넘김.말한다(넘김목록, 이유없음)
+    넘길것, 안되는줄 = 넘김.읽는다(넘김목록)
+    if 안되는줄:
+        넘김.말한다(넘김목록, 안되는줄)
         raise SystemExit(2)
     출 = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files"],
                        cwd=ROOT, capture_output=True).stdout.decode("utf-8")
