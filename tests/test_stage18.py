@@ -222,7 +222,9 @@ def test18_d05_못_쟀어도_주변은_잰다():
     assert "return;" not in 앞, "못 쟀을 때 주변을 안 재고 빠져나간다"
     # 주변이 무너지면 ✗ 이고, 그때는 못쟀음 에 담지 않는다
     assert "적는다" in 코드, "될때까지 가 기록을 미룰 수 있어야 두 번 안 센다"
-    assert 본체.index("errors.push") < 본체.index("못쟀음.push"), \
+    # ✗ 를 내는 길은 `잰다` 하나다 (test_stage20) — 여기서는 그 호출이
+    # 못쟀음 보다 먼저인지만 본다
+    assert 본체.index("잰다(false") < 본체.index("못쟀음.push"), \
         "✗ 판정이 못 쟀음보다 먼저여야 한다"
 
 
