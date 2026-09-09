@@ -155,7 +155,7 @@ def test6_k04_새_회차를_열어도_부서_리더가_자기_지출을_만든�
 # 이 자리들이 움직이면 목록과 어긋나 k05 가 빨개진다 — 그때 다시 본다 (V-c).
 ID_비교_허용: dict[tuple[str, int, str], str] = {
     # 키 없는 부서(구설계 데이터)의 되돌림 — None==None 통과 방지
-    ("app/domain/permissions.py", 47, "user_department_id == target_department_id"):
+    ("app/domain/permissions.py", 61, "user_department_id == target_department_id"):
         "키가 없을 때만 오는 id 되돌림 경로",
     ("app/notifications.py", 91, "User.department_id == department_id"):
         "department_members 의 키 없는 부서 되돌림",

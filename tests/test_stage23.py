@@ -12,10 +12,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import io
 import pathlib
 import re
 
 import pytest
+from openpyxl import load_workbook
 from sqlalchemy import select
 
 from app import models
@@ -101,21 +103,57 @@ def test23_g03_admin_은_본다(admin_client, 돈회차):
     assert 계좌 in _본다(admin_client, 돈회차)
 
 
-def test23_g04_엑셀은_admin_만_받는다(client, admin_client, 돈회차):
-    """화면만 막고 파일을 열어 두면 가린 뜻이 없다. **파일 쪽이 더 넓다** —
-    한 번 나가면 손을 떠나 돌아다닌다 (5-8)."""
-    ok = admin_client.get(f"/export/expenses.xlsx?retreat_id={돈회차['retreat']}")
+def _엑셀칸(res) -> tuple[list, list]:
+    """받은 xlsx 의 두 시트 머리줄 (지출 상세내역 · 환급 대상자)."""
+    wb = load_workbook(io.BytesIO(res.content))
+    머리 = lambda ws: [c.value for c in next(ws.iter_rows(max_row=1))]
+    return 머리(wb["지출 상세내역"]), 머리(wb["환급 대상자"])
+
+
+def test23_g04_엑셀은_편집자가_받되_계좌_칸은_admin_만(client, admin_client, 돈회차):
+    """**막을 것은 표가 아니라 계좌다.** 전에는 파일을 통째로 막았는데,
+    그러면 화면은 계좌만 빼고 누구나 보는데 파일은 아무도 못 받아
+    **같은 표인데 보는 사람이 갈린다** (5-8 · 7-3).
+
+    셋이 한 벌 — ① viewer 는 403 ② dept_lead 는 받되 계좌 칸이 **아예 없다**
+    ③ admin 파일에는 그 칸이 있고 **값도 들어 있다**(없으면 「칸이 없다」 가
+    「자료가 없다」 로도 통과한다)."""
+    주소 = f"/export/expenses.xlsx?retreat_id={돈회차['retreat']}"
+
+    ok = admin_client.get(주소)
     assert ok.status_code == 200
     assert ok.headers["content-type"].startswith(
         "application/vnd.openxmlformats"), "받아지는 것이 엑셀인지도 본다"
+    지출머리, 환급머리 = _엑셀칸(ok)
+    assert "지출자 계좌" in 지출머리 and "계좌" in 환급머리
+    assert _값에계좌있나(ok), "총무팀 파일에 계좌 값이 실제로 들어 있어야 한다 (③)"
 
-    for 이름, 번호, 역할 in (("엑셀 보는 사람", "01088880003", "viewer"),
-                          ("엑셀 리더", "01088880004", "dept_lead")):
-        make_user(이름, 번호, 역할, department_id=돈회차["dept"])
-        login_as(client, 번호)
-        client.get(f"/expenses?retreat_id={돈회차['retreat']}")
-        res = client.get(f"/export/expenses.xlsx?retreat_id={돈회차['retreat']}")
-        assert res.status_code == 403, f"{역할} 이 엑셀을 받았다"
+    # ② 편집자는 표를 받는다 — 계좌 칸만 없다
+    make_user("엑셀 리더", "01088880004", "dept_lead", department_id=돈회차["dept"])
+    login_as(client, "01088880004")
+    리더 = client.get(주소)
+    assert 리더.status_code == 200, "편집자가 표를 못 받는다"
+    지출머리2, 환급머리2 = _엑셀칸(리더)
+    assert "지출자 계좌" not in 지출머리2, "빈 칸이 아니라 없는 칸이어야 한다"
+    assert "계좌" not in 환급머리2
+    assert "지출자" in 지출머리2, "계좌만 빼야 하는데 표까지 줄었다"
+    # xlsx 는 zip 이라 바이트를 뒤져서는 못 본다 — 칸을 읽어 본다
+    assert not _값에계좌있나(리더)
+
+    # ① 열람 전용은 못 받는다
+    make_user("엑셀 보는 사람", "01088880003", "viewer", department_id=돈회차["dept"])
+    login_as(client, "01088880003")
+    assert client.get(주소).status_code == 403, "열람 전용이 엑셀을 받았다"
+
+
+def _값에계좌있나(res) -> bool:
+    """두 시트 어느 칸에든 계좌 문자열이 들어 있는가."""
+    wb = load_workbook(io.BytesIO(res.content))
+    return any(
+        c.value is not None and 계좌 in str(c.value)
+        for 이름 in ("지출 상세내역", "환급 대상자")
+        for row in wb[이름].iter_rows(min_row=2) for c in row
+    )
 
 
 def test23_g05_등록_폼이_남의_계좌를_미리_채우지_않는다(client, 돈회차):
@@ -150,11 +188,20 @@ def test23_g06_누를_수_없는_엑셀_단추를_그리지_않는다(client, ad
 
     ② 총무팀에게는 남아 있어야 한다(안 그러면 기능이 사라진 것이다)."""
     주소 = "/export/expenses.xlsx"
+    # ① 못 받는 사람에게는 안 그린다
     make_user("칩 보는 사람", "01088880006", "viewer", department_id=돈회차["dept"])
     login_as(client, "01088880006")
     for 화면 in ("/expenses", "/budget"):
         글 = client.get(f"{화면}?retreat_id={돈회차['retreat']}").text
         assert 주소 not in 글, f"{화면} 에 누를 수 없는 엑셀 단추가 남았다"
+    # ② **받을 수 있는 사람에게는 그린다** — 계좌가 보이는지와 다른 물음이다.
+    # 전에는 칩을 계좌 판정으로 그려서, 표를 받을 수 있는 부서 리더에게
+    # 단추가 없었다
+    make_user("칩 받는 리더", "01088880007", "dept_lead", department_id=돈회차["dept"])
+    login_as(client, "01088880007")
+    for 화면 in ("/expenses", "/budget"):
+        글 = client.get(f"{화면}?retreat_id={돈회차['retreat']}").text
+        assert 주소 in 글, f"{화면} 에서 편집자의 엑셀 단추까지 없앴다"
     for 화면 in ("/expenses", "/budget"):
         글 = admin_client.get(f"{화면}?retreat_id={돈회차['retreat']}").text
         assert 주소 in 글, f"{화면} 에서 총무팀의 엑셀 단추까지 없앴다"
