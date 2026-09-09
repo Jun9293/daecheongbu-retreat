@@ -36,13 +36,27 @@
     <a class="chip{{ ' on' if chip == 'human' }}" href="/notifications?chip=human">사람이 보낸 것</a>
     <a class="chip{{ ' on' if chip == 'system' }}" href="/notifications?chip=system">시스템이 보낸 것</a>
     <a class="chip{{ ' on' if chip == 'pending' }}" href="/notifications?chip=pending">답을 기다리는 것</a>
-    {# N 은 read-all 이 실제로 지우는 범위(이 회차)와 같은 수다 (4-16) #}
-    {% if retreat_unread %}
-    <form method="post" action="/notifications/read-all" style="margin-left:auto">
-      <button class="sbtn" type="submit">모두 읽음 ({{ retreat_unread }})</button>
-    </form>
-    {% endif %}
   </div>
+
+  {#
+    **「모두 읽음」 은 목록 위 한 줄이다** (4-16). 칩 줄 끝에 두었을 때는
+    고르는 것들 사이에 섞여 있어서, 300건을 받은 사람이 지울 자리를 못
+    찾았다. N 은 read-all 이 **실제로 지우는 범위(이 회차)와 같은 수**다 —
+    버튼이 (5) 라고 말하고 3건만 지우면 숫자가 거짓말이 된다.
+
+    **많으면 더 크게 낸다**(`many`). 첫 화면이 밀린 목록으로 보이면 사람은
+    그 화면을 다시 안 여는데, 그때 필요한 것은 「어디부터 볼까」 가 아니라
+    **한 번에 지우는 자리**다. 경계는 `MANY_UNREAD` 한 곳에서 온다 —
+    화면에 숫자를 박으면 고칠 때 두 곳이 갈린다.
+  #}
+  {% if retreat_unread %}
+  <div class="nallread{{ ' many' if retreat_unread >= many_unread }}">
+    <b>안 읽은 알림 {{ retreat_unread }}건</b>
+    <form method="post" action="/notifications/read-all">
+      <button class="sbtn p" type="submit">모두 읽음</button>
+    </form>
+  </div>
+  {% endif %}
 
   {% if chip == 'pending' %}
   {# 답을 기다리는 것 — 배지의 뒷항과 같은 목록(pending_for_user)이다.

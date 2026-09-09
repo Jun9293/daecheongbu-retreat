@@ -111,12 +111,14 @@ def notification_box(
             "rows": rows,
             "pending_reviews": pending_reviews,
             "sent": sent,
-            # 「모두 읽음 (N)」 — N 은 read_all 이 실제로 처리하는 범위(이 회차
+            # 목록 위 줄의 N — read_all 이 실제로 처리하는 범위(이 회차
             # + 회차 없는 것)와 같은 수다. 사이드바 배지의 전 회차 수를 그대로
             # 쓰면 버튼이 (5) 라 말하고 3건만 지운다
             "retreat_unread": notify_service.unread_count(
                 db, user, retreat_id=retreat.id
             ),
+            # 「많다」 의 경계는 여기 하나다 — 화면에 숫자를 박으면 갈린다
+            "many_unread": notify_service.MANY_UNREAD,
             "push_public_key": push_service.application_server_key(),
             "active_tab": "notifications",
             "page_subtitle": "알림",

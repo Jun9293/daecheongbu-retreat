@@ -18,6 +18,11 @@ from app.models import Notification, Retreat, Task, User
 
 logger = logging.getLogger("dcb.notify")
 
+# 「안 읽은 것이 많다」 의 경계 (4-16). 이만큼 넘으면 알림 화면 맨 위의
+# 「모두 읽음」 줄을 크게 낸다 — 첫 화면이 밀린 목록으로 보이면 사람은 그
+# 화면을 다시 안 열기 때문이다. 값은 여기 하나이고 화면이 받아 쓴다.
+MANY_UNREAD = 50
+
 RISK_TITLES = {
     "지연": "⚠️ 기한이 지났습니다",
     "기한임박": "🔔 마감이 다가옵니다",
@@ -171,13 +176,23 @@ def system_unread_count(db: Session, user: User) -> int:
 
     사람 발신(확인요청)을 여기서 세면 배지가 요청 하나를 둘로 센다 —
     같은 요청이 「답 대기 중 요청」(뒷항)으로 이미 세어지기 때문이다.
+
+    **들어오기 전에 쌓인 것은 안 센다** (4-16). `first_seen_at` 이 없으면
+    아직 한 번도 안 들어온 사람이라 0 이다 — 처음 연 화면에 275 가 붙으면
+    그 사람이 놓친 것으로 읽히는데, 실은 그 사람이 없던 동안 쌓인 것이다.
+    **감추는 것이 아니라 세는 자리가 다른 것이다**: 알림 화면은 그 전
+    것까지 전부 세어 보여주고 「모두 읽음」 한 번으로 지운다.
     """
+    since = getattr(user, "first_seen_at", None)
+    if since is None:
+        return 0
     return len(
         db.scalars(
             select(Notification).where(
                 Notification.user_id == user.id,
                 Notification.read_at.is_(None),
                 Notification.kind.not_in(HUMAN_KINDS),
+                Notification.created_at >= since,
             )
         ).all()
     )
@@ -185,8 +200,8 @@ def system_unread_count(db: Session, user: User) -> int:
 
 def unread_count(db: Session, user: User, retreat_id: int | None = None) -> int:
     """안 읽은 내 알림 수. retreat_id 를 주면 그 회차 것(+회차 없는 것)만 —
-    「모두 읽음 (N)」 의 N 은 **처리 범위와 같은 수**여야 한다 (4-16).
-    버튼이 (5) 라고 말하고 3건만 지우면 숫자가 거짓말이 된다."""
+    목록 위 줄이 말하는 N 은 **모두 읽음이 실제로 지우는 범위와 같은 수**
+    여야 한다 (4-16). 5건이라 말하고 3건만 지우면 숫자가 거짓말이 된다."""
     query = select(Notification).where(
         Notification.user_id == user.id, Notification.read_at.is_(None)
     )

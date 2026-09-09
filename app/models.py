@@ -141,6 +141,11 @@ class User(Base):
     bank_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    # 이 계정으로 **처음 화면을 연 때** (4-16). 계정을 만든 때(created_at)와
+    # 다르다 — 총무팀이 먼저 만들어 두고 링크는 나중에 보낸다.
+    # 사이드바 배지가 이 값을 본다: 들어오기 전에 쌓인 것은 세지 않는다.
+    # 없으면 아직 한 번도 안 들어온 것이고, 처음 들어오는 그 요청이 찍는다.
+    first_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     department: Mapped[Department | None] = relationship()
 

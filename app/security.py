@@ -54,7 +54,30 @@ def get_optional_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         return None
+    _mark_first_seen(db, user)
     return user
+
+
+def _mark_first_seen(db: Session, user: User) -> None:
+    """**처음 화면을 연 때를 한 번만 찍는다** (4-16).
+
+    문이 여기 하나라 여기서 찍는다 — 초대 링크를 여는 자리에서 찍으면
+    링크 없이 세션이 살아 있는 계정(이미 쓰던 사람)은 영영 안 찍힌다.
+    NULL 일 때만 쓰므로 계정마다 한 번이고, 그 뒤로는 읽기만 한다.
+
+    이 값이 사이드바 배지의 경계다: **들어오기 전에 쌓인 것은 안 센다.**
+    처음 들어온 사람이 275 를 보면 시스템이 밀린 것으로 읽히는데, 그건
+    그 사람이 놓친 것이 아니라 그 사람이 없던 동안 쌓인 것이다.
+    """
+    if getattr(user, "first_seen_at", None) is not None:
+        return
+    import datetime as dt
+
+    # **저장하는 시각은 이 저장소에서 전부 UTC 이고 tz 를 안 붙인다**
+    # (`models._now`). 벽시계로 찍으면 아홉 시간 앞서서, 들어온 직후
+    # 아홉 시간 동안 온 알림이 「들어오기 전 것」 으로 밀린다.
+    user.first_seen_at = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    db.commit()
 
 
 def get_current_user(user: User | None = Depends(get_optional_user)) -> User:

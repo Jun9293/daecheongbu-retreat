@@ -67,6 +67,9 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("programs", "parallel", "BOOLEAN"),
     # 비활성 계정이 놓은 번호 (4-12). 되살릴 때 돌려준다.
     ("users", "retired_phone", "VARCHAR(20)"),
+    # 처음 화면을 연 때 (4-16). 기존 행은 NULL — 아직 안 들어온 것으로 보고,
+    # 다음에 들어올 때 찍힌다. 배지가 그 뒤에 온 것만 센다.
+    ("users", "first_seen_at", "DATETIME"),
     # 링크 첨부 (4-9). 기존 행은 NULL — 값이 없으면 파일이다.
     ("task_attachments", "url", "VARCHAR(2000)"),
     # 회의록의 출처와 옮기기 묶음. 기존 행은 NULL — 읽는 쪽이 '사람' 으로 본다.
