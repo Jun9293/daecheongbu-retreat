@@ -10,6 +10,13 @@
 #}
 <div class="mt-head">
   <a class="mt-back" href="/meetings">← 회의록</a>
+  {#
+    **제안 자리는 본문 아래에 있다** — 본문이 길면 화면 밖이라, 회의록에서
+    업무·논의로 가는 길이 있는 줄도 모른다 (12장: 그 길은 제안 흐름 하나다).
+    그래서 위에서 한 번 가리킨다. 몇 건인지는 읽어 봐야 알므로 **글자는
+    `meeting.js` 가 채운다** — 여기에 수를 적으면 늘 같은 수가 된다.
+  #}
+  <a class="mt-tosug" href="#mt-sug" hidden>제안 보기 ↓</a>
 </div>
 
 <form class="mt-one" method="post" action="/meetings/{{ meeting.id }}/update">
@@ -62,7 +69,7 @@
 
   **실패해도 이 화면은 살아 있다** (4-10 조건 8) — 제안이 비는 것으로 끝난다.
 #}
-<section class="mt-sug" data-meeting="{{ meeting.id }}"
+<section class="mt-sug" id="mt-sug" data-meeting="{{ meeting.id }}"
          data-can-edit="{{ 1 if can_edit else 0 }}">
   <h2>이 회의록에서 제안</h2>
   {#

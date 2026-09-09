@@ -175,6 +175,19 @@ function 그린다(data) {
   list.innerHTML = items.map(줄).join('');
 }
 
+/* **위에서 한 번 가리킨다** — 제안 자리는 본문 아래라 긴 회의록에서는
+   화면 밖이다. 회의록에서 업무·논의로 가는 길이 그것 하나인데(12장),
+   보이지 않으면 없는 것과 같다.
+   **낼 것이 없으면 가리키지 않는다** — 눌러 봐야 빈 자리면 다음부터
+   안 누른다. 수는 목록과 같은 값에서 나온다: 화면이 다시 세지 않는다. */
+function 가리킨다(data) {
+  const 링크 = document.querySelector('.mt-tosug');
+  if (!링크) return;
+  const n = (data.items || []).length;
+  링크.hidden = !n;
+  링크.textContent = `이 회의록에서 제안 ${n}건 ↓`;
+}
+
 /* 무엇으로 골랐는가 + 사람 평가 표시. **둘 다 감추지 않는다.** */
 function 머리말(data) {
   if (!how) return;
@@ -228,6 +241,7 @@ async function 불러온다() {
     if (typeof data.can_edit === 'boolean') canEdit = data.can_edit;
     머리말(data);
     그린다(data);
+    가리킨다(data);
     // 도는 중이면 다시 물어본다. **끝나면 저절로 나타나야 한다** —
     // 사람이 새로고침해야 보이면 아무도 안 기다린다
     if (data.state === '도는중' || data.state === '기다림') {
