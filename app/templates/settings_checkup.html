@@ -43,7 +43,11 @@
       {% for log in logs %}
       <tr>
         <td style="white-space:nowrap;color:var(--ink-3)" class="mono">{{ log.created_at.strftime('%m/%d %H:%M') }}</td>
-        <td><b>{{ log.actor_name or '시스템' }}</b> · {{ log.action }}</td>
+        {# **이름이 없다고 전부 「시스템」 이 아닙니다.** 8장은 그 말을
+           「앱이 뜰 때 한 번 도는 전환」 에 못박아 두었습니다. 서버에서
+           스크립트로 한 일은 사람이 한 것이고 그 사람이 누구인지 모를
+           뿐이라, 두 가지를 `actor_type` 으로 가릅니다. #}
+        <td><b>{{ log.actor_name or ('시스템' if log.actor_type == 'system' else '서버에서') }}</b> · {{ log.action }}</td>
         <td class="sub">{{ log.summary or '' }}</td>
       </tr>
       {% else %}
