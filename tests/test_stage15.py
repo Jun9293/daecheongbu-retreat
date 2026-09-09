@@ -175,7 +175,9 @@ def test15_m02_메뉴가_화면_안에_묶인다():
     """가로·세로 둘 다. 한쪽만 잡으면 나머지로 넘친다 (W-2).
     어림값이 아니라 **실제 크기**로 잰다."""
     코드 = _코드(JS / "drawer.js")
-    자리 = 코드[코드.index("function statMenu"):][:1400]
+    # 자리 잡는 곳은 `메뉴를띄운다` 하나다 — 상태 메뉴와 담당자 메뉴(4-14)가
+    # 그것을 같이 쓴다. 두 벌로 두면 한쪽만 화면 안에 묶인다
+    자리 = 코드[코드.index("function 메뉴를띄운다"):][:1400]
     assert "offsetWidth" in 자리 and "offsetHeight" in 자리
     assert "innerWidth" in 자리 and "innerHeight" in 자리
     # **띄운 뒤에 잰다** — 숨은 채로 재면 0 이 나와 어림값으로 떨어지고,

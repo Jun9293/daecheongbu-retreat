@@ -157,7 +157,7 @@ ID_비교_허용: dict[tuple[str, int, str], str] = {
     # 키 없는 부서(구설계 데이터)의 되돌림 — None==None 통과 방지
     ("app/domain/permissions.py", 47, "user_department_id == target_department_id"):
         "키가 없을 때만 오는 id 되돌림 경로",
-    ("app/notifications.py", 86, "User.department_id == department_id"):
+    ("app/notifications.py", 91, "User.department_id == department_id"):
         "department_members 의 키 없는 부서 되돌림",
     ("app/routers/reviews.py", 60, "ReviewRequest.department_id == user.department_id"):
         "키 없는 부서 소속의 받은 요청 조회 되돌림",

@@ -523,7 +523,10 @@ def test4_n01_모두_읽음은_이_회차만이다(admin_client, world):
                title="다른 회차", dedupe_key="b")
     # 버튼의 N = 실제로 지울 수(이 회차) — 전 회차 합(2)이 아니다
     page = admin_client.get(f"/notifications?retreat_id={world['retreat']}").text
-    assert "모두 읽음 (1)" in page
+    # 수는 「모두 읽음」 단추가 아니라 그 줄이 말한다 (4-16) — 단추 옆
+    # 괄호는 칩 줄 끝에 있던 시절의 모양이다. 재는 것은 같다:
+    # **말한 수와 실제로 지우는 범위가 같은가**
+    assert "안 읽은 알림 1건" in page
     with app_session() as db:
         admin = db.scalars(select(models.User).where(models.User.role == "admin")).first()
         n = mark_all_read(db, admin, retreat_id=world["retreat"])
