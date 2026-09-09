@@ -26,6 +26,7 @@ from app.domain.budget import (
     is_refund_target,
     next_receipt_number,
 )
+from app.domain import permissions as perm
 from app.domain.meal import calculate_meal_settlement
 from app.models import (
     BudgetCategory,
@@ -150,10 +151,22 @@ def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
             "attendees": "",
             "level3b": "",
         }
+    # **남의 계좌를 미리 채워 주지 않는다.** 직전 지출의 값을 그대로
+    # 넣으면, 그 지출을 낸 사람의 계좌가 다음 사람의 입력칸에 뜬다 —
+    # 목록에서 계좌를 가려 놓고 폼으로 새면 가린 뜻이 없다.
+    # 총무팀은 원래 다 보는 자리라 그대로 두고(직전 값이 편하다),
+    # 나머지는 **자기 것만** 채운다.
+    #
+    # **이름과 계좌는 함께 떨어집니다.** 계좌만 자기 것으로 바꾸면
+    # (남의 이름, 내 계좌) 가 뜨는데, 환급은 `payer_name` 으로 사람을
+    # 가르고 돈은 `payer_account` 로 갑니다 — 두 칸이 서로를 부정하는데
+    # 화면에는 아무 표시도 나지 않습니다.
+    남이낸것 = perm.can_manage_retreat(user.role)
     return {
         "department_id": last.department_id,
-        "payer_name": last.payer_name or user.name,
-        "payer_account": last.payer_account or user.bank_account or "",
+        "payer_name": (last.payer_name if 남이낸것 else None) or user.name,
+        "payer_account": (last.payer_account if 남이낸것 else None)
+                         or user.bank_account or "",
         "attendees": " ".join(last.meal_attendee_names or []),
         "level3b": _next_meal_label(last.level3b),
     }

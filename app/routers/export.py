@@ -17,7 +17,7 @@ from app.deps import get_current_retreat
 from app.domain import budget_xlsx
 from app.domain.budget import build_budget_summary, entries_of
 from app.models import Retreat, User
-from app.security import get_current_user
+from app.security import require_admin
 
 router = APIRouter(prefix="/export")
 
@@ -25,7 +25,11 @@ router = APIRouter(prefix="/export")
 @router.get("/expenses.xlsx")
 def export_expenses(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    # **총무팀(admin)만 받습니다.** 이 파일에는 지출자 계좌가 두 시트에
+    # 들어갑니다(`budget_xlsx` 의 지출 상세·환급 대상자). 화면에서 계좌를
+    # 가려 놓고 파일을 열어 두면 가린 뜻이 없고, **파일 쪽이 더 넓습니다** —
+    # 한 번 나가면 손을 떠나 돌아다닙니다 (5-8).
+    user: User = Depends(require_admin),
     retreat: Retreat = Depends(get_current_retreat),
 ):
     summary = build_budget_summary(db, retreat=retreat)

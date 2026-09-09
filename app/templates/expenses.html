@@ -13,7 +13,9 @@
     <a class="chip{{ ' on' if filter == 'unpaid' }}" href="/expenses?filter=unpaid">미지급만</a>
     <a class="chip{{ ' on' if filter == 'refund' }}" href="/expenses?filter=refund">환급 대상자</a>
     <a class="chip{{ ' on' if filter == 'noreceipt' }}" href="/expenses?filter=noreceipt">영수증 없음</a>
-    <a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>
+    {# **누를 수 없는 단추를 그리지 않는다** (10장). 파일에는 계좌가 들어
+       있어 총무팀만 받습니다 — 남겨 두면 누른 사람이 403 화면을 봅니다. #}
+    {% if is_admin(user) %}<a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>{% endif %}
   </div>
 
   <div class="kpis">
@@ -147,7 +149,13 @@
             <td class="r mono">{{ (e.subsidy_amount if e.is_meal_expense else e.amount)|num }}</td>
             <td class="r mono">{% if e.is_meal_expense and e.personal_burden_amount %}{{ e.personal_burden_amount|num }}{% else %}<span class="dim">–</span>{% endif %}</td>
             <td class="nowrap">{{ e.payer_name or '–' }}
-              {% if e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
+              {#
+                **계좌는 총무팀(admin)에게만 냅니다.** 전에는 로그인만 하면
+                누구나 — `viewer` 까지 — 이 회차의 계좌를 전부 봤습니다.
+                **빈 칸을 두지 않고 줄 자체를 안 그립니다**: 자리만 남기면
+                「무엇이 가려져 있다」 가 보이고, 그것도 알 필요 없는 사실입니다.
+              #}
+              {% if is_admin(user) and e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
             <td>
               {# 취소된 행에는 지급 토글을 내지 않는다 (7-4) — 합계에 안 끼는
                  행의 지급을 누르는 것은 뜻 없는 조작이다. 상태는 배지로만 #}
