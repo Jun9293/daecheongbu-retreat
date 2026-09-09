@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib.util
+import collections
 import pathlib
 import re
 import sqlite3
@@ -151,30 +152,35 @@ def test6_k04_새_회차를_열어도_부서_리더가_자기_지출을_만든�
         assert entry.department_id == new_hebron
 
 
-# 남은 부서 id 비교의 전수 — (파일, 줄, 식): 왜 남는지. 새 비교가 생기거나
-# 이 자리들이 움직이면 목록과 어긋나 k05 가 빨개진다 — 그때 다시 본다 (V-c).
-ID_비교_허용: dict[tuple[str, int, str], str] = {
+# 남은 부서 id 비교의 전수 — (파일, 식): 왜 남는지. 새 비교가 생기면 목록에
+# 없어 k05 가 빨개진다 — 그때 다시 본다 (V-c).
+#
+# **줄 번호를 박지 않는다** (2026-09-10). 박았을 때는 위쪽에 함수 하나만
+# 넣어도 빨개졌다 — 도막 1·2 에서 연달아(143→144 · 47→61) 그 줄만 고치는
+# 커밋이 생겼다. 식 문자열은 그 줄의 비교 식 **그대로**이고, 같은 파일에
+# 같은 식이 둘이면 k05 의 셈에서 걸린다(아래 「같은 식이 두 번」).
+ID_비교_허용: dict[tuple[str, str], str] = {
     # 키 없는 부서(구설계 데이터)의 되돌림 — None==None 통과 방지
-    ("app/domain/permissions.py", 61, "user_department_id == target_department_id"):
+    ("app/domain/permissions.py", "user_department_id == target_department_id"):
         "키가 없을 때만 오는 id 되돌림 경로",
-    ("app/notifications.py", 91, "User.department_id == department_id"):
+    ("app/notifications.py", "User.department_id == department_id"):
         "department_members 의 키 없는 부서 되돌림",
-    ("app/routers/reviews.py", 60, "ReviewRequest.department_id == user.department_id"):
+    ("app/routers/reviews.py", "ReviewRequest.department_id == user.department_id"):
         "키 없는 부서 소속의 받은 요청 조회 되돌림",
-    ("app/routers/reviews.py", 80, "user.department_id == target.id"):
+    ("app/routers/reviews.py", "user.department_id == target.id"):
         "키 없는 부서 되돌림 (응답 권한)",
     # 같은 회차 안의 데이터 행 집계·조인 — 사람 소속 판정이 아니다
-    ("app/domain/board.py", 471, "r.department_id == dept.id"):
+    ("app/domain/board.py", "r.department_id == dept.id"):
         "회차 안 run 을 부서 행별로 묶는 집계",
-    ("app/routers/expenses.py", 144, "ExpenseEntry.department_id == my_dept"):
+    ("app/routers/expenses.py", "ExpenseEntry.department_id == my_dept"):
         "my_dept 는 키로 찾은 이번 회차 부서 행 id — 직전 입력값 집계",
-    ("app/routers/reviews.py", 56, "Department.id == ReviewRequest.department_id"):
+    ("app/routers/reviews.py", "Department.id == ReviewRequest.department_id"):
         "요청 행에 부서 행을 붙이는 조인",
-    ("app/routers/settings.py", 167, "User.department_id == d.id"):
+    ("app/routers/settings.py", "User.department_id == d.id"):
         "회차 부서별 인원수 집계 (키 없는 부서 되돌림 포함)",
-    ("app/routers/settings.py", 419, "Task.department_id == department_id"):
+    ("app/routers/settings.py", "Task.department_id == department_id"):
         "옛 Task 표의 회차 데이터 집계",
-    ("app/routers/settings.py", 424, "ExpenseEntry.department_id == department_id"):
+    ("app/routers/settings.py", "ExpenseEntry.department_id == department_id"):
         "회차 지출의 부서별 집계",
 }
 ID_비교_패턴 = re.compile(
@@ -192,28 +198,53 @@ def _id_비교_전수() -> list[tuple[str, int, str]]:
     return 나온것
 
 
+def _허용_밖(전수) -> list[tuple[str, int, str]]:
+    """목록에 없는 (파일, 식) — 줄 번호는 보고용으로만 붙인다."""
+    return [자리 for 자리 in 전수 if (자리[0],자리[2]) not in ID_비교_허용]
+
+
 def test6_k05_소속_판정의_id_비교가_0곳이다():
     """키를 쓸 수 있는데 id 로 견주는 소속 판정이 없다 (2장).
 
     남은 id 비교는 전부 키 없는 부서 되돌림이거나 회차 안 데이터 집계·조인 —
-    그 자리를 파일·줄·이유로 적어 둔다. 새 비교가 생기면 목록에 없어 빨개진다.
+    그 자리를 파일·식·이유로 적어 둔다. 새 비교가 생기면 목록에 없어 빨개진다.
     """
-    남은것 = [자리 for 자리 in _id_비교_전수() if 자리 not in ID_비교_허용]
-    assert 남은것 == [], f"목록에 없는 부서 id 비교: {남은것}"
-    # 검사가 볼 것을 실제로 보고 있다 — 센 것이 0이면 성공이 아니라 실패 (11-3)
-    assert len(_id_비교_전수()) == len(ID_비교_허용)
+    전수 = _id_비교_전수()
+    assert _허용_밖(전수) == [], f"목록에 없는 부서 id 비교: {_허용_밖(전수)}"
+    # 검사가 볼 것을 실제로 보고 있다 — 센 것이 0이면 성공이 아니라 실패 (11-3).
+    # (파일, 식)이 목록과 하나씩 맞고, 같은 식이 두 번 나오면 그것도 잡는다
+    본것 = [(f, e) for f, _, e in 전수]
+    겹침 = sorted(k for k, n in collections.Counter(본것).items() if n > 1)
+    목록에만 = sorted(set(ID_비교_허용) - set(본것))
+    assert sorted(본것) == sorted(ID_비교_허용), (
+        f"같은 식이 두 번: {겹침} · 목록에만 있는 것: {목록에만}")
 
 
-def test6_k05b_새_id_비교를_심으면_잡힌다(tmp_path):
-    """막는 코드의 막히는 쪽 — 가짜 id 비교 한 줄이 전수에 잡힌다 (1-c)."""
+def test6_k05b_새_id_비교를_심으면_잡힌다():
+    """막는 코드의 막히는 쪽 — 가짜 id 비교 한 줄이 전수에 잡히고, **k05 의
+    판정이 실제로 빨개지는지**를 같은 판정 함수로 잰다 (1-c).
+
+    뒷부분은 **줄 밀림을 재는 것이 아니다** — 진짜 파일을 안 건드리면 못
+    잰다(그것은 2026-09-10 도막 3 보고의 `expenses.py` 실험이 증명했다).
+    여기서 보는 것은 다른 줄에 적어도 정규화한 식이 목록의 키와 같은
+    문자열로 나오는가뿐이다."""
     temp = ROOT / "app" / "__stage6_fake_tmp.py"
-    temp.write_text("ok = user.department_id == target.department_id\n", encoding="utf-8")
     try:
-        걸린것 = [자리 for 자리 in _id_비교_전수()
-                if 자리[0] == "app/__stage6_fake_tmp.py"]
+        temp.write_text("ok = user.department_id == target.department_id\n", encoding="utf-8")
+        전수 = _id_비교_전수()
+        걸린것 = [자리 for 자리 in 전수 if 자리[0] == "app/__stage6_fake_tmp.py"]
         assert 걸린것 == [("app/__stage6_fake_tmp.py", 1,
                         "user.department_id == target.department_id")]
-        assert 걸린것[0] not in ID_비교_허용          # 목록에 없으니 k05 가 빨개진다
+        # 허용 안 된 비교가 생기면 k05 가 쓰는 그 판정이 빨개진다
+        assert _허용_밖(전수) == 걸린것
+
+        # 허용된 식을 다섯 줄 아래에 심어 정규화 결과가 목록의 키와 같은지 본다
+        temp.write_text("\n" * 5 + "x = r.department_id == dept.id\n", encoding="utf-8")
+        전수 = _id_비교_전수()
+        심은것 = [자리 for 자리 in 전수 if 자리[0] == "app/__stage6_fake_tmp.py"]
+        assert 심은것 and 심은것[0][1] == 6
+        # 파일이 다르므로 목록에는 없다 — 식 문자열만 견준다
+        assert ("app/domain/board.py", 심은것[0][2]) in ID_비교_허용
     finally:
         temp.unlink()
 
