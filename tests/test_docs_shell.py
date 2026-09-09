@@ -157,6 +157,11 @@ def 걸린줄(글: str):
     return 난것
 
 
+def 얼린판(p) -> bool:
+    """덮기 전에 날짜 이름으로 떠 둔 검토 보고인가 (11-3 4단계)."""
+    return p.parent.name == "review" and bool(re.match(r"\d{4}-\d{2}-\d{2}-", p.name))
+
+
 def 볼파일():
     """문서 + **스크립트의 모듈 독스트링** (11-2 — 규칙 안이다).
 
@@ -169,6 +174,15 @@ def 볼파일():
     문서 += sorted((ROOT / "docs").rglob("*.md"))
     문서 += sorted((ROOT / "docs").rglob("*.txt"))
     문서 += sorted((ROOT / ".claude").rglob("*.md"))
+    # **덮기 전에 떠 둔 판은 뺀다** (11-3 4단계 — `docs/review/<날짜>-…`).
+    # 그 파일은 그 판의 기록이라 **한 글자도 못 고칩니다.** 못 고치는 것을
+    # 계속 빨갛게 두면 사람이 검사를 통째로 안 보게 됩니다.
+    # **살아 있는 보고(`최근.md`)는 그대로 봅니다** — 얼리기 전에 걸립니다.
+    # (실제로 2026-09-09 도막 0 의 보고에 검토자가 인용한 SQL 한 줄이
+    #  `where` 로 시작해 이 검사에 걸렸습니다. 그때 **보고를 다 채운 뒤에
+    #  시험을 안 돌려서** 빨간 채로 커밋됐고, 다음 판이 그것을 얼리면서
+    #  알았습니다 — 11-3 에 그 순서를 적었습니다.)
+    문서 = [p for p in 문서 if not 얼린판(p)]
     낼것 = [(p, p.read_text(encoding="utf-8")) for p in 문서 if p.exists()]
     for p in sorted((ROOT / "scripts").glob("*.py")):
         try:
