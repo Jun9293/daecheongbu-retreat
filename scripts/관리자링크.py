@@ -59,7 +59,7 @@ from app.db import SessionLocal                                   # noqa: E402
 from app.deps import log_activity                                # noqa: E402
 from app.domain import auth as invites                           # noqa: E402
 from app.domain import permissions as perm                       # noqa: E402
-from app.models import InviteToken, User                         # noqa: E402
+from app.models import User                                      # noqa: E402
 
 
 def 마지막입장(db: Session, user: User) -> str:
@@ -69,12 +69,12 @@ def 마지막입장(db: Session, user: User) -> str:
     안 남습니다. 여기서 낼 수 있는 가장 가까운 사실은 **링크를 마지막으로
     쓴 때**(`invite_tokens.used_at`)입니다. 그 이름으로 찍습니다 —
     없는 값을 「마지막 로그인」 이라고 부르면 그 뒤로 아무도 안 의심합니다.
+
+    **토큰 표를 여기서 뒤지지 않습니다** — 보는 곳도 `domain/auth` 하나
+    입니다(`last_used_at`). 스스로 뒤지면 「살아 있다」·「쓴 적이 있다」 의
+    뜻이 자리마다 갈립니다.
     """
-    쓴때 = db.scalars(
-        select(InviteToken.used_at)
-        .where(InviteToken.user_id == user.id, InviteToken.used_at.is_not(None))
-        .order_by(InviteToken.used_at.desc())
-    ).first()
+    쓴때 = invites.last_used_at(db, user=user)
     return 쓴때.strftime("%Y-%m-%d") if 쓴때 else "-"
 
 

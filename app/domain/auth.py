@@ -83,15 +83,19 @@ def issue(db: Session, *, user: User, actor: User | None = None) -> str:
 
 
 def revoke_all(db: Session, *, user: User) -> int:
-    """그 사람의 살아 있는 링크를 전부 취소한다."""
+    """그 사람의 살아 있는 링크를 전부 취소한다.
+
+    **「살아 있다」 를 여기서 다시 정하지 않는다** — `problem_with` 하나가
+    그 답이다. 전에는 이 함수가 `used_at`·`revoked_at` 둘만 보고 기한을
+    안 봐서, 같은 파일 안에 「살아 있다」 가 두 뜻으로 있었다. 그렇게
+    갈리면 어느 쪽이 맞는지 아무도 눈치채지 못한다.
+    """
     count = 0
     for token in db.scalars(
-        select(InviteToken).where(
-            InviteToken.user_id == user.id,
-            InviteToken.used_at.is_(None),
-            InviteToken.revoked_at.is_(None),
-        )
+        select(InviteToken).where(InviteToken.user_id == user.id)
     ):
+        if problem_with(token) is not None:
+            continue
         token.revoked_at = _now()
         count += 1
     if count:
@@ -143,6 +147,24 @@ def live_token(db: Session, *, user: User) -> InviteToken | None:
         if problem_with(token) is None:
             return token
     return None
+
+
+def last_used_at(db: Session, *, user: User) -> dt.datetime | None:
+    """**링크를 마지막으로 쓴 때.** 없으면 None.
+
+    「마지막 로그인」 이 아니다 — 그런 칸은 없다(세션이 90일이라 화면을
+    언제 열었는지는 아무 데도 안 남는다). 여기서 낼 수 있는 가장 가까운
+    사실은 이것뿐이고, 부르는 쪽도 **그 이름 그대로** 찍는다.
+
+    `entered_ever` 와 같은 것을 묻되 **때까지** 돌려준다 — 스크립트가
+    토큰 표를 스스로 뒤지지 않게 하려고 여기 둔다(4-12 「만드는 것도 보는
+    것도 한 곳」).
+    """
+    return db.scalars(
+        select(InviteToken.used_at)
+        .where(InviteToken.user_id == user.id, InviteToken.used_at.is_not(None))
+        .order_by(InviteToken.used_at.desc())
+    ).first()
 
 
 def entered_ever(db: Session, *, user: User) -> bool:
