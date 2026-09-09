@@ -130,7 +130,7 @@ function renderDrawer() {
        <span class="cv" style="background:${esc(st.color)}"></span>${esc(st.label)}${d.can_edit ? ' ▾' : ''}</button>`;
   if (d.can_edit) {
     // **전파를 막지 않는다** — 바깥 클릭 판정이 이 자리를 안다
-    // (`originOf` 의 statchip). 목록의 상태 칸이 그 길을 쓰는데 드로어의
+    // (`originOf` 의 pickcell). 목록의 상태 칸이 그 길을 쓰는데 드로어의
     // 칩만 다른 길이면, 같은 메뉴를 여는 두 자리의 규약이 갈린다
     $('statchip').onclick = e => statMenu(e.currentTarget);
   }
@@ -218,20 +218,11 @@ function renderDrawer() {
       if (call('onDepartment', d.run_id) !== true) location.reload();
     };
 
-    $('dassignee').onchange = async e => {
-      const value = e.target.value;
-      const res = await fetch(`/board/task/${d.run_id}/assignee`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({user_id: value ? Number(value) : null}),
-      });
-      if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '지정하지 못했습니다.'); return; }
-      const saved = await res.json();
-      detail.assignee_id = saved.assignee_id;
-      detail.assignee = saved.assignee;
-      // 이름만이 아니라 **응답 전부**를 넘긴다 — 달력은 서버가 만든
-      // 툴팁 문장이 필요하고, 보드는 지금처럼 이름만 쓴다.
-      call('onAssignee', d.run_id, saved.assignee, saved);
-    };
+    // **드로어의 select 와 목록의 메뉴가 같은 함수를 부른다** (4-14).
+    // 서버 길이 하나인 것과 화면 길이 하나인 것은 다르다 — 두 벌이던
+    // 동안 이미 실패 문구가 갈려 있었다(검토가 짚었다).
+    $('dassignee').onchange = e =>
+      setAssignee(d.run_id, e.target.value ? Number(e.target.value) : null);
 
     // 관련팀 편집 (4-9) — 회차의 부서를 **키로** 여러 개 고른다 (2장)
     const reledit = $('dreledit');
@@ -1102,15 +1093,55 @@ $('drel').onclick = e => {
    색·라벨이 두 벌이 되고, 갈린 쪽을 아무도 눈치채지 못한다.
    `runId` 를 안 주면 지금 열려 있는 업무다(드로어의 칩). */
 function statMenu(btn, runId) {
-  const menu = $('statmenu'), r = btn.getBoundingClientRect();
   const 대상 = runId == null ? cur : runId;
-  // 같은 배지를 다시 누르면 상태를 바꾸지 않고 목록만 닫는다
-  if (menu.classList.contains('on') && menu.dataset.run === String(대상)) {
-    closeMenus(); return;
+  메뉴를띄운다(btn, 대상, 'status', PICKABLE.map(key =>
+    `<button data-v="${esc(key)}"><span class="cv" style="background:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join(''),
+    v => setStatus(대상, v));
+}
+
+/* 담당자 메뉴 — 목록의 담당자 칸이 부른다 (4-14).
+   **새 메뉴를 만들지 않는다.** 뜨는 자리·닫히는 규칙·바깥 클릭 판정이 두
+   벌이 되면 갈린 쪽을 아무도 눈치채지 못한다 — 상태 메뉴와 같은 길이다.
+
+   고를 사람은 **서버가 준다** (`/board/task/{id}` 의 `candidates` — 그 부서와
+   총무팀). 행에 실어 보내면 96행마다 명단이 붙고, 사람이 바뀌어도 옛
+   명단이 남는다. 못 고치는 사람에게는 애초에 이 칸이 안 눌린다(`pick`
+   없음)지만 **서버가 다시 본다** — 화면만 감춘 것이 아니다. */
+async function assigneeMenu(cell, runId) {
+  // **`disabled` 를 쓰지 않는다** — 죽여 두는 자리는 그 자체가 세어지는
+  // 목록이고(test18_d03), 여기는 잠깐 뜨는 글자지 못 누르는 단추가 아니다
+  if (!메뉴를띄운다(cell, runId, 'assignee', '<i class="mwait">불러오는 중…</i>', null))
+    return;
+  let d;
+  try {
+    const res = await fetch(`/board/task/${runId}`, {headers: {'Accept': 'application/json'}});
+    if (!res.ok) throw new Error();
+    d = await res.json();
+  } catch (_) { closeMenus(); alert('담당자 목록을 불러오지 못했습니다.'); return; }
+  if (!d.can_edit) { closeMenus(); return; }
+  const menu = $('statmenu');
+  // 그 사이에 다른 것을 눌렀으면 그쪽이 이긴다 — 늦게 온 답이 덮지 않는다
+  if (!menu.classList.contains('on') || menu.dataset.run !== String(runId)) return;
+  메뉴를띄운다(cell, runId, 'assignee',
+    `<button data-v="">지정 안 함</button>` + (d.candidates || []).map(p =>
+      `<button data-v="${p.id}"${p.id === d.assignee_id ? ' class="on"' : ''}>${esc(p.name)}</button>`).join(''),
+    v => setAssignee(runId, v === '' ? null : Number(v)), {다시열기: true});
+}
+
+/* 메뉴 하나를 그 자리에 띄운다 — 상태와 담당자가 같은 것을 쓴다.
+   같은 자리를 다시 누르면 고르지 않고 닫는다(드롭다운으로서 당연한 것 · 9장).
+   **무엇의 메뉴인지(kind)까지 봐야 한다** — 같은 행에서 상태 다음에
+   담당자를 누르면 「같은 것을 다시 누른 것」 이 되어 그냥 닫혀 버린다.
+   돌려주는 값은 「띄웠는가」 다 (닫기만 했으면 false). */
+function 메뉴를띄운다(btn, 대상, kind, html, onPick, opts) {
+  const menu = $('statmenu'), r = btn.getBoundingClientRect();
+  if (!(opts && opts.다시열기) && menu.classList.contains('on')
+      && menu.dataset.run === String(대상) && menu.dataset.kind === kind) {
+    closeMenus(); return false;
   }
   menu.dataset.run = String(대상);
-  menu.innerHTML = PICKABLE.map(key =>
-    `<button data-s="${esc(key)}"><span class="cv" style="background:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join('');
+  menu.dataset.kind = kind;
+  menu.innerHTML = html;
   // **화면 밖으로 나가지 않는다.** 드로어의 칩은 440px 패널 왼쪽 위라
   // 늘 아래·안쪽이었는데, 목록의 상태 칸은 **행 오른쪽 끝**이고 마지막
   // 행이면 아래도 없다. 가로·세로 둘 다 잡는다 — 한쪽만 잡으면 나머지
@@ -1127,11 +1158,41 @@ function statMenu(btn, runId) {
   menu.style.top = 안에(아래 + 높 > innerHeight ? r.top - 높 - 4 : 아래,
                        innerHeight - 높) + 'px';
   menu.onclick = async e => {
-    const b = e.target.closest('[data-s]');
-    if (!b) return;
+    const b = e.target.closest('[data-v]');
+    if (!b || !onPick) return;
     closeMenus();
-    await setStatus(대상, b.dataset.s);
+    await onPick(b.dataset.v);
   };
+  return true;
+}
+
+/* 담당자를 정한다 — **여기 하나다** (4-9 · 4-14). 드로어의 select 와
+   목록의 메뉴가 같이 부른다. 서버 엔드포인트가 하나인 것만으로는
+   모자란다: 두 벌이던 동안 실패했을 때 하는 말이 이미 갈려 있었다. */
+async function setAssignee(runId, userId) {
+  const res = await fetch(`/board/task/${runId}/assignee`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({user_id: userId}),
+  });
+  if (!res.ok) {
+    alert((await res.json().catch(() => ({}))).detail || '담당자를 지정하지 못했습니다.');
+    return;
+  }
+  const saved = await res.json();
+  if (detail && String(detail.run_id) === String(runId)) {
+    detail.assignee_id = saved.assignee_id;
+    detail.assignee = saved.assignee;
+    // **패널을 다시 그리지 않고 그 칸만 맞춘다.** 목록에서 바꿨을 때
+    // 열려 있는 패널이 옛 이름을 들고 있으면 안 되지만, 다시 그리면
+    // select 에서 고른 사람은 **고르자마자 포커스를 잃는다**
+    const sel = $('dassignee');
+    if (sel) sel.value = saved.assignee_id == null ? '' : String(saved.assignee_id);
+  }
+  // 자기 화면을 어떻게 고쳐 그릴지는 화면이 안다. 이름만이 아니라
+  // **응답 전부**를 넘긴다 — 달력은 서버가 만든 툴팁 문장이 필요하고
+  // 보드는 이름만 쓴다 (9장: 캐시하는 자리와 훅의 주어가 같은 이름이다)
+  call('onAssignee', runId, saved.assignee, saved);
 }
 
 async function setStatus(runId, status) {
@@ -1281,9 +1342,11 @@ function originOf(target) {
   return {
     drawer: at('#drawer'),
     statmenu: at('#statmenu'),
-    // **상태 메뉴를 여는 자리** — 드로어의 칩과 목록 행의 상태 칸(4-14).
-    // 여기를 모르면 메뉴가 뜨자마자 「바깥 클릭」 으로 닫힌다
-    statchip: at('#statchip') || at('.cell.st.pick'),
+    // **메뉴를 여는 자리** — 드로어의 상태 칩과 목록 행의 상태 칸·담당자
+    // 칸(4-14). 여기를 모르면 메뉴가 뜨자마자 「바깥 클릭」 으로 닫힌다.
+    // 이름이 `statchip` 이던 시절에는 상태 칸 하나였다 — 담당자 칸이
+    // 같은 메뉴를 쓰게 되면서 이름이 거짓이 되어 바꿨다
+    pickcell: at('#statchip') || at('.cell.st.pick') || at('.asg.pick'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
@@ -1328,7 +1391,7 @@ addEventListener('click', () => {
   // **한쪽 끝이라도 안이면 닫지 않는다.** 안에서 시작한 드래그(폭 조절·글자
   // 선택)도, 밖에서 시작해 안에서 끝난 드래그도 '바깥 클릭'이 아니다.
   const 어느쪽이든 = k => down[k] || up[k];
-  if (!어느쪽이든('relitem') && !어느쪽이든('statmenu') && !어느쪽이든('statchip')) closeMenus();
+  if (!어느쪽이든('relitem') && !어느쪽이든('statmenu') && !어느쪽이든('pickcell')) closeMenus();
   if (!dw.classList.contains('open')) return;
   if (어느쪽이든('drawer') || 어느쪽이든('statmenu')) return;
   if (어느쪽이든('task')) return;         // 다른 업무를 여는 동작이다
@@ -1356,6 +1419,8 @@ window.Drawer = {
   /* 목록의 행 배지가 부른다 (4-14) — **드로어의 그 메뉴 그대로**다.
      새 메뉴를 만들면 고를 수 있는 상태와 색·라벨이 두 벌이 된다. */
   statusMenu: (el, runId) => statMenu(el, runId),
+  // 목록의 담당자 칸이 부른다 (4-14) — 상태와 같은 메뉴다
+  assigneeMenu: (el, runId) => assigneeMenu(el, runId),
   isOpen: () => dw.classList.contains('open'),
   current: () => cur,
   /* 드래그 직후인가. **쓰는 곳은 board.js 하나다** — 바를 끌어 옮긴 뒤의

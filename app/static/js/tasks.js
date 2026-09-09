@@ -31,7 +31,7 @@ const rowOf = id => document.querySelector(`.trow[data-run="${CSS.escape(String(
      그 칸은 행의 다른 곳과 같아서 행을 연다
    · 링크·단추·입력칸: 자기 일이 있는 것들. 지금 행에는 없지만 생기면
      저절로 예외가 된다(이름을 더 적을 필요가 없다) */
-const 안여는곳 = '.cell.st.pick, a, button, input, select, textarea, label, [contenteditable]';
+const 안여는곳 = '.cell.st.pick, .asg.pick, a, button, input, select, textarea, label, [contenteditable]';
 
 /* 눌린 곳이 여는 자리면 그 행 — 아니면 null */
 function 여는자리(el) {
@@ -121,6 +121,19 @@ Drawer.init({
     const due = row.querySelector('.cell.due');
     if (due) due.className = due.className.replace(/b-\S+/, 'b-' + view.badge.cls);
   },
+  /* 담당자를 그 자리에서 바꿨으면 그 자리가 바뀌어야 한다 (4-14).
+     전에는 「페이지를 다시 그릴 때 서버가 채운다」 로 안 걸어 뒀는데,
+     그때는 목록에서 담당자를 바꿀 길이 없었다. 이제 이 화면이 바꾸므로
+     **누른 자리가 그대로면 아무 일도 안 일어난 줄 안다** (5-0 과 같은 자리).
+     이름은 서버가 준 것을 쓴다 — 화면이 조립하면 옛 이름이 남는다 (4-13). */
+  onAssignee(runId, name) {
+    const row = rowOf(runId);
+    const cell = row && row.querySelector('.asg');
+    if (!cell) return;
+    cell.textContent = name || '담당자 없음';
+    cell.classList.toggle('none', !name);
+  },
+
   /* **행 안은 「바깥」 이 아니다.** 여는 자리인지와 별개다 — 안 여는
      자리(상태 배지)를 눌렀다고 열려 있던 패널이 닫히면, 아무 일도 안
      하려던 손이 보던 것을 잃는다. 여는 것은 아래 click 이 정하고,
@@ -135,7 +148,6 @@ Drawer.init({
     link: '연결 강조는 보드의 바 사이에 선을 긋는 것이다. 목록 행에는 그을 선이 없다',
     afterLayout: '패널이 행 아래로 들어가므로 폭이 바뀌어도 다시 그릴 것이 없다',
     onDates: '행에 실린 마감은 서버가 그린 것이고, 날짜를 고치면 정렬 자리도 달라진다 — 다음에 열 때 서버가 다시 그린다',
-    onAssignee: '행의 담당자도 같다 — 페이지를 다시 그릴 때 서버가 채운다',
     onDepartment: '담당팀을 옮기면 행이 다른 부서 것이 된다 — 통째로 다시 그리는 것이 맞다. 기본값(새로고침)을 쓴다',
   },
   // 목록 행은 관련팀을 그리지 않는다 — true 는 새로고침을 막으려는 것뿐이다
@@ -158,8 +170,21 @@ list.addEventListener('click', e => {
   const row = 칸.closest('.trow.lrow');
   if (!row) return;
   // 전파를 막지 않는다 — 드로어의 바깥 클릭 판정이 이 자리를 알고 있다
-  // (`originOf` 의 statchip). 여기서 막으면 그 판단이 두 곳이 된다
+  // (`originOf` 의 pickcell). 여기서 막으면 그 판단이 두 곳이 된다
   Drawer.statusMenu(칸.querySelector('.stbadge') || 칸, row.dataset.run);
+});
+
+/* 담당자 칸을 누르면 **드로어의 그 메뉴**가 그 자리에 뜬다 (4-14).
+   상태 칸과 같은 규약이다 — 전파를 막지 않고, 고를 수 없는 사람의 칸
+   (`pick` 없음)은 예외가 아니라 행의 다른 곳과 같아서 행이 열린다.
+   「팀만 적혀 있으면 결국 아무도 안 한다」(4-9) 를 고치는 자리가 드로어
+   안쪽에만 있으면, 96건에 담당자를 붙이는 데 96번 패널을 열어야 한다. */
+list.addEventListener('click', e => {
+  const 칸 = e.target.closest('.asg.pick');
+  if (!칸) return;
+  const row = 칸.closest('.trow.lrow');
+  if (!row) return;
+  Drawer.assigneeMenu(칸, row.dataset.run);
 });
 
 list.addEventListener('click', e => {

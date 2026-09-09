@@ -42,6 +42,8 @@ class HomeView:
     budget: BudgetSummary | None = None
     top_categories: list = field(default_factory=list)   # 지출 상위 (CategorySummary)
     my_today: list = field(default_factory=list)         # 내 담당 · 마감 ≤ 오늘 · 미완료
+    mine_unassigned: int = 0         # 내 부서의 미완료 업무 중 담당자가 없는 것
+    my_dept_key: str | None = None   # 그 부서 키 — 목록 링크의 값이다 (2장)
     week: list = field(default_factory=list)             # 미완료 · 오늘 뒤 7일 안 마감
     overdue_ids: set = field(default_factory=set)        # 행의 지연 배지도 계산값에서 (4-10)
     dim_ids: set = field(default_factory=set)            # 소속 외 행 — 부서는 **키로** 비교 (2장)
@@ -115,6 +117,19 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
         ),
         key=_end_of,
     )
+    # **내 할 일이 비었을 때 낼 것** (4-15). 담당자가 안 정해진 업무는
+    # 「누구 일도 아닌 것」 이라 아무 화면에도 안 뜨는데, 그게 정확히
+    # 놓치는 지점이다 (달력의 「날짜 없는 업무」 와 같은 자리 · 4-13).
+    # **부서는 키로 본다** (2장) — id 로 보면 새 회차가 열리는 순간 0 이
+    # 되고, 0 이면 화면이 아무 말도 안 해서 왜 없어졌는지 알 수 없다.
+    view.my_dept_key = department_key_of(db, user)
+    if view.my_dept_key:
+        view.mine_unassigned = sum(
+            1
+            for r in open_runs
+            if r.assignee_id is None
+            and (r.department.key if r.department else None) == view.my_dept_key
+        )
     view.week = sorted(
         (
             r
@@ -131,7 +146,7 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
     # 소속 외 흐림 — id 로 비교하면 새 회차가 열리는 순간 자기 부서까지 흐려진다 (2장).
     # 총무팀(admin)은 전부 선명하다 (9장의 소속 외 규칙과 같다)
     if user.role != "admin" and user.department_id is not None:
-        my_key = department_key_of(db, user)
+        my_key = view.my_dept_key
         view.dim_ids = {
             r.id
             for r in runs

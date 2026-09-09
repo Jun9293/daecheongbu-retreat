@@ -29,7 +29,7 @@
   'meta': [
     {'cls': 'deptchip depthue' if row.dept else 'deptchip',
      'html': ('<i style="--c:%s"></i>%s'|format(row.dept.color, row.dept.name|e)) if row.dept else '담당 없음'},
-    {'cls': 'deptchip asg' ~ ('' if row.assignee else ' none'),
+    {'cls': 'deptchip asg' ~ ('' if row.assignee else ' none') ~ (' pick' if row.can_edit else ''),
      'html': row.assignee|e if row.assignee else '담당자 없음'},
     {'cls': 'deptchip due b-' ~ row.badge.cls,
      'html': (row.end|short_date ~ (' · ' ~ row.dday if row.dday else '')) if row.end else '날짜 없음'},
