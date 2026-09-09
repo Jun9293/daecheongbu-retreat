@@ -70,6 +70,18 @@
     <button type="submit" class="btn pri">추가하고 링크 발급</button>
   </form>
 
+  {#
+    **누구에게 아직 안 보냈는지가 맨 위에 있다** (4-12). 링크는 한 사람씩
+    발급해 카카오톡으로 보내는 일이라, 스무 줄을 훑으며 세는 것은 사람이
+    할 일이 아니다. 이름은 아래 표에 있다 — 여기서는 수만 말한다.
+    셋을 함께 내는 이유는 **「보냈는데 아직 안 들어온 사람」 이 「안 보낸
+    사람」 과 다른 일**이기 때문이다: 앞은 기다리는 것이고 뒤는 보내는 것이다.
+  #}
+  <div class="invsum{{ ' many' if yet_count }}">
+    <b>링크 안 받은 사람 {{ yet_count }}명</b>
+    <span>보냈고 아직 안 들어옴 {{ sent_count }}명 · 들어온 사람 {{ in_count }}명</span>
+  </div>
+
   <h3 class="secttl">등록된 사람 {{ rows|length }}명</h3>
   <div class="tablewrap">
     <table class="utable">
@@ -119,10 +131,18 @@
             </form>
           </td>
           <td class="invitecell">
+            {# 상태는 셋이다 (4-12) — 들어왔는지는 링크가 살아 있는지와
+               다른 질문이라, 한 칸에 담으면 누구에게 보내야 하는지가 안 보인다.
+               **그래서 겹칠 수 있고, 겹치면 둘 다 낸다** — 기기를 잃어 재발급한
+               사람이 그렇다(4-12). 하나로 끊으면 그 사람의 살아 있는 링크가
+               언제까지인지가 화면에서 사라진다 #}
+            {% if row.invite_state == '들어옴' %}
+            <span class="tag done">들어옴</span>
+            {% endif %}
             {% if row.invite_live %}
             <span class="tag must">{{ row.invite_expires }}까지</span>
-            {% else %}
-            <span class="tag low">없음</span>
+            {% elif row.invite_state != '들어옴' %}
+            <span class="tag low">안 보냄</span>
             {% endif %}
             {# JS 가 있으면 **그 자리에서** 링크가 뜬다 — 발급마다 페이지가 새로
                그려져 맨 위로 튀고, 배너가 누구 것인지 말하지 않던 것이 이 화면이

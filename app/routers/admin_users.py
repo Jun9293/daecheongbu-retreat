@@ -113,8 +113,21 @@ def users_page(
                 "is_active": person.is_active,
                 "invite_live": token is not None,
                 "invite_expires": token.expires_at.date().isoformat() if token else None,
+                # 링크 상태는 **셋이다** (4-12). 「보냈는가」 와 「들어왔는가」 를
+                # 한 값에 담으면, 아직 못 들어온 사람과 이미 쓰고 링크가 만료된
+                # 사람이 같은 칸에 들어가 **누구에게 보내야 하는지**가 안 보인다.
+                "invite_state": (
+                    "들어옴" if invites.entered_ever(db, user=person)
+                    else ("보냈음" if token is not None else "안 보냄")
+                ),
             }
         )
+
+    # **누가 남았는지 위에서 한 번에 보인다** (4-12). 열아홉 명에게 차례로
+    # 보내는 일이라, 목록을 훑어 세는 것은 사람이 할 일이 아니다.
+    # 비활성 계정은 세지 않는다 — 링크를 보낼 사람이 아니다.
+    보낼사람 = [r for r in rows if r["is_active"] and r["invite_state"] == "안 보냄"]
+    기다리는사람 = [r for r in rows if r["is_active"] and r["invite_state"] == "보냈음"]
 
     return render(
         request,
@@ -124,6 +137,11 @@ def users_page(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "rows": rows,
+            "yet_count": len(보낼사람),
+            "sent_count": len(기다리는사람),
+            "in_count": sum(
+                1 for r in rows if r["is_active"] and r["invite_state"] == "들어옴"
+            ),
             "departments": choices,
             "roles": [{"value": r, "label": ROLE_LABELS.get(r, r)} for r in ALL_ROLES],
             "active_tab": "settings",

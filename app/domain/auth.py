@@ -145,6 +145,26 @@ def live_token(db: Session, *, user: User) -> InviteToken | None:
     return None
 
 
+def entered_ever(db: Session, *, user: User) -> bool:
+    """이 계정으로 **초대 링크를 한 번이라도 쓴 적이 있는가.**
+
+    로그인 길이 초대 링크 하나뿐이라(4-12), 이것이 곧 「들어와 본 적이
+    있는가」 다. 계정을 만든 것과 다르다 — 총무팀이 먼저 만들어 두고
+    링크는 나중에 보낸다.
+
+    쓰인 링크는 만료돼도 `used_at` 이 남으므로 **살아 있는 링크가 있는지와
+    다른 질문**이다. 둘을 한 값으로 보면 「보냈는데 아직 안 들어온 사람」 과
+    「들어왔고 링크는 만료된 사람」 이 같은 칸에 들어간다.
+    """
+    return bool(
+        db.scalars(
+            select(InviteToken).where(
+                InviteToken.user_id == user.id, InviteToken.used_at.is_not(None)
+            )
+        ).first()
+    )
+
+
 # ── 발급 직후 한 번만 꺼내지는 자리 ──────────────────────────────────
 #
 # 원문을 URL 에 실으면 총무팀 브라우저의 **주소창과 방문 기록**, Cloudflare 접속
