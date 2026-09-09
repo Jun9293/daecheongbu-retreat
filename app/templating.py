@@ -182,6 +182,12 @@ templates.env.globals["today"] = dt.date.today
 templates.env.globals["can_edit_dept"] = can_edit_dept
 templates.env.globals["is_other_dept"] = is_other_dept
 templates.env.globals["is_readonly"] = perm.is_readonly
+# **계좌를 보일지 말지는 한 함수가 정한다** — 화면·엑셀·칩이 같이 쓴다
+templates.env.globals["계좌를_본다"] = (
+    lambda user: user is not None and perm.can_see_account(user.role))
+# 엑셀을 받을 수 있는가 — 열람 전용만 못 받는다. 계좌가 보이는지와 다른 물음이다
+templates.env.globals["엑셀을_받는다"] = (
+    lambda user: user is not None and not perm.is_readonly(user.role))
 templates.env.globals["is_admin"] = lambda user: user is not None and perm.can_manage_retreat(user.role)
 # 총무팀 일정(진행 화면)의 이름 — 사이드바와 화면 제목이 같은 한 곳(domain.live)에서 (5장)
 from app.domain.live import SCREEN_TITLE as _live_title  # noqa: E402

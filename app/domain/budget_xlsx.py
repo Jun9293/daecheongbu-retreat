@@ -37,8 +37,25 @@ def _widths(ws, widths: list[int]) -> None:
         ws.column_dimensions[get_column_letter(i)].width = width
 
 
-def write(summary: BudgetSummary, entries: list[ExpenseEntry]) -> io.BytesIO:
-    """summary(화면과 같은 것)와 지출 목록을 받아 통째로 놓는다."""
+def write(
+    summary: BudgetSummary,
+    entries: list[ExpenseEntry],
+    *,
+    계좌를_보인다: bool = False,
+) -> io.BytesIO:
+    """summary(화면과 같은 것)와 지출 목록을 받아 통째로 놓는다.
+
+    **계좌 칸은 빈 칸이 아니라 없는 칸입니다.** 자리만 남기면 「무엇이
+    가려져 있다」 가 보이고, 그것도 알 필요 없는 사실입니다 — 화면에서
+    같은 판단을 한 그 자리입니다.
+
+    판정은 여기서 하지 않습니다. `permissions.can_see_account` 하나가
+    정하고 라우터가 그 답을 넘깁니다 — 화면과 파일이 저마다 판정하면
+    같은 표인데 보는 사람이 갈립니다 (5-8).
+
+    **기본이 「안 보임」 입니다.** 부르는 쪽이 빠뜨렸을 때 계좌가 새는
+    쪽으로 기울면, 빠뜨린 것을 아무도 눈치채지 못합니다.
+    """
     wb = Workbook()
 
     # 1) 지출 상세내역 — 시트 「Belong 예산」 의 컬럼 순서 (7-1)
@@ -47,8 +64,10 @@ def write(summary: BudgetSummary, entries: list[ExpenseEntry]) -> io.BytesIO:
     headers = [
         "구분", "항목", "세부항목-1", "세부항목-2", "세부항목-3", "부서",
         "영수증번호", "지출일자", "금액", "지원금액", "개인부담액",
-        "식사인원", "참석자 명단", "비고", "지급여부", "지급일", "지출자", "지출자 계좌",
+        "식사인원", "참석자 명단", "비고", "지급여부", "지급일", "지출자",
     ]
+    if 계좌를_보인다:
+        headers.append("지출자 계좌")
     ws.append(headers)
     for e in entries:
         numbers = ", ".join(str(r.number) for r in e.receipts) or None
@@ -68,8 +87,8 @@ def write(summary: BudgetSummary, entries: list[ExpenseEntry]) -> io.BytesIO:
                 "지급완료" if e.paid else "미지급",
                 e.paid_date,
                 e.payer_name,
-                e.payer_account,
             ]
+            + ([e.payer_account] if 계좌를_보인다 else [])
         )
     for row in ws.iter_rows(min_row=2, min_col=9, max_col=11):
         for cell in row:
@@ -120,7 +139,11 @@ def write(summary: BudgetSummary, entries: list[ExpenseEntry]) -> io.BytesIO:
     ws3 = wb.create_sheet("환급 대상자")
     # 열 이름은 「환급액」 — 비식대 행에는 전액이 들어가므로 「지원금액」 이라
     # 적으면 열 이름과 값의 뜻이 어긋난다
-    ws3.append(["영수증번호", "항목", "지출일자", "환급액", "지출자", "계좌", "지급여부"])
+    환급열 = ["영수증번호", "항목", "지출일자", "환급액", "지출자"]
+    if 계좌를_보인다:
+        환급열.append("계좌")
+    환급열.append("지급여부")
+    ws3.append(환급열)
     refund_rows = [e for e in entries if is_refund_target(e)]
     for e in refund_rows:
         ws3.append(
@@ -130,18 +153,23 @@ def write(summary: BudgetSummary, entries: list[ExpenseEntry]) -> io.BytesIO:
                 e.expense_date,
                 e.settlement_amount,
                 e.payer_name,
-                e.payer_account,
-                "지급완료" if e.paid else "미지급",
             ]
+            + ([e.payer_account] if 계좌를_보인다 else [])
+            + ["지급완료" if e.paid else "미지급"]
         )
     ws3.append([])
     unpaid = [e for e in refund_rows if not e.paid]
-    ws3.append(["미지급 합계", "", "", sum(e.settlement_amount for e in unpaid), "", "", f"{len(unpaid)}건"])
+    ws3.append(["미지급 합계", "", "", sum(e.settlement_amount for e in unpaid), ""]
+               + ([""] if 계좌를_보인다 else [])
+               + [f"{len(unpaid)}건"])
     for row in ws3.iter_rows(min_row=2, min_col=4, max_col=4):
         for cell in row:
             cell.number_format = MONEY
-    _style_header(ws3, 7)
-    _widths(ws3, [12, 26, 12, 14, 12, 26, 10])
+    # 계좌 칸을 안 만들면 열이 하나 줄어든다 — 숫자로 박으면 머리줄만 남는다
+    _style_header(ws3, len(환급열))
+    # 계좌 칸이 없으면 폭도 하나 빠진다 — 그대로 두면 계좌 폭(26)이
+    # 지급여부에 가고 마지막 폭은 빈 열에 간다
+    _widths(ws3, [12, 26, 12, 14, 12] + ([26] if 계좌를_보인다 else []) + [10])
 
     buffer = io.BytesIO()
     wb.save(buffer)

@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_retreat
 from app.domain import budget_xlsx
+from app.domain import permissions as perm
 from app.domain.budget import build_budget_summary, entries_of
 from app.models import Retreat, User
-from app.security import require_admin
+from app.security import require_editor
 
 router = APIRouter(prefix="/export")
 
@@ -25,18 +26,22 @@ router = APIRouter(prefix="/export")
 @router.get("/expenses.xlsx")
 def export_expenses(
     db: Session = Depends(get_db),
-    # **총무팀(admin)만 받습니다.** 이 파일에는 지출자 계좌가 두 시트에
-    # 들어갑니다(`budget_xlsx` 의 지출 상세·환급 대상자). 화면에서 계좌를
-    # 가려 놓고 파일을 열어 두면 가린 뜻이 없고, **파일 쪽이 더 넓습니다** —
-    # 한 번 나가면 손을 떠나 돌아다닙니다 (5-8).
-    user: User = Depends(require_admin),
+    # **편집자 이상이 받습니다. 열람 전용만 못 받습니다.**
+    # 전에는 총무팀만 받았는데, 그러면 화면은 계좌만 빼고 누구나 보는데
+    # 파일은 통째로 막혀 **같은 표인데 보는 사람이 갈립니다** (5-8).
+    # 막을 것은 표가 아니라 계좌라, 계좌 칸만 빼고 표는 함께 봅니다.
+    user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
 ):
     summary = build_budget_summary(db, retreat=retreat)
     # 취소된 지출은 결산 파일에 넣지 않는다 (7-4) — summary 가 이미 빼고
     # 세므로, 행만 남기면 파일 안에서 합계와 행이 서로 안 맞는다
     entries = [e for e in entries_of(db, retreat) if e.canceled_at is None]
-    buffer = budget_xlsx.write(summary, entries)
+    # **판정은 여기서 하지 않습니다** — `permissions.can_see_account` 하나가
+    # 정하고 화면·칩도 같은 것을 부릅니다. 못 보는 사람의 파일에는 계좌
+    # **칸 자체가 없습니다**(빈 칸이 아니라 없는 칸).
+    buffer = budget_xlsx.write(
+        summary, entries, 계좌를_보인다=perm.can_see_account(user.role))
 
     filename = f"{retreat.name}_지출내역.xlsx"
     quoted = urllib.parse.quote(filename)

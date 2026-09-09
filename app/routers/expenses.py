@@ -161,7 +161,10 @@ def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
     # (남의 이름, 내 계좌) 가 뜨는데, 환급은 `payer_name` 으로 사람을
     # 가르고 돈은 `payer_account` 로 갑니다 — 두 칸이 서로를 부정하는데
     # 화면에는 아무 표시도 나지 않습니다.
-    남이낸것 = perm.can_manage_retreat(user.role)
+    # **계좌를 보일지는 `permissions.can_see_account` 하나가 정합니다** —
+    # 화면·엑셀·이 폼이 같이 부릅니다. 여기만 다른 함수를 부르면 그 함수가
+    # 바뀔 때 이 자리만 따로 움직입니다
+    남이낸것 = perm.can_see_account(user.role)
     return {
         "department_id": last.department_id,
         "payer_name": (last.payer_name if 남이낸것 else None) or user.name,

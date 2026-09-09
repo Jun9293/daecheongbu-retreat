@@ -21,8 +21,8 @@
 
   <div class="fld">
     <h3>지출 예산 <small class="cnt">{{ summary.categories|length }}항목</small>
-      {# 지출 화면과 같은 자리 — 총무팀만 받습니다 (파일에 계좌가 있습니다) #}
-      {% if is_admin(user) %}<a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>{% endif %}</h3>
+      {# 지출 화면과 같은 자리 — 받을 수 있는 사람(열람 전용 아님)에게만 그린다 #}
+      {% if 엑셀을_받는다(user) %}<a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>{% endif %}</h3>
     <div class="tblwrap">
       <table class="fintbl">
         <thead>

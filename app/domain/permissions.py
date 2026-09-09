@@ -22,6 +22,20 @@ def can_manage_retreat(role: str) -> bool:
     return role == ADMIN
 
 
+def can_see_account(role: str) -> bool:
+    """**지출자 계좌를 볼 수 있는가.** 화면·엑셀·칩이 이것 하나를 부른다.
+
+    지출을 등록하는 것과 남이 적은 계좌를 읽는 것은 다른 일이라, 편집자
+    (부서 리더·부서원)도 못 봅니다. 지금은 총무팀과 같은 줄이지만 **이름이
+    다른 물음**이라 따로 둡니다 — `can_manage_retreat` 를 그대로 쓰면
+    「회차를 만들 수 있는가」 가 바뀔 때 계좌까지 함께 움직입니다.
+
+    **두 곳에서 정하면 갈립니다.** 실제로 화면은 계좌만 빼고 누구나 보는데
+    파일은 통째로 막혀 있어서, 같은 표인데 보는 사람이 달랐습니다 (5-8).
+    """
+    return role == ADMIN
+
+
 def can_manage_users(role: str) -> bool:
     """사용자 초대 및 역할 변경 권한."""
     return role == ADMIN
