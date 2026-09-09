@@ -31,11 +31,24 @@
  * 나타난 이유가 「그 클릭이 드로어를 닫아서」 이면 그건 검사가 못 잰
  * 것이 아니라 **화면이 무너진 것**이라 ✗ 로 나옵니다.
  *
+ * **✗ 를 찍는 길은 `잰다` 하나입니다.** 찍는 것과 세는 것을 따로 두면
+ * 손으로 맞춰야 하고, 실제로 셋이 어긋나 ✗ 인데도 「통과」 였습니다.
+ *
+ * **콘솔에 붙여넣는 대신 서버에서 받아 돌릴 때** — 이 파일을
+ * `app/static/` 에 사본으로 두고 `fetch` 하는 길이 있는데, 정적 주소가
+ * **내용 해시라 1년 immutable** 입니다(11-2). 그래서 사본을 고치고 같은
+ * 주소로 다시 받으면 **옛 것이 옵니다.** 주소의 해시 자리를 매번 바꾸고
+ * `{cache: 'reload'}` 로 받은 뒤, **받은 길이를 찍어** 지금 파일과 같은지
+ * 보세요. 2026-09-09 에 이걸 안 해서 고친 줄이 안 실린 채로 여섯 판을
+ * 돌렸고, 길이를 찍어 보고서야 알았습니다.
+ *
  * **자가시험 — 검사가 볼 것을 실제로 보는지 검사가 스스로 증명합니다.**
  * 갈래마다 고장을 하나씩 심었다 걷어내며 그것이 ✗ 로 나오는지 잽니다.
  * 평소 점검과 따로 돌아 평소가 느려지지 않습니다 — 붙여넣기 **전에**
  * `window.__자가시험 = 1;` 을 실행하세요. **이 파일을 고친 판에서는
- * 반드시 돌립니다** (11-3 2단계). 자세한 것은 파일 끝의 그 자리에.
+ * 반드시, 그리고 두 계정으로 돌립니다** (11-3 2단계) — 부서 리더에게는
+ * 못 심는 갈래가 있고, 그때 ✗ 가 아니라 **「못 심음」** 으로 나오는 것이
+ * 그쪽의 정답입니다. 자세한 것은 파일 끝의 그 자리에.
  *
  * 무엇을 보는가 — 각 조작이 '되는가'만이 아니라, 그 뒤에도 주변이 그대로인가.
  *   · 드로어가 열려 있는가 (패널 안의 버튼은 패널을 닫지 않는다)
@@ -52,6 +65,24 @@ const 점검 = async () => {
   const painted = el => { const cs = getComputedStyle(el), r = el.getBoundingClientRect();
     return cs.display !== 'none' && r.width > 0 && r.height > 0; };
   const errors = [], results = [], 못쟀음 = [];
+
+  /* ── 찍는 자리와 세는 자리는 하나다 ───────────────────────────────
+     **✗ 를 찍는 길이 여기 하나뿐이다.** 전에는 `results.push` 로 찍고
+     그 다음 줄에서 `errors.push` 로 세었는데, 둘을 **손으로 맞춰야**
+     했고 실제로 셋이 어긋나 있었다 — ✗ 를 찍고도 안 세어서 그 줄이
+     빨개져도 `통과: true` 였다(2026-09-09 검토). 갈래 단위인 자가시험은
+     그 틈을 못 본다(봐둘것 AI-d).
+
+     그래서 둘을 한 함수로 모았다. `까닭` 을 안 주면 라벨을 그대로
+     쓴다 — 「✗ 를 찍었는데 셀 말이 없다」 가 생기지 않게.
+     JS 에서 배열을 진짜로 숨길 수는 없으므로 **검사가 견준다** —
+     `tests/test_stage20.py` 가 ✗ 를 찍는 줄과 세는 줄이 **각각 하나**
+     인지 본다. 둘이 되는 순간 손으로 맞추는 자리가 다시 생긴 것이다. */
+  const 잰다 = (ok, 라벨, 까닭) => {
+    results.push((ok ? '✓' : '✗') + 라벨);
+    if (!ok) errors.push(까닭 === undefined ? 라벨.trim() : 까닭);
+    return ok;
+  };
 
   /* ── 기다리지 말고 본다 ───────────────────────────────────────────
      시간을 어림으로 박으면 **검사가 흔들립니다.** 세 판 연속 그랬고
@@ -170,9 +201,8 @@ const 점검 = async () => {
        나타났을 때가 「못 쟀음」 — 그때는 검사가 엉뚱한 것을 기다린
        것이다 (봐둘것 AH-b). */
     if (bad.length) {
-      errors.push(label + ' → ' + bad.join(', ')
+      잰다(false, ` ${label}`, label + ' → ' + bad.join(', ')
         + (못쟀나 ? ' (기다린 것도 안 나타났다 — 주변이 무너져서다)' : ''));
-      results.push(`✗ ${label}`);
       return;
     }
     if (못쟀나) {
@@ -180,7 +210,7 @@ const 점검 = async () => {
       results.push(`? ${label} — 못 쟀음 (주변은 그대로인데 기다린 것이 안 나타남)`);
       return;
     }
-    results.push(`✓ ${label}`);
+    잰다(true, ` ${label}`);
   };
 
   /* **없는 것을 누르지 않는다.** 고칠 수 없는 업무를 연 계정에서는
@@ -249,24 +279,20 @@ const 점검 = async () => {
   // 달력·목록이라면 **보드로 넘어가지 않았는지** 함께 본다
   if (!isBoard) {
     const stayed = location.pathname.startsWith(isList ? '/tasks' : '/calendar');
-    results.push((stayed ? '✓' : '✗') + ` 보드로 넘어가지 않음 (${location.pathname})`);
-    if (!stayed) errors.push('눌렀더니 보드로 넘어감');
+    잰다(stayed, ` 보드로 넘어가지 않음 (${location.pathname})`, '눌렀더니 보드로 넘어감');
   }
 
   // 목록 전용 (4-14) — 패널이 눌린 행 아래로 들어가고, 펼침이 주소에 남는다
   if (isList) {
     const slot = document.querySelector('.lslot:not([hidden])');
     const inline = !!(slot && slot.contains(dw) && dw.classList.contains('inline'));
-    results.push((inline ? '✓' : '✗') + ' 패널이 눌린 행 아래에서 펼쳐짐 (그 자리에서)');
-    if (!inline) errors.push('패널이 행 아래로 들어가지 않음');
+    잰다(inline, ' 패널이 눌린 행 아래에서 펼쳐짐 (그 자리에서)', '패널이 행 아래로 들어가지 않음');
     const inUrl = new URLSearchParams(location.search).get('task');
-    results.push((inUrl ? '✓' : '✗') + ` 펼친 상태가 주소에 남음 (?task=${inUrl || '없음'})`);
-    if (!inUrl) errors.push('펼친 상태가 주소에 안 남음');
+    잰다(inUrl, ` 펼친 상태가 주소에 남음 (?task=${inUrl || '없음'})`, '펼친 상태가 주소에 안 남음');
     // 삭제 단추 없음 (4-9 · 0장) — 패널과 목록 어디에도
     const del = [...document.querySelectorAll('#drawer button, .tlist button')]
       .some(b => b.textContent.includes('삭제'));
-    results.push((!del ? '✓' : '✗') + ' 삭제 단추 없음');
-    if (del) errors.push('삭제 단추가 있다');
+    잰다(!del, ' 삭제 단추 없음', '삭제 단추가 있다');
 
     // 행의 칸 넷이 **보인다** — HTML 존재가 아니라 그려진 상태다 (단계 4).
     // offsetParent 와 크기, 그리고 빈 글자가 아님을 함께 본다.
@@ -284,9 +310,9 @@ const 점검 = async () => {
           && el.textContent.trim());
         if (!visible) bad.push(name);
       }
-      results.push((bad.length === 0 ? '✓' : '✗')
-        + ` 행에 칸 넷(부서·담당자·마감·배지)이 보임${bad.length ? ' — 안 보임: ' + bad.join(', ') : ''}`);
-      if (bad.length) errors.push('행의 칸이 화면에 안 보임: ' + bad.join(', '));
+      잰다(bad.length === 0,
+        ` 행에 칸 넷(부서·담당자·마감·배지)이 보임${bad.length ? ' — 안 보임: ' + bad.join(', ') : ''}`,
+        '행의 칸이 화면에 안 보임: ' + bad.join(', '));
     }
 
     // ▸/▾ — 접었다 펴는 것임이 보인다. 캐럿은 행 오른쪽 끝이다 (4-14)
@@ -296,8 +322,7 @@ const 점검 = async () => {
       const openCaret = row && row.querySelector('.caret')?.textContent === '▾';
       const others = [...document.querySelectorAll('.trow.lrow')].filter(r => r !== row);
       const rest = others.every(r => r.querySelector('.caret')?.textContent === '▸');
-      results.push((openCaret && rest ? '✓' : '✗') + ' 펼친 행만 ▾, 나머지는 ▸');
-      if (!(openCaret && rest)) errors.push('▸/▾ 토글이 상태를 안 보여줌');
+      잰다(openCaret && rest, ' 펼친 행만 ▾, 나머지는 ▸', '▸/▾ 토글이 상태를 안 보여줌');
     }
   }
 
@@ -306,8 +331,7 @@ const 점검 = async () => {
      ✗ 가 화면에만 뜨고 결과에는 안 남는 자리다(검토가 셋을 짚었다). */
   {
     const 규칙탭 = document.querySelector('#dtabs [aria-selected=true]').dataset.p === 'rules';
-    results.push((규칙탭 ? '✓' : '✗') + ' 처음 열면 업무 규칙 탭');
-    if (!규칙탭) errors.push('처음 열었는데 업무 규칙 탭이 아님');
+    잰다(규칙탭, ' 처음 열면 업무 규칙 탭', '처음 열었는데 업무 규칙 탭이 아님');
   }
 
   // 제목 편집 (4-9) — Esc 는 **편집만** 취소한다. 전파가 새면 문서의 Escape
@@ -317,8 +341,7 @@ const 점검 = async () => {
     await 누른다('제목 편집 열기', $('dtitletext'),
       {until: () => document.querySelector('#dtitletext input.titleedit')});
     const tinput = document.querySelector('#dtitletext input.titleedit');
-    results.push((tinput ? '✓' : '✗') + ' 제목 입력칸이 열림');
-    if (!tinput) errors.push('제목 입력칸이 열리지 않음');
+    잰다(tinput, ' 제목 입력칸이 열림', '제목 입력칸이 열리지 않음');
     if (tinput) {
       await check('제목 편집 중 Esc (편집만 취소)', () => {
         tinput.dispatchEvent(new KeyboardEvent('keydown',
@@ -326,8 +349,7 @@ const 점검 = async () => {
       });
       const restored = $('dtitletext').textContent === beforeTitle
         && !document.querySelector('#dtitletext input');
-      results.push((restored ? '✓' : '✗') + ' Esc 뒤 제목이 원래대로 (드로어는 그대로)');
-      if (!restored) errors.push('Esc 가 제목 편집을 취소하지 못함');
+      잰다(restored, ' Esc 뒤 제목이 원래대로 (드로어는 그대로)', 'Esc 가 제목 편집을 취소하지 못함');
     }
   } else results.push('· 고칠 수 없는 업무라 제목 편집은 건너뜀');
 
@@ -342,9 +364,8 @@ const 점검 = async () => {
     const canEdit = !document.querySelector('#statchip[disabled]');
     const 보임 = shown($('daddlog'));
     const 맞나 = canEdit ? 보임 : !보임;
-    results.push((맞나 ? '✓' : '✗')
-      + ` 논의 입력칸이 ${보임 ? '보임' : '안 보임'} (고칠 수 ${canEdit ? '있음' : '없음'})`);
-    if (!맞나) errors.push('논의 입력칸이 권한과 어긋남');
+    잰다(맞나, ` 논의 입력칸이 ${보임 ? '보임' : '안 보임'} (고칠 수 ${canEdit ? '있음' : '없음'})`,
+         '논의 입력칸이 권한과 어긋남');
   }
 
   await check('탭 — 업무 규칙', () => $('dtabs').querySelector('[data-p="rules"]').click(),
@@ -352,8 +373,7 @@ const 점검 = async () => {
   if ($('drulesopen')) {
     await 누른다('규칙 편집 열기', $('drulesopen'),
       {until: () => shown($('drulesedit'))});
-    results.push((shown($('drulesedit')) ? '✓' : '✗') + ' 규칙 편집창이 보임');
-    if (!shown($('drulesedit'))) errors.push('규칙 편집창이 보이지 않음');
+    잰다(shown($('drulesedit')), ' 규칙 편집창이 보임', '규칙 편집창이 보이지 않음');
     await 누른다('규칙 편집 취소', $('drulescancel'),
       {until: () => !shown($('drulesedit'))});
   }
@@ -367,8 +387,7 @@ const 점검 = async () => {
     const heads = [...document.querySelectorAll('#drel .relcard .rh')]
       .map(h => (h.querySelector('.arrow')?.textContent || '') + (h.querySelector('b')?.textContent || ''));
     const ok = heads.join(',') === '→선행,←후속,↔관련';
-    results.push((ok ? '✓' : '✗') + ` 연결 카드 셋이 순서대로 (${heads.join(' · ') || '없음'})`);
-    if (!ok) errors.push('연결 카드가 세 묶음이 아니거나 순서가 다름');
+    잰다(ok, ` 연결 카드 셋이 순서대로 (${heads.join(' · ') || '없음'})`, '연결 카드가 세 묶음이 아니거나 순서가 다름');
   }
 
   // 확인 요청 (4-9) — 보내는 폼과 이력. 실제로 하나 보내 본다.
@@ -377,8 +396,7 @@ const 점검 = async () => {
   {
     const canEdit = !document.querySelector('#statchip[disabled]');
     const formOk = canEdit ? shown($('drevform')) : !shown($('drevform'));
-    results.push((formOk ? '✓' : '✗') + ` 확인 요청 폼 (편집 ${canEdit ? '가능' : '불가'})`);
-    if (!formOk) errors.push('확인 요청 폼이 권한과 어긋남');
+    잰다(formOk, ` 확인 요청 폼 (편집 ${canEdit ? '가능' : '불가'})`, '확인 요청 폼이 권한과 어긋남');
     const firstDept = $('drevdepts') && $('drevdepts').querySelector('input');
     if (canEdit && firstDept) {
       const before = document.querySelectorAll('#drevlog .revitem').length;
@@ -387,21 +405,19 @@ const 점검 = async () => {
       await 누른다('확인 요청 보내기', $('drevsend'),
         {until: () => document.querySelectorAll('#drevlog .revitem').length > before});
       const after = document.querySelectorAll('#drevlog .revitem').length;
-      results.push((after > before ? '✓' : '✗') + ` 보낸 요청이 이력에 남음 (${before} → ${after})`);
-      if (after <= before) errors.push('확인 요청이 이력에 안 남음');
+      잰다(after > before, ` 보낸 요청이 이력에 남음 (${before} → ${after})`,
+        '확인 요청이 이력에 안 남음');
     } else results.push('· 고를 부서가 없거나 편집 불가라 보내기는 건너뜀');
   }
 
   // 첨부파일 — 회차별. 탭을 옮기는 것도 '패널 안의 조작'이라 같은 기준으로 본다.
   await check('탭 — 첨부파일', () => $('dtabs').querySelector('[data-p="files"]').click(),
     {until: () => shown($('p-files'))});
-  results.push((shown($('p-files')) ? '✓' : '✗') + ' 첨부파일 탭이 화면에 보임');
-  if (!shown($('p-files'))) errors.push('첨부파일 탭이 보이지 않음');
+  잰다(shown($('p-files')), ' 첨부파일 탭이 화면에 보임', '첨부파일 탭이 보이지 않음');
   {
     const tabs = [...document.querySelectorAll('#dtabs button')].map(b => b.dataset.p);
     const last = tabs[tabs.length - 1] === 'files';
-    results.push((last ? '✓' : '✗') + ` 첨부파일이 탭 맨 끝 (${tabs.join(' · ')})`);
-    if (!last) errors.push('첨부파일 탭이 맨 끝이 아님');
+    잰다(last, ` 첨부파일이 탭 맨 끝 (${tabs.join(' · ')})`, '첨부파일 탭이 맨 끝이 아님');
 
     // 드로어 폭에서 탭이 넘치지 않는가 — **첨부파일이 잘리면 안 된다**
     // (수를 적지 않는다 — 탭이 하나 늘면 그 수부터 낡는다: 10장)
@@ -419,29 +435,25 @@ const 점검 = async () => {
       const fit = bar.scrollWidth <= bar.clientWidth + 1;
       const lastTab = [...bar.querySelectorAll('button')].pop();
       const inside = lastTab.getBoundingClientRect().right <= bar.getBoundingClientRect().right + 1;
-      results.push((fit && inside ? '✓' : '✗')
-        + ` 탭이 드로어 폭에 들어감 (${bar.scrollWidth}px / ${bar.clientWidth}px)`);
-      if (!(fit && inside)) errors.push('탭이 넘쳐 첨부파일이 잘림');
+      잰다(fit && inside, ` 탭이 드로어 폭에 들어감 (${bar.scrollWidth}px / ${bar.clientWidth}px)`,
+           '탭이 넘쳐 첨부파일이 잘림');
     }
 
     // 올리는 자리는 탭 안에 있다. 고칠 수 없는 업무라면 없는 것이 맞다.
     const canEdit = !document.querySelector('#statchip[disabled]');
     const drop = shown($('ddrop'));
     const ok = canEdit ? drop : !drop;
-    results.push((ok ? '✓' : '✗') + ` 끌어다 놓는 자리 (편집 ${canEdit ? '가능' : '불가'})`);
-    if (!ok) errors.push('올리는 자리가 권한과 어긋남');
+    잰다(ok, ` 끌어다 놓는 자리 (편집 ${canEdit ? '가능' : '불가'})`, '올리는 자리가 권한과 어긋남');
 
     // 링크 붙이기도 같은 권한이다. 용량은 차지하지 않지만 자료인 것은 같다.
     const linkBtn = shown($('dlinkbtn'));
     const linkOk = canEdit ? linkBtn : !linkBtn;
-    results.push((linkOk ? '✓' : '✗') + ` 링크 붙이기 자리 (편집 ${canEdit ? '가능' : '불가'})`);
-    if (!linkOk) errors.push('링크 붙이기가 권한과 어긋남');
+    잰다(linkOk, ` 링크 붙이기 자리 (편집 ${canEdit ? '가능' : '불가'})`, '링크 붙이기가 권한과 어긋남');
 
     // 같은 기능이 두 군데 있으면 안 된다 — 하단의 '파일 첨부' 버튼은 없앴다
     const foot = [...document.querySelectorAll('.dfoot button')].map(b => b.textContent.trim());
     const clean = !foot.some(t => t.includes('파일 첨부'));
-    results.push((clean ? '✓' : '✗') + ` 하단에 '파일 첨부' 버튼 없음 (${foot.join(', ') || '없음'})`);
-    if (!clean) errors.push("하단에 '파일 첨부' 버튼이 남아 있음");
+    잰다(clean, ` 하단에 '파일 첨부' 버튼 없음 (${foot.join(', ') || '없음'})`, "하단에 '파일 첨부' 버튼이 남아 있음");
   }
   await 눌러본다('첨부파일 — 올리는 자리 클릭', 'ddrop');
 
@@ -450,8 +462,7 @@ const 점검 = async () => {
   if (shown($('dlinkbtn'))) {
     await 누른다('링크 붙이기 열기', $('dlinkbtn'),
       {until: () => shown($('dlinkform'))});
-    results.push((shown($('dlinkform')) ? '✓' : '✗') + ' 링크 붙이기 폼이 보임');
-    if (!shown($('dlinkform'))) errors.push('링크 붙이기 폼이 보이지 않음');
+    잰다(shown($('dlinkform')), ' 링크 붙이기 폼이 보임', '링크 붙이기 폼이 보이지 않음');
     await 누른다('링크 — 주소 칸 클릭', $('dlinkurl'));
     await check('링크 — 틀린 주소로 붙이기', () => {
       $('dlinkurl').value = '교개협 폴더';
@@ -459,15 +470,12 @@ const 점검 = async () => {
       $('dlinksave').click();
     });
     const urlErr = shown($('dlinkurlerr')), nameErr = shown($('dlinknameerr'));
-    results.push((urlErr ? '✓' : '✗') + ' 주소가 아니면 그 자리에서 말함');
-    if (!urlErr) errors.push('틀린 주소를 그냥 받음');
-    results.push((nameErr ? '✓' : '✗') + ' 설명을 비우면 그 자리에서 말함');
-    if (!nameErr) errors.push('설명 없이 붙음');
+    잰다(urlErr, ' 주소가 아니면 그 자리에서 말함', '틀린 주소를 그냥 받음');
+    잰다(nameErr, ' 설명을 비우면 그 자리에서 말함', '설명 없이 붙음');
     await 누른다('링크 붙이기 취소', $('dlinkcancel'),
       {until: () => !shown($('dlinkform'))});
     const 닫힘 = !shown($('dlinkform'));
-    results.push((닫힘 ? '✓' : '✗') + ' 취소하면 폼이 닫힘');
-    if (!닫힘) errors.push('링크 붙이기 폼이 취소해도 안 닫힘');
+    잰다(닫힘, ' 취소하면 폼이 닫힘', '링크 붙이기 폼이 취소해도 안 닫힘');
   } else results.push('· 고칠 수 없는 업무라 링크 붙이기는 건너뜀');
 
   await check('탭 — 논의 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click(),
@@ -486,8 +494,7 @@ const 점검 = async () => {
   if (pen) {
     await 누른다('논의 수정 열기', pen);
     const box = document.querySelector('#dlog textarea.editbox');
-    results.push((box ? '✓' : '✗') + ' 편집창이 열림');
-    if (!box) errors.push('편집창이 열리지 않음');
+    잰다(box, ' 편집창이 열림', '편집창이 열리지 않음');
     if (box) {
       await 누른다('편집창 안 클릭', box);
       await 누른다('편집 취소', document.querySelector('#dlog [data-cancel-edit]'));
@@ -502,9 +509,8 @@ const 점검 = async () => {
     // '이동' 은 보드에만 뜻이 있다 — 달력에는 스크롤해서 갈 자리가 없다
     const acts = [...rb.nextElementSibling.querySelectorAll('[data-act]')].map(b => b.dataset.act);
     const want = isBoard ? 'open,move' : 'open';
-    results.push((acts.join(',') === want ? '✓' : '✗')
-      + ` 연결 메뉴가 화면에 맞음 (${acts.join(',') || '없음'})`);
-    if (acts.join(',') !== want) errors.push(`연결 메뉴가 ${where} 에 맞지 않음`);
+    잰다(acts.join(',') === want, ` 연결 메뉴가 화면에 맞음 (${acts.join(',') || '없음'})`,
+      `연결 메뉴가 ${where} 에 맞지 않음`);
     await 누른다('연결 메뉴 다시 눌러 닫기', rb);
   } else results.push('· 이 업무에는 연결된 업무가 없어 건너뜀');
 
@@ -516,16 +522,14 @@ const 점검 = async () => {
        답을 못 얻었다」 로 나왔다. 그려진 크기로 본다. */
     await 누른다('선행 고르기 열기', $('preedit'),
       {until: () => painted($('prepick'))});
-    results.push((painted($('prepick')) ? '✓' : '✗') + ' 선행 고르기 판이 보임');
-    if (!painted($('prepick'))) errors.push('선행 고르기 판이 보이지 않음');
+    잰다(painted($('prepick')), ' 선행 고르기 판이 보임', '선행 고르기 판이 보이지 않음');
     await 누른다('선행 고르기 닫기', document.querySelector('#prepick [data-close]'),
       {until: () => !painted($('prepick'))});
   }
 
   // 진단 패널 — 하단 고정이므로 드로어를 밀어내거나 가리면 안 된다
   {
-    results.push((painted($('diag')) ? '✓' : '✗') + ' 진단 패널이 하단에 그려짐');
-    if (!painted($('diag'))) errors.push('진단 패널이 보이지 않음');
+    잰다(painted($('diag')), ' 진단 패널이 하단에 그려짐', '진단 패널이 보이지 않음');
     /* **다시 그려진 것을 보고 간다** — 900ms 를 어림하던 자리다.
        판정 글자는 다시 그려도 같은 말이라 「달라졌나」 로는 못 본다.
        그래서 **누르기 전에 비우고 다시 채워지는 것을 본다** — 채우는
@@ -588,8 +592,7 @@ const 점검 = async () => {
                                             clientX:x, clientY:y, view:window})));
     }, {mayClose: true});
     const closed = !dw.classList.contains('open');
-    results.push((closed ? '✓' : '✗') + ' 빈 영역 클릭으로는 닫힌다');
-    if (!closed) errors.push('빈 영역 클릭으로 닫히지 않음');
+    잰다(closed, ' 빈 영역 클릭으로는 닫힌다', '빈 영역 클릭으로 닫히지 않음');
   } else results.push('· 화면 안에 빈 칸이 없어 건너뜀');
 
   /* ── 드래그로 닫히지 않는가 ────────────────────────────────────────
@@ -652,11 +655,10 @@ const 점검 = async () => {
     //    「닫히지 않았다」 가 언제나 참이라 시험이 통째로 헛돈다.
     openers()[0].click();
     await 될때까지("드래그 시험용 드로어 열기", () => 열렸다());
-    if (!dw.classList.contains("open")) {
-      errors.push("드래그 시험 전에 드로어를 열지 못함 — 아래 셋은 아무것도 재지 못한다");
-      results.push("✗ 드래그 시험을 위한 드로어 열기");
-    } else {
-      results.push("✓ 드래그 시험을 위한 드로어 열기");
+    const 열림 = dw.classList.contains("open");
+    잰다(열림, " 드래그 시험을 위한 드로어 열기",
+      "드래그 시험 전에 드로어를 열지 못함 — 아래 셋은 아무것도 재지 못한다");
+    if (열림) {
 
       /* **각 항목은 앞 항목에 기대지 않는다.** 앞이 실패해 드로어가 닫히면
          뒤엣것은 `if (열려 있으면)` 에 걸려 **말없이 안 돌고**, 그러면
@@ -731,8 +733,7 @@ const 점검 = async () => {
         // 안 닫히는 것이 고장이므로 상한까지 보고 그대로 답한다
         await 잠깐본다(() => !dw.classList.contains("open"));
         const 닫힘 = !dw.classList.contains("open");
-        results.push((닫힘 ? "✓" : "✗") + " 여백을 눌렀다 떼면 닫힌다 (드래그 고침이 과하지 않다)");
-        if (!닫힘) errors.push("드래그 고침이 과해서 여백 클릭으로도 안 닫힘");
+        잰다(닫힘, " 여백을 눌렀다 떼면 닫힌다 (드래그 고침이 과하지 않다)", "드래그 고침이 과해서 여백 클릭으로도 안 닫힘");
       }
 
       /* **click 없이 끝난 포인터 뒤의 키보드 클릭.**
@@ -757,8 +758,8 @@ const 점검 = async () => {
         // 기다렸다가 그래도 열려 있으면 그것이 답이다 (✗ 로 센다)
         await 잠깐본다(() => !dw.classList.contains("open"));
         const 닫힘2 = !dw.classList.contains("open");
-        results.push((닫힘2 ? "✓" : "✗") + " 우클릭 뒤 키보드 클릭으로도 닫힌다 (옛 기록이 안 남는다)");
-        if (!닫힘2) errors.push("우클릭 뒤 키보드 클릭에서 옛 down/up 기록이 남아 안 닫힘");
+        잰다(닫힘2, " 우클릭 뒤 키보드 클릭으로도 닫힌다 (옛 기록이 안 남는다)",
+             "우클릭 뒤 키보드 클릭에서 옛 down/up 기록이 남아 안 닫힘");
       }
     }
   } else {
@@ -770,8 +771,7 @@ const 점검 = async () => {
   // 닫은 뒤에도 보던 자리가 그대로인가 — 달력은 특히 보던 달을 잃으면 안 된다
   if (calbar) {
     const kept = calbar.dataset.month && location.pathname.startsWith('/calendar');
-    results.push((kept ? '✓' : '✗') + ` 닫아도 보던 달이 그대로 (${calbar.dataset.month})`);
-    if (!kept) errors.push('닫았더니 보던 달을 잃음');
+    잰다(kept, ` 닫아도 보던 달이 그대로 (${calbar.dataset.month})`, '닫았더니 보던 달을 잃음');
   }
 
   /* 달력 탭은 드로어를 넓혀도 커지지 않아야 한다 — 한 화면에 들어와야 하므로.
@@ -798,8 +798,8 @@ const 점검 = async () => {
   const wide = cellW();
   document.documentElement.style.setProperty('--dw', '400px');
   await 될때까지('드로어 되돌리기', () => 드폭() < 좁을때폭 + 100, 2000);
-  results.push((narrow === wide ? '✓' : '✗') + ` 달력 칸 크기 고정 (${narrow}px → ${wide}px)`);
-  if (narrow !== wide) errors.push('드로어를 넓히면 달력이 커진다');
+  잰다(narrow === wide, ` 달력 칸 크기 고정 (${narrow}px → ${wide}px)`,
+    '드로어를 넓히면 달력이 커진다');
   }
 
   // ── 사이드바 (B안 · 4-0) — ≥1280px 펼침 고정이 기본, 그 아래는 접힘 + 호버.
@@ -822,42 +822,36 @@ const 점검 = async () => {
     // 기본 상태 — 저장값이 없으면 넓은 화면은 펼침, 좁은 화면은 접힘.
     let saved = null; try { saved = localStorage.getItem('dcb.sidepin'); } catch (e) {}
     const expectPinned = saved === '1' || (saved === null && wideScreen);
-    results.push((pinned() === expectPinned ? '✓' : '✗')
-      + ` 사이드바 기본 상태가 1280px 기준과 저장값을 따른다 (pinned=${pinned()})`);
-    if (pinned() !== expectPinned) errors.push('사이드바 기본 상태가 틀림');
+    잰다(pinned() === expectPinned,
+      ` 사이드바 기본 상태가 1280px 기준과 저장값을 따른다 (pinned=${pinned()})`,
+      '사이드바 기본 상태가 틀림');
     if (wideScreen) {
       const openWide = !pinned() || (at() === 0 && parseInt(getComputedStyle(document.body).paddingLeft, 10) > 100);
-      results.push((openWide ? '✓' : '✗') + ' 넓은 화면 고정 시 펼쳐지고 본문이 밀린다');
-      if (!openWide) errors.push('넓은 화면에서 고정이 본문을 밀지 않음');
+      잰다(openWide, ' 넓은 화면 고정 시 펼쳐지고 본문이 밀린다', '넓은 화면에서 고정이 본문을 밀지 않음');
     }
 
     if (wasPinned) {
       toggle.click();
       await 될때까지('사이드바 접기', () => at() < 0, 1500);
     }
-    results.push((at() < 0 ? '✓' : '✗') + ` 고정을 풀면 접힌다 (left ${at()}px)`);
-    if (at() >= 0) errors.push('고정을 풀어도 접히지 않음');
+    잰다(at() < 0, ` 고정을 풀면 접힌다 (left ${at()}px)`, '고정을 풀어도 접히지 않음');
 
-    results.push((!document.querySelector('nav.tabs') ? '✓' : '✗') + ' 상단 탭 줄이 없음');
-    if (document.querySelector('nav.tabs')) errors.push('상단 탭 줄이 남아 있음');
+    잰다(!document.querySelector('nav.tabs'), ' 상단 탭 줄이 없음', '상단 탭 줄이 남아 있음');
 
     // 그룹 제목은 링크이고 활성 표시는 하위에만 (3장)
     const groups = [...nav.querySelectorAll('a.g')];
     const groupOk = groups.length >= 3 && groups.every(g => g.getAttribute('href')
       && !g.hasAttribute('aria-current'));
-    results.push((groupOk ? '✓' : '✗') + ` 그룹 제목 ${groups.length}개가 링크이고 활성 표시가 없다`);
-    if (!groupOk) errors.push('그룹 제목이 링크가 아니거나 활성 표시가 붙음');
+    잰다(groupOk, ` 그룹 제목 ${groups.length}개가 링크이고 활성 표시가 없다`, '그룹 제목이 링크가 아니거나 활성 표시가 붙음');
     const onGroups = [...nav.querySelectorAll('.g[aria-current], .g.on')];
-    results.push((onGroups.length === 0 ? '✓' : '✗') + ' 선택 표시는 하위에만');
-    if (onGroups.length) errors.push('그룹에 선택 표시가 있음');
+    잰다(onGroups.length === 0, ' 선택 표시는 하위에만', '그룹에 선택 표시가 있음');
 
     // 가장자리 호버 — 잠깐 들춰 본다. 본문은 밀리지 않는다.
     await check('사이드바 — 가장자리 호버', async () => {
       edge.dispatchEvent(new MouseEvent('mouseenter', {bubbles: false}));
     }, {until: () => at() === 0});
     const peeked = at() === 0 && getComputedStyle(document.body).paddingLeft === '0px';
-    results.push((peeked ? '✓' : '✗') + ' 가장자리 호버로 잠깐 열리고 본문은 그대로');
-    if (!peeked) errors.push('가장자리 호버가 동작하지 않음');
+    잰다(peeked, ' 가장자리 호버로 잠깐 열리고 본문은 그대로', '가장자리 호버가 동작하지 않음');
     nav.dispatchEvent(new MouseEvent('mouseleave', {bubbles: false}));
     await 될때까지('가장자리에서 손 떼기', () => at() < 0, 1500);
 
@@ -866,10 +860,8 @@ const 점검 = async () => {
       {until: () => pinned() && at() === 0, mayScroll: true});
     const pad = parseInt(getComputedStyle(document.body).paddingLeft, 10);
     const pin = pinned() && (wideScreen ? (at() === 0 && pad > 100) : pad === 0);
-    results.push((pin ? '✓' : '✗') + (wideScreen
-      ? ' 토글로 고정하면 본문이 밀린다'
-      : ' 좁은 화면에서는 고정해도 본문이 밀리지 않는다'));
-    if (!pin) errors.push('토글 고정이 1280px 기준과 다르게 동작함');
+    잰다(pin, (wideScreen ? ' 토글로 고정하면 본문이 밀린다' : ' 좁은 화면에서는 고정해도 본문이 밀리지 않는다'),
+         '토글 고정이 1280px 기준과 다르게 동작함');
     await 누른다('사이드바 — 토글로 접기', toggle,
       {until: () => !pinned(), mayScroll: true});
     if (wasPinned) {
@@ -890,11 +882,9 @@ const 점검 = async () => {
       const cs = getComputedStyle(el);
       return cs.borderBottomWidth !== '0px' && cs.borderBottomStyle !== 'none';
     });
-    results.push((lined.length === 0 ? '✓' : '✗') + ` 가로 격자선 없음 (${lined.length}줄)`);
-    if (lined.length) errors.push('행에 가로선이 남아 있음');
+    잰다(lined.length === 0, ` 가로 격자선 없음 (${lined.length}줄)`, '행에 가로선이 남아 있음');
     const vert = [...sheet.querySelectorAll('.gridlines i')].length;
-    results.push((vert > 0 ? '✓' : '✗') + ` 세로 격자선은 남아 있음 (${vert}개)`);
-    if (!vert) errors.push('세로 격자선이 사라짐');
+    잰다(vert > 0, ` 세로 격자선은 남아 있음 (${vert}개)`, '세로 격자선이 사라짐');
 
     // 왼쪽 목록은 sticky 로 떠 있어 그 아래로 바가 지나간다. 배경이 반투명하면
     // **뒤의 바가 비친다.** CSS 에 규칙이 있다는 것만으로는 뒤엣것이 이기는지
@@ -915,7 +905,7 @@ const 점검 = async () => {
        틈만 주면 된다. `getComputedStyle` 을 한 번 읽어 레이아웃을
        강제하고(어림이 아니라 확정), 한 틱만 넘긴다. */
     const 한틱 = async () => { void document.body.offsetHeight; await sleep(0); };
-    const 잰다 = async (el, cls) => {
+    const 켜고잰다 = async (el, cls) => {
       el.classList.add(cls);
       await 한틱();
       const ok = 불투명(el);
@@ -928,9 +918,9 @@ const 점검 = async () => {
     if (main && team) {
       const 잰값 = {
         평소: 불투명(main),
-        호버: await 잰다(main, 'is-hover'),
-        부서호버: await 잰다(team, 'is-hover'),
-        연결: await 잰다(main.closest('.row'), 'hl') && true,
+        호버: await 켜고잰다(main, 'is-hover'),
+        부서호버: await 켜고잰다(team, 'is-hover'),
+        연결: await 켜고잰다(main.closest('.row'), 'hl') && true,
       };
       // `.hl`·`.anchorrow` 는 줄에 붙으므로 줄에 붙였다 뗀 뒤 칸을 다시 잰다
       const row = main.closest('.row');
@@ -942,9 +932,8 @@ const 점검 = async () => {
       row.classList.remove('anchorrow'); await 한틱();
 
       const ok = Object.values(잰값).every(Boolean);
-      results.push((ok ? '✓' : '✗') + ' 왼쪽 라벨 열이 불투명 ('
-        + Object.entries(잰값).map(([k, v]) => `${k} ${v ? 'O' : 'X'}`).join(' · ') + ')');
-      if (!ok) errors.push('왼쪽 라벨 열 배경이 반투명 — 뒤의 바가 비친다');
+      잰다(ok, ' 왼쪽 라벨 열이 불투명 (' + Object.entries(잰값).map(([k, v]) => `${k} ${v ? 'O' : 'X'}`).join(' · ') + ')',
+           '왼쪽 라벨 열 배경이 반투명 — 뒤의 바가 비친다');
     }
   } else if (isList) {
     // 목록 (4-14) — 완료는 기본 접힘, 「완료 N건 보기」 로 편다
@@ -967,8 +956,7 @@ const 점검 = async () => {
         meta.click();                     // 이름도 캐럿도 아닌 자리
         await 잠깐본다(() => 열렸다(), 2000);
         const opened = dw.classList.contains('open');
-        results.push((opened ? '✓' : '✗') + ' 행의 빈 곳(메타)을 눌러도 열림');
-        if (!opened) errors.push('행의 빈 곳을 눌러도 안 열린다');
+        잰다(opened, ' 행의 빈 곳(메타)을 눌러도 열림', '행의 빈 곳을 눌러도 안 열린다');
       }
       /* 상태 칸 — **바꿀 수 있을 때만** 안 여는 자리다 (4-14).
          배지 안쪽과 칸의 가장자리가 같은 자리여야 한다: 몇 px 차이로
@@ -1004,16 +992,12 @@ const 점검 = async () => {
           const 열렸나 = new URLSearchParams(location.search).get('task') !== before;
           // 바꿀 수 있으면 안 열려야 하고, 못 바꾸면 행처럼 열려야 한다
           const 맞나열림 = 고를수있나 ? !열렸나 : 열렸나;
-          results.push((맞나열림 ? '✓' : '✗')
-            + ` 상태 ${어디} → 행 ${열렸나 ? '열림' : '안 열림'}`
-            + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`);
-          if (!맞나열림) errors.push(`상태 ${어디}의 열림이 권한과 어긋남`);
+          잰다(맞나열림, ` 상태 ${어디} → 행 ${열렸나 ? '열림' : '안 열림'}` + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`,
+               `상태 ${어디}의 열림이 권한과 어긋남`);
           const 떴나 = !!(menu && menu.classList.contains('on'));
           const 맞나 = 고를수있나 ? 떴나 : !떴나;
-          results.push((맞나 ? '✓' : '✗')
-            + ` 상태 ${어디} → 메뉴 ${떴나 ? '뜸' : '안 뜸'}`
-            + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`);
-          if (!맞나) errors.push(`상태 ${어디}의 메뉴가 권한과 어긋남`);
+          잰다(맞나, ` 상태 ${어디} → 메뉴 ${떴나 ? '뜸' : '안 뜸'}` + ` (바꿀 수 ${고를수있나 ? '있음' : '없음'})`,
+               `상태 ${어디}의 메뉴가 권한과 어긋남`);
           /* **닫힌 것을 보고 다음으로 간다.** 250ms 를 기다리기만 했더니
              일곱 판 중 한 번, 아직 열려 있는 채로 다음 클릭이 들어가
              `statMenu` 가 **토글로 닫아** 「메뉴가 안 떴다」 가 됐다 —
@@ -1042,17 +1026,14 @@ const 점검 = async () => {
       // 안 닫히는 것이 고장이므로 상한까지 보고 그대로 답한다
       await 잠깐본다(() => !dw.classList.contains('open'));
       const closed = !dw.classList.contains('open');
-      results.push((closed ? '✓' : '✗') + ' 같은 행을 다시 누르면 닫힘');
-      if (!closed) errors.push('같은 행 토글이 닫지 않음');
+      잰다(closed, ' 같은 행을 다시 누르면 닫힘', '같은 행 토글이 닫지 않음');
       const urlCleared = !new URLSearchParams(location.search).get('task');
-      results.push((urlCleared ? '✓' : '✗') + ' 닫으면 ?task= 가 주소에서 빠짐');
-      if (!urlCleared) errors.push('닫아도 ?task= 가 남음');
+      잰다(urlCleared, ' 닫으면 ?task= 가 주소에서 빠짐', '닫아도 ?task= 가 남음');
     }
   } else {
     // 달력은 **마감일에 점 하나**다. 기간 띠가 아니다 (CLAUDE.md 4-13).
     const dots = document.querySelectorAll('.cal-dot').length;
-    results.push((dots > 0 ? '✓' : '✗') + ` 마감일에 점이 그려짐 (${dots}개)`);
-    if (!dots) errors.push('달력에 점이 없음');
+    잰다(dots > 0, ` 마감일에 점이 그려짐 (${dots}개)`, '달력에 점이 없음');
     // 날짜 없는 업무를 조용히 빼지 않는다 — 있을 때만 본다
     const undated = document.querySelector('.calundated');
     results.push('✓ 날짜 없는 업무 자리 ' + (undated ? '있음(펼치면 목록)' : '이번 달엔 해당 없음'));
@@ -1068,23 +1049,19 @@ const 점검 = async () => {
       const 칠해진 = [...document.querySelectorAll('.cal-cell.inspan')];
       const 맞는가 = 칠해진.length > 0 && 칠해진.every(td =>
         dot.dataset.start <= td.dataset.date && td.dataset.date <= dot.dataset.end);
-      results.push((맞는가 ? '✓' : '✗')
-        + ` 점에 올리면 기간이 비침 (${칠해진.length}칸)`);
-      if (!맞는가) errors.push('기간 비침이 동작하지 않음');
+      잰다(맞는가, ` 점에 올리면 기간이 비침 (${칠해진.length}칸)`, '기간 비침이 동작하지 않음');
 
       // 오늘 칸의 파란 테두리가 비침에 덮이지 않는다
       const today = document.querySelector('.cal-cell.today');
       if (today) {
         const 남음 = getComputedStyle(today).boxShadow !== 'none';
-        results.push((남음 ? '✓' : '✗') + ' 오늘 칸 테두리가 비침 위에 남음');
-        if (!남음) errors.push('오늘 칸 테두리가 덮임');
+        잰다(남음, ' 오늘 칸 테두리가 비침 위에 남음', '오늘 칸 테두리가 덮임');
       }
 
       dot.dispatchEvent(new MouseEvent('mouseout', {bubbles: true, relatedTarget: document.body}));
       await 잠깐본다(() => document.querySelectorAll('.cal-cell.inspan').length === 0, 1200);
       const 지워짐 = document.querySelectorAll('.cal-cell.inspan').length === 0;
-      results.push((지워짐 ? '✓' : '✗') + ' 손을 떼면 사라짐');
-      if (!지워짐) errors.push('비침이 남아 있음');
+      잰다(지워짐, ' 손을 떼면 사라짐', '비침이 남아 있음');
     } else results.push('· 기간을 가진 점이 없거나 좁은 화면이라 건너뜀');
   }
 
@@ -1186,10 +1163,15 @@ const 고장들 = [
      bar.insertBefore(끝, bar.firstChild);
      return () => bar.appendChild(끝);
    }},
-  {갈래: '④ 권한과 어긋남', 고장: '고칠 수 있는데 논의 입력칸이 안 보인다',
+  /* **여기는 계정을 보고 반대로 심는다.** 고칠 수 있는 계정에서는 숨기고,
+     못 고치는 계정에서는 **보이게** 한다 — 어느 쪽이든 「권한과 어긋남」 이다.
+     한 방향으로만 심으면 부서 리더에게는 이미 숨겨져 있어 아무 일도 안
+     일어나고, 그 갈래를 그 계정에서 **한 번도 못 재게** 된다. */
+  {갈래: '④ 권한과 어긋남', 고장: '논의 입력칸이 권한과 반대로 보인다',
    나와야: '논의 입력칸이 권한과 어긋남',
-   못심음: 항목 => 항목.some(r => String(r).includes('논의 입력칸이') && String(r).includes('고칠 수 없음')),
-   심는다: () => 스타일('#daddlog{display:none!important}')},
+   심는다: 항목 => 스타일(항목.some(r => String(r).includes('고칠 수 없음'))
+     ? '#daddlog{display:block!important}'
+     : '#daddlog{display:none!important}')},
   {갈래: '⑤ 닫혀야 할 때 안 닫힘', 고장: '여백 클릭이 드로어까지 닿지 않는다',
    나와야: '빈 영역 클릭으로 닫히지 않음',
    못심음: 항목 => 항목.some(r => String(r).includes('빈 칸이 없어')),
@@ -1220,7 +1202,7 @@ const 자가시험 = async () => {
                나온것: '· 못 심음 — 이 계정·화면에는 그 자리가 없다'});
       continue;
     }
-    const 걷어낸다 = g.심는다();
+    const 걷어낸다 = g.심는다(깨끗.항목);
     let 판;
     try { 판 = await 점검(); } finally { 걷어낸다(); }
     const 실패 = (판.실패 || []).map(String);
