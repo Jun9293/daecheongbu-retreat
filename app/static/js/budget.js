@@ -36,3 +36,20 @@
 
   document.querySelectorAll('form.editform').forEach(wire);
 })();
+
+/* 구분 접기 (UI 정리 판 1 · 1-b) — 그 묶음의 줄만 감춘다. 저장하지 않는다:
+ * 새로고침하면 펼침으로 돌아온다. 숨기는 것은 [hidden] 이다 (10장 — display 를
+ * 준 규칙이 없는 tr 이라 [hidden] 이 그대로 먹는다). */
+(function () {
+  'use strict';
+  document.querySelectorAll('.budtbl .fold[data-fold]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.dataset.fold;
+      var open = btn.getAttribute('aria-expanded') !== 'false';
+      btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+      document.querySelectorAll('.budtbl tr[data-group="' + id + '"]').forEach(function (tr) {
+        tr.hidden = open;
+      });
+    });
+  });
+})();

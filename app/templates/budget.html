@@ -14,9 +14,17 @@
       <div class="d">집행률 {{ summary.progress_pct }}%</div></div>
     <div class="kpi"><div class="l">총 수입</div>
       <div class="v">{{ summary.total_income|won }}</div></div>
+    {# 수입이 하나도 없으면 「총 수입 − 총 지출예산」 은 뜻 없는 음수다 —
+       빨갛게 띄우지 않고 「수입 미입력」 으로 말한다. 수입이 하나라도 있으면
+       계산하고, 음수면 붉다 (UI 정리 판 1 · 2-a·2-b) #}
     <div class="kpi"><div class="l">잔액</div>
+      {% if summary.incomes %}
       <div class="v" {% if summary.balance < 0 %}style="color:var(--now)"{% endif %}>{{ summary.balance|won }}</div>
-      <div class="d">총 수입 − 총 지출예산</div></div>
+      <div class="d">총 수입 − 총 지출예산</div>
+      {% else %}
+      <div class="v unset">수입 미입력</div>
+      <div class="d">수입을 넣으면 계산됩니다</div>
+      {% endif %}</div>
   </div>
 
   <div class="fld">
@@ -24,7 +32,7 @@
       {# 지출 화면과 같은 자리 — 받을 수 있는 사람(열람 전용 아님)에게만 그린다 #}
       {% if 엑셀을_받는다(user) %}<a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>{% endif %}</h3>
     <div class="tblwrap">
-      <table class="fintbl">
+      <table class="fintbl budtbl">
         <thead>
           <tr>
             <th>구분</th><th>항목</th><th>세부항목</th>
@@ -35,23 +43,36 @@
           </tr>
         </thead>
         <tbody>
-          {% set ncols = 12 if is_admin(user) else 11 %}
+          {# 「–」 — 값이 없는 칸. 빈칸으로 두면 칸이 없는 것처럼 읽힌다 (1-a) #}
+          {% macro n(v) %}{% if v is none %}<td class="r mono dim">–</td>{% else %}<td class="r mono">{{ v|num }}</td>{% endif %}{% endmacro %}
           {% for group in summary.groups %}
-          {# 구분 행 — 옅은 채움 + 600. 원본 시트의 구분·항목 단이 이 표의
-             구조인데, 전부 자료 행에 눌려 흰 바탕에 섞여 있었다 (7-3) #}
-          <tr class="l1row"><td colspan="{{ ncols }}">{{ group.name }}</td></tr>
+          {% set gid = 'g' ~ loop.index %}
+          {# 구분 제목 줄 — 이름 · 세부항목 수 · 소계(예산·결산·차액)를 한 줄에 (1-b·1-d).
+             소계 값은 summary.groups 의 것 — 화면에서 다시 더하지 않는다.
+             접기는 화면 안에서만이고 저장하지 않는다 (새로고침하면 펼침) #}
+          <tr class="l1row" data-fold-head="{{ gid }}">
+            <td colspan="6">
+              <button type="button" class="fold" data-fold="{{ gid }}" aria-expanded="true"
+                      aria-label="{{ group.name }} 접기/펼치기"><span class="caret" aria-hidden="true">▾</span></button>
+              {{ group.name }} <small class="cnt">세부항목 {{ group.rows|length }}</small>
+            </td>
+            <td class="r mono">{{ group.planned|num }}</td><td></td>
+            <td class="r mono">{{ group.spent|num }}</td>
+            <td class="r mono{% if group.remaining < 0 %} overrun{% endif %}">{{ group.remaining|num }}</td>
+            <td></td>{% if is_admin(user) %}<td></td>{% endif %}
+          </tr>
           {% set seen = namespace(l2=none) %}
           {% for row in group.rows %}
           {% set cat = row.category %}
-          {% if cat.level2 != seen.l2 %}{% set seen.l2 = cat.level2 %}
-          {# 항목 행 — 구분보다 약한 채움. 세부항목(자료) 행은 지금대로 #}
-          <tr class="l2row"><td></td><td colspan="{{ ncols - 1 }}">{{ cat.level2 }}</td></tr>
-          {% endif %}
-          <tr>
-            <td></td><td></td><td>{{ cat.level3 or '' }}</td>
-            <td class="r mono">{{ cat.unit_price|num if cat.unit_price is not none else '' }}</td>
-            <td class="r mono">{{ cat.headcount if cat.headcount is not none else '' }}</td>
-            <td class="r mono">{{ cat.times if cat.times is not none else '' }}</td>
+          {# 항목은 별도 줄이 아니라 첫 세부항목 줄의 들여쓴 라벨이다 (1-c).
+             같은 항목의 둘째 이후 줄은 라벨 없이 같은 깊이 #}
+          {% set first_of_item = cat.level2 != seen.l2 %}
+          {% if first_of_item %}{% set seen.l2 = cat.level2 %}{% endif %}
+          <tr data-group="{{ gid }}"{% if not first_of_item %} class="cont"{% endif %}>
+            <td></td>
+            <td>{% if first_of_item %}<span class="itemlbl">{{ cat.level2 }}</span>{% endif %}</td>
+            <td class="l3">{{ cat.level3 or '' }}</td>
+            {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
             <td class="r mono">{{ row.planned|num }}</td>
             <td class="r mono dim">{{ row.ratio_pct }}%</td>
             <td class="r mono">{{ row.spent|num }}</td>
@@ -78,14 +99,6 @@
             {% endif %}
           </tr>
           {% endfor %}
-          {# 구분별 소계 — 시트의 소계 행 (7-3). 값은 summary.groups 의 것 #}
-          <tr class="subtotal">
-            <td colspan="6">{{ group.name }} 소계</td>
-            <td class="r mono">{{ group.planned|num }}</td><td></td>
-            <td class="r mono">{{ group.spent|num }}</td>
-            <td class="r mono{% if group.remaining < 0 %} overrun{% endif %}">{{ group.remaining|num }}</td>
-            <td></td>{% if is_admin(user) %}<td></td>{% endif %}
-          </tr>
           {% endfor %}
           <tr class="grand">
             <td colspan="6">총계</td>
@@ -147,8 +160,13 @@
           {% else %}
           <tr><td colspan="6" class="dim">수입 항목이 없습니다 — 교개협 지원 · 수련회비 · 후원금 · 기관부담금 등을 적습니다.</td></tr>
           {% endfor %}
+          {# 위의 잔액 카드와 같은 규칙 — 수입이 없으면 계산하지 않는다 #}
           <tr class="grand"><td>잔액 (총 수입 − 총 지출예산)</td><td></td><td></td>
+            {% if summary.incomes %}
             <td class="r mono{% if summary.balance < 0 %} overrun{% endif %}">{{ summary.balance|num }}</td>
+            {% else %}
+            <td class="r dim">수입 미입력</td>
+            {% endif %}
             <td></td>{% if is_admin(user) %}<td></td>{% endif %}</tr>
         </tbody>
       </table>
