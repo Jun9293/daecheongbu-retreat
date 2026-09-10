@@ -5,7 +5,13 @@
 {#
   봉사자 시간표 (CLAUDE.md 5-8).
   **화면과 내려받는 파일은 같은 구조에서 나온다** — `staff_sheet.build()`.
-  여기서는 그 칸들을 표로 놓기만 한다. 색·병합을 다시 계산하지 않는다.
+  여기서는 그 칸들을 표로 놓기만 한다. 병합·순서를 다시 계산하지 않는다.
+
+  **구조의 색(`cell.fill`)은 파일의 것이다.** 화면은 그 파스텔을 칠하지 않고
+  앱 토큰으로 가른다 — 봉사자 칸과 전체일정 칸은 배경 농도(`band-*`)로, 부서가
+  있는 칸은 그 부서의 앱 색을 왼쪽 선(`--dc`)으로. 어느 파트인지는 구조가
+  `fill` 로만 말하므로 라우터가 `fill_for_part` 의 짝(`part_of_fill`)을 넘긴다 —
+  표를 만드는 함수는 손대지 않는다 (UI 정리 판 1 · 3-a·3-b).
 #}
 <div class="sheetbar">
   <a class="tabish" href="/live?stay=1">{{ live_title }}</a>
@@ -16,9 +22,9 @@
 </div>
 
 {% if sheet.days %}
-<div class="sheetwrap">
-  {# 가로로 길다. 휴대폰에서는 가로로 넘긴다 — 세로로 접거나 다른 모양으로
-     바꾸지 않는다. **같은 표를 보는 것이 이 화면의 목적이다.** #}
+<div class="sheetwrap" style="--timew:{{ sheet.columns[0].width_px }}px">
+  {# 가로로 길다. 휴대폰에서는 날짜 한 개씩 가로로 넘긴다 — 세로로 접거나 다른
+     모양으로 바꾸지 않는다. **같은 표를 보는 것이 이 화면의 목적이다.** #}
   {# 칸 안의 `.cx` 가 높이를 붙들고 있습니다 — 글이 많다고 칸이 늘어나면
      왼쪽 시각 눈금이 오른쪽 내용과 어긋납니다 (5-8). 넘치는 글은 칸을
      늘리는 대신 `dense` 로 작게 씁니다. #}
@@ -30,8 +36,8 @@
                 --fs-head:{{ sheet.font.head_px }}px;
                 --headh:{{ sheet.font.head_row_px }}px">
     {# 열 너비는 CSS 가 아니라 **구조가** 정합니다 — 원본 시트에서 읽은 값이고
-       파일도 같은 값을 씁니다(5-8). `table-layout:fixed` 는 colgroup 이 있으면
-       거기서 너비를 가져가므로 첫 줄의 병합에 휘둘리지 않습니다. #}
+       파일도 같은 값을 씁니다(5-8). 넓은 화면에서는 표가 창에 맞게 줄어들되
+       열끼리의 비율은 이 값 그대로입니다(table-layout:fixed). #}
     <colgroup>
       {% for col in sheet.columns %}
       <col style="width:{{ col.width_px }}px">
@@ -41,11 +47,15 @@
     <tr class="{{ 'headrow' if row < sheet.header_rows }}">
       {% for cell in sheet.cells if cell.row == row %}
       {% set tag = 'th' if cell.kind in ('head', 'time') else 'td' %}
+      {# 어느 띠인지는 **구조의 열**이 말한다 (columns[].band) — 빈 칸·머리 띠·내용
+         칸이 같은 답을 낸다. 시각 열과 날짜 머리(첫 줄)는 띠가 없다 #}
+      {% set band = none if (row == 0 or cell.col in sheet.time_cols) else sheet.columns[cell.col].band %}
+      {% set part = part_of_fill.get(cell.fill) if cell.kind == 'body' else none %}
       <{{ tag }}
         {% if cell.rowspan > 1 %}rowspan="{{ cell.rowspan }}"{% endif %}
         {% if cell.colspan > 1 %}colspan="{{ cell.colspan }}"{% endif %}
-        class="c-{{ cell.kind }}{{ ' edge' if cell.col in sheet.day_edges }}"
-        {% if cell.fill %}style="background:#{{ cell.fill }}"{% endif %}
+        class="c-{{ cell.kind }}{{ ' edge' if cell.col in sheet.day_edges }}{{ ' dayhead' if row == 0 and cell.kind == 'head' and cell.col not in sheet.time_cols }}{{ ' band-' ~ band if band }}{{ ' part' if part }}"
+        {% if part %}style="--dc:{{ dept_color_of_part.get(part, 'var(--ink-3)') }}" title="{{ part }}"{% endif %}
       ><div class="cx{{ ' dense' if cell.dense }}"
             style="--n:{{ cell.rowspan }}">{{ cell.text }}</div></{{ tag }}>
       {% endfor %}

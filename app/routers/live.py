@@ -23,6 +23,7 @@ from app.deps import all_retreats, get_current_retreat, log_activity
 from app.domain import live as live_domain
 from app.domain import staff_sheet as sheet_domain
 from app.domain import permissions as perm
+from app.domain.departments import DEPARTMENT_COLORS
 from app.models import (
     AUDIENCE_HINTS,
     AUDIENCE_LABELS,
@@ -163,6 +164,13 @@ def staff_page(
             "retreats": all_retreats(db),
             # 화면과 파일이 **같은 함수에서 나온 같은 구조**를 쓴다 (5-8)
             "sheet": sheet_domain.build(db, retreat),
+            # 화면은 구조의 파스텔을 안 칠하고 앱 토큰으로 가른다 (UI 정리 판 1 · 3-b).
+            # 어느 파트의 칸인지는 구조가 `fill` 로만 말하므로 같은 함수
+            # (`fill_for_part`)로 짝을 되돌린다 — 표를 두 벌 만들지 않는다
+            "part_of_fill": {sheet_domain.fill_for_part(p): p for p in sheet_domain.team_parts()},
+            "dept_color_of_part": {part: DEPARTMENT_COLORS[key]
+                                   for key, part in live_domain.DEPARTMENT_PART.items()
+                                   if key in DEPARTMENT_COLORS},
             "active_tab": "staff",
             "page_subtitle": "봉사팀 보기",
         },

@@ -202,6 +202,10 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
 .sidefoot .who{min-width:0;flex:1}
 .sidefoot .who b,.sidefoot .who small{display:block;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 소속 줄은 자르지 않는다 — 부서가 여섯이면 여섯이 읽혀야 한다 (UI 정리 판 1 · 4-a).
+   두 줄까지 꺾고, 그 넘는 것은 말줄임 대신 전체를 title 로 */
+.sidefoot .who .depts{white-space:normal;text-overflow:clip;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.35}
 .sidefoot .who b{font-weight:600;color:var(--ink)}
 .sidefoot .who small{color:var(--ink-2);font-size:var(--fz-sm)}
 
@@ -1284,69 +1288,82 @@ button.btn:disabled{opacity:.4;cursor:default}
 .sheetbar .sp{margin-left:auto}
 .sheetbar .hint{font-size:var(--fz-md);color:var(--ink-2)}
 
-/* 가로로 길다 — 휴대폰에서는 가로로 넘긴다. 세로로 접지 않는다. */
+/* ── 봉사팀 보기 (5-8 · UI 정리 판 1 · 3-b) ─────────────────────────
+   엑셀 흉내(고정폭 시각 · 굵은 회색 격자 · 파스텔 채움)를 걷었다. 글꼴은 본문과
+   같고, 격자는 헤어라인 하나, 날짜 머리는 본문색 굵게, 시각은 보조색.
+   봉사자 칸과 전체일정 칸은 **배경 농도**(`band-all` = 사이드바 면)로 가르고,
+   부서가 있는 칸은 그 부서의 앱 색을 **왼쪽 선**(`--dc`)으로 쓴다 — 4-0 의
+   「부서 색은 점과 왼쪽 마개에만」 과 같은 자리다. 새 색은 없다. */
 .sheetwrap{flex:1;overflow:auto;background:var(--paper)}
-/* 열 너비를 지킨다 — 좁은 화면에서 표가 찌그러지는 대신 가로로 넘어가게 */
 /* **글자 크기를 여기서 정하지 않는다.** 칸 크기와 같은 자리(staff_sheet)에서
    나와 표에 실려 온다 — 칸만 커지고 글자는 그대로인 상태가 또 생기지 않게. */
+/* 표를 창에 맞춰 줄이지 않는다 — 열 너비는 원본 시트의 값이고(5-8 「원본과 같은
+   비율」) 넘침 판정(dense)이 그 너비를 전제한다. 1440 에서는 네 날짜가 그대로
+   들어가고(구조 합 1178px), 그보다 좁으면 가로로 넘긴다. */
 .ssheet{border-collapse:separate;border-spacing:0;table-layout:fixed;
-  width:max-content;min-width:100%;
-  font-size:var(--fs);line-height:var(--lh);color:var(--ink)}
-.ssheet th,.ssheet td{border:1px solid rgba(0,0,0,.55);padding:0;
-  vertical-align:top;word-break:break-word;background:var(--paper)}
+  width:max-content;min-width:100%;font-size:var(--fs);line-height:var(--lh);color:var(--ink)}
+.ssheet th,.ssheet td{border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  padding:0;vertical-align:top;word-break:break-word;background:var(--paper)}
+.ssheet th{font-weight:600}
 
 /* **한 시각의 높이를 같게 붙드는 자리.** 칸 안의 이 상자가 높이를 정하므로
    글이 많다고 줄이 밀려나지 않는다 — 밀려나면 왼쪽 시각 눈금이 오른쪽
    내용과 어긋난다. 여백도 여기 둔다(칸에 두면 높이 계산이 어긋난다). */
-/* `border-collapse:separate` 라 칸마다 위아래 테두리 1px 씩이 더 붙는다.
-   그만큼 빼야 rowspan 2 짜리 한 칸과 rowspan 1 짜리 두 칸의 높이가 같아진다 —
-   안 빼면 줄마다 2px 씩 어긋나 아래로 갈수록 시각 눈금이 밀린다. */
-.cx{box-sizing:border-box;height:calc(var(--rowh) * var(--n) - 2px);
-  padding:3px 5px;line-height:var(--lh);overflow:hidden;white-space:pre-line}
-/* 넘치는 칸만 작게. **기본이 커진 만큼 이쪽도 같이 커진다** */
+/* `border-collapse:separate` 라 칸마다 아래 테두리 1px 이 붙는다. 그만큼 빼야
+   rowspan 2 짜리 한 칸과 rowspan 1 짜리 두 칸의 높이가 같아진다. */
+/* 여백 6px 10px · 줄 간격 --lh 는 **staff_sheet 의 CELL_PAD_PX·CELL_VPAD_PX·LINE_SCALE
+   과 같은 값**이다 — 넘침 판정이 이 여백을 전제한다. 여기만 바꾸면 안 넘친다고
+   판정한 칸이 화면에서 잘린다 (tests/test_stage26.py 가 둘을 견준다) */
+.cx{box-sizing:border-box;height:calc(var(--rowh) * var(--n) - 1px);
+  padding:6px 10px;line-height:var(--lh);overflow:hidden;white-space:pre-line}
+/* 넘치는 칸만 작게 — 13px 는 14px 하한의 예외다. 칸을 늘리면 시각 눈금이
+   어긋나므로 글자를 줄인다(5-8). 자리는 tests/test_stage26.py 에 이유와 함께 */
 .cx.dense{font-size:var(--fs-dense);line-height:var(--lh-dense)}
-/* 머리줄과 시각 열은 본문보다 크고 굵다 — 시각은 이 표에서 가장 자주 보는 글자다 */
-.c-head > .cx,.c-time > .cx{font-size:var(--fs-head);font-weight:600}
-.c-head > .cx{display:flex;align-items:center;justify-content:center;
-  white-space:nowrap}
-/* 시각은 **그 시각이 시작하는 자리**에 붙인다. 가운데에 두면 한 칸(한 시간)의
-   한복판에 떠서 오른쪽 내용보다 반 칸 아래로 보인다. */
-.c-time > .cx{display:flex;align-items:flex-start;justify-content:center;
-  white-space:nowrap}
-.c-note > .cx{display:flex;align-items:center;justify-content:center;
-  color:var(--ink-3)}
-/* 일자 사이만 굵게 — 파일의 double 테두리에 대응한다 */
-.ssheet .edge{border-left:3px double rgba(0,0,0,.75)}
+/* 머리줄은 본문색 굵게. 시각은 보조색 — 이 표에서 가장 자주 보는 글자라
+   머리와 같은 크기지만 본문과 같은 글꼴이다(고정폭 아님) */
+.c-head > .cx{font-size:var(--fs-head);font-weight:600;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;white-space:nowrap}
+.c-time > .cx{font-size:var(--fs-head);font-weight:500;color:var(--ink-2);
+  display:flex;align-items:flex-start;justify-content:center;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+/* 긴 빈 칸의 안내는 글자를 위에 붙이고 보조색 */
+.c-note > .cx{color:var(--ink-2);display:flex;align-items:flex-start;justify-content:center}
+/* 일자 사이 — 헤어라인보다 한 단 진한 선 하나 */
+.ssheet .edge{border-left:2px solid var(--rule-2)}
+/* 띠 — 봉사자 칸은 종이색, 전체일정 칸은 사이드바 면 */
+.ssheet .band-all{background:var(--side)}
+.ssheet .band-all.c-head{background:var(--st-done-bg)}
+.ssheet .band-staff.c-head{background:var(--side)}
+/* 부서가 있는 칸 — 그 부서의 앱 색을 왼쪽 선으로 */
+.ssheet td.part{box-shadow:inset 3px 0 0 var(--dc)}
+.ssheet td.part > .cx{padding-left:13px}
 
 /* 시각 열과 머리 두 줄은 스크롤해도 붙어 있게 */
-.ssheet .c-head{position:sticky;top:0;z-index:6;font-weight:600;text-align:center;
-  white-space:nowrap}
-/* 머리 줄 높이와 둘째 줄이 붙는 자리는 **같은 값 하나**여야 한다 —
-   따로 적으면 그 틈으로 본문이 비쳐 지나간다 */
+.ssheet .c-head{position:sticky;top:0;z-index:6;text-align:center;white-space:nowrap;
+  background:var(--side)}
 .ssheet .headrow th{height:var(--headh)}
-.ssheet .headrow .cx{height:calc(var(--headh) - 2px);
-  line-height:calc(var(--headh) - 2px);padding:0 5px}
+.ssheet .headrow .cx{height:calc(var(--headh) - 1px);
+  line-height:calc(var(--headh) - 1px);padding:0 8px}
 /* 내용 줄의 높이는 전부 같다 */
 .ssheet tr:not(.headrow){height:var(--rowh)}
 .ssheet tr.headrow + tr.headrow .c-head{top:var(--headh)}
-.ssheet .c-time{position:sticky;left:0;z-index:5;font-family:var(--mono);
-  text-align:center;color:var(--ink-2)}
+.ssheet .c-time{position:sticky;left:0;z-index:5;text-align:center;background:var(--paper)}
 /* 왼쪽 시각 열만 붙인다. 오른쪽 것은 표 끝이라 붙일 필요가 없다. */
 .ssheet tr > .c-time:last-child{position:static}
-/* **왼쪽 위 모서리만** 가로·세로 둘 다 붙는다. `.c-head:first-child` 로 적으면
-   둘째 머리 줄의 첫 칸(첫 부서의 `봉사자`)까지 왼쪽에 붙어 시각 열을 덮는다. */
+/* **왼쪽 위 모서리만** 가로·세로 둘 다 붙는다. */
 .ssheet tr:first-child .c-head:first-child{left:0;z-index:8}
 .ssheet .c-empty{background:var(--paper)}
+.ssheet .c-empty.band-all{background:var(--side)}
 
 /* **열 너비는 여기서 정하지 않는다.** 원본 시트에서 읽은 값이 구조에 실려
-   오고 `<colgroup>` 이 그대로 씁니다 — 화면과 파일이 같은 비율이어야 하므로
-   너비를 CSS 에도 적어 두면 그 순간 출처가 둘이 됩니다. */
-
+   오고 `<colgroup>` 이 그대로 씁니다. 좁은 화면에서는 날짜 한 개씩 물려서
+   넘깁니다(scroll-snap) — 붙어 있는 시각 열 폭만큼 물리는 자리를 밀어야
+   물린 날짜의 첫 칸이 그 열 아래로 안 들어간다(--timew 는 구조의 시각 열 폭). */
 @media (max-width:820px){
   .sheetbar{padding:8px 12px;gap:10px}
   .sheetbar .hint{display:none}
-  /* 표 모양을 바꾸지 않는다 — 같은 표를 보는 것이 이 화면의 목적이다.
-     좁아지면 줄여 넣지 않고 가로로 넘긴다. */
+  .sheetwrap{scroll-snap-type:x mandatory;scroll-padding-left:var(--timew,64px)}
+  .ssheet .dayhead{scroll-snap-align:start}
 }
 
 
@@ -1771,12 +1788,23 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fintbl .nowrap{white-space:nowrap}
 /* 차액이 음수(초과)면 붉다 — 100% 로 덮지 않는다 (7-3). 값은 --red-ink 하나 */
 .fintbl .overrun,.grouphead .overrun{color:var(--red-ink);font-weight:600;font-style:normal}
-/* 구분·항목 행 (7-3) — 자료 행과 갈리도록 옅은 채움. 4-0 의 값만 쓴다:
-   구분은 완료 배지의 채움(#EFEFED), 항목은 그보다 약한 사이드바 면 */
-.fintbl tr.l1row td{background:var(--st-done-bg);font-weight:600}
-.fintbl tr.l2row td{background:var(--side);font-weight:500}
-.fintbl tr.subtotal td{background:var(--side);font-weight:600;border-top:1px solid var(--rule-2)}
+/* 구분 제목 줄 (7-3) — 자료 행과 갈리도록 옅은 채움. 4-0 의 값만 쓴다:
+   완료 배지의 채움(#EFEFED). 항목은 줄이 아니라 첫 세부항목의 라벨(.itemlbl) */
+.fintbl tr.l1row td{background:var(--st-done-bg);font-weight:600;border-top:1px solid var(--rule-2)}
 .fintbl tr.grand td{font-weight:700;border-top:2px solid var(--rule-2)}
+/* 구분 제목 줄 (UI 정리 판 1 · 1-b) — 이름 · 세부항목 수 · 소계가 한 줄이고
+   접기 단추는 목록의 캐럿과 같은 것이다. 접힘은 화면 안에서만이다 */
+.budtbl .fold{border:0;background:none;padding:0 6px 0 0;cursor:pointer;color:var(--ink-3);
+  font:inherit;line-height:1;vertical-align:baseline}
+.budtbl .fold .caret{display:inline-block;font-size:var(--fz-xs);transition:transform .15s}
+.budtbl .fold[aria-expanded="false"] .caret{transform:rotate(-90deg)}
+.budtbl tr.l1row .cnt{margin-left:6px}
+/* 항목은 별도 줄이 아니라 첫 세부항목 줄의 들여쓴 작은 라벨이다 (1-c) */
+.budtbl .itemlbl{display:inline-block;font-size:var(--fz-sm);color:var(--ink-2);font-weight:500;
+  padding-left:8px}
+.budtbl td.l3{padding-left:22px}
+/* 수입이 없을 때의 잔액 — 값이 아니라 말이다. 빨강을 쓰지 않는다 (2-a) */
+.kpi .v.unset{font-size:var(--fz-xl);font-weight:600;color:var(--ink-2);padding-top:6px}
 .rowedit summary{cursor:pointer;color:var(--ink-2);font-size:var(--fz-sm)}
 .editform{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .editform input,.editform select{font:inherit;font-size:var(--fz-sm);padding:5px 8px;

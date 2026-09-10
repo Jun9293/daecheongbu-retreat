@@ -73,7 +73,10 @@ COL_MAIN_PX = _width_px(SRC_COL_MAIN)                  # 86
 COL_SIDE_PX = _width_px(SRC_COL_SIDE)                  # 64
 COL_WIDTH_PX = COL_MAIN_PX + COL_SIDE_PX               # 150 — 한 칸 전체
 
-CELL_PAD_PX = 12                  # 좌우 여백 + 테두리
+CELL_PAD_PX = 21                  # 좌우 여백(10+10) + 테두리 1 — 화면 CSS 의 `.cx` 와 같은 값이어야
+                                  # 한다. 여기가 정본이고 CSS 는 이 값을 따른다 (UI 정리 판 1 · 검토가
+                                  # 짚은 자리 — 둘이 갈리면 넘침 판정이 화면과 어긋나 글이 조용히 잘린다)
+CELL_VPAD_PX = 12                 # 위아래 여백(6+6) — 넘침 판정이 세로에서도 뺀다
 
 # ── 글자 크기 ────────────────────────────────────────────────────────
 #
@@ -88,8 +91,8 @@ CELL_PAD_PX = 12                  # 좌우 여백 + 테두리
 FONT_TO_ROW = 0.42
 HEAD_FONT_SCALE = 1.10            # 머리줄과 시각 열은 본문보다 크고 굵게
 DENSE_FONT_SCALE = 0.82           # 넘치는 칸만 작게 — 기본이 커진 만큼 함께 커진다
-LINE_SCALE = 1.32
-DENSE_LINE_SCALE = 1.28
+LINE_SCALE = 1.35                 # 줄 간격 — 화면은 이 값(--lh)을 그대로 쓴다 (3-c 의 1.35 이상)
+DENSE_LINE_SCALE = 1.30
 
 BODY_FONT_PT = round(SRC_ROW_PT * FONT_TO_ROW, 1)            # 12.0
 HEAD_FONT_PT = round(BODY_FONT_PT * HEAD_FONT_SCALE, 1)      # 13.2
@@ -431,7 +434,8 @@ def dense_of(text: str, rowspan: int, colspan: int, col: int = 0) -> bool:
     줄 높이는 고정이므로(`ROW_HEIGHT_PX`) 넘치는 것은 칸을 늘려서가 아니라
     **글자를 줄여서** 담는다. 화면과 파일이 같은 판단을 쓰도록 여기서 센다.
     """
-    room = rowspan * ROW_HEIGHT_PX
+    # 테두리 1px 과 위아래 여백은 글이 못 쓰는 자리다 — 화면의 `.cx` 와 같은 셈
+    room = rowspan * ROW_HEIGHT_PX - CELL_VPAD_PX - 1
     return wrapped_lines(text, colspan, col=col) * LINE_PX > room
 
 
@@ -582,7 +586,20 @@ def build(db: Session, retreat: Retreat) -> dict:
                         "align": "left", "dense": False,
                     })
                     continue
-                # 반 칸만 비어 있는 줄은 한 줄씩 채운다
+                # 반 칸만 비어 있는 줄은 한 줄씩 채운다. **그 줄의 두 열이 다 비면
+                # 한 칸(1×2)으로** — 열마다 1×1 로 놓으면 09:30 에 시작하는
+                # 프로그램 위의 반 줄이 세로선으로 둘로 갈라져 「빈 칸 하나가
+                # 더 있는」 것처럼 보인다 (UI 정리 판 1 · 0-d — 화면과 파일 둘 다)
+                if c == 0:
+                    for k in range(ROWS_PER_HOUR):
+                        if not block[k][0] and not block[k][1]:
+                            cells.append({
+                                "row": HEADER_ROWS + index + k, "col": band["col"],
+                                "rowspan": 1, "colspan": 2, "text": "",
+                                "fill": FILL_NONE, "kind": "empty", "align": "left",
+                                "dense": False,
+                            })
+                            block[k] = [True, True]
                 for k in range(ROWS_PER_HOUR):
                     if not block[k][c]:
                         cells.append({
