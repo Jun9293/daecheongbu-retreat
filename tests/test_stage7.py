@@ -306,14 +306,15 @@ def test7_f02_등록_폼은_접힌_채_시작하고_버튼으로_열린다(admin
     assert "exp-close" in js                              # 닫기 단추
 
 
-def test7_f03_예산_구분_행과_항목_행이_갈린다(admin_client, money_retreats):
+def test7_f03_예산_구분_행과_항목_라벨이_갈린다(admin_client, money_retreats):
+    """UI 정리 판 1 에서 항목 별도 줄이 없어졌다 — 첫 세부항목 줄의 라벨이다 (1-c)."""
     admin_client.get(f"/board?retreat_id={money_retreats['retreat']}")
     page = admin_client.get("/budget")
-    assert 'class="l1row"' in page.text and 'class="l2row"' in page.text
-    assert page.text.count('class="l2row"') == 2          # 항목(포스터·굿즈)마다 하나
-    # 4-0 의 색만 쓴다 — 구분은 완료 배지 채움, 항목은 그보다 약한 사이드바 면
+    assert 'class="l1row"' in page.text and 'class="l2row"' not in page.text
+    assert page.text.count('class="itemlbl"') == 2          # 항목(포스터·굿즈)마다 하나
+    # 4-0 의 색만 쓴다 — 구분은 완료 배지 채움, 항목 라벨은 보조색 글자
     assert re.search(r"\.fintbl tr\.l1row td\{[^}]*background:var\(--st-done-bg\)[^}]*font-weight:600", CSS)
-    assert re.search(r"\.fintbl tr\.l2row td\{[^}]*background:var\(--side\)[^}]*font-weight:500", CSS)
+    assert re.search(r"\.budtbl \.itemlbl\{[^}]*color:var\(--ink-2\)", CSS)
 
 
 # ════════════════════════════════════════════════════════════════════

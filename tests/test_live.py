@@ -1114,7 +1114,7 @@ def test_p30_주요_화면이_실제로_그려진다(admin_client, live_data, pa
     marks = {
         "/live?stay=1": ['class="days"', 'id="live-meta"', 'id="live-opts"'],
         "/live/staff": ['class="ssheet"', "<colgroup>", 'class="c-time"',
-                        'class="c-body"', "--fs:"],
+                        'class="c-body', "--fs:"],
         # 이 회차엔 업무가 없어 바가 없다. 업무가 든 보드가 그려지는지는
         # test_board_web.py 의  가 본다
         "/board": ['id="board"', 'id="board-meta"'],

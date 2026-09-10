@@ -164,15 +164,18 @@ def test_s14_사용자_카드_세_줄이_꺾이지_않는다():
     """1-h — 이름 · 역할 · 부서 각 한 줄. 240px 에서 nowrap + 말줄임."""
     foot = SHELL[SHELL.index('class="sidefoot"') : SHELL.index("</aside>")]
     # 세 줄: 이름(b) + 역할(small) + 부서(small)
-    assert foot.count("<small>") == 2 and "<b>{{ user.name }}</b>" in foot
+    assert foot.count("<small") == 2 and "<b>{{ user.name }}</b>" in foot
     assert "side_dept_name" in foot
     # 로그아웃은 카드에 없다 — 설정 › 내 정보에만 (4-17)
     assert "/logout" not in foot
     settings_tpl = (ROOT / "app" / "templates" / "settings.html").read_text(encoding="utf-8")
     assert '"/logout"' in settings_tpl
-    # 꺾이지 않는다 — nowrap + 넘침 처리, 칸은 줄어들 수 있어야 한다(min-width:0)
+    # 이름·역할은 꺾이지 않는다 — nowrap + 넘침 처리, 칸은 줄어들 수 있어야 한다(min-width:0).
+    # **소속 줄만 예외다** — 두 줄까지 꺾이고 전체는 title 로 (UI 정리 판 1 · 4-a)
     who = re.search(r"\.sidefoot \.who b,\.sidefoot \.who small\{([^}]*)\}", CSS).group(1)
     assert "white-space:nowrap" in who and "text-overflow:ellipsis" in who
+    depts = re.search(r"\.sidefoot \.who \.depts\{([^}]*)\}", CSS).group(1)
+    assert "white-space:normal" in depts and "-webkit-line-clamp:2" in depts
     assert re.search(r"\.sidefoot \.who\{[^}]*min-width:0", CSS)
     # 사이드바 폭이 목업과 같은 240px 이다 (9장)
     assert "--sw:240px" in CSS
