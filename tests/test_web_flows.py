@@ -200,7 +200,7 @@ def test_부서리더는_자기_부서_할일만_선명하게_보고_타부서�
     retreat, hongbo, chanyang = _keyed_two_departments(admin_client)
     _make_run(retreat.id, "포스터 시안 확정", hongbo.id)
     _make_run(retreat.id, "콘티 정리", chanyang.id)
-    make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
+    make_user("홍보 리더", "010-3333-4444", "dept_lead", dept=hongbo.id)
 
     leader = client
     login_as(leader, "01033334444")
@@ -220,7 +220,7 @@ def test_부서리더는_타부서_할일의_상태를_바꿀_수_없다(admin_c
     """목록의 상태 변경도 보드와 같은 엔드포인트다 (4-14) — 같은 권한이 걸린다."""
     retreat, hongbo, chanyang = _keyed_two_departments(admin_client)
     run_id = _make_run(retreat.id, "콘티 정리", chanyang.id)
-    make_user("홍보 리더", "010-3333-4444", "dept_lead", department_id=hongbo.id)
+    make_user("홍보 리더", "010-3333-4444", "dept_lead", dept=hongbo.id)
 
     login_as(client, "01033334444")
     response = client.post(f"/board/task/{run_id}/status", json={"status": "완료"})
@@ -235,7 +235,7 @@ def test_열람전용_계정은_업무를_고칠_수_없다(admin_client, client
     보드·목록이 함께 쓰는 엔드포인트다."""
     retreat, hongbo, _ = _keyed_two_departments(admin_client)
     run_id = _make_run(retreat.id, "포스터 시안 확정", hongbo.id)
-    make_user("담당 전도사", "010-5555-6666", "viewer", department_id=hongbo.id)
+    make_user("담당 전도사", "010-5555-6666", "viewer", dept=hongbo.id)
 
     login_as(client, "01055556666")
     assert client.post(

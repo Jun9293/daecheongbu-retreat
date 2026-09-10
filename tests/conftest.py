@@ -62,8 +62,9 @@ def sample_retreat(db: Session) -> models.Retreat:
     db.add(retreat)
     db.flush()
 
-    for i, name in enumerate(["총무팀", "홍보팀", "찬양팀"]):
-        db.add(models.Department(retreat_id=retreat.id, name=name, sort_order=i))
+    # 부서는 키를 갖는다 — 소속·알림이 키로 돈다 (2장 · 도막 4)
+    for i, (key, name) in enumerate([("chongmu", "총무팀"), ("hongbo", "홍보팀"), ("chanyang", "찬양팀")]):
+        db.add(models.Department(retreat_id=retreat.id, key=key, name=name, sort_order=i))
 
     categories = [
         ("홍보", "포스터", "인쇄비", 300_000),
@@ -126,7 +127,7 @@ def login_as(client, phone: str, name: str = "테스터"):
         if person is None:
             first = db.scalar(select(func.count()).select_from(User)) == 0
             person = User(
-                name=name, phone_number=phone, role="admin" if first else "member"
+                name=name, phone_number=phone, role="admin" if first else "general"
             )
             db.add(person)
             db.commit()
@@ -137,22 +138,62 @@ def login_as(client, phone: str, name: str = "테스터"):
     return response
 
 
-def make_user(name, phone, role="member", department_id=None):
+def dept_key_of(db, user):
+    """시험용 — 그 사람의 부서 키 **하나**(없으면 None, 둘 이상이면 실패).
+    옛 「한 사람 → 키 하나」 를 부르던 단언이 그대로 읽히게 두었다."""
+    from app.domain import permissions as perm
+
+    keys = sorted(perm.my_dept_keys(user))
+    assert len(keys) <= 1, f"부서가 여럿이다: {keys}"
+    return keys[0] if keys else None
+
+
+def legacy_user(db, *, role="member", dept=None, **kw):
+    """열린 세션 안에서 옛 모양(`role="dept_lead"` + 부서 하나)으로 계정을 만든다.
+
+    `make_user` 는 세션을 따로 열어 id 만 돌려주는데, 회차·부서·업무를 한 세션에서
+    같이 만드는 시험은 그 세션 안의 `User` 객체가 필요하다. 소속은 `perm.assign`
+    으로 놓는다 — 표를 직접 안 만진다.
+    """
+    from app.domain import permissions as perm
+    from app.models import Department, User
+
+    top, dept_role = perm.LEGACY_ROLE_MAP.get(role, (role, perm.MEMBER))
+    person = User(role=top, **kw)
+    db.add(person)
+    if dept is not None:
+        db.flush()
+        perm.assign(db, person, db.get(Department, dept), dept_role)
+    return person
+
+
+def make_user(name, phone, role="member", dept=None, departments=None):
     """시험용 계정을 DB 에 직접 만든다.
 
     전에는 구설계 POST(/users/create) 로 만들었는데, 그 엔드포인트는 화면이
     없어져 단계 2 에서 지웠다 (14장). 실제 흐름의 계정 생성은 /admin/users
     (4-12)이고, 여기는 픽스처라 저장만 하면 된다.
+
+    **부서 여럿을 받는다** (도막 4). `departments=[(dept_id, "lead"), (dept_id, "member")]`.
+    옛 부르기 `role="dept_lead", dept=N`(부서 하나) 도 그대로 통과한다 — 전체
+    역할은 「일반」 이 되고 그 부서에 리더로 붙는다. `role="member"` 이고
+    부서가 없으면 소속 없는 일반이다(열람 전용 · ②).
     """
     from app.db import SessionLocal
-    from app.models import User
+    from app.domain import permissions as perm
+    from app.models import Department, User
 
     digits = "".join(ch for ch in phone if ch.isdigit())
+    top, dept_role = perm.LEGACY_ROLE_MAP.get(role, (role, perm.MEMBER))
+    rows = list(departments or [])
+    if dept is not None:
+        rows.insert(0, (dept, dept_role))
     with SessionLocal() as db:
-        person = User(
-            name=name, phone_number=digits, role=role, department_id=department_id
-        )
+        person = User(name=name, phone_number=digits, role=top)
         db.add(person)
+        db.flush()
+        for dept_id, r in rows:
+            perm.assign(db, person, db.get(Department, dept_id), r)
         db.commit()
         return person.id
 

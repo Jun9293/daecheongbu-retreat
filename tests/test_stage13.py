@@ -111,8 +111,8 @@ def test13_f02_드롭다운으로_내_부서를_고르면_옛_내_부서와_같�
     옛 = _목록(c, "?scope=mine")           # 옛 주소가 살아 있다 (2-d)
     for html in (새, 옛):
         assert "홍보 포스터" in html and "찬양 콘티" not in html
-    # 옛 주소도 드롭다운에 그 부서가 골라진 채로 온다
-    assert 'value="hongbo" selected' in 옛
+    # 옛 주소도 드롭다운에 「내 부서」 가 골라진 채로 온다 (도막 4 · ④ — 부서가 여럿이면 전부)
+    assert 'value="depts" selected' in 옛
 
 
 def test13_f03_상태_건수는_고른_부서_안에서_센다(admin_client):
@@ -124,8 +124,8 @@ def test13_f03_상태_건수는_고른_부서_안에서_센다(admin_client):
 
     with app_session() as db:
         retreat = db.scalars(select(models.Retreat)).first()
-        전체 = tasklist.build(db, retreat, today=TODAY, my_key=None, dim=False)
-        하나 = tasklist.build(db, retreat, today=TODAY, my_key=None, dim=False,
+        전체 = tasklist.build(db, retreat, today=TODAY, my_keys=None, dim=False)
+        하나 = tasklist.build(db, retreat, today=TODAY, my_keys=None, dim=False,
                             dept="hongbo")
     assert 전체.state_counts["wait"] == 2
     assert 하나.state_counts["wait"] == 1                 # 고른 부서 안에서

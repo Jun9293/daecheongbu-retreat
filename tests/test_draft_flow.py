@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app import models
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, legacy_user
 
 OPEN = "2027-01-15"
 CLOSE = "2027-01-17"
@@ -45,8 +45,8 @@ def library(admin_client):
                                   status="완료"))
             made[title] = lib.id
 
-        lead = models.User(name="스케치 리더", phone_number="01055556666",
-                           role="dept_lead", department_id=depts["sketch"].id)
+        lead = legacy_user(db, name="스케치 리더", phone_number="01055556666",
+                           role="dept_lead", dept=depts["sketch"].id)
         db.add(lead)
         db.commit()
         return made

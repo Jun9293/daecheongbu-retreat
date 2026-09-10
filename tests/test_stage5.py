@@ -388,7 +388,7 @@ def test5_c01_확인_요청_취소는_상태다(admin_client, client, fin):
     from app.routers.reviews import create_review_requests, pending_for_user
 
     lead_id = make_user("총무 팀원", "01066660001", "dept_lead",
-                        department_id=fin["dept"])
+                        dept=fin["dept"])
     with app_session() as db:
         retreat = db.get(models.Retreat, fin["retreat"])
         admin = db.scalars(select(models.User).where(models.User.role == "admin")).first()
@@ -421,7 +421,7 @@ def test5_c02_배지_수와_답을_기다리는_칩_수가_같다(admin_client, 
     from app.notifications import system_unread_count
     from app.routers.reviews import create_review_requests, pending_for_user
 
-    make_user("총무 팀원2", "01066660002", "member", department_id=fin["dept"])
+    make_user("총무 팀원2", "01066660002", "member", dept=fin["dept"])
     with app_session() as db:
         retreat = db.get(models.Retreat, fin["retreat"])
         admin = db.scalars(select(models.User).where(models.User.role == "admin")).first()
@@ -442,7 +442,8 @@ def test5_c02_배지_수와_답을_기다리는_칩_수가_같다(admin_client, 
 
         # 부서 없는 admin — 배지의 요청 수 = 칩 행 수 (화면과 배지가 같은 말)
         admin = db.scalars(select(models.User).where(models.User.role == "admin")).first()
-        assert admin.department_id is None      # 전제 — admin 픽스처는 부서가 없다
+        from app.domain import permissions as perm
+        assert not perm.my_dept_keys(admin)      # 전제 — admin 픽스처는 부서가 없다
         admin_pending = len(pending_for_user(db, admin, retreat))
         assert admin_pending == 1               # 전 부서의 대기 요청을 다 본다
     pending_page = client.get("/notifications?chip=pending").text
@@ -484,7 +485,7 @@ def test5_c04_체크리스트_흐림은_부서_키다(admin_client, client, fin)
         db.add(models.Checklist(retreat_id=fin["retreat"], name="비품 목록",
                                 department_id=fin["dept"]))
         db.commit()
-    make_user("옛 소속", "01066660003", "dept_lead", department_id=old_dept_id)
+    make_user("옛 소속", "01066660003", "dept_lead", dept=old_dept_id)
     login_as(client, "01066660003")
     client.get(f"/board?retreat_id={fin['retreat']}")
     page = client.get("/checklists").text

@@ -72,7 +72,7 @@ def two_retreats(admin_client):
         ids = {"old_hebron": old_hebron.id, "retreat": cur.id,
                "hebron": hebron.id, "sketch": sketch.id, "entry": entry.id}
     lead = make_user("옛 소속 리더", "01077770001", "dept_lead",
-                     department_id=ids["old_hebron"])
+                     dept=ids["old_hebron"])
     ids["lead"] = lead
     return ids
 
@@ -160,15 +160,15 @@ def test6_k04_새_회차를_열어도_부서_리더가_자기_지출을_만든�
 # 커밋이 생겼다. 식 문자열은 그 줄의 비교 식 **그대로**이고, 같은 파일에
 # 같은 식이 둘이면 k05 의 셈에서 걸린다(아래 「같은 식이 두 번」).
 ID_비교_허용: dict[tuple[str, str], str] = {
-    # 키 없는 부서(구설계 데이터)의 되돌림 — None==None 통과 방지
-    ("app/domain/permissions.py", "user_department_id == target_department_id"):
-        "키가 없을 때만 오는 id 되돌림 경로",
-    ("app/notifications.py", "User.department_id == department_id"):
-        "department_members 의 키 없는 부서 되돌림",
-    ("app/routers/reviews.py", "ReviewRequest.department_id == user.department_id"):
-        "키 없는 부서 소속의 받은 요청 조회 되돌림",
-    ("app/routers/reviews.py", "user.department_id == target.id"):
-        "키 없는 부서 되돌림 (응답 권한)",
+    # 사람 소속을 id 로 되돌리던 줄들(permissions·notifications·reviews·settings 의
+    # 인원수)은 도막 4 에서 사라졌다 — 소속이 `user_departments` 로 가고 키로만 본다
+    # 소속 표(user_departments) 안에서의 조인·행 맞춤 — 여기가 유일한 창구다(도막 4).
+    # 부서 행은 부르는 쪽이 이번 회차에서 키로 찾아 넘긴 것이라 id 로 맞춰도 회차를
+    # 넘어가지 않는다
+    ("app/domain/permissions.py", "Department.id == UserDepartment.department_id"):
+        "소속 줄에 부서 행을 붙여 키로 거르는 조인",
+    ("app/domain/permissions.py", "m.department_id == department.id"):
+        "assign·unassign — 같은 부서 행의 소속 줄 찾기 (두 함수에 한 번씩)",
     # 같은 회차 안의 데이터 행 집계·조인 — 사람 소속 판정이 아니다
     ("app/domain/board.py", "r.department_id == dept.id"):
         "회차 안 run 을 부서 행별로 묶는 집계",
@@ -176,13 +176,13 @@ ID_비교_허용: dict[tuple[str, str], str] = {
         "my_dept 는 키로 찾은 이번 회차 부서 행 id — 직전 입력값 집계",
     ("app/routers/reviews.py", "Department.id == ReviewRequest.department_id"):
         "요청 행에 부서 행을 붙이는 조인",
-    ("app/routers/settings.py", "User.department_id == d.id"):
-        "회차 부서별 인원수 집계 (키 없는 부서 되돌림 포함)",
     ("app/routers/settings.py", "Task.department_id == department_id"):
         "옛 Task 표의 회차 데이터 집계",
     ("app/routers/settings.py", "ExpenseEntry.department_id == department_id"):
         "회차 지출의 부서별 집계",
 }
+# 같은 식이 **정확히 그 수만큼** 나와도 되는 자리 — 이유는 허용 목록의 그 줄에
+같은식_둘 = {("app/domain/permissions.py", "m.department_id == department.id"): 2}
 ID_비교_패턴 = re.compile(
     r"[\w.]*department_id\s*==\s*[\w.()\[\]]+|[\w.]+\s*==\s*[\w.]*department_id")
 
@@ -214,9 +214,10 @@ def test6_k05_소속_판정의_id_비교가_0곳이다():
     # 검사가 볼 것을 실제로 보고 있다 — 센 것이 0이면 성공이 아니라 실패 (11-3).
     # (파일, 식)이 목록과 하나씩 맞고, 같은 식이 두 번 나오면 그것도 잡는다
     본것 = [(f, e) for f, _, e in 전수]
-    겹침 = sorted(k for k, n in collections.Counter(본것).items() if n > 1)
+    겹침 = sorted(k for k, n in collections.Counter(본것).items() if n > 1
+                and 같은식_둘.get(k) != n)
     목록에만 = sorted(set(ID_비교_허용) - set(본것))
-    assert sorted(본것) == sorted(ID_비교_허용), (
+    assert sorted(set(본것)) == sorted(ID_비교_허용) and not 겹침, (
         f"같은 식이 두 번: {겹침} · 목록에만 있는 것: {목록에만}")
 
 

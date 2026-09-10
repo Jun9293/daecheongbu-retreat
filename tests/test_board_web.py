@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import board as board_view
-from tests.conftest import app_session, login_as, mirror_discussion_links
+from tests.conftest import app_session, login_as, mirror_discussion_links, legacy_user
 
 OPEN = dt.date(2026, 8, 21)
 
@@ -94,11 +94,11 @@ def board_data(admin_client):
             db.flush()
             runs[lib.title] = run.id
 
-        lead = models.User(
+        lead = legacy_user(db, 
             name="스케치 리더",
             phone_number="01055556666",
             role="dept_lead",
-            department_id=depts["sketch"].id,
+            dept=depts["sketch"].id,
         )
         db.add(lead)
         db.commit()

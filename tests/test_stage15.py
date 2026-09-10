@@ -211,7 +211,7 @@ def test15_m04_못_바꾸는_사람에게는_그_칸도_행을_연다(admin_clie
     make_user("찬양 리더", "01099990001", "dept_lead", depts[1].id)
     남 = TestClient(app)
     login_as(남, "01099990001", name="찬양 리더")
-    html = 남.get("/tasks").text
+    html = 남.get("/tasks?dept=all").text      # 기본은 내 부서 전부다 (④)
     자리 = html.index("남의 부서 업무")
     assert "cell st pick" not in html[자리:자리 + 400]
 

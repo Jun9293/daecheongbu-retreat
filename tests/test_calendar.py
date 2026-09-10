@@ -13,8 +13,9 @@ import pytest
 from sqlalchemy import select
 
 from app import models
+from app.domain import permissions as perm
 from app.domain import calendar as cal_domain
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, dept_key_of, legacy_user, login_as
 
 import pathlib
 
@@ -45,9 +46,9 @@ def cal_data(admin_client):
             depts[key] = dept
         db.flush()
 
-        lead = models.User(
+        lead = legacy_user(db, 
             name="헤브론 리더", phone_number="01055556666", role="dept_lead",
-            department_id=depts["hebron"].id)
+            dept=depts["hebron"].id)
         db.add(lead)
         admin = db.scalars(
             select(models.User).where(models.User.role == "admin")).first()
@@ -375,18 +376,18 @@ def test_09_어느_부서든_골라_볼_수_있고_기본이_내_것이다(admin
     것만 보려 해도 방법이 없었다. 이제 부서 키가 그대로 범위 값이다."""
     with app_session() as db:
         person = me(db, cal_data)
-        mine = build(db, cal_data, user=person, my_dept_key="chongmuM")
+        mine = build(db, cal_data, user=person, my_dept_keys={"chongmuM"})
         assert mine["scope"] == "mine", "기본이 '내 것' 이 아니다"
         # 담당자가 나인 것만
         assert "헤브론 업무" not in all_titles(mine)
         assert "오늘 업무" in all_titles(mine)
 
         # **내 부서가 아니어도 고를 수 있다** — 이것이 이번에 없던 것이다
-        남의부서 = build(db, cal_data, user=person, my_dept_key="chongmuM",
+        남의부서 = build(db, cal_data, user=person, my_dept_keys={"chongmuM"},
                      scope="hebron")
         assert all_titles(남의부서) == ["헤브론 업무"]
 
-        every = build(db, cal_data, user=person, my_dept_key="chongmuM",
+        every = build(db, cal_data, user=person, my_dept_keys={"chongmuM"},
                       scope="all")
         assert "헤브론 업무" in all_titles(every)
         assert len(all_titles(every)) > len(all_titles(mine))
@@ -414,16 +415,14 @@ def test_10_부서를_키로_비교한다(admin_client, cal_data):
         db.flush()
         # 리더의 계정이 **새 회차의 부서 행**을 가리키게 한다
         lead = db.get(models.User, cal_data["lead_id"])
-        lead.department_id = fresh_dept.id
+        perm.assign(db, lead, fresh_dept, perm.LEAD)
         db.commit()
 
-        from app.domain.departments import department_key_of
-
-        key = department_key_of(db, lead)
+        key = dept_key_of(db, lead)
         assert key == "hebron"
 
         # 옛 회차의 달력에서도 자기 부서 업무가 그대로 보인다
-        view = build(db, cal_data, user=lead, my_dept_key=key, scope="dept")
+        view = build(db, cal_data, user=lead, my_dept_keys={key}, scope="dept")
         assert all_titles(view) == ["헤브론 업무"], \
             "새 회차가 열리자 자기 부서 업무가 사라졌다 — id 로 비교하고 있다"
 
@@ -433,25 +432,26 @@ def test_11_옛_값과_모르는_값을_다르게_다룬다(admin_client, cal_da
 
     다만 **쿠키에 옛 값(`dept`)이 남아 있을 수 있다.** 모르는 값이라고
     `내 것` 으로 떨어뜨리면, 어제까지 우리 부서를 보던 사람이 오늘 갑자기
-    자기 것만 보게 되고 왜인지 알 수 없다. 그래서 **내 부서 키로 옮겨 준다.**
+    자기 것만 보게 되고 왜인지 알 수 없다. 그래서 **「내 부서」(`depts`)로
+    옮겨 준다** — 부서가 여럿이면 전부다 (도막 4 · ④).
     """
     with app_session() as db:
         person = me(db, cal_data)
-        옛것 = build(db, cal_data, user=person, my_dept_key="hebron", scope="dept")
-        assert 옛것["scope"] == "hebron", "옛 값을 내 부서로 안 옮겼다"
+        옛것 = build(db, cal_data, user=person, my_dept_keys={"hebron"}, scope="dept")
+        assert 옛것["scope"] == "depts", "옛 값을 내 부서로 안 옮겼다"
         assert all_titles(옛것) == ["헤브론 업무"]
 
         # 부서가 없는 사람이 옛 값으로 오면 갈 곳이 없다 — '내 것' 으로
-        없는사람 = build(db, cal_data, user=person, my_dept_key=None, scope="dept")
+        없는사람 = build(db, cal_data, user=person, my_dept_keys=set(), scope="dept")
         assert 없는사람["scope"] == "mine"
 
         # 아예 모르는 값도 마찬가지다 (없는 부서 키)
-        모르는값 = build(db, cal_data, user=person, my_dept_key="hebron",
+        모르는값 = build(db, cal_data, user=person, my_dept_keys={"hebron"},
                      scope="없는부서")
         assert 모르는값["scope"] == "mine"
 
         # 고를 수 있는 부서는 그 회차의 부서 전부다
-        보임 = build(db, cal_data, user=person, my_dept_key="hebron")
+        보임 = build(db, cal_data, user=person, my_dept_keys={"hebron"})
         키들 = [d["key"] for d in 보임["departments"]]
         assert "hebron" in 키들 and "chongmuM" in 키들
 

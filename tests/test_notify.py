@@ -16,7 +16,8 @@ from sqlalchemy import select
 from app import models
 from app.domain import diagnosis
 from app.domain import notify
-from tests.conftest import app_session
+from app.domain import permissions as perm
+from tests.conftest import app_session, legacy_user
 
 OPEN = dt.date(2026, 8, 21)
 CLOSE = dt.date(2026, 8, 23)
@@ -58,8 +59,8 @@ def world(admin_client):
             ("헤브론 담당", "01020002000", "member", "hebron"),
             ("헤브론 리더", "01030003000", "dept_lead", "hebron"),
         ]:
-            person = models.User(
-                name=name, phone_number=phone, role=role, department_id=depts[key].id
+            person = legacy_user(db, 
+                name=name, phone_number=phone, role=role, dept=depts[key].id
             )
             db.add(person)
             db.flush()
@@ -153,7 +154,9 @@ def test_03_담당자가_없으면_부서_리더_그다음_총무팀(world):
 
     # 부서 리더가 없으면 총무팀(admin)으로 올린다
     with app_session() as db:
-        db.get(models.User, world["people"]["헤브론 리더"]).role = "member"
+        person = db.get(models.User, world["people"]["헤브론 리더"])
+        hebron = db.get(models.Department, world["depts"]["hebron"])
+        perm.assign(db, person, hebron, perm.MEMBER)      # 리더에서 팀원으로
         db.commit()
     out = _digests()
     admin = next((d for name, d in out.items() if name == "총무 김간사"), None)
@@ -440,14 +443,13 @@ def two_rounds(world):
 
 
 def test_보완01_회차를_두_번_열어도_부서_리더가_잡힌다(two_rounds):
-    """User.department_id 는 계정을 만들 때의 회차 행을 가리킨다.
+    """소속 줄은 계정을 만들 때의 회차 부서 행을 가리킨다.
     id 로 비교하면 새 회차에서 리더를 못 찾고 조용히 총무팀으로 떨어진다."""
     with app_session() as db:
         run = db.get(models.TaskRun, two_rounds["run_id"])
-        who = notify.recipient_for(db, run)
-        assert who is not None
-        assert who.name == "헤브론 리더"
-        assert who.role == "dept_lead"
+        who = notify.recipients_for(db, run)
+        assert [w.name for w in who] == ["헤브론 리더"]
+        assert perm.is_lead_of(who[0], "hebron")
 
 
 def test_보완02_리더가_있으면_총무팀으로_떨어지지_않는다(two_rounds):
@@ -460,14 +462,17 @@ def test_보완02_리더가_있으면_총무팀으로_떨어지지_않는다(two
 
 def test_보완02b_공용_함수를_같이_쓴다():
     """소속을 키로 보는 자리가 두 벌이 되면 한쪽만 고쳐진다."""
-    from app.domain.departments import department_key_of, users_in_department
+    from app.domain.departments import department_keys_of, users_in_department
     from app.routers import board as board_router
 
-    assert board_router._dept_key_of.__module__ == "app.routers.board"
-    assert callable(department_key_of) and callable(users_in_department)
+    assert board_router._dept_keys_of.__module__ == "app.routers.board"
+    assert callable(department_keys_of) and callable(users_in_department)
     import inspect
 
-    assert "department_key_of" in inspect.getsource(board_router._dept_key_of)
+    # 셋 다 permissions 의 그 함수를 부른다 — 소속을 읽는 곳은 하나다 (도막 4)
+    assert "perm.my_dept_keys" in inspect.getsource(board_router._dept_keys_of)
+    assert "perm.my_dept_keys" in inspect.getsource(department_keys_of)
+    assert "perm.members_of" in inspect.getsource(users_in_department)
 
 
 # ── 보완 3 · 4 ────────────────────────────────────────────────────────

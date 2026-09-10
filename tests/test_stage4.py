@@ -89,7 +89,7 @@ def test4_a02_세_화면이_종료_회차에서_조용하다(over_world):
         row = next(r for d in board["departments"] for r in d["rows"])
         assert row["status"] == "대기"
 
-        lst = tasklist.build(db, retreat, today=TODAY, my_key=None)
+        lst = tasklist.build(db, retreat, today=TODAY, my_keys=None)
         assert lst.state_counts["late"] == 0
         assert lst.rows[0]["badge"]["cls"] == "wait"
 
@@ -359,7 +359,7 @@ def test4_t01_제목_편집_셋(admin_client, client, world):
     assert admin_client.post(f"/board/task/{a}/title",
                              json={"title": "  "}).status_code == 400   # 막는 쪽
 
-    make_user("열람이", "01044440001", "viewer", department_id=world["chongmu"])
+    make_user("열람이", "01044440001", "viewer", dept=world["chongmu"])
     login_as(client, "01044440001")
     client.get(f"/board?retreat_id={world['retreat']}")
     assert client.post(f"/board/task/{a}/title",
@@ -419,7 +419,7 @@ def test4_v01_드로어에서_보낸_요청이_세_자리에_뜬다(admin_client
 
     a = world["runs"]["명찰 제작"]
     lead_id = make_user("헤브론 리더", "01055550001", "dept_lead",
-                        department_id=world["hebron"])
+                        dept=world["hebron"])
     # 모르는 키는 걸러서 진행하지 않고 거절한다 (5-1) — 둘 중 하나만 가면
     # 보낸 사람은 둘 다 갔다고 믿는다
     assert admin_client.post(f"/board/task/{a}/review-request",
@@ -482,7 +482,7 @@ def test4_v02_받는_쪽도_부서를_키로_본다(admin_client, client, world)
         db.commit()
         old_dept_id = old_hebron.id
     lead_id = make_user("옛 소속 리더", "01055550002", "dept_lead",
-                        department_id=old_dept_id)
+                        dept=old_dept_id)
 
     sent = admin_client.post(f"/board/task/{a}/review-request",
                              json={"department_keys": ["hebron"],

@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import staff_sheet, staff_xlsx
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, legacy_user
 
 OPEN = dt.date(2026, 8, 21)
 CLOSE = dt.date(2026, 8, 23)
@@ -134,8 +134,8 @@ def test_01b_부서원도_본다(sheet_data, admin_client):
     with app_session() as db:
         dept = db.scalars(select(models.Department).where(
             models.Department.key == "hebron")).first()
-        db.add(models.User(name="헤브론 팀원", phone_number="01055556666",
-                           role="member", department_id=dept.id))
+        db.add(legacy_user(db, name="헤브론 팀원", phone_number="01055556666",
+                           role="member", dept=dept.id))
         db.commit()
 
     from app.main import app
@@ -152,8 +152,8 @@ def test_02_봉사팀_소속이면_그_탭이_기본으로_열린다(sheet_data,
                                  ("koram", "01055557777", "코람데오 리더")]:
             dept = db.scalars(select(models.Department).where(
                 models.Department.key == key)).first()
-            db.add(models.User(name=name, phone_number=phone,
-                               role="dept_lead", department_id=dept.id))
+            db.add(legacy_user(db, name=name, phone_number=phone,
+                               role="dept_lead", dept=dept.id))
         db.commit()
 
     from app.main import app

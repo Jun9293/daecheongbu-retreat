@@ -89,7 +89,7 @@ def test23_g02_부서_리더도_못_본다(client, 돈회차):
     """편집자라고 남의 계좌를 볼 이유가 없다 — 지출을 등록하는 것과
     남이 적은 계좌를 읽는 것은 다른 일이다."""
     make_user("헤브론 리더", "01088880002", "dept_lead",
-              department_id=돈회차["dept"])
+              dept=돈회차["dept"])
     login_as(client, "01088880002")
     page = _본다(client, 돈회차)
     assert "지출한 사람" in page
@@ -129,7 +129,7 @@ def test23_g04_엑셀은_편집자가_받되_계좌_칸은_admin_만(client, adm
     assert _값에계좌있나(ok), "총무팀 파일에 계좌 값이 실제로 들어 있어야 한다 (③)"
 
     # ② 편집자는 표를 받는다 — 계좌 칸만 없다
-    make_user("엑셀 리더", "01088880004", "dept_lead", department_id=돈회차["dept"])
+    make_user("엑셀 리더", "01088880004", "dept_lead", dept=돈회차["dept"])
     login_as(client, "01088880004")
     리더 = client.get(주소)
     assert 리더.status_code == 200, "편집자가 표를 못 받는다"
@@ -141,7 +141,7 @@ def test23_g04_엑셀은_편집자가_받되_계좌_칸은_admin_만(client, adm
     assert not _값에계좌있나(리더)
 
     # ① 열람 전용은 못 받는다
-    make_user("엑셀 보는 사람", "01088880003", "viewer", department_id=돈회차["dept"])
+    make_user("엑셀 보는 사람", "01088880003", "viewer", dept=돈회차["dept"])
     login_as(client, "01088880003")
     assert client.get(주소).status_code == 403, "열람 전용이 엑셀을 받았다"
 
@@ -160,7 +160,7 @@ def test23_g05_등록_폼이_남의_계좌를_미리_채우지_않는다(client,
     """목록에서 계좌를 가려 놓고 **폼으로 새면** 가린 뜻이 없다 —
     직전 지출의 계좌가 다음 사람의 입력칸에 뜨던 자리다."""
     make_user("등록하는 리더", "01088880005", "dept_lead",
-              department_id=돈회차["dept"])
+              dept=돈회차["dept"])
     login_as(client, "01088880005")
     page = _본다(client, 돈회차)
     assert 계좌 not in page
@@ -189,7 +189,7 @@ def test23_g06_누를_수_없는_엑셀_단추를_그리지_않는다(client, ad
     ② 총무팀에게는 남아 있어야 한다(안 그러면 기능이 사라진 것이다)."""
     주소 = "/export/expenses.xlsx"
     # ① 못 받는 사람에게는 안 그린다
-    make_user("칩 보는 사람", "01088880006", "viewer", department_id=돈회차["dept"])
+    make_user("칩 보는 사람", "01088880006", "viewer", dept=돈회차["dept"])
     login_as(client, "01088880006")
     for 화면 in ("/expenses", "/budget"):
         글 = client.get(f"{화면}?retreat_id={돈회차['retreat']}").text
@@ -197,7 +197,7 @@ def test23_g06_누를_수_없는_엑셀_단추를_그리지_않는다(client, ad
     # ② **받을 수 있는 사람에게는 그린다** — 계좌가 보이는지와 다른 물음이다.
     # 전에는 칩을 계좌 판정으로 그려서, 표를 받을 수 있는 부서 리더에게
     # 단추가 없었다
-    make_user("칩 받는 리더", "01088880007", "dept_lead", department_id=돈회차["dept"])
+    make_user("칩 받는 리더", "01088880007", "dept_lead", dept=돈회차["dept"])
     login_as(client, "01088880007")
     for 화면 in ("/expenses", "/budget"):
         글 = client.get(f"{화면}?retreat_id={돈회차['retreat']}").text

@@ -17,7 +17,7 @@ from sqlalchemy import select, text
 from app import models
 from app.domain import board as board_domain
 from app.domain import discussion, home as home_domain, tasklist
-from tests.conftest import app_session, login_as, make_user
+from tests.conftest import app_session, login_as, make_user, legacy_user
 
 TODAY = dt.date.today()
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -187,7 +187,7 @@ def test_c01_홈_목록_보드가_같은_run_에_같은_배지를_단다(world):
         admin = db.scalars(select(models.User).where(models.User.role == "admin")).first()
 
         home = home_domain.build(db, retreat, admin, today=TODAY)
-        lst = tasklist.build(db, retreat, today=TODAY, my_key=None)
+        lst = tasklist.build(db, retreat, today=TODAY, my_keys=None)
         board = board_domain.build(db, retreat, today=TODAY)
 
         by_row = {r["run_id"]: r["badge"] for r in lst.rows + lst.done_rows}
@@ -239,7 +239,7 @@ def test_l01_지연_칩은_계산값이다(world):
     """마감이 미래인 행은 지연으로 세지 않는다 — 저장값이 아니라 overdue_of."""
     with app_session() as db:
         retreat = db.get(models.Retreat, world["retreat"])
-        view = tasklist.build(db, retreat, today=TODAY, my_key=None)
+        view = tasklist.build(db, retreat, today=TODAY, my_keys=None)
         runs = db.scalars(select(models.TaskRun).where(
             models.TaskRun.retreat_id == retreat.id, models.TaskRun.included)).all()
         # 값끼리 맞는지 본다 — 숫자를 박지 않는다 (11-3)
@@ -249,7 +249,7 @@ def test_l01_지연_칩은_계산값이다(world):
     # 지연 필터에는 마감 미래 행이 없다
     with app_session() as db:
         retreat = db.get(models.Retreat, world["retreat"])
-        late = tasklist.build(db, retreat, today=TODAY, my_key=None, state="late")
+        late = tasklist.build(db, retreat, today=TODAY, my_keys=None, state="late")
         titles = [r["title"] for r in late.rows]
         assert "지난 마감" in titles and "한참 뒤 마감" not in titles
 
@@ -259,7 +259,7 @@ def test_l02_완료에_DN_이_없다(admin_client, world):
     잰다 — 막는 쪽만 보면 검사가 빈다."""
     with app_session() as db:
         retreat = db.get(models.Retreat, world["retreat"])
-        view = tasklist.build(db, retreat, today=TODAY, my_key=None)
+        view = tasklist.build(db, retreat, today=TODAY, my_keys=None)
     done = next(r for r in view.done_rows if r["title"] == "끝낸 것")
     assert done["dday"] is None                       # 마감이 지났어도
     late = next(r for r in view.rows if r["title"] == "지난 마감")
@@ -340,7 +340,7 @@ def test_l06_옛_상세_주소는_목록으로_301_이고_행은_남는다(admin
 def test_l07_시작일_순_정렬과_완료_접힘(admin_client, world):
     with app_session() as db:
         retreat = db.get(models.Retreat, world["retreat"])
-        view = tasklist.build(db, retreat, today=TODAY, my_key=None)
+        view = tasklist.build(db, retreat, today=TODAY, my_keys=None)
         starts = []
         for row in view.rows:
             run = db.get(models.TaskRun, row["run_id"])
@@ -355,15 +355,15 @@ def test_l08_흐림은_부서_키로_가른다(world, client):
     with app_session() as db:
         retreat = db.get(models.Retreat, world["retreat"])
         # 겨울 회차의 헤브론(hebron2)에 묶인 리더 — 키는 같은 hebron 이다
-        lead = models.User(name="헤브론 리더", phone_number="01099998888",
-                           role="dept_lead", department_id=world["hebron2"])
+        lead = legacy_user(db, name="헤브론 리더", phone_number="01099998888",
+                           role="dept_lead", dept=world["hebron2"])
         db.add(lead)
         db.commit()
-        view = tasklist.build(db, retreat, today=TODAY, my_key="hebron")
+        view = tasklist.build(db, retreat, today=TODAY, my_keys={"hebron"})
         by_title = {r["title"]: r["dim"] for r in view.rows + view.done_rows}
         # 총무팀은 전부 선명하다 — 홈·옛 화면과 같은 규칙 (4-15)
         admin_view = tasklist.build(db, retreat, today=TODAY,
-                                    my_key="hebron", dim=False)
+                                    my_keys={"hebron"}, dim=False)
         admin_dim = {r["title"]: r["dim"] for r in admin_view.rows + admin_view.done_rows}
     assert by_title["헤브론 일"] is False              # 같은 키 → 선명
     assert by_title["지난 마감"] is True               # 다른 키 → 흐림
@@ -534,7 +534,7 @@ def test_e04b_권한_없는_사람은_떼지_못한다(admin_client, world, clie
     a = world["runs"]["한참 뒤 마감"]                  # 총무M 부서의 업무
     entry_id = admin_client.post(f"/board/task/{a}/discussion",
                                  json={"body": "권한 시험"}).json()["discussions"][-1]["id"]
-    make_user("헤브론 부원", "01077770001", "member", department_id=world["hebron"])
+    make_user("헤브론 부원", "01077770001", "member", dept=world["hebron"])
     login_as(client, "01077770001")
     client.get(f"/board?retreat_id={world['retreat']}")   # 같은 회차를 본다
     assert client.post(

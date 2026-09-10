@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from app import models
 from app.config import ALLOWED_ATTACHMENT_EXTS, ATTACHMENT_DIR, MAX_ATTACHMENT_BYTES
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, legacy_user
 
 OPEN = dt.date(2026, 8, 21)
 
@@ -76,11 +76,11 @@ def task_data(admin_client):
             runs[title] = {"run_id": run.id, "library_id": lib.id}
 
         db.add(
-            models.User(
+            legacy_user(db, 
                 name="스케치 리더",
                 phone_number="01055556666",
                 role="dept_lead",
-                department_id=depts["sketch"].id,
+                dept=depts["sketch"].id,
             )
         )
         db.commit()

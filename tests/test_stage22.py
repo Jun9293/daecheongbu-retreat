@@ -141,7 +141,7 @@ def test22_b01_처음_들어온_사람에게는_배지가_없다(client, world):
     ③ **검사가 볼 것을 보고 있는가** — 배지가 0 인 것이 「알림이 없어서」
     가 아님을 함께 잰다: 같은 판에서 알림 화면은 그 수를 그대로 말한다."""
     lead_id = make_user("부서 리더", "01077770001", "dept_lead",
-                        department_id=world["chongmu"])
+                        dept=world["chongmu"])
     with app_session() as db:
         lead = db.get(models.User, lead_id)
         assert lead.first_seen_at is None, "아직 안 들어온 계정이다"
@@ -162,7 +162,7 @@ def test22_b01_처음_들어온_사람에게는_배지가_없다(client, world):
 def test22_b02_들어온_뒤에_온_것은_센다(client, world):
     """② 안 걸려야 할 것이 통과하는가 — 안 그러면 배지가 영영 0 이다."""
     lead_id = make_user("나중 리더", "01077770002", "dept_lead",
-                        department_id=world["chongmu"])
+                        dept=world["chongmu"])
     login_as(client, "01077770002")
     client.get(f"/board?retreat_id={world['retreat']}")
     with app_session() as db:
@@ -181,17 +181,19 @@ def test22_c01_내_할_일이_비면_다음_할_일을_가리킨다(client, worl
     """담당자가 없는 업무는 **아무 화면에도 안 뜨는데, 그게 정확히 놓치는
     지점**이다 (달력의 「날짜 없는 업무」 와 같은 자리 · 4-13)."""
     make_user("총무 리더", "01077770003", "dept_lead",
-              department_id=world["chongmu"])
+              dept=world["chongmu"])
     login_as(client, "01077770003")
     page = client.get(f"/?retreat_id={world['retreat']}").text
-    assert "내 부서에 담당자 없는 업무 2건" in page, "내 부서 것만 센다(헤브론 1건 제외)"
+    # 부서마다 한 줄 — 「<부서>에 담당자 없는 업무 N건」 (도막 4)
+    assert "에 담당자 없는 업무 2건" in page, "내 부서 것만 센다(헤브론 1건 제외)"
+    assert "담당자 없는 업무 1건" not in page
     assert f'href="/tasks?dept={world["chongmu_key"]}"' in page
 
 
 def test22_c02_담당자가_붙으면_그_줄이_사라진다(client, admin_client, world):
     """② 늘 뜨는 줄이면 아무것도 안 재는 것이다 — 다 붙이면 없어져야 한다."""
     lead_id = make_user("총무 리더2", "01077770004", "dept_lead",
-                        department_id=world["chongmu"])
+                        dept=world["chongmu"])
     for title in ("명찰 제작", "스트랩 발주"):
         res = admin_client.post(f"/board/task/{world['runs'][title]}/assignee",
                                 json={"user_id": lead_id})
@@ -208,7 +210,7 @@ def test22_c03_내_할_일이_있으면_그_줄이_없다(client, admin_client, 
     오늘인 내 업무를 하나 만들어, 「내 할 일」 이 차면 안내가 사라지는지
     봅니다."""
     lead_id = make_user("총무 리더3", "01077770010", "dept_lead",
-                        department_id=world["chongmu"])
+                        dept=world["chongmu"])
     with app_session() as db:
         lib = models.TaskLibrary(title="오늘까지 할 것", kind="main", default_d_week=1)
         db.add(lib)
@@ -229,7 +231,7 @@ def test22_d01_목록에서_담당자를_그_자리에서_고른다(admin_client
     고를 사람과 저장하는 길이 두 벌이 되면 갈린 쪽을 아무도 눈치채지 못한다."""
     run_id = world["runs"]["명찰 제작"]
     who = make_user("총무 사람", "01077770005", "member",
-                    department_id=world["chongmu"])
+                    dept=world["chongmu"])
     page = admin_client.get(f"/tasks?retreat_id={world['retreat']}").text
     assert "deptchip asg none pick" in page, "고를 수 있는 칸으로 안 나온다"
 
@@ -248,7 +250,7 @@ def test22_d01_목록에서_담당자를_그_자리에서_고른다(admin_client
 def test22_d02_다른_부서_업무는_403(client, world):
     """권한은 상태와 같다 — **그 문 하나다** (4-14). 부서는 키로 본다 (2장)."""
     make_user("헤브론 리더", "01077770006", "dept_lead",
-              department_id=world["hebron"])
+              dept=world["hebron"])
     login_as(client, "01077770006")
     client.get(f"/board?retreat_id={world['retreat']}")
     res = client.post(f"/board/task/{world['runs']['명찰 제작']}/assignee",
@@ -264,9 +266,9 @@ def test22_d03_못_고치는_사람에게는_메뉴가_안_뜬다(client, world)
     """**서버가 다시 본다** — 화면만 감춘 것이 아니다. 그리고 그 칸은
     예외가 아니라 행의 다른 곳과 같다: 메뉴 대신 행이 열린다 (4-14)."""
     make_user("헤브론 리더2", "01077770007", "dept_lead",
-              department_id=world["hebron"])
+              dept=world["hebron"])
     login_as(client, "01077770007")
-    page = client.get(f"/tasks?retreat_id={world['retreat']}").text
+    page = client.get(f"/tasks?retreat_id={world['retreat']}&dept=all").text
     # 헤브론 행 하나는 고를 수 있고, 총무 행 둘은 못 고른다
     assert page.count("asg none pick") == 1, "못 고치는 행까지 고를 수 있게 나온다"
     assert page.count('class="deptchip asg none"') == 2

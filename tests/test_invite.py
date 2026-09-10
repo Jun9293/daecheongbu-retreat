@@ -15,8 +15,9 @@ import pytest
 from sqlalchemy import select
 
 from app import models
+from app.domain import permissions as perm
 from app.domain import auth as invites
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, dept_key_of, login_as
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -324,7 +325,7 @@ def test_마무리01_계정을_만들어도_주소창에_원문이_없다(with_d
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -361,7 +362,7 @@ def test_마무리02_서버가_보는_URL_에도_원문이_없다(with_departmen
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     location = response.headers["location"]
@@ -393,7 +394,7 @@ def test_마무리03_새로고침하면_링크가_다시_나오지_않는다(wit
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     location = response.headers["location"]
@@ -423,8 +424,8 @@ def test_마무리03b_꺼내는_자리는_한_번만_준다():
 
 def test_마무리04_없는_부서_키는_목록에_없다(with_departments, admin_client):
     page = admin_client.get("/admin/users")
-    assert 'value="sketch"' in page.text
-    assert 'value="hebron"' in page.text
+    assert 'name="dept_sketch"' in page.text
+    assert 'name="dept_hebron"' in page.text
     # 어느 회차에도 없는 부서는 고를 수 없다
     assert 'value="saechingu"' not in page.text
     assert 'value="koram"' not in page.text
@@ -435,7 +436,7 @@ def test_마무리04b_없는_부서로_저장하려_하면_막힌다(with_depart
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "saechingu"},
+              "role": "general", "dept_saechingu": "member"},
     )
     assert response.status_code == 200
     assert "이번 회차" in response.text and "없는 부서라 배정할 수 없습니다" in response.text
@@ -451,7 +452,7 @@ def test_마무리04c_변경할_때도_막힌다(with_departments, admin_client)
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     with app_session() as db:
@@ -461,16 +462,15 @@ def test_마무리04c_변경할_때도_막힌다(with_departments, admin_client)
 
     response = admin_client.post(
         f"/admin/users/{person_id}/update",
-        data={"role": "member", "department_key": "koram"},
+        data={"role": "general", "dept_koram": "member"},
     )
     assert response.status_code == 200
     assert "이번 회차" in response.text and "없는 부서라 배정할 수 없습니다" in response.text
 
     with app_session() as db:
-        from app.domain.departments import department_key_of
-
+        
         # 원래 부서가 그대로다 — 조용히 떨어지지 않았다
-        assert department_key_of(db, db.get(models.User, person_id)) == "sketch"
+        assert dept_key_of(db, db.get(models.User, person_id)) == "sketch"
 
 
 # ── 마무리 5 ──────────────────────────────────────────────────────────
@@ -480,7 +480,7 @@ def test_마무리05_배정에_실패했는데_성공_메시지가_뜨지_않는
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "saechingu"},
+              "role": "general", "dept_saechingu": "member"},
     )
     assert "배정할 수 없습니다" in response.text
     assert "설정을 바꿨습니다" not in response.text
@@ -492,7 +492,7 @@ def test_마무리05b_부서_없음은_그대로_허용된다(with_departments, 
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": ""},
+              "role": "general"},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -503,7 +503,7 @@ def test_마무리05b_부서_없음은_그대로_허용된다(with_departments, 
             select(models.User).where(models.User.name == "박서진")
         ).first()
         assert person is not None
-        assert person.department_id is None
+        assert dept_key_of(db, person) is None
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -540,10 +540,11 @@ def two_rounds(admin_client):
         # 지난 회차의 '봉사팀 공통' 에 붙어 있는 계정 — 해체 전에 만든 사람이다
         gone = next(d for d in old.departments if d.key == "bongsa")
         legacy = models.User(
-            name="옛 봉사팀원", phone_number="01077770000",
-            role="member", department_id=gone.id,
+            name="옛 봉사팀원", phone_number="01077770000", role="general",
         )
         db.add(legacy)
+        db.flush()
+        perm.assign(db, legacy, gone, perm.MEMBER)
 
         new = models.Retreat(
             name="2027 겨울수련회",
@@ -575,9 +576,9 @@ def test_배포03_현재_회차에_없는_부서는_목록에_없다(two_rounds,
     assert page.status_code == 200
 
     form = page.text.split('class="userform"')[1].split("</form>")[0]
-    assert 'value="sketch"' in form
-    assert 'value="hebron"' in form          # 이번 회차에 있는 것
-    assert 'value="bongsa"' not in form      # 지난 회차에만 있는 것
+    assert 'name="dept_sketch"' in form
+    assert 'name="dept_hebron"' in form          # 이번 회차에 있는 것
+    assert 'name="dept_bongsa"' not in form      # 지난 회차에만 있는 것
 
 
 # ── 배포 4 ────────────────────────────────────────────────────────────
@@ -587,7 +588,7 @@ def test_배포04_그런_부서로_저장하려_하면_막힌다(two_rounds, adm
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "bongsa"},
+              "role": "general", "dept_bongsa": "member"},
     )
     assert response.status_code == 200
     assert "이번 회차" in response.text
@@ -606,7 +607,7 @@ def test_배포04b_바꿀_때도_막힌다(two_rounds, admin_client):
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     with app_session() as db:
@@ -616,7 +617,7 @@ def test_배포04b_바꿀_때도_막힌다(two_rounds, admin_client):
 
     response = admin_client.post(
         f"/admin/users/{person_id}/update",
-        data={"role": "member", "department_key": "bongsa"},
+        data={"role": "general", "dept_bongsa": "member"},
     )
     assert response.status_code == 200
     assert "없는 부서라 배정할 수 없습니다" in response.text
@@ -632,7 +633,7 @@ def test_배포05_지난_회차_부서에_붙은_계정은_건드리지_않는�
     # 소속은 그대로 남아 있다
     with app_session() as db:
         person = db.get(models.User, two_rounds["legacy_id"])
-        assert person.department_id == two_rounds["legacy_dept_id"]
+        assert dept_key_of(db, person) == "bongsa"
 
     # 화면에는 "이번 회차에 없음" 으로 보인다
     assert "이번 회차에 없음" in page.text
@@ -647,15 +648,16 @@ def test_배포05b_권한만_바꿔도_지난_부서가_지워지지_않는다(t
 
     response = admin_client.post(
         f"/admin/users/{two_rounds['legacy_id']}/update",
-        data={"role": "dept_lead", "department_key": "bongsa"},   # 화면이 되돌려 보내는 값
+        data={"role": "viewer", "dept_sketch": ""},        # 화면이 보내는 값 — 지난 부서 칸은 없다
         follow_redirects=False,
     )
     assert response.status_code == 303
 
     with app_session() as db:
         person = db.get(models.User, two_rounds["legacy_id"])
-        assert person.role == "dept_lead"                 # 바꾸려던 것은 바뀌고
-        assert person.department_id == before             # 소속은 그대로다
+        assert person.role == "viewer"                    # 바꾸려던 것은 바뀌고
+        assert dept_key_of(db, person) == "bongsa"        # 소속은 그대로다
+        del before
 
 
 def test_배포05c_지난_부서를_남에게_새로_붙이는_것은_막힌다(two_rounds, admin_client):
@@ -663,7 +665,7 @@ def test_배포05c_지난_부서를_남에게_새로_붙이는_것은_막힌다(
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     with app_session() as db:
@@ -673,25 +675,27 @@ def test_배포05c_지난_부서를_남에게_새로_붙이는_것은_막힌다(
 
     response = admin_client.post(
         f"/admin/users/{other_id}/update",
-        data={"role": "member", "department_key": "bongsa"},
+        data={"role": "general", "dept_bongsa": "member"},
     )
     assert response.status_code == 200
     assert "없는 부서라 배정할 수 없습니다" in response.text
     with app_session() as db:
-        from app.domain.departments import department_key_of
-
-        assert department_key_of(db, db.get(models.User, other_id)) == "sketch"
+        
+        assert dept_key_of(db, db.get(models.User, other_id)) == "sketch"
 
 
 def test_배포05d_지난_부서를_실제로_뗄_수는_있다(two_rounds, admin_client):
-    """유지를 통과시킨다고 해서 못 떼는 것은 아니다 — 빈 값은 그대로 미지정이다."""
+    """유지를 통과시킨다고 해서 못 떼는 것은 아니다 — 그 줄의 「켜면 뗀다」 칸을
+    켜고 저장하면 뗀다. 빈 폼만으로는 안 떼진다(05b)."""
+    page = admin_client.get("/admin/users").text
+    assert 'name="drop_bongsa"' in page
     admin_client.post(
         f"/admin/users/{two_rounds['legacy_id']}/update",
-        data={"role": "member", "department_key": ""},
+        data={"role": "general", "drop_bongsa": "on"},
         follow_redirects=False,
     )
     with app_session() as db:
-        assert db.get(models.User, two_rounds["legacy_id"]).department_id is None
+        assert dept_key_of(db, db.get(models.User, two_rounds["legacy_id"])) is None
 
 
 # ── 배포 6 ────────────────────────────────────────────────────────────
@@ -709,7 +713,7 @@ def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "admin", "department_key": ""},
+              "role": "admin"},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -718,7 +722,7 @@ def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin
     blocked = admin_client.post(
         "/admin/users/new",
         data={"name": "다른사람", "phone_number": "01088880000",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
     )
     assert blocked.status_code == 200
     assert "아직 회차가 없어" in blocked.text

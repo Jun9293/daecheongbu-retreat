@@ -200,7 +200,7 @@ def test_s09_사용자_카드와_알림_배지():
     # 부서는 키로 — templating 이 회차의 같은 키 부서로 바꿔 준다 (2장)
     assert "side_dept_name" in foot
     templating = (ROOT / "app" / "templating.py").read_text(encoding="utf-8")
-    assert "department_key_of" in templating
+    assert "perm.describe" in templating and "perm.my_dept_keys" in templating
     # 배지 = 안 읽은 알림 + 대기 요청, 0이면 없음
     assert "unread_count" in SHELL and "pending_review_count" in SHELL
     assert "{% if nav_badge %}" in SHELL, "배지가 0건에도 나온다"

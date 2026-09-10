@@ -12,8 +12,8 @@ import pytest
 from sqlalchemy import select
 
 from app import models
-from app.domain.departments import department_key_of
-from tests.conftest import app_session
+from app.domain import permissions as perm
+from tests.conftest import app_session, dept_key_of
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_07_계정을_추가하고_부서는_키로_붙는다(rounds, admin_clie
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "010-9999-1111",
-              "role": "dept_lead", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "lead"},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -58,9 +58,10 @@ def test_07_계정을_추가하고_부서는_키로_붙는다(rounds, admin_clie
         ).first()
         assert person is not None
         assert person.phone_number == "01099991111"        # 숫자만 남는다
-        assert person.role == "dept_lead"
+        assert person.role == "general"
         # **키로** 붙었는지 — 어느 회차의 행이든 키가 sketch 면 된다
-        assert department_key_of(db, person) == "sketch"
+        assert dept_key_of(db, person) == "sketch"
+        assert perm.is_lead_of(person, "sketch")
 
 
 def test_07b_새_회차에서도_소속이_유지된다(rounds, admin_client):
@@ -68,13 +69,13 @@ def test_07b_새_회차에서도_소속이_유지된다(rounds, admin_client):
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "dept_lead", "department_key": "hebron"},
+              "role": "general", "dept_hebron": "lead"},
         follow_redirects=False,
     )
     with app_session() as db:
         from app.domain.departments import users_in_department
 
-        found = users_in_department(db, "hebron", role="dept_lead")
+        found = users_in_department(db, "hebron", dept_role=perm.LEAD)
         assert [u.name for u in found] == ["박서진"]
 
 
@@ -82,7 +83,7 @@ def test_07c_권한과_부서를_바꿀_수_있다(rounds, admin_client):
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     with app_session() as db:
@@ -92,28 +93,29 @@ def test_07c_권한과_부서를_바꿀_수_있다(rounds, admin_client):
 
     assert admin_client.post(
         f"/admin/users/{person_id}/update",
-        data={"role": "dept_lead", "department_key": "hebron"},
+        data={"role": "general", "dept_hebron": "lead", "dept_sketch": ""},
         follow_redirects=False,
     ).status_code == 303
 
     with app_session() as db:
         person = db.get(models.User, person_id)
-        assert person.role == "dept_lead"
-        assert department_key_of(db, person) == "hebron"
+        assert person.role == "general"
+        assert dept_key_of(db, person) == "hebron"
+        assert perm.is_lead_of(person, "hebron")
 
-    # 부서를 뗄 수도 있다
+    # 부서를 뗄 수도 있다 — 이번 회차 칸을 비워 보낸다
     admin_client.post(
         f"/admin/users/{person_id}/update",
-        data={"role": "member", "department_key": ""},
+        data={"role": "general", "dept_hebron": "", "dept_sketch": ""},
         follow_redirects=False,
     )
     with app_session() as db:
-        assert department_key_of(db, db.get(models.User, person_id)) is None
+        assert dept_key_of(db, db.get(models.User, person_id)) is None
 
 
 def test_07d_같은_연락처는_두_번_등록되지_않는다(rounds, admin_client):
     data = {"name": "박서진", "phone_number": "01099991111",
-            "role": "member", "department_key": ""}
+            "role": "general"}
     admin_client.post("/admin/users/new", data=data, follow_redirects=False)
     again = admin_client.post("/admin/users/new", data=data)
     assert again.status_code == 200
@@ -130,7 +132,7 @@ def test_07e_화면이_열리고_사람이_보인다(rounds, admin_client):
     admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "01099991111",
-              "role": "member", "department_key": "sketch"},
+              "role": "general", "dept_sketch": "member"},
         follow_redirects=False,
     )
     page = admin_client.get("/admin/users")
@@ -181,11 +183,18 @@ def test_07g_자기_계정은_비활성화할_수_없다(rounds, admin_client):
 # ══════════════════════════════════════════════════════════════════════
 
 
+def _form(role, dept):
+    """옛 부르기(`role="dept_lead", dept="hebron"`)를 새 폼 값으로 — 전체 역할 + `dept_<키>`."""
+    data = {"role": "general" if role in ("dept_lead", "member") else role}
+    if dept:
+        data[f"dept_{dept}"] = "lead" if role == "dept_lead" else "member"
+    return data
+
+
 def make_person(admin_client, name, phone, *, role="member", dept=""):
     admin_client.post(
         "/admin/users/new",
-        data={"name": name, "phone_number": phone, "role": role,
-              "department_key": dept},
+        data={"name": name, "phone_number": phone, **_form(role, dept)},
         follow_redirects=False,
     )
     with app_session() as db:
@@ -194,7 +203,7 @@ def make_person(admin_client, name, phone, *, role="member", dept=""):
 
 
 def save(admin_client, person_id, **fields):
-    data = {"role": "member", "department_key": ""}
+    data = _form(fields.pop("role", "member"), fields.pop("department_key", ""))
     data.update(fields)
     return admin_client.post(
         f"/admin/users/{person_id}/update", data=data, follow_redirects=False)
@@ -220,8 +229,9 @@ def test_p2_부서_권한과_같은_저장으로_함께_바뀐다(rounds, admin_
     with app_session() as db:
         person = db.get(models.User, person_id)
         assert person.phone_number == "01055556666"
-        assert person.role == "dept_lead"
-        assert department_key_of(db, person) == "hebron"
+        assert person.role == "general"
+        assert dept_key_of(db, person) == "hebron"
+        assert perm.is_lead_of(person, "hebron")
 
     # 화면에서도 한 폼이다 — 연락처 칸이 그 줄의 폼에 묶여 있다
     page = admin_client.get("/admin/users").text
@@ -315,8 +325,7 @@ def test_p8_총무팀이_아니면_403(rounds, admin_client, client):
     person_id = make_person(admin_client, "박서진", "01000000001")
     with app_session() as db:
         person = db.get(models.User, person_id)
-        person.role = "dept_lead"
-        db.commit()
+        assert person.role == "general"          # 총무팀이 아니다
 
     from fastapi.testclient import TestClient
 
@@ -334,7 +343,7 @@ def test_p8_총무팀이_아니면_403(rounds, admin_client, client):
     with app_session() as db:
         person = db.get(models.User, person_id)
         assert person.phone_number == "01000000001"
-        assert person.role == "dept_lead"           # 권한도 안 올라갔다
+        assert person.role == "general"             # 권한도 안 올라갔다
 
 
 def test_p9_연락처를_바꿔도_살아_있는_링크가_죽지_않는다(rounds, admin_client):

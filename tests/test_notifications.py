@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
+from tests.conftest import legacy_user
 from app.domain.escalation import RISK_OVERDUE, RISK_UNASSIGNED, Risk
 from app.notifications import (
     notify,
@@ -23,21 +24,21 @@ TODAY = dt.date(2026, 7, 1)
 def _people(db: Session, retreat: models.Retreat) -> dict[str, models.User]:
     depts = {d.name: d for d in retreat.departments}
     people = {
-        "총무": models.User(
+        "총무": legacy_user(db, 
             name="김총무", phone_number="01011112222", role="admin",
-            department_id=depts["총무팀"].id
+            dept=depts["총무팀"].id
         ),
-        "홍보리더": models.User(
+        "홍보리더": legacy_user(db, 
             name="이홍보", phone_number="01022223333", role="dept_lead",
-            department_id=depts["홍보팀"].id
+            dept=depts["홍보팀"].id
         ),
-        "홍보원": models.User(
+        "홍보원": legacy_user(db, 
             name="최부원", phone_number="01044445555", role="member",
-            department_id=depts["홍보팀"].id
+            dept=depts["홍보팀"].id
         ),
-        "찬양리더": models.User(
+        "찬양리더": legacy_user(db, 
             name="박찬양", phone_number="01033334444", role="dept_lead",
-            department_id=depts["찬양팀"].id
+            dept=depts["찬양팀"].id
         ),
         "열람": models.User(name="정전도사", phone_number="01055556666", role="viewer"),
     }

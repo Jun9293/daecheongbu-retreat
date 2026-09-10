@@ -296,8 +296,9 @@ def test14_b04_권한이_없으면_메뉴가_안_뜬다(admin_client):
     with app_session() as db:
         run = db.scalars(select(models.TaskRun).join(models.TaskLibrary)
                          .where(models.TaskLibrary.title == "홍보팀 업무")).one()
-    남목록 = 남.get("/tasks").text
-    내목록 = 내.get("/tasks").text
+    # 기본은 내 부서 전부라(④) 남의 행을 보려면 「전체」 를 고른다
+    남목록 = 남.get("/tasks?dept=all").text
+    내목록 = 내.get("/tasks?dept=all").text
     자리 = 남목록.index("홍보팀 업무")
     assert "cell st pick" not in 남목록[자리:자리 + 400]
     자리2 = 내목록.index("홍보팀 업무")

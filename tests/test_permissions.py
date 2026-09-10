@@ -1,113 +1,88 @@
-"""역할 기반 권한 규칙 테스트.
+"""권한 규칙 — 전체 역할과 부서 역할 (도막 4).
 
-CLAUDE.md 3-3 기준:
-  admin      = 전체
-  dept_lead  = 자기 부서 Task·예산만 편집
-  member     = 자기 부서 Task·예산만 편집
-  viewer     = 읽기 전용
+`permissions` 는 이제 사람(`User`)을 받는다 — 부서 역할이 소속 줄에서
+파생되기 때문이다. 순수 함수 시험은 DB 없이 가짜 소속을 붙여 잰다.
 """
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
 import pytest
 
 from app.domain.permissions import (
-    ADMIN,
-    DEPT_LEAD,
-    MEMBER,
-    VIEWER,
-    can_edit_department_content,
-    can_manage_retreat,
-    can_manage_users,
-    is_readonly,
+    ADMIN, GENERAL, LEAD, MEMBER, VIEWER,
+    can_edit_department_key, can_manage_retreat, can_manage_users, can_see_account,
+    is_lead_of, is_readonly, lead_keys, my_dept_keys,
 )
+
+
+def _user(role, *memberships):
+    """가짜 사람 — memberships 는 (부서 키, 부서 역할)."""
+    return SimpleNamespace(
+        role=role,
+        departments=[SimpleNamespace(dept_role=r, department=SimpleNamespace(key=k), department_id=i)
+                     for i, (k, r) in enumerate(memberships, 1)],
+    )
 
 
 def test_admin은_회차_설정을_관리할_수_있다():
     assert can_manage_retreat(ADMIN) is True
+    assert can_manage_retreat(_user(ADMIN)) is True
 
 
-@pytest.mark.parametrize("role", [DEPT_LEAD, MEMBER, VIEWER])
+@pytest.mark.parametrize("role", [GENERAL, VIEWER])
 def test_admin이_아니면_회차_설정을_관리할_수_없다(role):
     assert can_manage_retreat(role) is False
 
 
 def test_admin만_사용자_역할을_관리할_수_있다():
     assert can_manage_users(ADMIN) is True
-    assert can_manage_users(DEPT_LEAD) is False
+    assert can_manage_users(GENERAL) is False
+
+
+def test_계좌는_admin만_본다():
+    assert can_see_account(_user(ADMIN)) is True
+    assert can_see_account(_user(GENERAL, ("hebron", LEAD))) is False
 
 
 def test_viewer는_읽기_전용이다():
-    assert is_readonly(VIEWER) is True
-    assert is_readonly(MEMBER) is False
+    assert is_readonly(_user(VIEWER)) is True
+    assert is_readonly(_user(VIEWER, ("hebron", LEAD))) is True, "viewer 는 소속이 있어도 열람 전용"
 
 
-def test_부서리더는_자기_부서_내용을_편집할_수_있다():
-    assert can_edit_department_content(
-        role=DEPT_LEAD, user_department_id=3, target_department_id=3
-    ) is True
+def test_소속_없는_일반은_읽기_전용이다():
+    """② — 부서 없는 업무는 총무팀 소관이라, 아무 데도 안 붙은 사람이 편집자면 넓어진다."""
+    assert is_readonly(_user(GENERAL)) is True
+    assert is_readonly(_user(GENERAL, ("hebron", MEMBER))) is False
 
 
-def test_부서리더는_타_부서_내용을_편집할_수_없다():
-    assert can_edit_department_content(
-        role=DEPT_LEAD, user_department_id=3, target_department_id=4
-    ) is False
+def test_admin은_소속이_있어도_없어도_읽기_전용이_아니다():
+    assert is_readonly(_user(ADMIN)) is False
+    assert is_readonly(_user(ADMIN, ("hebron", LEAD))) is False
 
 
-def test_부서원은_자기_부서_내용을_편집할_수_있다():
-    assert can_edit_department_content(
-        role=MEMBER, user_department_id=3, target_department_id=3
-    ) is True
-
-
-def test_viewer는_자기_부서_내용도_편집할_수_없다():
-    assert can_edit_department_content(
-        role=VIEWER, user_department_id=3, target_department_id=3
-    ) is False
-
-
-def test_admin은_모든_부서_내용을_편집할_수_있다():
-    assert can_edit_department_content(
-        role=ADMIN, user_department_id=None, target_department_id=99
-    ) is True
+def test_두_부서_사람은_두_부서를_고치고_셋째는_못_고친다():
+    u = _user(GENERAL, ("hebron", LEAD), ("sketch", MEMBER))
+    assert my_dept_keys(u) == {"hebron", "sketch"}
+    assert lead_keys(u) == {"hebron"}
+    assert is_lead_of(u, "hebron") is True
+    assert is_lead_of(u, "sketch") is False
+    assert can_edit_department_key(u, "hebron") is True
+    assert can_edit_department_key(u, "sketch") is True
+    assert can_edit_department_key(u, "koram") is False
 
 
 def test_부서_미지정_내용은_admin만_편집할_수_있다():
-    # 부서가 지정되지 않은 독립 Task/예산은 총무팀 소관
-    assert can_edit_department_content(
-        role=ADMIN, user_department_id=None, target_department_id=None
-    ) is True
-    assert can_edit_department_content(
-        role=DEPT_LEAD, user_department_id=3, target_department_id=None
-    ) is False
+    assert can_edit_department_key(_user(ADMIN), None) is True
+    assert can_edit_department_key(_user(GENERAL, ("hebron", LEAD)), None) is False
 
 
-def test_소속_부서가_없는_사용자는_부서_내용을_편집할_수_없다():
-    assert can_edit_department_content(
-        role=MEMBER, user_department_id=None, target_department_id=3
-    ) is False
+def test_키_없는_부서는_admin만():
+    """구설계 데이터 — None == None 으로 남의 부서까지 통과시키면 안 된다."""
+    assert can_edit_department_key(_user(GENERAL, ("hebron", LEAD)), "") is False
 
 
-def test_알_수_없는_역할은_거부한다():
-    assert can_manage_retreat("superuser") is False
-    assert can_edit_department_content(
-        role="superuser", user_department_id=1, target_department_id=1
-    ) is False
-
-
-def test_부서_소속은_키로_비교해야_한다():
-    """Department 행은 회차마다 새로 만들어진다.
-
-    id 로 비교하면 새 회차가 열리는 순간 모든 부서 리더가 자기 부서 업무조차
-    손대지 못한다. 회차를 넘어 같은 부서임을 알아보는 것은 key 뿐이다.
-    """
-    from app.domain import permissions as perm
-
-    assert perm.can_edit_department_by_key(
-        role="dept_lead", user_department_key="sketch", target_department_key="sketch") is True
-    assert perm.can_edit_department_by_key(
-        role="dept_lead", user_department_key="sketch", target_department_key="chongmuM") is False
-    assert perm.can_edit_department_by_key(
-        role="admin", user_department_key=None, target_department_key="sketch") is True
-    assert perm.can_edit_department_by_key(
-        role="viewer", user_department_key="sketch", target_department_key="sketch") is False
-    # 담당 없는 업무는 총무팀 소관
-    assert perm.can_edit_department_by_key(
-        role="dept_lead", user_department_key="sketch", target_department_key=None) is False
+def test_admin은_모든_부서_내용을_편집할_수_있다():
+    assert can_edit_department_key(_user(ADMIN), "koram") is True
+    assert can_edit_department_key(_user(ADMIN, ("hebron", MEMBER)), "koram") is True

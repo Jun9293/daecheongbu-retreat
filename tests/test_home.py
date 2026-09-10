@@ -16,7 +16,7 @@ from app import models
 from app.domain import escalation, home as home_domain, period
 from app.domain.board import overdue_of
 from app.domain.budget import build_budget_summary
-from tests.conftest import app_session, login_as, make_user
+from tests.conftest import app_session, login_as, make_user, legacy_user
 
 TODAY = dt.date.today()
 
@@ -298,9 +298,9 @@ def test_h10_소속_외_흐림은_부서_키로_가른다(admin_client, home_dat
             retreat_id=old.id, key="hebron", name="5 헤브론", sort_order=0)
         db.add(old_hebron)
         db.flush()
-        lead = models.User(
+        lead = legacy_user(db, 
             name="헤브론 리더", phone_number="01077770000", role="dept_lead",
-            department_id=old_hebron.id)
+            dept=old_hebron.id)
         db.add(lead)
         db.flush()
 
@@ -336,8 +336,8 @@ def test_h09_확인_요청은_받은_것_목록에_서고_0건이면_조용하�
             models.User.role == "admin")).first()
         dept_id = dept.id
         # 요청자는 자기 알림을 받지 않으므로(exclude_user_id) 받는 사람을 만든다
-        member = models.User(name="총무 팀원", phone_number="01088880001",
-                             role="member", department_id=dept_id)
+        member = legacy_user(db, name="총무 팀원", phone_number="01088880001",
+                             role="member", dept=dept_id)
         db.add(member)
         db.flush()
         reviews = create_review_requests(

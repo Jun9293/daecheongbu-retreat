@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 from app import models
 from app.domain import library as lib_domain
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, legacy_user
 
 OPEN = dt.date(2026, 8, 21)
 
@@ -87,11 +87,11 @@ def libs(admin_client):
             runs[lib.title] = run.id
 
         db.add(
-            models.User(
+            legacy_user(db, 
                 name="헤브론 리더",
                 phone_number="01077778888",
                 role="dept_lead",
-                department_id=depts["hebron"].id,
+                dept=depts["hebron"].id,
             )
         )
         db.commit()

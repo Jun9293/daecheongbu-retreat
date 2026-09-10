@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import live as live_domain
-from tests.conftest import app_session, login_as
+from tests.conftest import app_session, login_as, legacy_user
 
 OPEN = dt.date(2026, 8, 21)      # 금 — 1일차
 CLOSE = dt.date(2026, 8, 23)     # 일 — 폐회
@@ -72,9 +72,9 @@ def live_data(admin_client):
         program("2일차", "18:00", "저녁집회", [("pre", "교역자", "하윤M", "설교 PPT 확인")])
         program("폐회", "11:00", "파송예배", [("post", "재정", "준서", "영수증 취합")])
 
-        lead = models.User(
+        lead = legacy_user(db, 
             name="헤브론 리더", phone_number="01055556666", role="dept_lead",
-            department_id=db.scalars(
+            dept=db.scalars(
                 select(models.Department).where(models.Department.key == "hebron")).one().id,
         )
         db.add(lead)
