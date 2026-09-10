@@ -397,14 +397,23 @@ def _warn_old_equipment_shape() -> None:
 
     고치는 것은 `scripts/비품묶음옮기기.py` 이고 사람이 돌린다(4-18). 부팅이 표를
     다시 세우면 사본 없이 되돌릴 수 없는 일이 서버를 켤 때마다 일어날 수 있다.
-    옛 모양인 채로 뜨면 /equipment 만 실패한다(다른 화면은 그 표를 안 읽는다).
+    옛 모양인 채로 뜨면 /equipment 만 「아직 못 읽습니다」 를 낸다(다른 화면은 그 표를
+    안 읽는다).
+
+    **이 함수는 서버를 멈추게 하면 안 된다.** 알리는 말 한 줄이 앱을 못 뜨게 하는 것은
+    앞뒤가 안 맞는다 — 실제로 그렇게 죽였다(2026-09-10 · 운영 콘솔이 cp949 라 `—` 에서
+    UnicodeEncodeError). 그래서 찍는 글자를 아스키 밖으로 안 나가게 두고, 그래도 무엇이
+    나면 통째로 삼킨다.
     """
-    with engine.connect() as conn:
-        items = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_items)"))}
-        runs = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_runs)"))}
-    if "group_name" in items or (runs and "group_name" not in runs):
-        print("!! 비품 표가 옛 모양입니다(묶음이 품목에) — /equipment 가 실패합니다. "
-              "scripts/비품묶음옮기기.py 를 돌리세요 (미리보기 → --실행).")
+    try:
+        with engine.connect() as conn:
+            items = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_items)"))}
+            runs = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_runs)"))}
+        if "group_name" in items or (runs and "group_name" not in runs):
+            print("!! bipum table is old shape: run scripts/bipum-mukum-omgigi"
+                  " (see CLAUDE.md 4-18)")
+    except Exception as exc:                       # noqa: BLE001 - 알리는 말이 앱을 막지 않는다
+        print(f"!! equipment shape check skipped: {exc!r}")
 
 
 def init_db() -> None:

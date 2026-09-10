@@ -270,13 +270,16 @@ def test29_e01_새로_만든_빈_DB_는_처음부터_새_유니크_둘을_갖는
         con.close()
     capsys.readouterr()
     init_db()
-    assert "옛 모양" not in capsys.readouterr().out
+    assert "old shape" not in capsys.readouterr().out
     with app_session() as db:
         db.execute(text("DROP TABLE equipment_runs")); db.execute(text("DROP TABLE equipment_items"))
         db.execute(text(옛_품목)); db.execute(text(옛_run)); db.commit()
     init_db()
     out = capsys.readouterr().out
-    assert "비품 표가 옛 모양입니다" in out and "비품묶음옮기기" in out
+    # 찍는 말은 **아스키만** — 운영 콘솔이 cp949 라 `—` 하나로 서버가 안 떴다(2026-09-10).
+    # 그리고 이 알림이 무슨 일이 있어도 앱을 못 뜨게 하면 안 된다
+    assert "old shape" in out and "bipum-mukum-omgigi" in out
+    assert out.isascii(), "알리는 말은 아스키만 — 콘솔 인코딩이 서버를 죽이면 안 된다"
     with app_session() as db:
         assert "group_name" in {r[1] for r in db.execute(text("PRAGMA table_info(equipment_items)"))}, "부팅은 표를 안 고친다"
 
