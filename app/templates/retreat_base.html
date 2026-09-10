@@ -106,7 +106,8 @@
     <span class="who">
       <b>{{ user.name }}</b>
       <small>{{ ROLE_LABELS.get(user.role, user.role) }}</small>
-      <small>{{ side_dept_name or '부서 미지정' }}</small>
+      {# 두 줄까지 꺾이고, 그 넘는 것은 title 로 전부 (4-a) #}
+      <small class="depts" title="{{ side_dept_name or '부서 미지정' }}">{{ side_dept_name or '부서 미지정' }}</small>
     </span>
   </div>
 </aside>

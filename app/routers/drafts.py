@@ -29,15 +29,18 @@ router = APIRouter()
 
 
 def _default_key(user: User, allowed: list[str]) -> tuple[str | None, list[str]]:
-    """`/draft` 의 기본 칸 (도막 4 · ③) — **리더인 부서 중 첫째**, 둘 이상이면
-    고르게 한다. 리더인 데가 없으면 소속 중 첫째. 돌려주는 것: (키, 고를 것들).
-    `allowed` 는 이번 초안에 든 부서 키다 — 그 밖의 소속은 후보가 아니다."""
+    """`/draft` 의 기본 칸 (도막 4 · ③) — **리더인 부서 중 첫째**, 둘 이상이거나
+    **리더 없이 팀원으로 둘 이상이면** 고르게 한다 (UI 정리 판 1 · 4-b — 봐둘것 AM-c).
+    돌려주는 것: (키, 고를 것들). `allowed` 는 이번 초안에 든 부서 키다 — 그 밖의
+    소속은 후보가 아니다."""
     leads = sorted(k for k in perm.lead_keys(user) if k in allowed)
     if len(leads) > 1:
         return None, leads
     if leads:
         return leads[0], []
     mine = sorted(k for k in perm.my_dept_keys(user) if k in allowed)
+    if len(mine) > 1:
+        return None, mine
     return (mine[0] if mine else None), []
 
 
@@ -63,7 +66,7 @@ def draft_page(
     if not key:
         key, choices = _default_key(user, draft.department_keys or [])
         if choices:
-            # 리더인 부서가 둘 이상 — 어느 칸을 채울지 고른다 (③)
+            # 리더인 부서가 둘 이상, 또는 리더 없이 팀원으로 둘 이상 — 어느 칸을 채울지 고른다 (③)
             return render(
                 request,
                 "draft_pick.html",
@@ -139,7 +142,7 @@ def draft_page(
             "items": items,
             "progress": draft_domain.progress(draft),
             "history_depth": lib_domain.history_depth(db),
-            "can_edit": is_admin or key == mine,
+            "can_edit": is_admin or key in perm.my_dept_keys(user),   # 소속 중 하나 (도막 4)
             "viewer_is_admin": is_admin,
             "dept_names": DEPARTMENT_NAMES,
             "dept_colors": DEPARTMENT_COLORS,
