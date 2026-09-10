@@ -1349,14 +1349,25 @@ N건 · 미완료 업무 N건(정리 필요)」 을 냅니다. 결산의 두 숫
 표 둘을 새로 만들고(2026-09-10) 지금 것을 그리로 옮겼습니다. 시트 들여오기는
 다음 도막입니다(`docs/인계.md`).
 
-**품목은 라이브러리이고, 수량·체크·위치는 회차별입니다** —
-`EquipmentItem`(`equipment_items`: 팀 키 · 묶음 · 이름 · 단위 · 메모) 과
-`EquipmentRun`(`equipment_runs`: 회차 · 품목 · `included` · 수량 · 위치 · 체크와
-누가·언제 · 순서). `TaskLibrary` / `TaskRun` 과 같은 갈림입니다 — 한 표에 두면
+**품목은 라이브러리이고, 수량·체크·위치·묶음은 회차별입니다** —
+`EquipmentItem`(`equipment_items`: 팀 키 · 이름 · 단위 · 메모) 과
+`EquipmentRun`(`equipment_runs`: 회차 · 품목 · **묶음** · `included` · 수량 · 위치 ·
+체크와 누가·언제 · 순서). `TaskLibrary` / `TaskRun` 과 같은 갈림입니다 — 한 표에 두면
 회차마다 품목이 복제되어 「지난 회차에 있던 그 품목」 을 알아볼 열쇠가 없습니다.
-유니크는 둘입니다: (team_key, group_name, name) — 릴선처럼 **묶음이 다르면 같은
-이름이 둘 설 수 있어** 묶음까지 넣습니다 — 과 (retreat_id, item_id). 묶음이 없으면
-NULL 이 아니라 빈 문자열입니다 — SQLite 의 유니크는 NULL 끼리를 다른 값으로 봅니다.
+
+**묶음(어느 자리에서 챙기는가)은 품목이 아니라 회차 쪽에 있습니다** — 품목은 회차를
+넘고 쓰이는 자리는 그 회차의 것이기 때문입니다. 처음(2026-09-10 도막 1)에는 묶음이
+품목의 유니크에 들어 있어 **같은 릴선이 묶음마다 다른 품목**이 됐고, 시트를 들여오면
+릴선이 넷·멀티탭이 둘로 서서 이미 옮긴 서른 줄과도 겹치게 돼 있었습니다. 같은 날
+도막 2 에서 옮겼습니다(`scripts/비품묶음옮기기.py` — 사람이 돌립니다. 부팅은 옛 모양이면
+말만 하고 고치지 않고, 그동안 `/equipment` 도 500 이 아니라 「아직 못 읽습니다」 를
+냅니다). **순서는 묶음옮기기가 먼저입니다** — `scripts/비품옮기기.py`(체크리스트 →
+비품)는 새 모양에만 쓰고, 옛 모양을 만나면 멈추고 그렇게 말합니다.
+
+유니크는 둘입니다: 품목 (team_key, name) 과 회차 **(retreat_id, item_id, group_name)
+셋** — 같은 품목을 두 자리에서 챙기면 두 줄이고 각각 따로 체크합니다. 한 줄로 합치면
+한쪽의 수량·체크를 잃습니다. 묶음이 없으면 NULL 이 아니라 빈 문자열입니다 — SQLite 의
+유니크는 NULL 끼리를 다른 값으로 봅니다.
 **수량은 숫자가 아니라 글자입니다** — 원본에 「인당 2개」 「1세트」 같은 표기가
 있어 정수로 두면 그 뜻을 잃습니다. 더하지 않고 보여주기만 합니다.
 
@@ -1371,12 +1382,13 @@ NULL 이 아니라 빈 문자열입니다 — SQLite 의 유니크는 NULL 끼�
 
 **옮기기** — `scripts/비품옮기기.py`(미리보기 기본 · `--실행` · 직전에 `VACUUM INTO`
 사본 · 계정정리.py 와 같은 꼴). 대상은 업무에 안 딸렸고(`task_id` 없음) 아직 안
-옮긴(`moved_at` 없음) 체크리스트입니다. 이름 → 묶음, 부서의 **키** → `team_key`,
-항목 → 품목, 수량·체크·누가·언제·순서 → `EquipmentRun`. 같은 (팀·묶음·이름)이
+옮긴(`moved_at` 없음) 체크리스트입니다. 이름 → run 의 묶음, 부서의 **키** → `team_key`,
+항목 → 품목, 수량·체크·누가·언제·순서 → `EquipmentRun`. 같은 (팀·이름)이
 라이브러리에 있으면 그것을 씁니다. 옮긴 체크리스트에 `moved_at` 을 찍고 행과
 항목은 지우지 않습니다(0장). 둘째 판은 「옮길 것이 없습니다」 — 「성공」 이 아닙니다.
 
-**화면** — 묶음별로 접힙니다. 줄마다 체크 · 이름 · 수량 · 위치 · 「이번 회차
+**화면** — 묶음(run 의 것)별로 접힙니다 — 부서 순서(sort_order) 먼저, 그다음 묶음
+이름. 부서 칩은 품목의 `team_key`. 줄마다 체크 · 이름 · 수량 · 위치 · 「이번 회차
 불필요」. 불필요는 `included` 를 끄는 것이고 행은 그 묶음 끝에 흐리게 남습니다 —
 지우는 길이 없습니다(0장). 고칠 수 있는지는 `permissions.can_edit_department_key`
 (부서 키 비교) **하나**이고 id 비교를 새로 심지 않습니다. 못 고치는 사람에게는
@@ -2194,14 +2206,15 @@ TaskAttachment {
 // 파일 자체는 DB 밖(config.ATTACHMENT_DIR)에 있다. 백업 대상이다 (11-2)
 
 /* ── 비품 (4-18) — TaskLibrary / TaskRun 과 같은 갈림 ── */
-EquipmentItem { id, teamKey, groupName, name, unit?, note?, createdAt }
+EquipmentItem { id, teamKey, name, unit?, note?, createdAt }
                                       // 회차를 넘어 남는 품목. 부서는 키(2장).
-                                      // (teamKey, groupName, name) 유니크 — 묶음이
-                                      // 다르면 같은 이름이 둘 선다. groupName 은
-                                      // NULL 이 아니라 "" (유니크가 NULL 을 안 본다)
-EquipmentRun { id, retreatId, itemId, included, quantity?, location?,
+                                      // (teamKey, name) 유니크 — 묶음은 여기 없다
+EquipmentRun { id, retreatId, itemId, groupName, included, quantity?, location?,
                checked, checkedById?, checkedByName?, checkedAt?, sortOrder }
-                                      // 회차별. (retreatId, itemId) 유니크.
+                                      // 회차별. groupName = 이 회차에 어느 자리에서
+                                      // 챙기는가 ("" 허용 · NULL 아님).
+                                      // (retreatId, itemId, groupName) 유니크 — 같은
+                                      // 품목을 두 자리에서 챙기면 두 줄, 따로 체크.
                                       // quantity 는 글자다 — 「인당 2개」
 // Checklist 에는 movedAt? 이 붙었다 — 비품 표로 옮긴 표시. 행은 남는다
 
@@ -3565,7 +3578,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 업무 행 — 목록·마법사 3단계 공용 (4-14 · 6-6) | `templates/partials/taskrow.html` — **여기 한 벌뿐이다.** 체크박스만 마법사의 것 |
 | 논의 걸린 곳 (4-9) | `app/domain/discussion.py` (`attach` · `detach` · `runs_of`) — 링크 행이 없는 옛 논의는 `app/db.py` 가 앱이 뜰 때 한 번 옮긴다 |
 | 배지 판정 (4-3) | `app/domain/board.py` 의 `paint_of` 가 내는 `badge` — **여기 하나다.** 홈·목록·보드·드로어 칩이 받아 쓰기만 한다 |
-| 비품 (4-18) | `app/routers/equipment.py` · `templates/equipment.html` · `scripts/비품옮기기.py` — 품목은 `EquipmentItem`(라이브러리), 수량·체크·위치는 `EquipmentRun`(회차별). 권한은 `permissions` 의 키 비교 하나 |
+| 비품 (4-18) | `app/routers/equipment.py` · `templates/equipment.html` · `scripts/비품옮기기.py`(체크리스트 → 비품) · `scripts/비품묶음옮기기.py`(도막 1 의 표 모양 → 묶음이 회차에) — 품목은 `EquipmentItem`(라이브러리), 수량·체크·위치·묶음은 `EquipmentRun`(회차별). 권한은 `permissions` 의 키 비교 하나 |
 | 재정 (7장) | `app/domain/budget.py` · `routers/budget.py` · `routers/expenses.py` |
 | 재정 엑셀 | `app/domain/budget_xlsx.py` — **화면과 같은 함수** |
 
