@@ -104,31 +104,33 @@ def 세상(admin_client):
 
 # ── 가·나. 유니크 둘 — 실제로 넣어서 잰다 ────────────────────────────────
 
-def test28_a01_같은_팀_묶음_이름은_거절되고_묶음만_다르면_선다(admin_client):
-    """가) ① (team_key, group_name, name) 을 두 번 넣으면 IntegrityError ② 묶음만
-    다르면 둘 다 선다. 본다: 두 번째 add+commit 이 예외인가, 셋째 뒤 행 수가 2인가."""
+def test28_a01_같은_팀_이름은_거절되고_팀이_다르면_선다(admin_client):
+    """가) ① (team_key, name) 을 두 번 넣으면 IntegrityError ② 팀이 다르면 둘 다 선다.
+    (묶음이 품목에서 회차로 옮겨 간 뒤의 모양 — 4-18.) 본다: 두 번째 add+commit 이
+    예외인가, 셋째 뒤 행 수가 2인가."""
     with app_session() as db:
-        db.add(models.EquipmentItem(team_key="hebron", group_name="집회", name="릴선")); db.commit()
-        db.add(models.EquipmentItem(team_key="hebron", group_name="집회", name="릴선"))
+        db.add(models.EquipmentItem(team_key="hebron", name="릴선")); db.commit()
+        db.add(models.EquipmentItem(team_key="hebron", name="릴선"))
         with pytest.raises(IntegrityError):
             db.commit()
         db.rollback()
-        db.add(models.EquipmentItem(team_key="hebron", group_name="야외", name="릴선")); db.commit()
+        db.add(models.EquipmentItem(team_key="sketch", name="릴선")); db.commit()
         assert _count(db, models.EquipmentItem, models.EquipmentItem.name == "릴선") == 2
 
 
-def test28_a02_같은_회차_같은_품목은_한_번만(admin_client, 세상):
-    """나) (retreat_id, item_id) 를 두 번 넣으면 거절. 본다: 두 번째 commit 이 예외이고
-    행 수가 1 인가."""
+def test28_a02_같은_회차_같은_품목_같은_묶음은_한_번만(admin_client, 세상):
+    """나) (retreat_id, item_id, group_name) 을 두 번 넣으면 거절, 묶음만 다르면 둘 다
+    선다. 본다: 두 번째 commit 이 예외이고 셋째 뒤 행 수가 2 인가."""
     with app_session() as db:
-        item = models.EquipmentItem(team_key="hebron", group_name="집회", name="스탠드")
+        item = models.EquipmentItem(team_key="hebron", name="스탠드")
         db.add(item); db.flush()
-        db.add(models.EquipmentRun(retreat_id=세상["retreat"], item_id=item.id)); db.commit()
-        db.add(models.EquipmentRun(retreat_id=세상["retreat"], item_id=item.id))
+        db.add(models.EquipmentRun(retreat_id=세상["retreat"], item_id=item.id, group_name="집회")); db.commit()
+        db.add(models.EquipmentRun(retreat_id=세상["retreat"], item_id=item.id, group_name="집회"))
         with pytest.raises(IntegrityError):
             db.commit()
         db.rollback()
-        assert _count(db, models.EquipmentRun, models.EquipmentRun.item_id == item.id) == 1
+        db.add(models.EquipmentRun(retreat_id=세상["retreat"], item_id=item.id, group_name="야외")); db.commit()
+        assert _count(db, models.EquipmentRun, models.EquipmentRun.item_id == item.id) == 2
 
 
 # ── 부팅 마이그레이션 — 두 번 띄워도 같다 ────────────────────────────────
@@ -185,11 +187,11 @@ def test28_c02_실행하면_항목_체크_수량이_그대로_옮겨진다(세�
         mic = next(r for r in runs if r.item.name == "무선마이크")
         assert mic.checked_by_name == "박민준" and mic.checked_by_id == 세상["hebron_lead"]
         assert mic.checked_at == dt.datetime(2026, 9, 1, 3, 0) and mic.item.team_key == "hebron"
-        assert mic.item.group_name == "집회 비품"
+        assert mic.group_name == "집회 비품"                       # 묶음은 run 의 것
         # 부서 없는 체크리스트는 team_key "" 로
-        common = next(r for r in runs if r.item.group_name == "공통 비품")
+        common = next(r for r in runs if r.group_name == "공통 비품")
         assert common.item.team_key == "" and common.item.name == "릴선"
-        # 같은 이름이라도 묶음이 다르면 딴 품목이다 — 새친구 비품의 릴선과 공통 비품의 릴선
+        # 같은 이름이라도 팀이 다르면 딴 품목이다 — 새친구(sketch)의 릴선과 공통("")의 릴선
         assert _count(db, models.EquipmentItem, models.EquipmentItem.name == "릴선") == 2
         assert db.get(models.Checklist, 세상["c"]).moved_at is None, "업무에 딸린 것은 그대로"
         assert db.get(models.Checklist, 세상["a"]).moved_at is not None
@@ -252,7 +254,7 @@ def 옮긴세상(세상, tmp_path, monkeypatch):
     _사본준비(모듈, tmp_path, monkeypatch)
     with app_session() as db:
         모듈.옮기기(db, 실행=True)
-        runs = {r.item.name + "/" + r.item.group_name: r.id for r in db.scalars(select(models.EquipmentRun))}
+        runs = {r.item.name + "/" + r.group_name: r.id for r in db.scalars(select(models.EquipmentRun))}
     세상["run_mic"] = runs["무선마이크/집회 비품"]
     세상["run_tag"] = runs["이름표/새친구 비품"]
     return 세상
@@ -314,9 +316,17 @@ def test28_e03_사이드바에_비품이_있고_수량_위치를_저장한다(ad
 
 # ── 새 표의 글자 칸을 개발 DB 게이트가 본다 ──────────────────────────────
 
+def 글자칸(model) -> set[tuple[str, str]]:
+    """모델에서 글자 칸을 뽑는다 — 손으로 적어 두면 칸이 늘 때 목록이 갈린다 (도막 2)."""
+    from sqlalchemy import String, Text
+    t = model.__table__
+    return {(t.name, c.name) for c in t.columns if isinstance(c.type, (String, Text))}
+
+
 def test28_f01_새_표의_글자_칸은_제외하지_않고_기본으로_본다(client):
-    """check_dev_db 의 제외칸에 equipment 표가 없고, 볼칸들 이 새 표의 글자 칸을 낸다.
-    본다: 제외칸 키 · 볼칸들 결과."""
+    """check_dev_db 의 제외칸에 equipment 표가 없고, 볼칸들 이 새 표의 글자 칸을 **전부**
+    낸다. 목록은 손으로 적지 않고 모델의 String/Text 칸에서 뽑는다 — 칸이 늘면 이
+    시험도 따라 는다. 본다: 제외칸 키 · 모델에서 뽑은 집합 ⊆ 볼칸들 · 뽑은 수가 0 이 아님."""
     from app.db import engine
     모듈 = _스크립트("check_dev_db")
     assert not [k for k in 모듈.제외칸 if k[0].startswith("equipment")]
@@ -325,8 +335,7 @@ def test28_f01_새_표의_글자_칸은_제외하지_않고_기본으로_본다(
         본다 = set(모듈.볼칸들(con))
     finally:
         con.close()
-    for 칸 in (("equipment_items", "team_key"), ("equipment_items", "group_name"),
-               ("equipment_items", "name"), ("equipment_items", "note"),
-               ("equipment_runs", "quantity"), ("equipment_runs", "location"),
-               ("equipment_runs", "checked_by_name")):
-        assert 칸 in 본다, 칸
+    기대 = 글자칸(models.EquipmentItem) | 글자칸(models.EquipmentRun)
+    assert len(기대) >= 8, "③ 뽑은 것이 있어야 한다"
+    assert ("equipment_items", "unit") in 기대 and ("equipment_runs", "group_name") in 기대
+    assert 기대 <= 본다, 기대 - 본다
