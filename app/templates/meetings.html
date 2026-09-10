@@ -22,6 +22,11 @@
 </div>
 
 {% if can_edit %}
+{# 만들기 폼은 접힌 채 시작한다 — 목록을 보러 온 화면이 입력 폼이 되면 안 된다.
+   지출 화면의 「+ 지출 등록」 과 같은 부품(.addbox). 값을 적기 시작했으면
+   새로고침 전까지 펼친 채로 둔다 (meetings.js) #}
+<details class="addbox mt-addbox" id="addbox">
+  <summary class="addbtn-row"><span class="btnlike">+ 회의록 만들기</span></summary>
 <form class="mt-new" method="post" action="/meetings/create">
   <div class="mt-new-row">
     <input name="title" required placeholder="회의 제목" aria-label="제목">
@@ -37,6 +42,7 @@
     <button class="btn" type="submit">회의록 만들기</button>
   </div>
 </form>
+</details>
 {% endif %}
 
 {% if meetings %}
@@ -46,9 +52,10 @@
     <span class="mt-date">{{ m.meeting_date.isoformat() if m.meeting_date else '날짜 없음' }}</span>
     <span class="mt-title">{{ m.title }}</span>
     <span class="mt-tags">
-      {% if m.origin == '노션' %}<i class="mt-from" title="노션에서 옮겨 온 것 — {{ m.source_ref }}">옮김</i>{% endif %}
+      {# 끝 칸의 말은 읽히게 — 「옮김」 「N명」 만으로는 무엇인지 모른다 (UI 정리 판 2) #}
+      {% if m.origin == '노션' %}<i class="mt-from" title="노션에서 옮겨 온 것 — {{ m.source_ref }}">노션에서 옮김</i>{% endif %}
       {% if m.retreat_id is none %}<i class="mt-who">일반 회의</i>{% endif %}
-      {% if m.attendee_names %}<i class="mt-who">{{ m.attendee_names|length }}명</i>{% endif %}
+      {% if m.attendee_names %}<i class="mt-who">참석 {{ m.attendee_names|length }}명</i>{% endif %}
     </span>
   </a>
   {% endfor %}
@@ -61,4 +68,5 @@
 
 {% block scripts %}
 <script src="{{ static('js/listinput.js') }}" defer></script>
+<script src="{{ static('js/meetings.js') }}" defer></script>
 {% endblock %}

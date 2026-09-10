@@ -208,11 +208,14 @@ def _badge_counts(context: dict) -> dict:
         return {"unread_count": 0, "pending_review_count": 0}
 
     from app.db import SessionLocal
-    from app.notifications import system_unread_count
+    from app.notifications import badge_unread_count
 
     with SessionLocal() as db:
-        counts = {"unread_count": system_unread_count(db, user), "pending_review_count": 0}
         retreat = context.get("retreat")
+        # 알림 화면의 「안 읽은 알림 N건」 과 **같은 함수·같은 범위**(이 회차 + 회차
+        # 없는 것) — 두 수가 갈리면 배지가 (5) 라 하고 화면이 (3) 이라 한다 (UI 정리 판 2)
+        counts = {"unread_count": badge_unread_count(db, user, retreat.id if retreat is not None else None),
+                  "pending_review_count": 0}
         if retreat is not None:
             from app.routers.reviews import pending_for_user
 

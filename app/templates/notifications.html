@@ -49,9 +49,21 @@
     **한 번에 지우는 자리**다. 경계는 `MANY_UNREAD` 한 곳에서 온다 —
     화면에 숫자를 박으면 고칠 때 두 곳이 갈린다.
   #}
-  {% if retreat_unread %}
-  <div class="nallread{{ ' many' if retreat_unread >= many_unread }}">
+  {# N 은 배지와 같은 수. 모두 읽음이 그보다 많이 지우면 그 수를, 수련회가 끝난 뒤
+     쌓인 것이 있으면 그 수를 함께 적는다 (UI 정리 판 2 · 4-b·4-c) #}
+  {% if all_unread %}
+  {# 「많다」 의 기준은 모두 읽음이 지울 수(all_unread) — 처음 들어온 사람은 N 이 0 이고
+     M 이 세 자리인데, MANY_UNREAD 를 둔 이유가 바로 그 사람이다 (4-16 · 검토가 짚음) #}
+<div class="nallread{{ ' many' if all_unread >= many_unread }}">
+    {% if retreat_unread %}
     <b>안 읽은 알림 {{ retreat_unread }}건</b>
+    {# 끝난 뒤 쌓인 수는 M(모두 읽음이 지우는 수)의 부분집합이라 그 수 뒤에 「그중」 으로 붙는다 #}
+    {% if all_unread > retreat_unread %}<span class="also">· 들어오기 전 것·확인 요청까지 {{ all_unread }}건을 함께 읽음 처리합니다{% if after_close_unread %} (그중 수련회가 끝난 뒤 쌓인 {{ after_close_unread }}건){% endif %}</span>{% elif after_close_unread %}<span class="also">· 그중 수련회가 끝난 뒤 쌓인 {{ after_close_unread }}건</span>{% endif %}
+    {# 배지는 여기에 답 대기 요청을 더한 수다 (4-0) — 그 셈을 줄이 같이 말한다 #}
+    {% if pending_review_count %}<span class="also">· 답을 기다리는 요청 {{ pending_review_count }}건 (배지 {{ retreat_unread + pending_review_count }})</span>{% endif %}
+    {% else %}
+    <b>들어오기 전에 쌓인 알림 {{ all_unread }}건</b>{% if after_close_unread %}<span class="also">· 그중 수련회가 끝난 뒤 쌓인 {{ after_close_unread }}건</span>{% endif %}
+    {% endif %}
     <form method="post" action="/notifications/read-all">
       <button class="sbtn p" type="submit">모두 읽음</button>
     </form>

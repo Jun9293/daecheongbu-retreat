@@ -73,7 +73,7 @@ COL_MAIN_PX = _width_px(SRC_COL_MAIN)                  # 86
 COL_SIDE_PX = _width_px(SRC_COL_SIDE)                  # 64
 COL_WIDTH_PX = COL_MAIN_PX + COL_SIDE_PX               # 150 — 한 칸 전체
 
-CELL_PAD_PX = 21                  # 좌우 여백(10+10) + 테두리 1 — 화면 CSS 의 `.cx` 와 같은 값이어야
+CELL_PAD_PX = 17                  # 좌우 여백(8+8) + 테두리 1 — 화면 CSS 의 `.cx` 와 같은 값이어야
                                   # 한다. 여기가 정본이고 CSS 는 이 값을 따른다 (UI 정리 판 1 · 검토가
                                   # 짚은 자리 — 둘이 갈리면 넘침 판정이 화면과 어긋나 글이 조용히 잘린다)
 CELL_VPAD_PX = 12                 # 위아래 여백(6+6) — 넘침 판정이 세로에서도 뺀다
@@ -430,6 +430,10 @@ def wrapped_lines(text: str, colspan: int, *, col: int = 0,
 
 def dense_of(text: str, rowspan: int, colspan: int, col: int = 0) -> bool:
     """이 칸의 글이 **정해진 높이에 안 들어가는가.**
+
+    「dense 로도 넘치는 칸」 은 코드가 재지 않는다(넘치게 둔다 — 5-8). 보고가
+    셀 때의 셈은 하나다: `wrapped_lines(dense=True) × DENSE_LINE_PX > room`
+    (UI 정리 판 2 · 0-d). 기본 줄 높이로 곱하면 다른 수가 나온다.
 
     줄 높이는 고정이므로(`ROW_HEIGHT_PX`) 넘치는 것은 칸을 늘려서가 아니라
     **글자를 줄여서** 담는다. 화면과 파일이 같은 판단을 쓰도록 여기서 센다.

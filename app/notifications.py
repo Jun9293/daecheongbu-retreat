@@ -162,31 +162,48 @@ def _try_push(db: Session, notifications: list[Notification]) -> None:
 HUMAN_KINDS = ("확인요청", "확인결과")
 
 
-def system_unread_count(db: Session, user: User) -> int:
-    """안 읽은 **시스템** 알림 수 — 사이드바 배지의 앞항이다 (4-0).
+def badge_unread_count(db: Session, user: User, retreat_id: int | None = None) -> int:
+    """**배지의 앞항과 알림 화면의 「안 읽은 알림 N건」 이 같이 쓰는 하나의 수**
+    (UI 정리 판 2 · 4-c) — 안 읽은 시스템 알림 중 내가 들어온 뒤(`first_seen_at`)
+    온 것. `retreat_id` 를 주면 그 회차 것(+회차 없는 것)만. 사람 발신은 배지의
+    뒷항(답 대기 요청)이 따로 센다.
 
-    사람 발신(확인요청)을 여기서 세면 배지가 요청 하나를 둘로 센다 —
-    같은 요청이 「답 대기 중 요청」(뒷항)으로 이미 세어지기 때문이다.
-
-    **들어오기 전에 쌓인 것은 안 센다** (4-16). `first_seen_at` 이 없으면
-    아직 한 번도 안 들어온 사람이라 0 이다 — 처음 연 화면에 275 가 붙으면
-    그 사람이 놓친 것으로 읽히는데, 실은 그 사람이 없던 동안 쌓인 것이다.
-    **감추는 것이 아니라 세는 자리가 다른 것이다**: 알림 화면은 그 전
-    것까지 전부 세어 보여주고 「모두 읽음」 한 번으로 지운다.
+    두 정의를 배지 쪽으로 합쳤다 — 「내가 들어온 뒤로 온 것」 이 사람이 놓친
+    것의 수이고(4-16), 그 전 것은 「모두 읽음」 이 지우되 몇 건인지 줄에 적는다.
     """
     since = getattr(user, "first_seen_at", None)
     if since is None:
         return 0
-    return len(
-        db.scalars(
-            select(Notification).where(
-                Notification.user_id == user.id,
-                Notification.read_at.is_(None),
-                Notification.kind.not_in(HUMAN_KINDS),
-                Notification.created_at >= since,
-            )
-        ).all()
+    query = select(Notification).where(
+        Notification.user_id == user.id,
+        Notification.read_at.is_(None),
+        Notification.kind.not_in(HUMAN_KINDS),
+        Notification.created_at >= since,
     )
+    if retreat_id is not None:
+        query = query.where(
+            (Notification.retreat_id == retreat_id) | (Notification.retreat_id.is_(None))
+        )
+    return len(db.scalars(query).all())
+
+
+def after_close_unread_count(db: Session, user: User, retreat: Retreat) -> int:
+    """수련회가 끝난 뒤(폐회일 다음 날부터) 쌓인 안 읽은 알림 수 (4-b) — 지우지
+    않고 몇 건인지 말한다. 끝나지 않았으면 0.
+
+    종류·경계를 안 거르므로 「모두 읽음」 이 지우는 수(unread_count)의 부분집합이다 —
+    줄에서는 그 수 뒤에 「그중 …」 으로 붙는다(검토가 짚음: 배지 수의 부분집합은
+    아니다). 경계는 폐회 다음 날 0시(UTC naive — 봐둘것 AN-b)."""
+    from app.domain import period
+
+    today = dt.date.today()
+    if not period.is_over(retreat, today):
+        return 0
+    edge = dt.datetime.combine((retreat.end_date or retreat.start_date) + dt.timedelta(days=1), dt.time())
+    return len(db.scalars(select(Notification).where(
+        Notification.user_id == user.id, Notification.read_at.is_(None),
+        Notification.retreat_id == retreat.id, Notification.created_at >= edge,
+    )).all())
 
 
 def unread_count(db: Session, user: User, retreat_id: int | None = None) -> int:
@@ -255,6 +272,13 @@ def run_risk_scan(
     반환값: 새로 만들어진 알림 수
     """
     today = today or dt.date.today()
+    # **끝난 회차에는 아무것도 만들지 않는다** (UI 정리 판 2 · 4-a). 판정은 저장된
+    # 상태가 아니라 폐회일에서(period.is_over) — 폐회 뒤 열하루 동안 날마다 서른 몇
+    # 건이 쌓여 있었다. 진행 중인 회차는 그대로다
+    from app.domain import period
+
+    if period.is_over(retreat, today):
+        return 0
     tasks = list(db.scalars(select(Task).where(Task.retreat_id == retreat.id)))
 
     for task in tasks_to_mark_delayed(tasks, today=today):
