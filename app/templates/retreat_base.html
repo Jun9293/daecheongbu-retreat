@@ -93,6 +93,7 @@
     {% set nav_badge = (unread_count or 0) + (pending_review_count or 0) %}
     <a class="single" href="/notifications" {% if active_tab == 'notifications' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>알림{% if nav_badge %}<span class="badge">{{ nav_badge }}</span>{% endif %}</a>
     <a class="single" href="/checklists" {% if active_tab == 'checklists' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>체크리스트</a>
+    <a class="single" href="/equipment" {% if active_tab == 'equipment' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v13H3zM3 7l3-4h12l3 4M9 12h6"/></svg>비품</a>
     {% if external_link %}
     {# 바깥 링크 (도막 4) — 값이 있을 때만 · 새 창. 주소는 DB 에서 온다 #}
     <a class="single" href="{{ external_link.url }}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>{{ external_link.name }} ↗</a>

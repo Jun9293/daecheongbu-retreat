@@ -167,6 +167,8 @@ templates.env.globals["is_other_dept"] = is_other_dept
 # **열람 전용인가는 사람을 받는다** (도막 4 · ②) — 소속이 없는 일반도 열람 전용이다
 templates.env.globals["is_readonly"] = perm.is_readonly
 templates.env.globals["내_부서키"] = perm.my_dept_keys
+# 키로 바로 묻는 자리 (비품 — 4-18) — 부서 행이 없고 team_key 만 있다
+templates.env.globals["can_edit_key"] = perm.can_edit_department_key
 templates.env.globals["is_lead_of"] = perm.is_lead_of
 # **계좌를 보일지 말지는 한 함수가 정한다** — 화면·엑셀·칩이 같이 쓴다
 templates.env.globals["계좌를_본다"] = (

@@ -24,6 +24,7 @@ from app.routers import (
     live,
     budget,
     checklists,
+    equipment,
     dashboard,
     drafts,
     expenses,
@@ -182,6 +183,7 @@ app.include_router(admin_users.router)
 app.include_router(reviews.router)
 # (/files 는 단계 4에서 지웠다 — 파일은 업무 첨부(4-9)로 옮겼고 행은 남는다)
 app.include_router(checklists.router)
+app.include_router(equipment.router)
 app.include_router(meetings.router)
 
 

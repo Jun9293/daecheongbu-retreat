@@ -1,0 +1,62 @@
+{% extends "retreat_base.html" %}
+{% block title %}비품 · {{ retreat.name }}{% endblock %}
+{# 비품 (4-18) — 품목은 회차를 넘어 남고(EquipmentItem), 수량·체크·위치는 이 회차의 것
+   (EquipmentRun). 묶음별로 접힌다. 단추는 can_edit_key(부서 키 비교 하나)가 참일 때만
+   나온다 — 못 고치는 사람에게는 단추가 아예 없다(4-14). 지우는 길은 없다. #}
+
+{% block body %}
+<main class="setting">
+  <h1>비품</h1>
+  <div class="sub">품목은 회차를 넘어 남고, 수량·위치·챙겼는지는 이 회차의 것입니다. 이번 회차에 안 쓰는 것은 지우지 않고 「이번 회차 불필요」 로 둡니다.</div>
+
+  {% for g in groups %}
+  {% set editable = can_edit_key(user, g.team_key) %}
+  <details class="fld" style="margin-top:14px;{% if is_other_dept(user, g.dept) %}opacity:.6{% endif %}">
+    <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <h3 style="margin:0;font-size:var(--fz-lg)">{{ g.name }}</h3>
+      {% if g.dept %}<span class="deptchip" style="--c:{{ g.dept.color }}"><i></i>{{ g.dept.name }}</span>{% elif g.team_key %}<span class="deptchip">{{ g.team_key }}</span>{% else %}<span class="deptchip">부서 미지정</span>{% endif %}
+      <span class="stbadge {% if g.total and g.checked == g.total %}done{% else %}prog{% endif %}">{{ g.checked }}/{{ g.total }}</span>
+    </summary>
+
+    <div style="margin:10px 0 4px">
+      {% for run, item in g.rows %}
+      <div class="tickrow {% if run.checked %}done{% endif %}" data-run="{{ run.id }}" {% if not run.included %}style="opacity:.55"{% endif %}>
+        {% if editable and run.included %}
+        <form method="post" action="/equipment/{{ run.id }}/toggle">
+          <button class="tick {% if run.checked %}on{% endif %}" type="submit" aria-label="{{ item.name }} 체크">✓</button>
+        </form>
+        {% else %}
+        <span class="tick {% if run.checked %}on{% endif %}">✓</span>
+        {% endif %}
+        <span class="ticklabel">
+          {{ item.name }}{% if item.unit %} <span class="sub">({{ item.unit }})</span>{% endif %}
+          {% if run.quantity %}<span class="deptchip">{{ run.quantity }}</span>{% endif %}
+          {% if run.location %}<span class="deptchip">{{ run.location }}</span>{% endif %}
+          {% if not run.included %}<span class="deptchip">이번 회차 불필요</span>{% endif %}
+          {% if run.checked and run.checked_by_name %}
+          <span class="sub">— {{ run.checked_by_name }} {{ run.checked_at.strftime('%m/%d') }}</span>
+          {% endif %}
+        </span>
+        {% if editable %}
+        {% if run.included %}
+        <form method="post" action="/equipment/{{ run.id }}/edit" style="display:flex;gap:6px">
+          <input name="quantity" value="{{ run.quantity or '' }}" placeholder="수량" aria-label="{{ item.name }} 수량"
+                 style="font:inherit;font-size:var(--fz-md);padding:3px 7px;border:1px solid var(--rule-2);border-radius:5px;width:80px">
+          <input name="location" value="{{ run.location or '' }}" placeholder="위치" aria-label="{{ item.name }} 위치"
+                 style="font:inherit;font-size:var(--fz-md);padding:3px 7px;border:1px solid var(--rule-2);border-radius:5px;width:110px">
+          <button class="sbtn" type="submit">저장</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/equipment/{{ run.id }}/include">
+          <button class="sbtn" type="submit">{% if run.included %}이번 회차 불필요{% else %}다시 넣기{% endif %}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% else %}
+  <div class="fld" style="margin-top:14px"><span class="sub">이 회차에 비품이 없습니다. 옛 체크리스트의 비품은 총무팀이 <code>scripts/비품옮기기.py</code> 로 옮겨 옵니다.</span></div>
+  {% endfor %}
+</main>
+{% endblock %}

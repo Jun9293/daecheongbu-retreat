@@ -1,4 +1,4 @@
-"""비품·준비물 체크리스트."""
+"""업무에 딸린 준비물 체크리스트 — 비품은 /equipment (4-18)."""
 
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ def checklist_page(
         db.scalars(
             select(Checklist)
             .where(Checklist.retreat_id == retreat.id)
+            # 비품 화면으로 옮긴 것은 안 보인다 (4-18) — 행은 남는다
+            .where(Checklist.moved_at.is_(None))
             .order_by(Checklist.sort_order, Checklist.id)
         )
     )
