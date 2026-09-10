@@ -9,6 +9,10 @@
   <h1>비품</h1>
   <div class="sub">품목은 회차를 넘어 남고, 수량·위치·챙겼는지는 이 회차의 것입니다. 이번 회차에 안 쓰는 것은 지우지 않고 「이번 회차 불필요」 로 둡니다.</div>
 
+  {% if old_shape %}
+  {# 표가 도막 1 의 옛 모양 — 부팅이 경고만 하듯 화면도 말만 한다 (4-18) #}
+  <div class="fld" style="margin-top:14px"><span class="sub">비품 표가 옛 모양(묶음이 품목에)이라 아직 못 읽습니다 — 총무팀이 <code>scripts/비품묶음옮기기.py</code> 를 돌리면 그대로 다시 보입니다. 자료는 그대로 있습니다.</span></div>
+  {% endif %}
   {% for g in groups %}
   {% set editable = can_edit_key(user, g.team_key) %}
   <details class="fld" style="margin-top:14px;{% if is_other_dept(user, g.dept) %}opacity:.6{% endif %}">
@@ -56,7 +60,7 @@
     </div>
   </details>
   {% else %}
-  <div class="fld" style="margin-top:14px"><span class="sub">이 회차에 비품이 없습니다. 옛 체크리스트의 비품은 총무팀이 <code>scripts/비품옮기기.py</code> 로 옮겨 옵니다.</span></div>
+  {% if not old_shape %}<div class="fld" style="margin-top:14px"><span class="sub">이 회차에 비품이 없습니다. 옛 체크리스트의 비품은 총무팀이 <code>scripts/비품옮기기.py</code> 로 옮겨 옵니다.</span></div>{% endif %}
   {% endfor %}
 </main>
 {% endblock %}

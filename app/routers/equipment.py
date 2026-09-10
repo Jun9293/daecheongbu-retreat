@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -45,23 +45,26 @@ def _gate(user: User, run: EquipmentRun) -> None:
 
 
 def groups_of(db: Session, retreat: Retreat) -> list[dict]:
-    """묶음(팀 · group_name)별로 — 쓰는 것이 먼저, 「이번 회차 불필요」 는 묶음 끝에."""
+    """묶음(팀 · run 의 group_name)별로 — 쓰는 것이 먼저, 「이번 회차 불필요」 는 묶음 끝에.
+
+    묶음은 품목이 아니라 **이 회차의 run** 에 있다(4-18) — 부서 칩은 품목의 team_key.
+    """
     rows = db.execute(
         select(EquipmentRun, EquipmentItem)
         .join(EquipmentItem, EquipmentItem.id == EquipmentRun.item_id)
         .where(EquipmentRun.retreat_id == retreat.id)
-        .order_by(EquipmentItem.team_key, EquipmentItem.group_name,
+        .order_by(EquipmentItem.team_key, EquipmentRun.group_name,
                   EquipmentRun.included.desc(), EquipmentRun.sort_order, EquipmentRun.id)
     ).all()
     depts = {d.key: d for d in db.scalars(
         select(Department).where(Department.retreat_id == retreat.id)) if d.key}
     groups: dict[tuple[str, str], dict] = {}
     for run, item in rows:
-        key = (item.team_key, item.group_name)
+        key = (item.team_key, run.group_name)
         g = groups.get(key)
         if g is None:
             g = groups[key] = {"team_key": item.team_key, "dept": depts.get(item.team_key),
-                               "name": item.group_name or "묶음 없음", "rows": [],
+                               "name": run.group_name or "묶음 없음", "rows": [],
                                "checked": 0, "total": 0}
         g["rows"].append((run, item))
         if run.included:
@@ -79,9 +82,12 @@ def equipment_page(
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
 ):
+    # 표가 옛 모양(묶음이 품목에)이면 500 대신 말한다 — 고치는 것은 사람이 스크립트로
+    # (4-18). 판정은 부팅의 경고와 같은 것(품목 표에 group_name 이 있는가)이다
+    old_shape = "group_name" in {r[1] for r in db.execute(text("PRAGMA table_info(equipment_items)"))}
     return render(request, "equipment.html", {
         "user": user, "retreat": retreat, "retreats": all_retreats(db),
-        "groups": groups_of(db, retreat),
+        "groups": [] if old_shape else groups_of(db, retreat), "old_shape": old_shape,
         "active_tab": "equipment", "page_subtitle": "비품",
     })
 
