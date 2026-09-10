@@ -9,6 +9,8 @@
   <p class="lead">
     사람을 등록하고 <b>초대 링크</b>를 발급합니다. 링크는 카카오톡으로 직접 전달하세요.
     링크는 <b>7일</b> 동안 쓸 수 있고 <b>한 번 쓰면 만료</b>됩니다.
+    한 사람에 <b>부서를 여럿</b> 붙일 수 있고 부서마다 리더/팀원을 고릅니다 — 링크는
+    계정에 붙으므로 소속과 무관합니다.
   </p>
 
   {% if issued_url %}
@@ -41,16 +43,31 @@
   </div>
   {% endif %}
 
-  {% if rows | selectattr('department_stale') | list %}
+  {% if rows | selectattr('stale') | list %}
   <div class="alert warn">
     <span class="ic">확인</span>
     <span><b>이번 회차에 없는 부서에 붙어 있는 계정이 있습니다.</b>
-      해체됐거나 이번 회차에서 뺀 부서입니다. 그대로 두면 그분은 아무 업무도
-      고치지 못하니, 아래 목록에서 <b>(이번 회차에 없음)</b> 이라고 표시된 분의
-      부서를 다시 골라주세요. <span style="opacity:.8">건드리지 않고 두었습니다 —
-      조용히 바꾸면 총무팀이 모르는 채로 소속이 달라지기 때문입니다.</span></span>
+      해체됐거나 이번 회차에서 뺀 부서입니다. 아래 목록에서 <b>(이번 회차에 없음)</b>
+      이라고 표시된 줄입니다. <span style="opacity:.8">건드리지 않고 두었습니다 —
+      조용히 바꾸면 총무팀이 모르는 채로 소속이 달라지기 때문입니다.
+      이번 회차의 부서를 고르면 그쪽이 새로 붙고 옛 줄은 그대로 남습니다.</span></span>
   </div>
   {% endif %}
+
+  {# 부서마다 「없음 / 팀원 / 리더」 한 칸 — 한 사람이 여러 부서에 다른 역할로 (도막 4) #}
+  {% macro dept_cells(departments, dept_roles, current, form_id) %}
+    {% for d in departments %}
+    <label class="deptcell">
+      <span>{{ d.name }}</span>
+      <select name="dept_{{ d.key }}" class="find sm" {% if form_id %}form="{{ form_id }}"{% endif %}>
+        <option value="">—</option>
+        {% for r in dept_roles %}
+        <option value="{{ r.value }}" {% if current and current.get(d.key) == r.value %}selected{% endif %}>{{ r.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endfor %}
+  {% endmacro %}
 
   <h3 class="secttl">사람 추가</h3>
   <form method="post" action="/admin/users/new" class="userform">
@@ -59,14 +76,11 @@
        하나 더 생긴 적이 있다 (4-12) #}
     <input type="text" name="phone_number" placeholder="연락처" required class="find"
            inputmode="numeric">
-    <select name="department_key" class="find">
-      <option value="">부서 없음</option>
-      {% for d in departments %}<option value="{{ d.key }}">{{ d.name }}</option>{% endfor %}
-    </select>
     <select name="role" class="find">
       {% for r in roles %}<option value="{{ r.value }}"
-        {% if r.value == 'member' %}selected{% endif %}>{{ r.label }}</option>{% endfor %}
+        {% if r.value == 'general' %}selected{% endif %}>{{ r.label }}</option>{% endfor %}
     </select>
+    <div class="deptcells">{{ dept_cells(departments, dept_roles, none, none) }}</div>
     <button type="submit" class="btn pri">추가하고 링크 발급</button>
   </form>
 
@@ -86,12 +100,12 @@
   <div class="tablewrap">
     <table class="utable">
       <thead><tr>
-        <th>이름</th><th>연락처</th><th>부서</th><th>권한</th><th>초대 링크</th><th>상태</th>
+        <th>이름</th><th>연락처</th><th>권한 · 소속</th><th>초대 링크</th><th>상태</th>
       </tr></thead>
       <tbody>
         {% for row in rows %}
         <tr class="{{ 'off' if not row.is_active }}">
-          <td><b>{{ row.name }}</b></td>
+          <td><b>{{ row.name }}</b><div class="dim">{{ row.departments_text or '부서 미지정' }}</div></td>
           {# 연락처는 부서·권한과 **같은 폼**에 들어간다 — 칸을 따로 두면
              어느 것이 저장됐는지 헷갈린다. 표 칸이 달라 form 속성으로 잇는다. #}
           <td>
@@ -107,26 +121,21 @@
               {%- if row.retired_phone %} <em>(반납)</em>{% endif %}</span>
             {% endif %}
           </td>
-          <td colspan="2">
+          <td>
             <form method="post" action="/admin/users/{{ row.id }}/update"
                   id="u{{ row.id }}" class="inlineform">
-              <select name="department_key" class="find sm">
-                <option value="">부서 없음</option>
-                {% if row.department_stale %}
-                {# 지난 회차 부서다. **disabled 로 두면 안 된다** — 폼이 빈 값을
-                   보내서 권한만 바꿔도 소속이 조용히 지워진다. 값은 그대로 되돌아오게
-                   두고 이번 회차에 없다는 것만 밝힌다. #}
-                <option value="{{ row.department_key }}" selected>{{ row.department_name }} (이번 회차에 없음)</option>
-                {% endif %}
-                {% for d in departments %}
-                <option value="{{ d.key }}" {% if d.key == row.department_key %}selected{% endif %}>{{ d.name }}</option>
-                {% endfor %}
-              </select>
               <select name="role" class="find sm">
                 {% for r in roles %}
                 <option value="{{ r.value }}" {% if r.value == row.role %}selected{% endif %}>{{ r.label }}</option>
                 {% endfor %}
               </select>
+              <div class="deptcells">{{ dept_cells(departments, dept_roles, row.current, none) }}</div>
+              {% for s in row.stale %}
+              {# 지난 회차 부서다. 폼의 선택 칸에 없으므로 저장해도 **안 지워진다** —
+                 떼려면 사람이 이 칸을 켜고 저장한다 #}
+              <label class="tag low"><input type="checkbox" name="drop_{{ s.key }}">
+                {{ s.name }} {{ s.role_label }} (이번 회차에 없음 · 켜면 뗀다)</label>
+              {% endfor %}
               <button type="submit" class="btn sm">저장</button>
             </form>
           </td>
@@ -176,10 +185,17 @@
       지난 회차의 논의와 지출에 그 사람이 <b>작성자로 남아 있습니다.</b>
       계정을 지우면 그 기록이 “누가 썼는지 모르는 것”이 됩니다.<br>
       <span style="color:var(--ink-3)">비활성화하면 로그인만 막히고 기록은 그대로 남습니다.
-      살아 있던 초대 링크도 함께 취소됩니다.</span>
+      살아 있던 초대 링크도 함께 취소됩니다. 사람이 id 를 골라 지우는 한 갈래는 서버의
+      스크립트에만 있습니다 (0장의 예외).</span>
     </div>
   </div>
 </main>
+
+<style>
+  .deptcells{display:flex;flex-wrap:wrap;gap:4px 10px;margin:4px 0}
+  .deptcell{display:inline-flex;align-items:center;gap:4px;font-size:var(--fz-sm);color:var(--ink-2)}
+  .deptcell select{min-width:64px}
+</style>
 
 <script>
 (() => {
