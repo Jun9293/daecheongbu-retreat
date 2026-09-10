@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import DATABASE_URL
@@ -392,10 +392,28 @@ def _move_receipts() -> None:
             )
 
 
+def _warn_old_equipment_shape() -> None:
+    """비품 표가 옛 모양(묶음이 품목에)이면 **말만 한다** — 고치지 않는다.
+
+    고치는 것은 `scripts/비품묶음옮기기.py` 이고 사람이 돌린다(4-18). 부팅이 표를
+    다시 세우면 사본 없이 되돌릴 수 없는 일이 서버를 켤 때마다 일어날 수 있다.
+    옛 모양인 채로 뜨면 /equipment 만 실패한다(다른 화면은 그 표를 안 읽는다).
+    """
+    with engine.connect() as conn:
+        items = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_items)"))}
+        runs = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_runs)"))}
+    if "group_name" in items or (runs and "group_name" not in runs):
+        print("!! 비품 표가 옛 모양입니다(묶음이 품목에) — /equipment 가 실패합니다. "
+              "scripts/비품묶음옮기기.py 를 돌리세요 (미리보기 → --실행).")
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (모델 등록)
 
+    # 없는 표만 만든다 — 있는 표는 손대지 않는다. equipment 표는 새 DB 에서는 여기서
+    # 새 모양(유니크 (team_key, name) · (retreat_id, item_id, group_name))으로 선다
     Base.metadata.create_all(bind=engine)
+    _warn_old_equipment_shape()
     _catch_up_columns()
     _swap_phone_index()
     _release_inactive_phones()

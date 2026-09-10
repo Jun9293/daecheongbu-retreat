@@ -728,19 +728,16 @@ class EquipmentItem(Base):
 
     부서는 `department_id` 가 아니라 **`team_key`** 다 — departments 행은 회차마다
     따로 서므로 id 로 잡으면 새 회차가 열리는 순간 모든 품목이 부서를 잃는다(2장).
+
+    **묶음(어느 자리에서 챙기는가)은 여기 없다** — 품목은 회차를 넘고 쓰이는 자리는
+    회차의 것이라 EquipmentRun.group_name 에 있다. 품목의 신분증은 (team_key, name) 뿐이다.
     """
 
     __tablename__ = "equipment_items"
-    # 릴선처럼 묶음이 다르면 같은 이름이 둘 설 수 있어 묶음까지 넣는다.
-    # group_name 은 NULL 이 아니라 빈 문자열이다 — SQLite 의 유니크는 NULL 끼리를
-    # 다른 값으로 보므로 NULL 을 허용하면 이 제약이 묶음 없는 품목에서 안 걸린다.
-    __table_args__ = (
-        UniqueConstraint("team_key", "group_name", "name", name="uq_equipment_item"),
-    )
+    __table_args__ = (UniqueConstraint("team_key", "name", name="uq_equipment_item"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     team_key: Mapped[str] = mapped_column(String(30), index=True)  # 부서 키 (2장) · 부서 없는 품목은 ""
-    group_name: Mapped[str] = mapped_column(String(100), default="")  # 묶음 — 비어도 된다 ("")
     name: Mapped[str] = mapped_column(String(200))
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -754,10 +751,17 @@ class EquipmentRun(Base):
 
     TaskRun 이 TaskLibrary 에 붙는 것과 같은 모양이다 — 회차가 바뀌면 이 행만
     새로 서고 품목은 그대로다.
+
+    **묶음(group_name)은 회차의 것이다** — 같은 릴선을 이번 회차에는 강당 세팅에서,
+    다음 회차에는 야외 세팅에서 챙길 수 있다. 품목에 두면 자리마다 딴 품목이 된다.
+    같은 품목을 두 자리에서 챙기면 두 줄이고 각각 따로 체크한다 — 그래서 유니크가
+    (회차, 품목, 묶음) 셋이다. 한 줄로 합치면 한쪽의 수량·체크를 잃는다.
     """
 
     __tablename__ = "equipment_runs"
-    __table_args__ = (UniqueConstraint("retreat_id", "item_id", name="uq_equipment_run"),)
+    __table_args__ = (
+        UniqueConstraint("retreat_id", "item_id", "group_name", name="uq_equipment_run"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     retreat_id: Mapped[int] = mapped_column(
@@ -766,6 +770,9 @@ class EquipmentRun(Base):
     item_id: Mapped[int] = mapped_column(
         ForeignKey("equipment_items.id", ondelete="CASCADE"), index=True
     )
+    # 이 회차에 이 품목을 어느 자리에서 챙기는가. 비면 "" — SQLite 의 유니크는
+    # NULL 끼리를 다른 값으로 보므로 NULL 을 허용하면 셋짜리 제약이 안 걸린다
+    group_name: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
     # False 여도 행을 지우지 않는다 — 「이번 회차 불필요」 도 기록이다 (0장 · 4-18)
     included: Mapped[bool] = mapped_column(Boolean, default=True)
     # 수량은 숫자가 아니라 글자다 — 원본에 「인당 2개」 「1세트」 같은 표기가 있어
