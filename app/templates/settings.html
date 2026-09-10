@@ -32,6 +32,23 @@
       </form>
     </div>
 
+    {% if is_admin(user) %}
+    {# 바깥 링크 (도막 4) — 주소는 DB 에만. 값이 있으면 사이드바에 새 창 항목이 생긴다 #}
+    <div class="fld">
+      <h3>바깥 링크</h3>
+      <form method="post" action="/settings/external-link">
+        <div class="kv">
+          <span class="k">이름</span>
+          <input name="name" value="{{ external.name if external else '' }}" placeholder="사이드바에 보일 이름">
+          <span class="k">주소</span>
+          <input name="url" value="{{ external.url if external else '' }}" placeholder="https://…" inputmode="url">
+        </div>
+        <div class="hint">값이 있으면 사이드바에 그 이름의 항목이 생겨 <b>새 창</b>으로 엽니다. 둘 다 비우면 항목이 사라집니다. 주소는 저장소가 아니라 여기(DB)에만 있습니다.</div>
+        <div style="margin-top:10px"><button class="sbtn p" type="submit">저장</button></div>
+      </form>
+    </div>
+    {% endif %}
+
     {# 푸시는 기본이 꺼짐이고 사용자가 켜야 받는다 (4-11) #}
     <div class="fld" id="push-card" data-vapid="{{ push_public_key }}">
       <h3>이 기기의 푸시 구독</h3>

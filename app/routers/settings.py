@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
 from app.db import get_db
+from app.domain import permissions as perm
 from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
 from app.domain import board as board_domain
@@ -69,7 +70,8 @@ def settings_page(
     return render(
         request,
         "settings.html",
-        {**_base_ctx(request, db, user), "push_public_key": push_key()},
+        {**_base_ctx(request, db, user), "push_public_key": push_key(),
+         "external": external_link(db)},
     )
 
 
@@ -161,12 +163,8 @@ def settings_retreat_detail(
         {
             "name": d.name,
             "color": d.color,
-            "member_count": (
-                len(users_in_department(db, d.key)) if d.key
-                else db.scalar(
-                    select(func.count()).select_from(User).where(User.department_id == d.id)
-                ) or 0
-            ),
+            # 두 부서 사람은 두 번 세어진다 — 「부서 인원 합 > 계정 수」 가 맞다 (도막 4)
+            "member_count": len(users_in_department(db, d.key)) if d.key else 0,
         }
         for d in db.scalars(
             select(Department)
@@ -228,7 +226,7 @@ def settings_checkup(
     ctx = _base_ctx(request, db, user)
     retreat = ctx["retreat"]
 
-    admins = list(db.scalars(select(User).where(User.role == "admin", User.is_active.is_(True))))
+    admins = perm.admins(db)
     names = [a.name for a in admins]
     dup_admin_names = sorted({n for n in names if names.count(n) > 1})
 
@@ -384,8 +382,12 @@ def create_department(
         )
         or 0
     )
+    from app.domain.departments import next_team_key
+
+    # 키는 여기서도 발급한다 — 키 없는 부서는 소속·알림이 전부 비껴간다 (2장)
     dept = Department(
         retreat_id=retreat.id,
+        key=next_team_key(db),
         name=name.strip(),
         color_tag=color_tag.strip() or None,
         sort_order=max_order + 1,
@@ -440,6 +442,51 @@ def delete_department(
 
 # 구설계 사용자 POST(/users/create · /users/{id}/update)는 지웠다 (14장) —
 # 화면이 없어진 엔드포인트다. 사용자 관리는 /admin/users (4-12) 하나다.
+# ── 바깥 링크 (도막 4 · 3장) ─────────────────────────────────────
+# 바깥 서비스의 관리자 화면처럼 **저장소 어디에도 적으면 안 되는 주소**는
+# DB 에만 둔다. 값이 있으면 사이드바에 그 이름의 항목이 생겨 새 창으로 열린다.
+EXTERNAL_LINK_NAME = "external_link_name"
+EXTERNAL_LINK_URL = "external_link_url"
+
+
+def external_link(db: Session) -> dict | None:
+    """(이름, 주소) — 둘 다 있을 때만. 사이드바가 이것을 받아 그린다."""
+    from app.models import SiteSetting
+
+    name = db.get(SiteSetting, EXTERNAL_LINK_NAME)
+    url = db.get(SiteSetting, EXTERNAL_LINK_URL)
+    if name is None or url is None or not (name.value and url.value):
+        return None
+    return {"name": name.value, "url": url.value}
+
+
+@router.post("/settings/external-link")
+def set_external_link(
+    name: str = Form(""),
+    url: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """총무팀만 고친다. 둘 다 비우면 지운 것 — 사이드바 항목이 사라진다."""
+    from app.models import SiteSetting
+
+    name, url = name.strip(), url.strip()
+    if url and not url.startswith(("http://", "https://")):
+        return redirect("/settings", message="주소는 http:// 또는 https:// 로 시작해야 합니다.")
+    for key, value in ((EXTERNAL_LINK_NAME, name), (EXTERNAL_LINK_URL, url)):
+        row = db.get(SiteSetting, key)
+        if row is None:
+            row = SiteSetting(key=key)
+            db.add(row)
+        row.value = value or None
+    db.commit()
+    # 주소는 활동 기록에도 남기지 않는다 — 화면에서 누구나 읽는 자리다
+    log_activity(db, retreat_id=None, actor=user, action="바깥_링크_변경",
+                 target_type="setting", target_id=None,
+                 summary=f"바깥 링크: {name or '(없음)'}")
+    return redirect("/settings", message="바깥 링크를 저장했습니다." if url else "바깥 링크를 지웠습니다.")
+
+
 @router.post("/me/update")
 def update_me(
     name: str = Form(...),
