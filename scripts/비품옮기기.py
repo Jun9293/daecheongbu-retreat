@@ -6,14 +6,14 @@
 `task_id` 가 비어 있고 `moved_at` 이 비어 있는 체크리스트 — 업무에 딸린
 준비물 체크리스트는 건드리지 않습니다.
 
-- `Checklist.name` → `EquipmentItem.group_name`(묶음)
+- `Checklist.name` → `EquipmentRun.group_name`(이 회차의 묶음 — 품목이 아니라 회차의 것)
 - `Checklist.department_id` 가 가리키는 부서의 **키** → `EquipmentItem.team_key`
   (부서가 없거나 키가 없으면 빈 문자열 — 총무팀 소관)
 - `ChecklistItem.label` → `EquipmentItem.name`
 - 수량 · 체크 · 누가 · 언제 · 순서 → `EquipmentRun` 그대로
 
-같은 (team_key, group_name, name) 이 라이브러리에 이미 있으면 새 행을 만들지
-않고 그것을 씁니다. 옮긴 체크리스트에는 `moved_at` 을 찍고 **행과 항목은
+같은 (team_key, name) 이 라이브러리에 이미 있으면 새 행을 만들지 않고 그것을
+씁니다 — 같은 릴선이 묶음마다 딴 품목이 되지 않게(4-18). 옮긴 체크리스트에는 `moved_at` 을 찍고 **행과 항목은
 지우지 않습니다**(0장).
 
 ## 기본은 미리보기
@@ -31,6 +31,9 @@
 
     .venv\\Scripts\\python.exe scripts/비품옮기기.py           # 미리보기
     .venv\\Scripts\\python.exe scripts/비품옮기기.py --실행    # 실제로 옮김
+
+표가 도막 1 의 옛 모양(묶음이 품목에)이면 멈추고 먼저 `scripts/비품묶음옮기기.py`
+를 돌리라고 말합니다 — 순서는 묶음옮기기 → 이것입니다.
 """
 
 from __future__ import annotations
@@ -75,13 +78,13 @@ def 팀키(checklist: Checklist) -> str:
     return (dept.key or "") if dept is not None else ""
 
 
-def 열쇠들(db: Session, 목록: list[Checklist]) -> tuple[set[tuple[str, str, str]], int]:
-    """옮길 항목의 (team_key, group_name, name) 전부와, 그중 라이브러리에 없는 수."""
-    있는 = {(i.team_key, i.group_name, i.name) for i in db.scalars(select(EquipmentItem))}
-    전부: set[tuple[str, str, str]] = set()
+def 열쇠들(db: Session, 목록: list[Checklist]) -> tuple[set[tuple[str, str]], int]:
+    """옮길 항목의 (team_key, name) 전부와, 그중 라이브러리에 없는 수."""
+    있는 = {(i.team_key, i.name) for i in db.scalars(select(EquipmentItem))}
+    전부: set[tuple[str, str]] = set()
     for c in 목록:
         for it in c.items:
-            전부.add((팀키(c), c.name, it.label))
+            전부.add((팀키(c), it.label))
     return 전부, len(전부 - 있는)
 
 
@@ -113,29 +116,30 @@ def 옮긴다(db: Session, 목록: list[Checklist]) -> dict[str, int]:
     사본을_뜬다()
     now = dt.datetime.now(dt.UTC).replace(tzinfo=None)
     수 = {"체크리스트": 0, "항목": 0, "새품목": 0, "겹침": 0}
-    만든것: set[tuple[int, int]] = set()
+    만든것: set[tuple[int, int, str]] = set()
     for c in 목록:
         key = 팀키(c)
         for it in c.items:
             item = db.scalar(select(EquipmentItem).where(
-                EquipmentItem.team_key == key, EquipmentItem.group_name == c.name,
-                EquipmentItem.name == it.label))
+                EquipmentItem.team_key == key, EquipmentItem.name == it.label))
             if item is None:
-                item = EquipmentItem(team_key=key, group_name=c.name, name=it.label)
+                item = EquipmentItem(team_key=key, name=it.label)
                 db.add(item)
                 db.flush()
                 수["새품목"] += 1
-            # 같은 회차에 같은 품목이 이미 있으면(한 체크리스트에 같은 이름이 둘)
-            # 유니크에 걸리므로 만들지 않고 센다 — 조용히 넘기지 않는다.
+            # 같은 회차·같은 묶음에 같은 품목이 이미 있으면(한 체크리스트에 같은 이름이
+            # 둘) 유니크에 걸리므로 만들지 않고 센다 — 조용히 넘기지 않는다.
             # **세션이 autoflush=False 라** 방금 add 한 run 을 select 가 못 본다 —
             # 이 판에서 만든 것을 집합으로 들고 함께 본다 (검토가 짚음)
-            if (c.retreat_id, item.id) in 만든것 or db.scalar(select(EquipmentRun).where(
-                    EquipmentRun.retreat_id == c.retreat_id, EquipmentRun.item_id == item.id)):
+            열쇠 = (c.retreat_id, item.id, c.name)
+            if 열쇠 in 만든것 or db.scalar(select(EquipmentRun).where(
+                    EquipmentRun.retreat_id == c.retreat_id, EquipmentRun.item_id == item.id,
+                    EquipmentRun.group_name == c.name)):
                 수["겹침"] += 1
                 continue
-            만든것.add((c.retreat_id, item.id))
+            만든것.add(열쇠)
             db.add(EquipmentRun(
-                retreat_id=c.retreat_id, item_id=item.id, included=True,
+                retreat_id=c.retreat_id, item_id=item.id, group_name=c.name, included=True,
                 quantity=it.quantity, checked=it.checked, checked_by_id=it.checked_by_id,
                 checked_by_name=it.checked_by_name, checked_at=it.checked_at,
                 sort_order=it.sort_order,
@@ -147,7 +151,17 @@ def 옮긴다(db: Session, 목록: list[Checklist]) -> dict[str, int]:
     return 수
 
 
+def 옛모양인가(db: Session) -> bool:
+    """묶음이 품목에 있는 도막 1 의 표 모양 — 이 스크립트는 새 모양(묶음이 run 에)에만 쓴다."""
+    from sqlalchemy import text
+    return "group_name" in {r[1] for r in db.execute(text("PRAGMA table_info(equipment_items)"))}
+
+
 def 옮기기(db: Session, 실행: bool) -> int:
+    if 옛모양인가(db):
+        print("!! 비품 표가 옛 모양(묶음이 품목에)입니다 — 먼저 scripts/비품묶음옮기기.py 를 "
+              "돌린 뒤 이것을 돌리세요. 아무것도 바꾸지 않았습니다.")
+        return 1
     목록 = 대상(db)
     if not 목록:
         print("옮길 것이 없습니다 — 업무에 안 딸린 체크리스트가 전부 이미 옮겨졌거나 없습니다.")
