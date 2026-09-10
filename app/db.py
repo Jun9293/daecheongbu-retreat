@@ -51,6 +51,10 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("meetings", "suggest_cost", "FLOAT"),
     ("meetings", "suggest_tokens", "VARCHAR(40)"),
     ("meetings", "suggest_due_at", "DATETIME"),
+    # 체크리스트를 비품 표로 옮긴 표시 (4-18). 새 표 둘(equipment_items ·
+    # equipment_runs)은 create_all 이 만들고 이 칸은 여기서 붙는다 — 둘 다
+    # 이미 있으면 아무 일도 안 한다
+    ("checklists", "moved_at", "DATETIME"),
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
     ("task_library", "rules", "TEXT"),

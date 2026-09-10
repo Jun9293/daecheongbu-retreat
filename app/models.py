@@ -657,7 +657,10 @@ class ReviewRequest(Base):
 
 
 class Checklist(Base):
-    """비품·준비물 체크리스트. Task와 별개지만 Task에 종속시킬 수도 있다."""
+    """업무에 딸린 준비물 체크리스트. Task와 별개지만 Task에 종속시킬 수도 있다.
+
+    비품(회차를 넘는 품목)은 여기가 아니라 EquipmentItem / EquipmentRun 이다 (4-18).
+    """
 
     __tablename__ = "checklists"
 
@@ -672,6 +675,8 @@ class Checklist(Base):
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    # 비품 화면으로 옮긴 표시 (4-18) — 찍힌 것은 /checklists 에 안 나온다. 행은 남는다
+    moved_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     department: Mapped[Department | None] = relationship()
     task: Mapped[Task | None] = relationship()
@@ -710,6 +715,72 @@ class ChecklistItem(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     checklist: Mapped[Checklist] = relationship(back_populates="items")
+
+
+class EquipmentItem(Base):
+    """비품 품목 — 회차를 넘어 남는 라이브러리 (4-18).
+
+    TaskLibrary / TaskRun 과 같은 갈림이다: 품목(팀·묶음·이름)은 회차를 넘어
+    같은 것이고, 수량·체크·위치는 그 회차의 실행 기록이라 EquipmentRun 에 둔다 —
+    한 표에 두면 회차마다 품목이 복제되어 「지난 회차에 있던 그 품목」 을
+    알아볼 열쇠가 없어진다. 이번 회차에 안 쓰는 품목도 지우지 않고
+    EquipmentRun.included 로만 적는다(0장).
+
+    부서는 `department_id` 가 아니라 **`team_key`** 다 — departments 행은 회차마다
+    따로 서므로 id 로 잡으면 새 회차가 열리는 순간 모든 품목이 부서를 잃는다(2장).
+    """
+
+    __tablename__ = "equipment_items"
+    # 릴선처럼 묶음이 다르면 같은 이름이 둘 설 수 있어 묶음까지 넣는다.
+    # group_name 은 NULL 이 아니라 빈 문자열이다 — SQLite 의 유니크는 NULL 끼리를
+    # 다른 값으로 보므로 NULL 을 허용하면 이 제약이 묶음 없는 품목에서 안 걸린다.
+    __table_args__ = (
+        UniqueConstraint("team_key", "group_name", "name", name="uq_equipment_item"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_key: Mapped[str] = mapped_column(String(30), index=True)  # 부서 키 (2장) · 부서 없는 품목은 ""
+    group_name: Mapped[str] = mapped_column(String(100), default="")  # 묶음 — 비어도 된다 ("")
+    name: Mapped[str] = mapped_column(String(200))
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+
+    runs: Mapped[list[EquipmentRun]] = relationship(back_populates="item")
+
+
+class EquipmentRun(Base):
+    """어떤 회차에서 그 품목을 얼마나·어디에·챙겼는지 — 회차별 실행 기록 (4-18).
+
+    TaskRun 이 TaskLibrary 에 붙는 것과 같은 모양이다 — 회차가 바뀌면 이 행만
+    새로 서고 품목은 그대로다.
+    """
+
+    __tablename__ = "equipment_runs"
+    __table_args__ = (UniqueConstraint("retreat_id", "item_id", name="uq_equipment_run"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(
+        ForeignKey("retreats.id", ondelete="CASCADE"), index=True
+    )
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_items.id", ondelete="CASCADE"), index=True
+    )
+    # False 여도 행을 지우지 않는다 — 「이번 회차 불필요」 도 기록이다 (0장 · 4-18)
+    included: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 수량은 숫자가 아니라 글자다 — 원본에 「인당 2개」 「1세트」 같은 표기가 있어
+    # 정수로 두면 그 뜻을 잃는다. 더하지 않고 보여주기만 하는 칸이다
+    quantity: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    checked_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    checked_by_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    checked_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    item: Mapped[EquipmentItem] = relationship(back_populates="runs")
 
 
 class Meeting(Base):
