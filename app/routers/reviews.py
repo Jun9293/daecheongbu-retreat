@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import notifications as notify_service
 from app.db import get_db
+from app.domain import permissions as perm
 from app.deps import get_current_retreat, log_activity
 from app.models import (
     REVIEW_STATUSES,
@@ -31,53 +32,40 @@ def _now() -> dt.datetime:
 
 
 def pending_for_user(db: Session, user: User, retreat: Retreat) -> list[ReviewRequest]:
-    """나에게(= 내 부서에) 온 대기 중인 확인 요청.
+    """나에게(= 내 부서 **중 하나**에) 온 대기 중인 확인 요청 (도막 4).
 
     **부서는 키로 비교한다** (2장). 요청의 department_id 는 이번 회차 행이고
-    User.department_id 는 계정을 만들 때의 회차 행이라, id 로 견주면 새 회차가
-    열리는 순간 배지·답 버튼이 조용히 사라진다.
+    소속 줄은 계정을 만들 때의 회차 행이라, id 로 견주면 새 회차가 열리는
+    순간 배지·답 버튼이 조용히 사라진다. 소속이 없으면 총무팀만 전부 본다.
     """
-    from app.domain.departments import department_key_of
-
-    if user.department_id is None:
-        if user.role != "admin":
-            return []
-        query = select(ReviewRequest).where(
-            ReviewRequest.retreat_id == retreat.id, ReviewRequest.status == "대기"
-        )
+    keys = perm.my_dept_keys(user)
+    base = select(ReviewRequest).where(
+        ReviewRequest.retreat_id == retreat.id, ReviewRequest.status == "대기"
+    )
+    if perm.is_admin(user):
+        # 총무팀은 부서 줄이 있어도 전부 — 답할 수 있는 것(can_respond_to)과 세는
+        # 것이 갈리면 배지와 단추가 어긋난다 (도막 4 · ①)
+        query = base
+    elif not keys:
+        return []
     else:
-        my_key = department_key_of(db, user)
-        base = select(ReviewRequest).where(
-            ReviewRequest.retreat_id == retreat.id,
-            ReviewRequest.status == "대기",
-        )
-        if my_key:
-            query = base.join(
-                Department, Department.id == ReviewRequest.department_id
-            ).where(Department.key == my_key)
-        else:
-            # 키 없는 부서(구설계 데이터)는 행으로만 — can_respond_to 와 같은 결
-            query = base.where(ReviewRequest.department_id == user.department_id)
+        query = base.join(
+            Department, Department.id == ReviewRequest.department_id
+        ).where(Department.key.in_(sorted(keys)))
     return list(db.scalars(query.order_by(ReviewRequest.id.desc())))
 
 
 def can_respond_to(db: Session, user: User, review: ReviewRequest) -> bool:
-    """요청받은 부서(키로 — 2장)와 총무팀만 답한다. 화면의 답 버튼과
-    respond 엔드포인트가 **같은 판정**을 쓴다 — 갈리면 버튼은 뜨는데 403 이 난다.
-
-    키 없는 부서(구설계 데이터)는 키를 넓힐 근거가 없으므로 행(id)으로만
-    본다 — None == None 으로 남의 부서까지 통과시키면 안 된다.
-    """
-    from app.domain.departments import department_key_of
-
-    if user.role == "admin":
+    """요청받은 부서(키로 — 2장 · 내 부서 중 하나 — 도막 4)와 총무팀만 답한다.
+    화면의 답 버튼과 respond 엔드포인트가 **같은 판정**을 쓴다 — 갈리면
+    버튼은 뜨는데 403 이 난다. 키 없는 부서(구설계 데이터)는 견줄 근거가
+    없으므로 총무팀만."""
+    if perm.is_admin(user):
         return True
     target = review.department
-    if target is None:
+    if target is None or not target.key:
         return False
-    if target.key:
-        return department_key_of(db, user) == target.key
-    return user.department_id == target.id
+    return target.key in perm.my_dept_keys(user)
 
 
 @router.get("/reviews")
@@ -225,7 +213,7 @@ def cancel(
     review = db.get(ReviewRequest, review_id)
     if review is None or review.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="확인 요청을 찾을 수 없습니다.")
-    if review.requester_id != user.id and user.role != "admin":
+    if review.requester_id != user.id and not perm.is_admin(user):
         raise HTTPException(status_code=403, detail="요청한 본인만 취소할 수 있습니다.")
     if review.status != "대기":
         return redirect(

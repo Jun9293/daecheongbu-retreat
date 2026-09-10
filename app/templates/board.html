@@ -4,13 +4,13 @@
 
 {% block body %}
 <div class="toolbar">
-  {{ deptpick(board.departments, my_department_key or 'all') }}
+  {{ deptpick(board.departments, my_department_key or 'all', depts=my_department_keys) }}
   <label class="tog"><input type="checkbox" id="opT"> 미완료만</label>
   <button class="fchip" id="fchip" hidden></button>
   <span class="mono" style="font-size:12.5px;color:var(--ink-3)">
     {{ board.done }}/{{ board.total }} 완료{% if board.late %} · 지연 {{ board.late }}건{% endif %}
   </span>
-  {% if not is_readonly(user.role) %}
+  {% if not is_readonly(user) %}
   <a class="addlink" href="/board/add">+ 업무 추가</a>
   {% endif %}
   <div class="legend">

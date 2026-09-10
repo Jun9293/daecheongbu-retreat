@@ -137,58 +137,44 @@ templates.env.filters["dday"] = dday
 
 def can_edit_dept(user, department) -> bool:
     """화면의 편집 버튼 — 서버 판정(assert_can_edit_department)과 **같은 축**
-    (부서 키 · 2장)으로 가른다. Department **행**을 받는다. id 로 견주면
-    새 회차가 열리는 순간 버튼이 조용히 사라져, 403 이 나기도 전에 길이 없다.
-    키 없는 부서(구설계 데이터)만 행으로 견준다.
+    (부서 키 · 2장 · 「내 부서 중 하나인가」 · 도막 4)으로 가른다.
+    Department **행**을 받는다. id 로 견주면 새 회차가 열리는 순간 버튼이
+    조용히 사라져, 403 이 나기도 전에 길이 없다.
     """
-    if user is None:
-        return False
-    mine = user.department
-    if department is not None and department.key and mine is not None and mine.key:
-        return perm.can_edit_department_by_key(
-            role=user.role,
-            user_department_key=mine.key,
-            target_department_key=department.key,
-        )
-    return perm.can_edit_department_content(
-        role=user.role,
-        user_department_id=user.department_id,
-        target_department_id=department.id if department is not None else None,
-    )
+    return perm.can_edit_department_key(
+        user, department.key if department is not None else None)
 
 
 def is_other_dept(user, department) -> bool:
-    """내 부서가 아닌 항목인지 — 흐리게 표시할 대상. **키로 비교한다** (2장).
-
-    Department **행**을 받는다(id 가 아니라). id 로 견주면 새 회차가 열리는
-    순간 다른 회차의 같은 부서가 전부 흐려진다 — 소속인데 남의 것으로 보인다.
-    키 없는 부서(구설계 데이터)만 행으로 견준다 — None == None 으로 남의
-    부서까지 내 것이 되면 안 된다.
+    """내 부서가 아닌 항목인지 — 흐리게 표시할 대상. **키로, 집합으로** 비교한다
+    (2장 · 도막 4). 총무팀은 아무것도 흐리지 않는다. 소속이 하나도 없으면
+    부서 있는 항목이 전부 남의 것이다 — None == None 으로 내 것이 되면 안 된다.
     """
-    if user is None or user.role == perm.ADMIN:
+    if user is None or perm.is_admin(user):
         return False
-    mine = user.department
-    if mine is None:
-        return department is not None
+    mine = perm.my_dept_keys(user)
     if department is None:
         return True
-    if mine.key and department.key:
-        return mine.key != department.key
-    return mine.id != department.id
+    if not mine or not department.key:
+        return True
+    return department.key not in mine
 
 
 templates.env.globals["ROLE_LABELS"] = perm.ROLE_LABELS
 templates.env.globals["today"] = dt.date.today
 templates.env.globals["can_edit_dept"] = can_edit_dept
 templates.env.globals["is_other_dept"] = is_other_dept
+# **열람 전용인가는 사람을 받는다** (도막 4 · ②) — 소속이 없는 일반도 열람 전용이다
 templates.env.globals["is_readonly"] = perm.is_readonly
+templates.env.globals["내_부서키"] = perm.my_dept_keys
+templates.env.globals["is_lead_of"] = perm.is_lead_of
 # **계좌를 보일지 말지는 한 함수가 정한다** — 화면·엑셀·칩이 같이 쓴다
 templates.env.globals["계좌를_본다"] = (
-    lambda user: user is not None and perm.can_see_account(user.role))
+    lambda user: user is not None and perm.can_see_account(user))
 # 엑셀을 받을 수 있는가 — 열람 전용만 못 받는다. 계좌가 보이는지와 다른 물음이다
 templates.env.globals["엑셀을_받는다"] = (
-    lambda user: user is not None and not perm.is_readonly(user.role))
-templates.env.globals["is_admin"] = lambda user: user is not None and perm.can_manage_retreat(user.role)
+    lambda user: user is not None and not perm.is_readonly(user))
+templates.env.globals["is_admin"] = lambda user: user is not None and perm.is_admin(user)
 # 총무팀 일정(진행 화면)의 이름 — 사이드바와 화면 제목이 같은 한 곳(domain.live)에서 (5장)
 from app.domain.live import SCREEN_TITLE as _live_title  # noqa: E402
 
@@ -235,32 +221,29 @@ def _badge_counts(context: dict) -> dict:
 
 
 def _side_dept_name(context: dict) -> str | None:
-    """사이드바 사용자 카드의 부서 이름 — **키로 찾는다** (2장).
+    """사이드바 사용자 카드의 소속 한 줄 — 「헤브론 리더 · 총무팀」 (도막 4).
 
-    `user.department` 는 어느 회차의 행일지 모른다. 지금 보는 회차에 같은
-    키의 부서가 있으면 그 이름을 쓰고, 없으면 원래 행의 이름으로 물러선다."""
+    부서 이름은 **지금 보는 회차의 이름**을 우선 쓴다 (키로 찾는다 · 2장).
+    소속이 없으면 None — 화면이 「부서 미지정」 을 낸다."""
     user = context.get("user")
-    if user is None or getattr(user, "department_id", None) is None:
+    if user is None:
         return None
-    from sqlalchemy import select
+    retreat = context.get("retreat")
+    names = {}
+    if retreat is not None:
+        names = {d.key: d.name for d in retreat.departments if d.key}
+    return perm.describe(user, dept_names=names) or None
 
+
+def _external_link(context: dict) -> dict | None:
+    """사이드바의 바깥 링크 (도막 4) — 로그인한 화면에서만, DB 에 값이 있을 때만."""
+    if context.get("user") is None:
+        return None
     from app.db import SessionLocal
-    from app.domain.departments import department_key_of
-    from app.models import Department
+    from app.routers.settings import external_link
 
     with SessionLocal() as db:
-        retreat = context.get("retreat")
-        key = department_key_of(db, user)
-        if retreat is not None and key:
-            dept = db.scalars(
-                select(Department).where(
-                    Department.retreat_id == retreat.id, Department.key == key
-                )
-            ).first()
-            if dept is not None:
-                return dept.name
-        dept = db.get(Department, user.department_id)
-        return dept.name if dept is not None else None
+        return external_link(db)
 
 
 def render(
@@ -273,6 +256,7 @@ def render(
         **_badge_counts(context),
         "active_draft": _active_draft(context),
         "side_dept_name": _side_dept_name(context),
+        "external_link": _external_link(context),
         **context,
     }
     response = templates.TemplateResponse(

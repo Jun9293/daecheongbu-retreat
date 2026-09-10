@@ -32,7 +32,6 @@ from app.config import (
 from app.db import get_db
 from app.deps import get_current_retreat, log_activity
 from app.domain import permissions as perm
-from app.domain.departments import department_key_of
 from app.models import Retreat, TaskAttachment, TaskRun, User
 from app.security import get_current_user
 
@@ -63,11 +62,8 @@ def _load_run(db: Session, retreat: Retreat, run_id: int) -> TaskRun:
 
 
 def _can_edit(db: Session, user: User, run: TaskRun) -> bool:
-    return perm.can_edit_department_by_key(
-        role=user.role,
-        user_department_key=department_key_of(db, user),
-        target_department_key=run.department.key if run.department else None,
-    )
+    return perm.can_edit_department_key(
+        user, run.department.key if run.department else None)
 
 
 def _require_edit(db: Session, user: User, run: TaskRun) -> None:

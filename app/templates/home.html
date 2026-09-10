@@ -91,10 +91,11 @@
         두 곳에 있으면 갈린다) 링크는 그 부서를 그대로 연다 — 눌러 간 화면에서
         「담당자 없음」 을 눌러 그 자리에서 정한다 (4-14).
       #}
-      {% if home.mine_unassigned %}
-      <a class="homeask" href="/tasks?dept={{ home.my_dept_key|urlencode }}">
-        내 부서에 담당자 없는 업무 {{ home.mine_unassigned }}건<span>목록에서 담당자 정하기 →</span></a>
-      {% endif %}
+      {# 부서마다 한 줄 — 링크가 `?dept=키` 하나를 받는다 (도막 4) #}
+      {% for m in home.mine_unassigned %}
+      <a class="homeask" href="/tasks?dept={{ m.key|urlencode }}">
+        {{ m.name }}에 담당자 없는 업무 {{ m.count }}건<span>목록에서 담당자 정하기 →</span></a>
+      {% endfor %}
       {% endfor %}
     </div>
 

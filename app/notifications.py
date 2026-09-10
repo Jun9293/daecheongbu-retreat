@@ -51,7 +51,7 @@ def recipients_for_risk(db: Session, risk: Risk) -> list[User]:
     def add(user: User | None) -> None:
         if user is None or not user.is_active:
             return
-        if perm.is_readonly(user.role):  # 열람 전용에게는 보내지 않는다
+        if perm.is_readonly(user):  # 열람 전용에게는 보내지 않는다
             return
         users[user.id] = user
 
@@ -64,7 +64,7 @@ def recipients_for_risk(db: Session, risk: Risk) -> list[User]:
             add(user)
 
     if risk.escalate_to_admin or task.department_id is None:
-        for user in db.scalars(select(User).where(User.role == perm.ADMIN)):
+        for user in perm.admins(db):
             add(user)
 
     return list(users.values())
@@ -77,30 +77,21 @@ def department_members(db: Session, department_id: int) -> list[User]:
     department_id 는 이번 회차 행이라, id 로만 찾으면 새 회차가 열리는 순간
     옛 회차 소속 사람들이 조용히 빠진다 — 아무 오류도 나지 않고 알림이 안 간다.
     """
-    from app.domain.departments import users_in_department
     from app.models import Department
 
     dept = db.get(Department, department_id)
-    if dept is None:
+    if dept is None or not dept.key:
+        # 키 없는 부서(구설계 데이터)는 넓힐 근거가 없다 — 소속 줄도 키로만 본다
         return []
-    if dept.key:
-        members = users_in_department(db, dept.key)
-    else:
-        # 키 없는 부서(구설계 데이터)는 넓힐 근거가 없다 — 그 행 소속만
-        members = list(
-            db.scalars(select(User).where(User.department_id == department_id))
-        )
     return [
         user
-        for user in members
-        if user.is_active and not perm.is_readonly(user.role)
+        for user in perm.members_of(db, dept.key)
+        if not perm.is_readonly(user)
     ]
 
 
 def admins(db: Session) -> list[User]:
-    return list(
-        db.scalars(select(User).where(User.role == perm.ADMIN, User.is_active))
-    )
+    return perm.admins(db)
 
 
 # ---------------------------------------------------------------- 알림 생성

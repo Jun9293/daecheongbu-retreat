@@ -68,7 +68,10 @@
   <div class="chips">
     <select class="ldept" id="ldept" aria-label="부서"
             data-base="/tasks{{ q(state=view.state, sort=keep_sort, dir=keep_dir) }}">
-      <option value="">부서 전체</option>
+      {# 값이 `all` 인 이유 — 빈 값으로 보내면 기본(내 부서)으로 되돌아가 전체를 고를 수 없다 #}
+      <option value="all"{{ ' selected' if view.dept in ('', 'all') }}>부서 전체</option>
+      {# 내 부서 전부 — 소속이 여럿일 수 있어 「내 부서」 항목이 따로 있다 (도막 4 · ④) #}
+      {% if 내_부서키(user) %}<option value="depts"{{ ' selected' if view.dept == 'depts' }}>내 부서</option>{% endif %}
       {% for d in view.dept_counts %}
       <option value="{{ d.key }}"{{ ' selected' if view.dept == d.key }}>{{ d.name }} · {{ d.count }}</option>
       {% endfor %}

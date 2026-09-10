@@ -30,8 +30,8 @@ from app.models import Retreat, TaskRun, User
 # `dept` 는 옛 값이다. 쿠키에 남아 있을 수 있어 **내 부서 키로 옮겨 준다** —
 # 모르는 값이라고 `mine` 으로 떨어뜨리면, 어제까지 우리 부서를 보던 사람이
 # 오늘 갑자기 자기 것만 보게 되고 왜인지 알 수 없다.
-FIXED_SCOPES = ("mine", "all")
-SCOPE_LABELS = {"mine": "내 것", "all": "전체"}
+FIXED_SCOPES = ("mine", "depts", "all")
+SCOPE_LABELS = {"mine": "내 것", "depts": "내 부서", "all": "전체"}
 LEGACY_DEPT = "dept"
 
 # 한 칸에 이만큼까지 펼쳐 두고 나머지는 접는다. 다 펼치면 칸이 세로로
@@ -69,8 +69,9 @@ def shift_month(first: dt.date, step: int) -> dt.date:
     return dt.date(year, (month - 1) % 12 + 1, 1)
 
 
-def _in_scope(run: TaskRun, *, scope: str, user: User | None) -> bool:
-    """`mine` · `all` · **부서 키**.
+def _in_scope(run: TaskRun, *, scope: str, user: User | None,
+              my_dept_keys: set[str] | None = None) -> bool:
+    """`mine` · `depts`(내 부서 전부 · 도막 4) · `all` · **부서 키**.
 
     **부서는 키로 비교합니다** (2장). `Department` 행은 회차마다 새로
     만들어지므로 id 로 보면 새 회차가 열리는 순간 그 부서 업무가 통째로
@@ -80,6 +81,8 @@ def _in_scope(run: TaskRun, *, scope: str, user: User | None) -> bool:
         return True
     if scope == "mine":
         return user is not None and run.assignee_id == user.id
+    if scope == "depts":
+        return (run.department.key if run.department else None) in (my_dept_keys or set())
     return (run.department.key if run.department else None) == scope
 
 
@@ -121,7 +124,7 @@ def build(
     *,
     today: dt.date,
     user: User | None = None,
-    my_dept_key: str | None = None,
+    my_dept_keys: set[str] | None = None,
     month: str | None = None,
     scope: str = "mine",
     only_open: bool = False,
@@ -132,8 +135,11 @@ def build(
              if d.key]
     쓸수있는 = set(FIXED_SCOPES) | {d["key"] for d in depts}
     # 옛 값(`dept`)은 **내 부서 키로 옮긴다** — 쿠키에 남아 있을 수 있다
+    my_dept_keys = my_dept_keys or set()
     if scope == LEGACY_DEPT:
-        scope = my_dept_key or "mine"
+        scope = "depts" if my_dept_keys else "mine"
+    if scope == "depts" and not my_dept_keys:
+        scope = "mine"
     if scope not in 쓸수있는:
         scope = "mine"
 
@@ -141,7 +147,7 @@ def build(
     runs = [
         run for run in board_domain.load_runs(db, retreat)
         if run.included
-        and _in_scope(run, scope=scope, user=user)
+        and _in_scope(run, scope=scope, user=user, my_dept_keys=my_dept_keys)
         and not (only_open and run.status == "완료")
     ]
 
@@ -199,6 +205,7 @@ def build(
         "weeks": weeks,
         "undated": undated,
         "scope": scope,
+        "my_dept_keys": sorted(my_dept_keys),
         # 고르는 자리는 보드와 같은 것을 쓴다 (`partials/deptpick.html`)
         "departments": depts,
         "only_open": only_open,

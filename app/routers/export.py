@@ -41,7 +41,7 @@ def export_expenses(
     # 정하고 화면·칩도 같은 것을 부릅니다. 못 보는 사람의 파일에는 계좌
     # **칸 자체가 없습니다**(빈 칸이 아니라 없는 칸).
     buffer = budget_xlsx.write(
-        summary, entries, 계좌를_보인다=perm.can_see_account(user.role))
+        summary, entries, 계좌를_보인다=perm.can_see_account(user))
 
     filename = f"{retreat.name}_지출내역.xlsx"
     quoted = urllib.parse.quote(filename)

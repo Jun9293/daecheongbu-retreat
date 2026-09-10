@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat
 from app.domain import calendar as calendar_domain
-from app.domain.departments import department_key_of
+from app.domain import permissions as perm
 from app.models import Retreat, User
 from app.security import get_current_user
 from app.templating import render
@@ -46,11 +46,11 @@ def _view(
 
     두 벌이면 화살표로 넘긴 달과 새로고침한 달이 다르게 계산된다.
     """
-    my_key = department_key_of(db, user)
+    my_keys = perm.my_dept_keys(user)
 
     # 주소에 없으면 지난번에 고른 것, 그것도 없으면 기본값.
-    # **기본은 `내 것`** — "내가 뭘 해야 하나" 를 보려고 여는 화면이다
-    chosen = scope or request.cookies.get(SCOPE_COOKIE) or "mine"
+    # **기본은 내 부서 전부**(도막 4 · ④) — 소속이 없으면 `내 것`(담당자 나)
+    chosen = scope or request.cookies.get(SCOPE_COOKIE) or ("depts" if my_keys else "mine")
     if only_open is None:
         open_only = request.cookies.get(OPEN_COOKIE) == "1"
     else:
@@ -61,7 +61,7 @@ def _view(
         retreat,
         today=_today(),
         user=user,
-        my_dept_key=my_key,
+        my_dept_keys=my_keys,
         month=month,
         scope=chosen,
         only_open=open_only,

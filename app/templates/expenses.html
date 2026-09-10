@@ -26,7 +26,7 @@
     <div class="kpi"><div class="l">개인부담</div><div class="v">{{ totals.burden|won }}</div></div>
   </div>
 
-  {% if not is_readonly(user.role) %}
+  {% if not is_readonly(user) %}
   {# 등록은 **버튼으로 연다** (7-4) — 늘 접힌 채 시작한다. 전에는 필터에
      걸린 행이 0건이면 저절로 펼쳐져 목록을 보러 온 화면이 입력 폼이 됐다.
      다음 영수증 번호는 버튼 옆에 그대로 보인다. #}

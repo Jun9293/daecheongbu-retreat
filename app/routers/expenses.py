@@ -117,10 +117,10 @@ def _my_department_id(db: Session, retreat: Retreat, user: User) -> int | None:
     """이 회차에서의 내 부서 행 — **키로 찾는다** (2장). 소속 행이 다른 회차
     것이어도 이번 회차의 같은 키 부서를 돌려준다. 없으면(키 없는 부서 등)
     원래 행으로 물러선다."""
-    from app.domain.departments import department_key_of
-
-    my_key = department_key_of(db, user)
-    if my_key:
+    # 소속이 여럿이면 **리더인 부서 중 첫째**, 아니면 첫 소속 (도막 4 · ③과 같은 규칙).
+    # 폼의 부서 칸은 하나를 고르는 자리라 기본값도 하나여야 한다
+    keys = sorted(perm.lead_keys(user)) or sorted(perm.my_dept_keys(user))
+    for my_key in keys:
         mine = db.scalar(
             select(Department.id).where(
                 Department.retreat_id == retreat.id, Department.key == my_key
@@ -128,7 +128,7 @@ def _my_department_id(db: Session, retreat: Retreat, user: User) -> int | None:
         )
         if mine is not None:
             return mine
-    return user.department_id
+    return None
 
 
 def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
@@ -164,7 +164,7 @@ def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
     # **계좌를 보일지는 `permissions.can_see_account` 하나가 정합니다** —
     # 화면·엑셀·이 폼이 같이 부릅니다. 여기만 다른 함수를 부르면 그 함수가
     # 바뀔 때 이 자리만 따로 움직입니다
-    남이낸것 = perm.can_see_account(user.role)
+    남이낸것 = perm.can_see_account(user)
     return {
         "department_id": last.department_id,
         "payer_name": (last.payer_name if 남이낸것 else None) or user.name,

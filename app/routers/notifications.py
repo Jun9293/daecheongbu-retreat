@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app import notifications as notify_service
 from app import push as push_service
 from app.db import get_db
+from app.domain import permissions as perm
 from app.deps import all_retreats, get_current_retreat, log_activity
 from app.models import Retreat, User
 from app.security import get_current_user, require_admin
@@ -54,7 +55,7 @@ def notification_box(
             review = db.get(ReviewRequest, n.target_id)
             if review is not None and review.requester_id:
                 sender = db.get(User, review.requester_id)
-                sender_dept = sender.department if sender else None
+                sender_dept = perm.first_department(sender) if sender else None
             # 요청받은 부서(또는 총무팀)만 답한다 — respond 엔드포인트와
             # **같은 함수**를 쓴다. 부서는 키로 (2장) — id 로 견주면 새 회차가
             # 열리는 순간 버튼이 조용히 사라진다

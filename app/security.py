@@ -87,14 +87,14 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    if not perm.can_manage_retreat(user.role):
+    if not perm.is_admin(user):
         raise HTTPException(status_code=403, detail="총무팀(관리자)만 사용할 수 있는 기능입니다.")
     return user
 
 
 def require_editor(user: User = Depends(get_current_user)) -> User:
     """열람 전용 계정이 쓰기 동작을 시도하는 것을 막는다."""
-    if perm.is_readonly(user.role):
+    if perm.is_readonly(user):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 편집할 수 없습니다.")
     return user
 
@@ -108,22 +108,12 @@ def assert_can_edit_department(db, user: User, target_department_id: int | None)
     읽어야 해서 db 를 받는다. 키 없는 부서(구설계 데이터)만 행(id)으로
     견준다 — None == None 으로 남의 부서까지 통과시키면 안 된다.
     """
-    from app.domain.departments import department_key_of
     from app.models import Department
 
     target = db.get(Department, target_department_id) if target_department_id else None
-    if target is not None and target.key:
-        ok = perm.can_edit_department_by_key(
-            role=user.role,
-            user_department_key=department_key_of(db, user),
-            target_department_key=target.key,
-        )
-    else:
-        ok = perm.can_edit_department_content(
-            role=user.role,
-            user_department_id=user.department_id,
-            target_department_id=target_department_id,
-        )
+    # **내 부서 중 하나인가** (도막 4) — 판정은 permissions 하나다. 키 없는
+    # 부서(구설계 데이터)는 견줄 근거가 없어 admin 만 통과한다
+    ok = perm.can_edit_department_key(user, target.key if target is not None else None)
     if not ok:
         raise HTTPException(
             status_code=403, detail="내 부서의 항목만 편집할 수 있습니다."

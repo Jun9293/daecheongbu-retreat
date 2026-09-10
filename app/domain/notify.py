@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.domain import diagnosis as diag
 from app.domain.board import has_started, load_runs, overdue_days_of, overdue_of
-from app.domain.departments import users_in_department
+from app.domain import permissions as perm
 from app.models import Department, NotificationLog, Retreat, TaskRun, User
 
 # ── 임계값. 이름을 붙여 둔다 ──────────────────────────────────────────
@@ -93,25 +93,27 @@ class Digest:
 # ── 받는 사람 고르기 ──────────────────────────────────────────────────
 
 
-def recipient_for(db: Session, run: TaskRun) -> User | None:
-    """담당자. 없으면 그 부서의 리더, 그마저 없으면 총무팀으로 올린다.
+def recipients_for(db: Session, run: TaskRun) -> list[User]:
+    """받는 사람들. 담당자 한 사람 — 없으면 그 부서의 **리더 전부**(도막 4 · ⑤),
+    그마저 없으면 총무팀 전원으로 올린다.
 
-    셋 다에게 보내지 않는다 — 다 받으면 아무도 자기 일로 받지 않는다.
+    셋에게 다 보내지 않는다 — 다 받으면 아무도 자기 일로 받지 않는다.
+    리더가 둘이면 둘 다 받는다: 한 사람만 받으면 나머지 리더는 그 부서에
+    담당자 없는 업무가 있는지 영영 모른다.
     """
     if run.assignee_id is not None:
-        return db.get(User, run.assignee_id)
+        who = db.get(User, run.assignee_id)
+        return [who] if who is not None else []
 
     if run.department_id is not None:
         dept = db.get(Department, run.department_id)
         # **키로 찾는다.** id 로 비교하면 새 회차가 열리는 순간 리더를 못 찾고
         # 조용히 총무팀으로 떨어져, 담당자 미지정 업무가 한 사람에게 몰린다.
-        leads = users_in_department(db, dept.key if dept else None, role="dept_lead")
+        leads = perm.leads_of(db, dept.key if dept else None)
         if leads:
-            return leads[0]
+            return leads
 
-    return db.scalars(
-        select(User).where(User.role == "admin").order_by(User.id)
-    ).first()
+    return perm.admins(db)
 
 
 # ── 항목 고르기 ───────────────────────────────────────────────────────
@@ -195,7 +197,8 @@ def build_digests(db: Session, *, today: dt.date | None = None) -> list[Digest]:
             # 재촉받는 것이 된다. 대신 선행을 쥔 쪽이 아래에서 받는다.
             if verdict != diag.BLOCKED:
                 for item in items_for_run(run, verdict, today):
-                    add(recipient_for(db, run), item)
+                    for who in recipients_for(db, run):
+                        add(who, item)
 
             # 선행 재촉 — 내 업무가 남을 막고 있을 때 내가 받는다
             waiting = [
@@ -224,7 +227,8 @@ def build_digests(db: Session, *, today: dt.date | None = None) -> list[Digest]:
                     f"{run.library.title} — {who}{more}이(가) 이 업무를 기다리고 있습니다{tail}",
                     verdict, run.status,
                 )
-                add(recipient_for(db, run), item)
+                for who in recipients_for(db, run):
+                    add(who, item)
 
                 # 기다리는 쪽이 기한을 넘겼을 때만 총무팀에도 올린다.
                 # **이때만 예외다** — 나머지는 담당자 한 사람 원칙을 그대로 지킨다.
@@ -244,11 +248,9 @@ def build_digests(db: Session, *, today: dt.date | None = None) -> list[Digest]:
                         f"막고 있고, 그쪽 마감이 {worst}일 지났습니다",
                         verdict, run.status,
                     )
-                    owner = recipient_for(db, run)
-                    for boss in db.scalars(
-                        select(User).where(User.role == "admin").order_by(User.id)
-                    ):
-                        if owner is not None and boss.id == owner.id:
+                    owners = {u.id for u in recipients_for(db, run)}
+                    for boss in perm.admins(db, active_only=False):
+                        if boss.id in owners:
                             continue      # 담당자가 총무팀이면 두 번 받지 않는다
                         add(boss, boss_item)
 

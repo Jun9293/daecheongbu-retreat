@@ -20,7 +20,6 @@ from app.db import get_db
 from app.deps import all_retreats, get_current_retreat
 from app.domain import permissions as perm
 from app.domain import tasklist
-from app.domain.departments import department_key_of
 from app.models import Retreat, User
 from app.security import get_current_user
 from app.templating import render
@@ -31,7 +30,7 @@ router = APIRouter()
 @router.get("/tasks")
 def tasks_page(
     request: Request,
-    scope: str = "all",
+    scope: str = "",
     state: str = "",
     dept: str = "",
     sort: str = "date",
@@ -51,24 +50,25 @@ def tasks_page(
     부서를 보던 사람이 오늘 갑자기 전체를 보고 **왜인지 알 수 없다**
     (달력의 옛 `dept` 값을 옮겨 준 것과 같은 자리, 4-13).
     """
-    my_key = department_key_of(db, user)
-    if not dept and scope == "mine" and my_key:
-        dept = my_key
+    my_keys = perm.my_dept_keys(user)
+    # **기본값은 내 부서 전부** (도막 4 · ④) — 옛 `?scope=mine` 도 그것이다.
+    # 소속이 없으면 전체
+    if not dept and (scope == "mine" or not scope) and my_keys:
+        dept = "depts"
+    if dept == "depts" and not my_keys:
+        dept = ""
     view = tasklist.build(
         db,
         retreat,
         today=dt.date.today(),
-        my_key=my_key,
+        my_keys=my_keys,
         # 총무팀은 전부 선명하게 — 홈·옛 화면과 같은 규칙 (4-15 · 9장)
-        dim=user.role != "admin",
+        dim=not perm.is_admin(user),
         # 행 배지에서 상태를 바꿀 수 있는가 — **보드가 쓰는 그 문**이다
         # (2장: 부서는 키로). 상태를 바꾸는 것은 어차피 서버가 다시
         # 보므로, 여기서 다른 규칙을 쓰면 화면과 저장이 갈린다
-        can_edit=lambda run: perm.can_edit_department_by_key(
-            role=user.role,
-            user_department_key=my_key,
-            target_department_key=(run.department.key if run.department else None),
-        ),
+        can_edit=lambda run: perm.can_edit_department_key(
+            user, run.department.key if run.department else None),
         state=state,
         dept=dept,
         sort=sort,

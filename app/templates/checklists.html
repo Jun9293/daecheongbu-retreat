@@ -8,7 +8,7 @@
   <h1>체크리스트</h1>
   <div class="sub">비품·준비물처럼 "챙겼는지"만 확인하면 되는 것들.</div>
 
-  {% if not is_readonly(user.role) %}
+  {% if not is_readonly(user) %}
   <details class="fld" style="margin-top:14px" {% if not checklists %}open{% endif %}>
     <summary style="cursor:pointer;font-weight:600;font-size:var(--fz-md)">체크리스트 만들기</summary>
     <form method="post" action="/checklists/create" style="margin-top:10px">
@@ -18,9 +18,11 @@
         <span class="k">부서</span>
         <select name="department_id">
           <option value="">부서 미지정</option>
+          {# 기본 선택도 키로 — id 로 견주면 다른 회차 소속의 기본값이 안 잡힌다 (2장).
+             내 부서 **중** 첫째다 — 목록의 첫째가 아니다 #}
+          {% set 내첫부서 = departments|selectattr('key', 'in', 내_부서키(user))|map(attribute='key')|list|first %}
           {% for d in departments %}
-          {# 기본 선택도 키로 — id 로 견주면 다른 회차 소속의 기본값이 안 잡힌다 (2장) #}
-          <option value="{{ d.id }}" {% if user.department and d.key and d.key == user.department.key %}selected{% endif %}>{{ d.name }}</option>
+          <option value="{{ d.id }}" {% if d.key and d.key == 내첫부서 %}selected{% endif %}>{{ d.name }}</option>
           {% endfor %}
         </select>
         <span class="k">연결할 할 일</span>

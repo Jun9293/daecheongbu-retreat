@@ -88,7 +88,7 @@ def meeting_list(
             "meetings": meetings,
             "today": dt.date.today().isoformat(),
             "active_tab": "meetings",
-            "can_edit": not perm.is_readonly(user.role),
+            "can_edit": not perm.is_readonly(user),
         },
     )
 
@@ -111,7 +111,7 @@ def meeting_detail(
             "retreats": all_retreats(db),
             "meeting": meeting,
             "active_tab": "meetings",
-            "can_edit": not perm.is_readonly(user.role),
+            "can_edit": not perm.is_readonly(user),
             "kinds": MEETING_ITEM_KINDS,
             "departments": list(
                 db.scalars(
@@ -699,7 +699,7 @@ def meeting_suggestions(
                      if meeting.suggest_state == "기다림" and meeting.suggest_due_at
                      else 0),
         "people_notes": 평가줄[:8],
-        "can_edit": not perm.is_readonly(user.role),
+        "can_edit": not perm.is_readonly(user),
         "items": 항목,
         "failed": (meeting.suggest_state == "실패"),
         # 제안 한 줄을 **여러 업무에** 걸 수 있다 (4-9) — 고를 목록.

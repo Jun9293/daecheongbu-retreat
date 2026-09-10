@@ -28,13 +28,17 @@ from app.templating import render
 router = APIRouter()
 
 
-def _my_department_key(db: Session, user: User) -> str | None:
-    if user.department_id is None:
-        return None
-    from app.models import Department
-
-    dept = db.get(Department, user.department_id)
-    return dept.key if dept else None
+def _default_key(user: User, allowed: list[str]) -> tuple[str | None, list[str]]:
+    """`/draft` 의 기본 칸 (도막 4 · ③) — **리더인 부서 중 첫째**, 둘 이상이면
+    고르게 한다. 리더인 데가 없으면 소속 중 첫째. 돌려주는 것: (키, 고를 것들).
+    `allowed` 는 이번 초안에 든 부서 키다 — 그 밖의 소속은 후보가 아니다."""
+    leads = sorted(k for k in perm.lead_keys(user) if k in allowed)
+    if len(leads) > 1:
+        return None, leads
+    if leads:
+        return leads[0], []
+    mine = sorted(k for k in perm.my_dept_keys(user) if k in allowed)
+    return (mine[0] if mine else None), []
 
 
 @router.get("/draft")
@@ -53,11 +57,20 @@ def draft_page(
         )
 
     key = request.query_params.get("department")
-    mine = _my_department_key(db, user)
-    is_admin = perm.can_manage_retreat(user.role)
-    if key and not is_admin and key != mine:
+    is_admin = perm.is_admin(user)
+    if key and not is_admin and key not in perm.my_dept_keys(user):
         raise HTTPException(status_code=403, detail="내 부서의 칸만 볼 수 있습니다.")
-    key = key or mine
+    if not key:
+        key, choices = _default_key(user, draft.department_keys or [])
+        if choices:
+            # 리더인 부서가 둘 이상 — 어느 칸을 채울지 고른다 (③)
+            return render(
+                request,
+                "draft_pick.html",
+                {"user": user, "retreats": all_retreats(db), "draft": draft,
+                 "choices": [{"key": k, "name": DEPARTMENT_NAMES.get(k, k)} for k in choices],
+                 "page_subtitle": "회차 준비"},
+            )
     if key is None:
         raise HTTPException(status_code=400, detail="소속 부서가 없어 고를 수 없습니다. 총무팀에 문의해주세요.")
     if key not in (draft.department_keys or []):
@@ -153,9 +166,9 @@ def save(
     draft = draft_domain.active_draft(db)
     if draft is None:
         raise HTTPException(status_code=404, detail="진행 중인 회차 준비가 없습니다.")
-    if perm.is_readonly(user.role):
+    if perm.is_readonly(user):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 고를 수 없습니다.")
-    if not perm.can_manage_retreat(user.role) and _my_department_key(db, user) != department_key:
+    if not perm.is_admin(user) and department_key not in perm.my_dept_keys(user):
         raise HTTPException(status_code=403, detail="내 부서의 칸만 채울 수 있습니다.")
 
     submission = draft_domain.submission_for(db, draft, department_key)

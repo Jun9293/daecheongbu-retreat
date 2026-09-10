@@ -18,7 +18,7 @@ from app.domain import discussion
 from app.domain import dweek
 from app.domain import library as lib_domain
 from app.domain import permissions as perm
-from app.domain.departments import department_key_of, short_name
+from app.domain.departments import short_name
 from app.models import DiscussionEntry, Meeting, Retreat, TaskRun, User
 from app.routers import attachments
 from app.security import get_current_user
@@ -27,17 +27,19 @@ from app.templating import render
 router = APIRouter()
 
 
-def _dept_key_of(db: Session, user: User) -> str | None:
-    """로그인한 사람의 부서 키. 공용 함수로 옮겼다 — 알림 쪽과 같은 것을 써야 한다."""
-    return department_key_of(db, user)
+def _dept_keys_of(db: Session, user: User) -> set[str]:
+    """로그인한 사람의 부서 키 **집합** (도막 4). 판정은 permissions 하나다."""
+    return perm.my_dept_keys(user)
+
+
+def _pick_default(user: User) -> str:
+    """부서 드롭다운의 기본값 — **내 부서 전부**(`depts`), 소속이 없으면 전체 (④)."""
+    return "depts" if perm.my_dept_keys(user) else "all"
 
 
 def _can_edit(db: Session, user: User, run: TaskRun) -> bool:
-    return perm.can_edit_department_by_key(
-        role=user.role,
-        user_department_key=_dept_key_of(db, user),
-        target_department_key=run.department.key if run.department else None,
-    )
+    return perm.can_edit_department_key(
+        user, run.department.key if run.department else None)
 
 
 @router.get("/board")
@@ -54,10 +56,9 @@ def board_page(
     if retreat.start_date is None:
         raise HTTPException(status_code=400, detail="회차의 개회일이 지정되지 않았습니다.")
 
-    my_key = _dept_key_of(db, user)
-    view = board_view.build(db, retreat, can_edit=lambda run: perm.can_edit_department_by_key(
-            role=user.role, user_department_key=my_key,
-            target_department_key=run.department.key if run.department else None))
+    my_keys = _dept_keys_of(db, user)
+    view = board_view.build(db, retreat, can_edit=lambda run: perm.can_edit_department_key(
+            user, run.department.key if run.department else None))
     return render(
         request,
         "board.html",
@@ -66,7 +67,8 @@ def board_page(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "board": view,
-            "my_department_key": my_key,
+            "my_department_key": _pick_default(user),
+            "my_department_keys": sorted(my_keys),
             "active_tab": "board",
             "page_subtitle": "준비 보드",
         },
@@ -146,7 +148,7 @@ def _can_edit_entry(user: User | None, entry: DiscussionEntry) -> bool:
     """
     if user is None or entry.carried_from_run_id is not None:
         return False
-    return perm.can_manage_retreat(user.role) or entry.author_id == user.id
+    return perm.is_admin(user) or entry.author_id == user.id
 
 
 @router.get("/board/task/{run_id}")
@@ -346,13 +348,11 @@ def _assignee_candidates(db: Session, run: TaskRun) -> list[dict]:
     people = []
     keys = {run.department.key} if run.department else set()
     for user in db.scalars(select(User).where(User.is_active)):
-        if perm.can_manage_retreat(user.role):
+        if perm.is_admin(user):
             people.append(user)
             continue
-        if user.department_id is None:
-            continue
-        dept = db.get(Department, user.department_id)
-        if dept and dept.key in keys:
+        # **내 부서 중 하나**가 이 업무의 부서인가 (도막 4)
+        if perm.my_dept_keys(user) & keys:
             people.append(user)
     seen, out = set(), []
     for user in people:
@@ -393,11 +393,9 @@ def set_department(
     run.department_id = target.id if target else None
 
     # 넘긴 팀 사람이 담당자로 남아 있으면 뜻이 맞지 않는다
-    if run.assignee is not None and not perm.can_manage_retreat(run.assignee.role):
-        from app.models import Department
-
-        holder = db.get(Department, run.assignee.department_id) if run.assignee.department_id else None
-        if holder is None or holder.key != payload.key:
+    if run.assignee is not None and not perm.is_admin(run.assignee):
+        # 담당자의 부서 **중 하나**가 새 부서면 남긴다 (도막 4)
+        if payload.key not in perm.my_dept_keys(run.assignee):
             run.assignee_id = None
     db.commit()
     log_activity(
@@ -599,7 +597,7 @@ def add_task_page(
     from app.domain import dweek as dweek_mod
     from app.models import TaskLibrary
 
-    if perm.is_readonly(user.role):
+    if perm.is_readonly(user):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
 
     existing = {
@@ -658,10 +656,11 @@ def add_task_page(
             "retreats": all_retreats(db),
             "library_rows": rows,
             "departments": departments,
-            # 소속 키는 회차를 가리지 않고 찾는다 (2장) — 이 회차 목록에서
-            # id 로 찾으면 다른 회차 소속의 키가 안 잡힌다
-            "my_department_key": department_key_of(db, user),
-            "viewer_is_admin": perm.can_manage_retreat(user.role),
+            # 담당 부서 칸에 미리 골라 둘 키 하나 — 리더인 부서 먼저 (도막 4).
+            # 드롭다운 값(`depts`)이 아니라 부서 키여야 option 과 맞는다
+            "my_department_key": perm.primary_key(user),
+            "my_department_keys": sorted(perm.my_dept_keys(user)),
+            "viewer_is_admin": perm.is_admin(user),
             "slots": slots,
             "parents": parents,
             "active_tab": "board",
@@ -685,7 +684,7 @@ def add_existing(
     from app.domain import dweek as dweek_mod
     from app.models import TaskLibrary
 
-    if perm.is_readonly(user.role):
+    if perm.is_readonly(user):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
 
     dept_by_key = {d.key: d for d in retreat.departments}
@@ -695,11 +694,7 @@ def add_existing(
         if lib is None:
             continue
         dept = dept_by_key.get(lib.default_department_key or "")
-        if not perm.can_edit_department_by_key(
-            role=user.role,
-            user_department_key=_dept_key_of(db, user),
-            target_department_key=lib.default_department_key,
-        ):
+        if not perm.can_edit_department_key(user, lib.default_department_key):
             raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
         for target in [lib] + list(
             db.scalars(select(TaskLibrary).where(TaskLibrary.parent_library_id == lib.id))
@@ -782,7 +777,7 @@ def add_new(
     """
     from app.domain import tasks as tasks_domain
 
-    if perm.is_readonly(user.role):
+    if perm.is_readonly(user):
         raise HTTPException(status_code=403, detail="열람 전용 계정은 추가할 수 없습니다.")
     dept_by_key = {d.key: d for d in retreat.departments}
     dept = dept_by_key.get(payload.department_key or "")
@@ -790,11 +785,8 @@ def add_new(
     # 같은 규칙이다. 부서 없는 업무는 아직 누구 일인지 안 정해진 것이고,
     # 그것을 만드는 데 관리자를 요구하면 「나중에 정하자」 를 적을 수 없다.
     # 담당 부서는 드로어에서 나중에 고른다 (4-9).
-    if payload.department_key and not perm.can_edit_department_by_key(
-        role=user.role,
-        user_department_key=_dept_key_of(db, user),
-        target_department_key=payload.department_key,
-    ):
+    if payload.department_key and not perm.can_edit_department_key(
+        user, payload.department_key):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
 
     try:

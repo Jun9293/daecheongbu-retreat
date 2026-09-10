@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.domain import board, escalation, period
-from app.domain.departments import department_key_of
+from app.domain import permissions as perm
 from app.domain.board import overdue_of
 from app.domain.budget import BudgetSummary, build_budget_summary
 from app.models import Retreat, TaskRun, User
@@ -42,8 +42,10 @@ class HomeView:
     budget: BudgetSummary | None = None
     top_categories: list = field(default_factory=list)   # 지출 상위 (CategorySummary)
     my_today: list = field(default_factory=list)         # 내 담당 · 마감 ≤ 오늘 · 미완료
-    mine_unassigned: int = 0         # 내 부서의 미완료 업무 중 담당자가 없는 것
-    my_dept_key: str | None = None   # 그 부서 키 — 목록 링크의 값이다 (2장)
+    # 내 부서**들**의 미완료 업무 중 담당자가 없는 것 — 부서마다 한 줄
+    # (키 · 이름 · 수). 링크가 `?dept=키` 하나를 받으므로 부서마다 따로 낸다 (도막 4)
+    mine_unassigned: list = field(default_factory=list)
+    my_dept_keys: set = field(default_factory=set)   # 내 부서 키 집합 (2장 · 도막 4)
     week: list = field(default_factory=list)             # 미완료 · 오늘 뒤 7일 안 마감
     overdue_ids: set = field(default_factory=set)        # 행의 지연 배지도 계산값에서 (4-10)
     dim_ids: set = field(default_factory=set)            # 소속 외 행 — 부서는 **키로** 비교 (2장)
@@ -122,14 +124,14 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
     # 놓치는 지점이다 (달력의 「날짜 없는 업무」 와 같은 자리 · 4-13).
     # **부서는 키로 본다** (2장) — id 로 보면 새 회차가 열리는 순간 0 이
     # 되고, 0 이면 화면이 아무 말도 안 해서 왜 없어졌는지 알 수 없다.
-    view.my_dept_key = department_key_of(db, user)
-    if view.my_dept_key:
-        view.mine_unassigned = sum(
-            1
-            for r in open_runs
-            if r.assignee_id is None
-            and (r.department.key if r.department else None) == view.my_dept_key
-        )
+    view.my_dept_keys = perm.my_dept_keys(user)
+    names = {d.key: d.name for d in retreat.departments if d.key}
+    for key in sorted(view.my_dept_keys):
+        n = sum(1 for r in open_runs
+                if r.assignee_id is None
+                and (r.department.key if r.department else None) == key)
+        if n:
+            view.mine_unassigned.append({"key": key, "name": names.get(key, key), "count": n})
     view.week = sorted(
         (
             r
@@ -145,11 +147,10 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
 
     # 소속 외 흐림 — id 로 비교하면 새 회차가 열리는 순간 자기 부서까지 흐려진다 (2장).
     # 총무팀(admin)은 전부 선명하다 (9장의 소속 외 규칙과 같다)
-    if user.role != "admin" and user.department_id is not None:
-        my_key = view.my_dept_key
+    if not perm.is_admin(user) and view.my_dept_keys:
         view.dim_ids = {
             r.id
             for r in runs
-            if (r.department.key if r.department else None) != my_key
+            if (r.department.key if r.department else None) not in view.my_dept_keys
         }
     return view

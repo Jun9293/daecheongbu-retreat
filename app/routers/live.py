@@ -23,7 +23,6 @@ from app.deps import all_retreats, get_current_retreat, log_activity
 from app.domain import live as live_domain
 from app.domain import staff_sheet as sheet_domain
 from app.domain import permissions as perm
-from app.domain.departments import department_key_of
 from app.models import (
     AUDIENCE_HINTS,
     AUDIENCE_LABELS,
@@ -45,6 +44,21 @@ from app.security import get_current_user
 from app.templating import redirect, render
 
 router = APIRouter()
+
+
+def _staff_default(user: User) -> bool:
+    """봉사팀 보기가 기본인가 — 총무팀이면 아니고, 내 부서 **중 하나**가 봉사팀이면 그렇다."""
+    if perm.is_admin(user):
+        return False
+    return any(live_domain.DEPARTMENT_PART.get(k) in live_domain.TEAM_PARTS
+               for k in perm.my_dept_keys(user))
+
+
+def _first_key(user: User) -> str | None:
+    """파트 칩의 기본값에 쓸 키 하나 — 봉사팀 부서가 있으면 그것, 아니면 첫 키."""
+    keys = sorted(perm.my_dept_keys(user))
+    team = [k for k in keys if live_domain.DEPARTMENT_PART.get(k) in live_domain.TEAM_PARTS]
+    return (team or keys or [None])[0]
 
 
 def _now() -> dt.datetime:
@@ -78,10 +92,9 @@ def live_page(
     user: User = Depends(get_current_user),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    my_key = department_key_of(db, user)
     # 헤브론·코람데오 소속이면 봉사팀 보기가 기본으로 열린다 (5-8).
-    # 총무팀은 이 화면이 기본이고 위의 탭으로 건너간다.
-    is_team = live_domain.DEPARTMENT_PART.get(my_key or "") in live_domain.TEAM_PARTS
+    # **총무팀은 소속이 있어도 이 화면이 기본이다** (도막 4 · ①) — 위의 탭으로 건너간다.
+    is_team = _staff_default(user)
     if is_team and request.query_params.get("stay") is None:
         return redirect("/live/staff")
 
@@ -90,7 +103,7 @@ def live_page(
         retreat,
         now=_now(),
         day=day,
-        department_key=my_key,
+        department_key=_first_key(user),
     )
     return render(
         request,
@@ -121,9 +134,7 @@ def live_page(
             "team_parts": sorted(live_domain.TEAM_PARTS),
             "team_words": sorted(TEAM_WORDS),
             # 헤브론·코람데오 소속이면 봉사팀 보기가 기본이다 (5-8)
-            "staff_default": live_domain.DEPARTMENT_PART.get(
-                department_key_of(db, user) or ""
-            ) in live_domain.TEAM_PARTS,
+            "staff_default": _staff_default(user),
             "active_tab": "live",
             "page_subtitle": live_domain.SCREEN_TITLE,
         },
@@ -211,7 +222,7 @@ def live_data(
     """화면이 다시 그릴 때 쓰는 것. 판정은 서버에서만 한다."""
     return live_domain.build(
         db, retreat, now=_now(), day=day,
-        department_key=department_key_of(db, user),
+        department_key=_first_key(user),
     )
 
 

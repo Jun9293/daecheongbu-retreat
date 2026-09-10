@@ -52,7 +52,7 @@ def _sort_key(run: TaskRun):
     return (start is None, start or dt.date.max, run.id)
 
 
-def _row(run: TaskRun, today: dt.date, *, dim_key: str | None,
+def _row(run: TaskRun, today: dt.date, *, dim_keys: set[str] | None,
          can_edit=None) -> dict:
     paint = board.paint_of(run, today)
     end = run.end_date or run.start_date
@@ -77,7 +77,7 @@ def _row(run: TaskRun, today: dt.date, *, dim_key: str | None,
         "badge": paint["badge"],
         # 소속 외는 숨기지 않고 흐리게 (1장) — 부서는 키로 비교한다 (2장).
         # dim_key 가 없으면(총무팀 등) 전부 선명하다 — 홈과 같은 규칙 (4-15)
-        "dim": bool(dim_key and (dept.key if dept else None) != dim_key),
+        "dim": bool(dim_keys and (dept.key if dept else None) not in dim_keys),
         # 행 배지에서 상태를 바로 바꿀 수 있는가 (4-14) — **보드·드로어와
         # 같은 문**이다. 못 바꾸는 사람에게는 누를 것처럼 보이지 않는다
         "can_edit": True if can_edit is None else bool(can_edit(run)),
@@ -89,7 +89,7 @@ def build(
     retreat: Retreat,
     *,
     today: dt.date,
-    my_key: str | None,
+    my_keys: set[str] | None = None,
     dim: bool = True,
     state: str = "",
     dept: str = "",
@@ -97,7 +97,8 @@ def build(
     dir: str = "asc",
     can_edit=None,
 ) -> ListView:
-    """my_key 는 소속 외 흐림의 기준, dim 은 그 흐림을 켤지다.
+    """my_keys 는 소속 외 흐림의 기준(내 부서 **집합** · 도막 4), dim 은 그 흐림을 켤지다.
+    dept 가 `depts` 면 **내 부서 전부**가 범위다 (④).
 
     총무팀(admin)은 dim=False 로 전부 선명하게 본다 — 홈(4-15)·옛 화면과
     같은 규칙이다. 정렬은 날짜(기본 · 시작일)·이름 두 축, 오름/내림 (4-14) —
@@ -143,14 +144,19 @@ def build(
 
     # 부서가 곧 범위다. **상태 건수는 그 안에서 센다** — 「홍보팀 · 대기 3」
     # 처럼 지금 보고 있는 것을 말해야 한다
-    scoped = [r for r in runs if not dept or key_of(r) == dept]
+    if dept == "depts":
+        scoped = [r for r in runs if key_of(r) in (my_keys or set())]
+    else:
+        # `all` 은 「부서 전체」 — 기본이 내 부서가 되면서(④) 전체를 고른 것과
+        # 안 고른 것을 갈라야 해서 값이 생겼다. 걸러내지 않는다
+        scoped = [r for r in runs if dept in ("", "all") or key_of(r) == dept]
     state_counts = {s: sum(1 for r in scoped if badge_of[r.id] == s) for s in STATE_ORDER}
 
     picked = scoped
     if state:
         picked = [r for r in picked if badge_of[r.id] == state]
 
-    rows = [_row(r, today, dim_key=my_key if dim else None, can_edit=can_edit)
+    rows = [_row(r, today, dim_keys=(my_keys or set()) if dim else None, can_edit=can_edit)
             for r in picked]
     return ListView(
         rows=[r for r in rows if r["badge"]["cls"] != "done"],

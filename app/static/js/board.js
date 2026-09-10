@@ -101,7 +101,7 @@ function applyFilters() {
       team.classList.remove('dim');
     } else {
       team.style.display = '';
-      const isMine = (mine === 'all' || key === mine);
+      const isMine = (mine === 'all' || key === mine || (mine === 'depts' && myKeys().includes(key)));
       open = openedByHand.has(key) ? openedByHand.get(key) : isMine;
       team.classList.toggle('collapsed', !open);
       // 소속 외 부서는 숨기지 않고 흐리게 — 존재는 인지되어야 한다
@@ -133,7 +133,7 @@ function applyMobileFilters(mine, onlyOpen) {
       }
       if (onlyOpen && row.dataset.status === '완료') ok = false;
       row.style.display = ok ? '' : 'none';
-      row.classList.toggle('dim', ok && mine !== 'all' && row.dataset.of !== mine);
+      row.classList.toggle('dim', ok && mine !== 'all' && !(row.dataset.of === mine || (mine === 'depts' && myKeys().includes(row.dataset.of))));
       if (ok) visible++;
     });
     group.style.display = visible ? '' : 'none';
@@ -173,11 +173,18 @@ function setRoomBelow(px) {
   roomBelow.style.height = Math.max(0, Math.round(px)) + 'px';
 }
 
+/* 「내 부서」(depts) — 한 사람이 여러 부서에 속한다 (도막 4 · ④). 키 목록은
+   드롭다운이 data-mykeys 로 들고 있다 — 서버가 준 것을 여기서 다시 세지 않는다 */
+function myKeys() {
+  const sel = document.querySelector('[data-deptpick]');
+  return (sel && sel.dataset.mykeys) ? sel.dataset.mykeys.split(',').filter(Boolean) : [];
+}
+
 function scrollTeamToTop(key, smooth = true) {
   if (isMobile()) return;                 // 모바일은 D-주차 목록이라 부서 묶음이 없다
   const behavior = smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches
     ? 'smooth' : 'auto';
-  if (key === 'all') { setRoomBelow(0); board.scrollTo({top: 0, behavior}); return; }
+  if (key === 'all' || key === 'depts') { setRoomBelow(0); board.scrollTo({top: 0, behavior}); return; }
   const team = sheet.querySelector(`.row.team[data-team="${key}"]`);
   if (!team || !team.offsetParent) return;
   const head = sheet.querySelector('.row.head');

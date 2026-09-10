@@ -19,12 +19,17 @@
   이지만, 고르는 자리가 둘이면 사람이 어디를 봐야 할지 모른다 — 4-9 에서
   버튼을 두 자리에 두지 않기로 한 것과 같다.
 #}
-{% macro deptpick(departments, selected, id='me', label='내 소속', mine=false) %}
+{% macro deptpick(departments, selected, id='me', label='내 소속', mine=false, depts=none) %}
 <div class="ctl">
   <label for="{{ id }}">{{ label }}</label>
-  <select id="{{ id }}" name="{{ id }}" data-deptpick>
+  {# `depts` = 내 부서 키들. 있으면 「내 부서」 항목이 생기고 그것이 기본이다 (도막 4 · ④) —
+     한 사람이 여러 부서에 속하므로 「내 소속」 하나로는 고를 수 없다 #}
+  <select id="{{ id }}" name="{{ id }}" data-deptpick data-mykeys="{{ (depts or [])|join(',') }}">
     {% if mine %}
     <option value="mine"{{ ' selected' if selected == 'mine' }}>내 것</option>
+    {% endif %}
+    {% if depts %}
+    <option value="depts"{{ ' selected' if selected == 'depts' }}>내 부서</option>
     {% endif %}
     <option value="all"{{ ' selected' if selected == 'all' }}>전체</option>
     {% for d in departments %}

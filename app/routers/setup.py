@@ -320,17 +320,12 @@ def new_department_key(
     한글 이름으로는 안전한 키를 만들 수 없으므로 번호를 붙인다.
     이 키가 다음 회차에서도 같은 부서임을 알아보는 유일한 근거다.
     """
-    from app.models import Department
+    from app.domain.departments import next_team_key
 
     name = str(payload.get("name", "")).strip()
     if not name:
         raise HTTPException(status_code=400, detail="부서 이름을 입력해주세요.")
-    used = {d.key for d in db.scalars(select(Department)) if d.key}
-    used |= {k for k, _, _ in DEPARTMENT_MASTER}
-    n = 1
-    while f"team{n}" in used:
-        n += 1
-    return {"key": f"team{n}", "name": name, "color": payload.get("color") or "#69726D"}
+    return {"key": next_team_key(db), "name": name, "color": payload.get("color") or "#69726D"}
 
 
 class DraftIn(BaseModel):

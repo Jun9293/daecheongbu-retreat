@@ -34,7 +34,7 @@
   {# **보드와 같은 것을 쓴다** — 부서를 고를 수 있어야 한다 (partials/deptpick.html).
      `미완료만` 은 고르는 축이 달라 칩으로 남긴다. #}
   <div class="calchips" role="group" aria-label="범위">
-    {{ deptpick(cal.departments, cal.scope, id='calscope', label='범위', mine=true) }}
+    {{ deptpick(cal.departments, cal.scope, id='calscope', label='범위', mine=true, depts=cal.my_dept_keys) }}
     <a class="chip{{ ' on' if cal.only_open }}"
        href="/calendar?month={{ cal.month }}&scope={{ cal.scope }}&only_open={{ 0 if cal.only_open else 1 }}"
        aria-pressed="{{ 'true' if cal.only_open else 'false' }}">미완료만</a>

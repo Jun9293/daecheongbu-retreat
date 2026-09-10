@@ -1,0 +1,15 @@
+{% extends "retreat_base.html" %}
+{% block title %}회차 준비 · 어느 부서 칸{% endblock %}
+{% block body %}
+<main class="wiz">
+  <h2>어느 부서의 칸을 채울까요</h2>
+  <p class="lead">
+    리더인 부서가 둘 이상입니다 (도막 4 · ③). 한 칸씩 채웁니다 — 고르세요.
+  </p>
+  <ul class="picklist">
+    {% for c in choices %}
+    <li><a class="btn" href="/draft?department={{ c.key|urlencode }}">{{ c.name }}</a></li>
+    {% endfor %}
+  </ul>
+</main>
+{% endblock %}
