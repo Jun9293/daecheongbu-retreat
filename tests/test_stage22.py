@@ -22,7 +22,7 @@ import pytest
 from sqlalchemy import select
 
 from app import models
-from app.notifications import MANY_UNREAD, notify, system_unread_count
+from app.notifications import MANY_UNREAD, badge_unread_count, notify
 from tests.conftest import app_session, login_as, make_user
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -154,9 +154,9 @@ def test22_b01_처음_들어온_사람에게는_배지가_없다(client, world):
     with app_session() as db:
         lead = db.get(models.User, lead_id)
         assert lead.first_seen_at is not None, "들어온 때를 안 찍었다"
-        assert system_unread_count(db, lead) == 0
-    # 그런데 알림 화면은 감추지 않는다 — 세는 자리가 다른 것이다
-    assert "안 읽은 알림 3건" in page
+        assert badge_unread_count(db, lead, world["retreat"]) == 0
+    # 배지도 줄의 N 도 「들어온 뒤 온 것」 이라 0 — 그 전 것은 따로 말한다 (UI 정리 판 2 · 4-c)
+    assert "들어오기 전에 쌓인 알림 3건" in page and "안 읽은 알림 0건" not in page
 
 
 def test22_b02_들어온_뒤에_온_것은_센다(client, world):
@@ -169,7 +169,7 @@ def test22_b02_들어온_뒤에_온_것은_센다(client, world):
         lead = db.get(models.User, lead_id)
         assert lead.first_seen_at is not None
         _쌓는다(db, lead, world["retreat"], 2)
-        assert system_unread_count(db, lead) == 2
+        assert badge_unread_count(db, lead, world["retreat"]) == 2
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -8,13 +8,13 @@ from app import models
 from tests.conftest import app_session, login_as, make_user
 
 
-def _create_retreat(client, name="2026 여름수련회 Belong", cap=8000):
+def _create_retreat(client, name="2026 여름수련회 Belong", cap=8000, *, start="2026-07-20", end="2026-07-23"):
     response = client.post(
         "/retreats/create",
         data={
             "name": name,
-            "start_date": "2026-07-20",
-            "end_date": "2026-07-23",
+            "start_date": start,
+            "end_date": end,
             "meal_subsidy_per_person": cap,
             "clone_from": "",
         },

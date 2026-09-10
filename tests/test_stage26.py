@@ -322,7 +322,7 @@ def test26_e04_봉사팀_보기의_글자_하한과_그_예외():
     # 여백은 예전(3px 5px)의 두 배 이상, 줄 간격 1.35 이상 (3-c) — 줄 간격은 구조의
     # LINE_SCALE 하나에서 나온다 (e06 이 CSS 와 견준다)
     block = _ssheet_css()
-    assert "padding:6px 10px" in block and ss.LINE_SCALE >= 1.35
+    assert "padding:6px 8px" in block and ss.LINE_SCALE >= 1.35   # 8px — 사람이 정함 (UI 정리 판 2)
 
 
 def test26_e05_파트_색_짝은_전체일정_봉사자_공통색과_겹치지_않는다():

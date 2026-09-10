@@ -418,7 +418,7 @@ def test5_c01_확인_요청_취소는_상태다(admin_client, client, fin):
 def test5_c02_배지_수와_답을_기다리는_칩_수가_같다(admin_client, client, fin):
     """배지 = 안 읽은 **시스템** 알림 + 답 대기 요청 (4-0). 뒷항은 「답을
     기다리는 것」 칩과 같은 함수라, 부서 없는 admin 도 두 수가 같다."""
-    from app.notifications import system_unread_count
+    from app.templating import _badge_counts
     from app.routers.reviews import create_review_requests, pending_for_user
 
     make_user("총무 팀원2", "01066660002", "member", dept=fin["dept"])
@@ -436,7 +436,8 @@ def test5_c02_배지_수와_답을_기다리는_칩_수가_같다(admin_client, 
         retreat = db.get(models.Retreat, fin["retreat"])
         member = db.scalars(select(models.User).where(
             models.User.phone_number == "01066660002")).one()
-        badge = system_unread_count(db, member) + len(pending_for_user(db, member, retreat))
+        c = _badge_counts({"user": member, "retreat": retreat})   # 진짜 배지와 같은 함수
+        badge = c["unread_count"] + c["pending_review_count"]
         chip_rows = len(pending_for_user(db, member, retreat))
         assert badge == 1 == chip_rows
 

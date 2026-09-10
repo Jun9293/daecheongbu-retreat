@@ -17,7 +17,9 @@ TODAY = dt.date.today()
 
 
 def _setup(admin_client, dept_names=("홍보팀", "찬양팀")):
-    retreat = _create_retreat(admin_client)
+    # 진행 중인 회차여야 한다 — 끝난 회차에는 위험 점검이 알림을 안 만든다 (UI 정리 판 2)
+    retreat = _create_retreat(admin_client, start=(TODAY + dt.timedelta(days=40)).isoformat(),
+                              end=(TODAY + dt.timedelta(days=43)).isoformat())
     depts = _create_departments(admin_client, list(dept_names))
     return retreat, depts
 

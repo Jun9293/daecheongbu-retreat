@@ -1088,8 +1088,8 @@ def test_f06_머리줄과_시각_열이_본문보다_크고_굵다(sheet_data):
 def test_f07_글자를_키운_만큼_줄_수도_다시_센다():
     """글자 폭을 크기에서 계산하지 않으면, 키운 뒤에도 예전 폭으로 세어
     넘치는 칸을 못 잡는다."""
-    text = "음향 및 무대설치 (3.5h) (헤브론)"
-    # 온 칸(colspan 2)에서 잰다 — 반 칸(86px)은 여백 21px 을 빼면 65px 라 13px 로
+    text = " · ".join(["음향 및 무대설치 (3.5h) (헤브론)"] * 3)
+    # 온 칸(colspan 2)에서, 두 줄을 넘는 글로 잰다 — 짧은 글은 줄여도 같은 줄 수가 나온다 — 반 칸(86px)은 여백 21px 을 빼면 65px 라 13px 로
     # 줄여도 같은 줄 수가 나올 만큼 좁다 (UI 정리 판 1 에서 여백을 두 배로 했다)
     big = staff_sheet.wrapped_lines(text, 2)
     small = staff_sheet.wrapped_lines(text, 2, dense=True)
