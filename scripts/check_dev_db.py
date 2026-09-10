@@ -112,7 +112,9 @@ _스펙.loader.exec_module(_anon)
     ("tasks", "blocked_by_task_ids"): "숫자 id JSON (옛 표 — 이제 seed 만 쓴다; 할 일 전환은 TaskRun 을 만든다) — 근거: seed.py:241 (빈/숫자 목록)",
     ("tasks", "related_department_ids"): "숫자 id JSON (옛 표 — 이제 seed 만 쓴다) — 근거: seed.py:230 (빈 목록)",
     ("tasks", "status"): "상태 enum (옛 표) — 근거: app/models.py:26 (TASK_STATUSES)",
-    ("users", "role"): "권한 enum — 근거: app/domain/permissions.py:8 (ALL_ROLES)",
+    ("users", "role"): "권한 enum — 근거: app/domain/permissions.py:39 (ALL_ROLES)",
+    ("user_departments", "dept_role"): "lead|member (도막 4) — 근거: app/domain/permissions.py:50 (DEPT_ROLES)",
+    ("site_settings", "key"): "설정 키 슬러그 — 근거: app/routers/settings.py:444 (EXTERNAL_LINK_*)",
 }
 
 _글자형 = ("CHAR", "TEXT", "CLOB", "JSON")

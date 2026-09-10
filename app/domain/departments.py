@@ -37,32 +37,40 @@ def short_name(name: str) -> str:
 # 회차를 넘어 같은 부서임을 알아보는 것은 key 뿐이다.
 
 
-def department_key_of(db, user) -> str | None:
-    """그 사람의 부서 키. 회차가 바뀌어도 이것만은 그대로다."""
-    from app.models import Department
+def next_team_key(db) -> str:
+    """새 부서에 회차를 넘어 쓸 키(`team1`, `team2` …)를 발급한다 (6-6).
 
-    if user is None or user.department_id is None:
-        return None
-    dept = db.get(Department, user.department_id)
-    return dept.key if dept else None
-
-
-def users_in_department(db, key: str | None, *, role: str | None = None) -> list:
-    """그 부서 키에 속한 사람들.
-
-    User.department_id 는 계정을 만들 때의 회차 행을 가리키므로, 같은 키를 가진
-    **모든 회차의** Department 행 id 를 모아서 찾아야 한다.
-    """
+    한글 이름으로는 안전한 키를 만들 수 없으므로 번호를 붙인다. **키 없는 부서를
+    만드는 길을 두지 않는다** — 소속·알림·권한이 전부 키로 도는데(2장) 키가 비면
+    그 부서 사람은 아무것도 못 받고 아무 오류도 안 난다. 마법사와 설정 › 부서가
+    같이 쓴다."""
     from sqlalchemy import select
 
-    from app.models import Department, User
+    from app.models import Department
 
-    if not key:
-        return []
-    dept_ids = list(db.scalars(select(Department.id).where(Department.key == key)))
-    if not dept_ids:
-        return []
-    query = select(User).where(User.department_id.in_(dept_ids))
-    if role is not None:
-        query = query.where(User.role == role)
-    return list(db.scalars(query.order_by(User.id)))
+    used = {d.key for d in db.scalars(select(Department)) if d.key}
+    used |= {k for k, _, _ in DEPARTMENT_MASTER}
+    n = 1
+    while f"team{n}" in used:
+        n += 1
+    return f"team{n}"
+
+
+def department_keys_of(user) -> set[str]:
+    """그 사람의 부서 **키 집합** — 회차가 바뀌어도 이것만은 그대로다.
+
+    한 사람에 여러 부서가 붙는다(도막 4). 「키 하나」 를 돌려주던
+    옛 「한 사람 → 키 하나」 함수는 없앴다 — 같은 이름으로 집합을 돌려주면
+    `== my_key` 로 견주던 자리가 **조용히 항상 거짓**이 된다.
+    표를 읽는 것은 `permissions` 가 한다 — 여기는 이름만 빌려준다.
+    """
+    from app.domain import permissions as perm
+
+    return perm.my_dept_keys(user)
+
+
+def users_in_department(db, key: str | None, *, dept_role: str | None = None) -> list:
+    """그 부서 키에 속한 사람들 (활성) — `permissions.members_of` 그대로."""
+    from app.domain import permissions as perm
+
+    return perm.members_of(db, key, dept_role=dept_role)

@@ -21,6 +21,7 @@ import seed_library_data as L
 from app.config import ASSET_DIR, DATA_DIR, DATABASE_URL
 from app.db import Base, SessionLocal, engine, init_db
 from app.domain.meal import calculate_meal_settlement
+from app.domain import permissions as perm
 from app.models import (
     BudgetCategory,
     Checklist,
@@ -166,15 +167,14 @@ def seed(demo: bool = False) -> None:
         # 사용자 (demo 전용 — 자리표시자 번호다)
         users: dict[str, User] = {}
         for name, phone, role, dept_name in D.USERS:
-            user = User(
-                name=name,
-                phone_number=phone,
-                role=role,
-                department_id=depts[dept_name].id if dept_name else None,
-                bank_account=None,
-            )
+            # 옛 역할(dept_lead·member)은 전체 역할 「일반」 + 소속 줄의 부서 역할로
+            # 갈라진다 (도막 4). 부서 없는 옛 member 는 소속 없는 일반이다
+            top, dept_role = perm.LEGACY_ROLE_MAP.get(role, (role, perm.MEMBER))
+            user = User(name=name, phone_number=phone, role=top, bank_account=None)
             db.add(user)
             db.flush()
+            if dept_name:
+                perm.assign(db, user, depts[dept_name], dept_role)
             users[name] = user
 
         # 예산 항목

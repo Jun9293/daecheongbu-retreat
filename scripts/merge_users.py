@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session                               # noqa: E402
 from app.deps import log_activity                                # noqa: E402
 from app import config                                           # noqa: E402
 from app.domain import auth as invites                           # noqa: E402
+from app.domain import permissions as perm  # noqa: E402
 from app.models import (                                         # noqa: E402
     ActivityLog,
     DiscussionEntry,
@@ -82,7 +83,7 @@ def groups(db: Session, *, only_admin: bool = False) -> dict[str, list[User]]:
     """이름이 같은 계정 묶음. 둘 이상인 것만."""
     query = select(User).order_by(User.id)
     if only_admin:
-        query = query.where(User.role == "admin")
+        query = query.where(User.role == perm.ADMIN)
     by_name: dict[str, list[User]] = {}
     for person in db.scalars(query):
         by_name.setdefault(person.name.strip(), []).append(person)
@@ -99,7 +100,7 @@ def survey(db: Session, *, only_admin: bool = False) -> list[dict]:
                     "id": p.id,
                     "phone": p.phone_number,
                     "role": p.role,
-                    "department_id": p.department_id,
+                    "departments": perm.describe(p) or None,
                     "is_active": p.is_active,
                     "created_at": p.created_at,
                     "last_seen": last_seen(db, p.id),
@@ -166,7 +167,7 @@ def show(rows: list[dict]) -> None:
             print(
                 f"    id={person['id']:<4} {person['phone']:<14}"
                 f" {person['role']:<10}"
-                f" 부서={person['department_id'] if person['department_id'] else '없음':<5}"
+                f" 부서={person['departments'] or '없음':<12}"
                 f" {'활성' if person['is_active'] else '비활성'}"
             )
             print(

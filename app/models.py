@@ -134,10 +134,12 @@ class User(Base):
     # 를 보여주는 근거이기도 하다 — 빈 칸으로 두면 알 수 없다.
     retired_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     name: Mapped[str] = mapped_column(String(50))
-    department_id: Mapped[int | None] = mapped_column(
-        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
-    )
-    role: Mapped[str] = mapped_column(String(20), default="member")
+    # **전체 역할**만 — admin · general(일반) · viewer (permissions.ALL_ROLES).
+    # 부서 역할(리더·팀원)은 여기 없다: `user_departments` 줄에서 파생한다 —
+    # 한 사람이 여러 부서에 다른 역할로 붙을 수 있다 (도막 4 · 4-12).
+    # 옛 `department_id` 칸은 2026-09-10 에 그 표로 옮기고 지웠다
+    # (`scripts/부서옮기기.py`).
+    role: Mapped[str] = mapped_column(String(20), default="general")
     bank_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
@@ -147,7 +149,11 @@ class User(Base):
     # 없으면 아직 한 번도 안 들어온 것이고, 처음 들어오는 그 요청이 찍는다.
     first_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
-    department: Mapped[Department | None] = relationship()
+    # 소속 줄들 — **읽는 곳은 `domain/permissions` 하나다** (`my_dept_keys` ·
+    # `is_lead_of` …). 다른 파일이 이것을 직접 훑으면 「소속」 의 뜻이 갈린다.
+    departments: Mapped[list[UserDepartment]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def holds_phone(self) -> bool:
@@ -158,6 +164,44 @@ class User(Base):
     def shown_phone(self) -> str:
         """화면에 보일 번호. 놓았으면 원래 번호를 돌려준다 (표시용)."""
         return self.phone_number or (self.retired_phone or "")
+
+
+class UserDepartment(Base):
+    """한 사람의 부서 소속 한 줄 — **여러 줄일 수 있다** (도막 4).
+
+    `dept_role` 은 그 부서에서의 역할(`lead`·`member`)이다. 전체 역할
+    (`users.role`)과 다른 축이다 — 총무팀이면서 헤브론 리더일 수 있다.
+    비교는 `departments.key` 로 한다 (2장) — 이 줄은 회차의 부서 **행**을
+    가리키지만, 같은 키의 다른 회차 부서도 같은 소속으로 본다.
+
+    사람이 지워지면 함께 사라진다(`CASCADE`) — 소속 줄은 그 사람의 것이다.
+    """
+
+    __tablename__ = "user_departments"
+    __table_args__ = (UniqueConstraint("user_id", "department_id", name="uq_user_department"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id", ondelete="CASCADE"), index=True
+    )
+    dept_role: Mapped[str] = mapped_column(String(10), default="member")
+
+    user: Mapped[User] = relationship(back_populates="departments")
+    department: Mapped[Department] = relationship(lazy="joined")
+
+
+class SiteSetting(Base):
+    """앱 전체의 설정 값 — 키·값 한 줄씩 (도막 4 의 「바깥 링크」).
+
+    저장소 어디에도 적으면 안 되는 값(바깥 서비스의 관리자 주소 같은 것)을
+    **DB 에만** 둔다. 총무팀이 설정 화면에서 넣고 고친다.
+    """
+
+    __tablename__ = "site_settings"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class InviteToken(Base):

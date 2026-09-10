@@ -238,16 +238,17 @@ def seed_current(
 
 
 def seed_extra_users(db: Session, depts: dict[str, Department]) -> None:
+    from app.domain import permissions as perm
+
     for name, phone, role, dept_key in EXTRA_USERS:
+        # 옛 역할(dept_lead·member)은 「일반」 + 소속 줄의 부서 역할로 (도막 4)
+        top, dept_role = perm.LEGACY_ROLE_MAP.get(role, (role, perm.MEMBER))
+        person = User(name=name, phone_number=phone, role=top)
+        db.add(person)
+        db.flush()
         dept = depts.get(dept_key)
-        db.add(
-            User(
-                name=name,
-                phone_number=phone,
-                role=role,
-                department_id=dept.id if dept else None,
-            )
-        )
+        if dept is not None:
+            perm.assign(db, person, dept, dept_role)
     db.flush()
 
 

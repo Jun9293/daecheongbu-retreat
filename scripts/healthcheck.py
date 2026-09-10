@@ -195,6 +195,8 @@ def check_admin() -> tuple[bool, str]:
     try:
         from collections import Counter
 
+        from app.domain import permissions as perm
+
         from sqlalchemy import select
 
         from app.db import SessionLocal
@@ -202,7 +204,7 @@ def check_admin() -> tuple[bool, str]:
 
         with SessionLocal() as db:
             admins = list(
-                db.scalars(select(User).where(User.role == "admin", User.is_active))
+                db.scalars(select(User).where(User.role == perm.ADMIN, User.is_active))
             )
     except Exception as exc:                                     # noqa: BLE001
         return False, f"계정을 확인하지 못했습니다 — {exc}"

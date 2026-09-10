@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session                               # noqa: E402
 from app import config                                           # noqa: E402
 from app.db import SessionLocal, init_db                         # noqa: E402
 from app.domain import auth as invites                           # noqa: E402
+from app.domain import permissions as perm                       # noqa: E402
 from app.models import User                                      # noqa: E402
 
 # 환경변수를 안 준 상태인지 알아보려고 둔다 — 안내 문구가 달라진다
@@ -56,7 +57,7 @@ def same_name_admins(db: Session, name: str) -> list[User]:
     return list(
         db.scalars(
             select(User)
-            .where(User.name == name, User.role == "admin", User.is_active)
+            .where(User.name == name, User.role == perm.ADMIN, User.is_active)
             .order_by(User.id)
         )
     )
@@ -93,7 +94,7 @@ def show_link(raw: str) -> None:
 def reissue(db: Session, phone: str) -> int:
     person = db.scalars(select(User).where(User.phone_number == phone)).first()
     if person is None:
-        have = list(db.scalars(select(User).where(User.role == "admin").order_by(User.id)))
+        have = perm.admins(db, active_only=False)
         print(f"'{phone}' 연락처의 계정이 없습니다.")
         if have:
             print("  있는 관리자 계정:")
@@ -119,8 +120,8 @@ def create(db: Session, name: str, phone: str, force: bool) -> int:
     existing = db.scalars(select(User).where(User.phone_number == phone)).first()
     if existing is not None:
         changed = []
-        if existing.role != "admin":
-            existing.role = "admin"
+        if not perm.is_admin(existing):
+            existing.role = perm.ADMIN
             changed.append("관리자로 바꿨습니다")
         if not existing.is_active:
             existing.is_active = True
@@ -147,7 +148,7 @@ def create(db: Session, name: str, phone: str, force: bool) -> int:
         print(f'      python scripts/create_admin.py "{name}" {phone} --force')
         return 1
 
-    person = User(name=name, phone_number=phone, role="admin")
+    person = User(name=name, phone_number=phone, role=perm.ADMIN)
     db.add(person)
     db.commit()
     if twins:

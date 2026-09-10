@@ -226,14 +226,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
         from app.db import SessionLocal
         from app.models import User
+        from app.domain import permissions as perm
         from app.security import _user_id_from_request
 
         uid = _user_id_from_request(request)
         if uid:
             with SessionLocal() as db:
-                # 세션이 닫힌 뒤 화면에서 user.department 를 읽으므로 미리 같이 로드한다
+                # 세션이 닫힌 뒤 화면이 소속(사이드바 카드)을 읽으므로 미리 같이 로드한다
                 user = db.scalars(
-                    select(User).options(joinedload(User.department)).where(User.id == uid)
+                    select(User).options(perm.eager_load()).where(User.id == uid)
                 ).first()
     except Exception:  # pragma: no cover - 오류 화면에서 또 터지지 않게
         user = None
