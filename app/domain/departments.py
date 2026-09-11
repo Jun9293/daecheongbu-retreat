@@ -56,6 +56,28 @@ def next_team_key(db) -> str:
     return f"team{n}"
 
 
+def departments_of(db, retreat_id: int | None) -> list:
+    """그 회차의 부서 — **묻는 곳은 여기 하나다.**
+
+    설정의 부서 탭과 회차 상세가 같은 것을 물으면서 각자 질의를 적고 있었다.
+    질의가 같아도 **한쪽이 답을 화면에 안 넘기면** 그 화면은 「부서가 없습니다」
+    라고 말한다 — Jinja 는 없는 이름을 빈 것으로 그려서 아무 오류도 안 난다.
+    2026-09-11 에 회차 둘 다 부서 아홉을 갖고 있는데 상세 화면만 없다고 했고,
+    그 거짓말 때문에 사람과 내가 원인을 엉뚱한 데서 찾았다.
+    """
+    from sqlalchemy import select
+
+    from app.models import Department
+
+    if retreat_id is None:
+        return []
+    return list(db.scalars(
+        select(Department)
+        .where(Department.retreat_id == retreat_id)
+        .order_by(Department.sort_order, Department.id)
+    ))
+
+
 def department_keys_of(user) -> set[str]:
     """그 사람의 부서 **키 집합** — 회차가 바뀌어도 이것만은 그대로다.
 

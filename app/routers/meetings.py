@@ -39,6 +39,7 @@ from app.domain import permissions as perm
 from app.domain import suggest as suggest_mod
 from app.security import get_current_user, require_editor
 from app.templating import redirect, render
+from app.domain.departments import departments_of
 
 router = APIRouter(prefix="/meetings")
 
@@ -113,13 +114,7 @@ def meeting_detail(
             "active_tab": "meetings",
             "can_edit": not perm.is_readonly(user),
             "kinds": MEETING_ITEM_KINDS,
-            "departments": list(
-                db.scalars(
-                    select(Department)
-                    .where(Department.retreat_id == retreat.id)
-                    .order_by(Department.sort_order, Department.id)
-                )
-            ),
+            "departments": departments_of(db, retreat.id),
             "members": list(
                 db.scalars(select(User).where(User.is_active).order_by(User.name))
             ),

@@ -23,6 +23,7 @@ from app.domain import permissions as perm
 from app.models import Department, EquipmentItem, EquipmentRun, Retreat, User
 from app.security import get_current_user
 from app.templating import redirect, render
+from app.domain.departments import departments_of
 
 router = APIRouter(prefix="/equipment")
 
@@ -56,8 +57,7 @@ def groups_of(db: Session, retreat: Retreat) -> list[dict]:
         .order_by(EquipmentItem.team_key, EquipmentRun.group_name,
                   EquipmentRun.included.desc(), EquipmentRun.sort_order, EquipmentRun.id)
     ).all()
-    depts = {d.key: d for d in db.scalars(
-        select(Department).where(Department.retreat_id == retreat.id)) if d.key}
+    depts = {d.key: d for d in departments_of(db, retreat.id) if d.key}
     groups: dict[tuple[str, str], dict] = {}
     for run, item in rows:
         key = (item.team_key, run.group_name)

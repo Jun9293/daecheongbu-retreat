@@ -13,6 +13,7 @@ from app.deps import all_retreats, get_current_retreat, log_activity
 from app.models import Checklist, ChecklistItem, Department, Retreat, Task, User
 from app.security import assert_can_edit_department, get_current_user, require_editor
 from app.templating import redirect, render
+from app.domain.departments import departments_of
 
 router = APIRouter(prefix="/checklists")
 
@@ -52,13 +53,7 @@ def checklist_page(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "checklists": checklists,
-            "departments": list(
-                db.scalars(
-                    select(Department)
-                    .where(Department.retreat_id == retreat.id)
-                    .order_by(Department.sort_order, Department.id)
-                )
-            ),
+            "departments": departments_of(db, retreat.id),
             "tasks": list(
                 db.scalars(
                     select(Task).where(Task.retreat_id == retreat.id).order_by(Task.id.desc())

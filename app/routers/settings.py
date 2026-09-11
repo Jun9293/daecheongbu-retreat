@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.security import get_current_user, require_admin
 from app.templating import redirect, render
+from app.domain.departments import departments_of
 
 router = APIRouter()
 
@@ -166,11 +167,7 @@ def settings_retreat_detail(
             # 두 부서 사람은 두 번 세어진다 — 「부서 인원 합 > 계정 수」 가 맞다 (도막 4)
             "member_count": len(users_in_department(db, d.key)) if d.key else 0,
         }
-        for d in db.scalars(
-            select(Department)
-            .where(Department.retreat_id == target.id)
-            .order_by(Department.sort_order, Department.id)
-        )
+        for d in departments_of(db, target.id)
     ]
 
     return render(
@@ -191,6 +188,9 @@ def settings_retreat_detail(
             "expense_sum": expense_sum,
             "program_count": int(program_count),
             "program_item_count": int(program_item_count),
+            # 이 줄이 없어서 화면이 「부서가 없습니다」 라고 말했다 (2026-09-11).
+            # 만든 값을 안 넘기면 Jinja 가 조용히 빈 것으로 그린다
+            "dept_rows": dept_rows,
         },
     )
 
@@ -203,17 +203,7 @@ def settings_departments(
 ):
     ctx = _base_ctx(request, db, user)
     retreat = ctx["retreat"]
-    departments = (
-        list(
-            db.scalars(
-                select(Department)
-                .where(Department.retreat_id == retreat.id)
-                .order_by(Department.sort_order, Department.id)
-            )
-        )
-        if retreat
-        else []
-    )
+    departments = departments_of(db, retreat.id if retreat else None)
     return render(request, "settings_departments.html", {**ctx, "departments": departments})
 
 

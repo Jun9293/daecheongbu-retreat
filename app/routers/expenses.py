@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.security import assert_can_edit_department, get_current_user, require_editor
 from app.templating import redirect, render
+from app.domain.departments import departments_of
 
 router = APIRouter()
 
@@ -104,13 +105,7 @@ def _add_receipt(
 
 
 def _departments(db: Session, retreat: Retreat) -> list[Department]:
-    return list(
-        db.scalars(
-            select(Department)
-            .where(Department.retreat_id == retreat.id)
-            .order_by(Department.sort_order, Department.id)
-        )
-    )
+    return departments_of(db, retreat.id)
 
 
 def _my_department_id(db: Session, retreat: Retreat, user: User) -> int | None:
