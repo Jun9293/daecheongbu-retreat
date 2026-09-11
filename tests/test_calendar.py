@@ -1182,7 +1182,11 @@ def test_r2_09_README_가_지금_상태와_맞는다():
 
     # 로그인은 아이디와 비밀번호다 (4-12 · 2026-09-11)
     assert "아이디" in text and "계정문열기.py" in text
-    assert "초대 링크" not in text, "옛 로그인 방식이 README 에 남아 있다"
+    # **낱말이 아니라 「시키는 말」 을 찾는다** (10장) — 무엇을 왜 걷었는지
+    # 적으려면 걷힌 것의 이름이 그 문장에 나온다. 낱말로 막으면 그 설명까지
+    # 걸려, 고쳐 놓고도 빨갛다
+    for 시키는말 in ("초대 링크로 합니다", "링크를 발급", "create_admin.py", "관리자링크.py"):
+        assert 시키는말 not in text, f"옛 로그인 방식을 아직 시킨다: {시키는말}"
 
     # 설계는 CLAUDE.md 를 가리키는가 (두 곳에 같은 것을 적지 않는다)
     assert "CLAUDE.md" in text
