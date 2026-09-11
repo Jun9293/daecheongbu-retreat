@@ -32,6 +32,7 @@
 | `check_named` | **이름**이 낡은 것 — 목록에 기대지 않는 둘째 축 (11-3) |
 | `check_counts` | **자리를 세어 둔 말** — 10장을 다섯 판 연속 어겨서 검사로 옮겼다 |
 | `check_handoff` | **사람칸** — 사람이 움직여야 하는 것이 보고 맨 위 한 자리에 모였나 (11-3) |
+| `check_placeholder` | **보고의 안 채운 자리** — 없는 것을 있다고 적은 것이 네 판째라 검사로 옮겼다 (11-3) |
 
 **하나라도 0 이 아니면 전체가 0 이 아닙니다.** 그리고 **끝까지 다
 돌립니다** — 첫 실패에서 멈추면 한 번에 하나씩만 알게 되어, 고치고
@@ -57,7 +58,8 @@ ROOT = 여기.parent
 # `check_dev_db` 는 여기 없다 — 그건 devserve 앞의 입구이고 보는 것이
 # 커밋 내용이 아니라 **개발 DB** 다(11-2). 커밋 문에 끼우면 「커밋할
 # 것이 깨끗한데 개발 DB 때문에 빨갛다」 가 된다
-검사들 = ("check_names", "check_stale", "check_named", "check_counts", "check_handoff")
+검사들 = ("check_names", "check_stale", "check_named", "check_counts",
+       "check_handoff", "check_placeholder")
 
 
 def 돌린다(이름: str) -> int:
