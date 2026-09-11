@@ -50,14 +50,22 @@
           <input type="password" id="mypw2" name="password2"
                  autocomplete="new-password" required>
         </div>
-        <button type="submit">바꾸기</button>
+        {# **어휘는 이 페이지의 것입니다** — 바로 위 칸의 「저장」 과 같은
+           `sbtn p` 이고 감싸는 줄도 같습니다. 로그인 화면의 어휘(`.loginform
+           button`)를 그대로 쓰면 같은 카드 안에서 단추 둘이 서로 다른 말을
+           합니다 (2026-09-11 에 사람이 정함) #}
+        <div style="margin-top:10px;display:flex;gap:6px">
+          <button class="sbtn p" type="submit">바꾸기</button>
+        </div>
       </form>
       {# 「바꾸면 남의 기기가 잠긴다」 로 읽히면 안 됩니다 — 해시만 바뀌고
          세션은 그대로입니다(봐둘것 AS-a 의 「반대 방향」). #}
       <div class="hint">규칙은 길이 하나뿐입니다. 바꿔도 <b>이미 들어와 있는
         기기는 이 기기든 다른 기기든 그대로</b>이고, 다음에 새로 들어올 때부터
-        새 비밀번호를 씁니다. <b>남의 기기에서 쓰셨으면 끝나고 로그아웃해
-        주세요.</b></div>
+        새 비밀번호를 씁니다.</div>
+      {# **이 한 줄만 한 급 위입니다** — 왜인지는 CSS 의 `.pwwarn` 주석과
+         CLAUDE.md 4-0 에. 어휘가 어긋난 것이 아니라 그렇게 정한 것입니다 #}
+      <div class="pwwarn">남의 기기에서 쓰셨으면 끝나고 로그아웃해 주세요.</div>
     </div>
     {% endif %}
 

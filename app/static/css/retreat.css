@@ -1912,8 +1912,28 @@ input[type=password]{font:inherit;font-size:var(--fz-lg);
 .loginform input[type=text],.loginform input[type=password]{
   width:100%;box-sizing:border-box;font-size:var(--fz-lg);padding:10px 12px;
   border-radius:6px}
-.loginform button{font:inherit;font-size:var(--fz-lg);padding:11px 12px;border-radius:6px;
+/* **어휘를 밝힌 단추는 비켜 간다.** 이 묶음은 로그인 화면의 것이고
+   `.loginform` 은 칸을 폭 100% 로 두려고 설정 › 내 정보의 비밀번호 카드도
+   함께 씁니다(4-17). 그 카드의 단추까지 여기서 칠하면 **같은 카드 안에서
+   「저장」 은 작은 알약이고 「바꾸기」 는 카드 폭을 채운 막대**가 됩니다 —
+   2026-09-11 검토가 잰 값으로 짚었고 사람이 설정 쪽으로 맞추기로 정했습니다.
+   `:not(.sbtn)` 이 경계입니다: 어휘를 안 밝힌 단추만 로그인 것으로 봅니다. */
+.loginform button:not(.sbtn){font:inherit;font-size:var(--fz-lg);padding:11px 12px;border-radius:6px;
   border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+/* **이 한 줄만 `.hint` 보다 한 급 위입니다** (4-0 · 2026-09-11 에 사람이 정함).
+   설정 › 내 정보의 비밀번호 카드에서 「남의 기기에서 쓰고 나면 로그아웃한다」
+   를 담는 자리입니다. `.hint`(장식 단 12px)에 두었더니 **옆에 뜻을 대신 져 줄
+   값이 없는 문장이 장식 단에** 놓였습니다 — 4-0 은 혼자 뜻을 지는 글자에
+   14px 을 둡니다. 그 카드가 특별한 까닭은, **지금 비밀번호를 안 묻기로 한
+   대가를 감당하는 문장이 이것뿐**이기 때문입니다(봐둘것 AS-a). 막는 것이
+   아니라 아는 사람을 늘리는 것이 지금 할 수 있는 전부이고, 그 전부가 안
+   읽히면 아무것도 안 한 것과 같습니다.
+   **`.hint` 를 통째로 올리지 않습니다** — 그 페이지의 다른 칸도 그것을 쓰고,
+   거기 든 말들은 옆의 값이 뜻을 지는 자리입니다. 새 색을 만들지 않고 앱
+   토큰만 씁니다(4-0). */
+.fld .pwwarn{font-size:var(--fz-md);color:var(--ink);font-weight:500;
+  margin-top:8px;line-height:1.5}
+
 .bareerr{background:var(--st-late-bg);color:var(--st-late-fg);border-radius:6px;padding:8px 12px}
 
 /* ── 목록 (4-14) — 행은 마법사 3단계와 같은 partial(taskrow)이다 */
