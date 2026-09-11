@@ -344,6 +344,25 @@ def 회차고르기(db: Session, 회차id: int | None) -> Retreat:
     return 열린[0]
 
 
+def 회차머리(db: Session, 회차id: int | None) -> Retreat:
+    """회차를 고르고 머리 줄을 찍는다 — **고르는 규칙도 보관 경고도 여기 하나다.**
+
+    `scripts/비품묶음합치기.py` 가 이것을 그대로 부른다. 두 곳에 적으면 한쪽만
+    고쳐지고, 그때 「안 주면 열려 있는 회차」 와 「보관된 것도 받는다」 가 도구마다
+    달라진다(4-18).
+    """
+    retreat = 회차고르기(db, 회차id)
+    print(f"회차: {retreat.name} (id {retreat.id})")
+    if retreat.is_archived:
+        # **막지 않는다 — 말한다** (2026-09-11 에 사람이 정했다). 사람이 `--회차` 로
+        # 대놓고 고른 것이라 거절할 일이 아니지만, 안 주면 고르지 않는 기준이
+        # 「열려 있는 회차」 라서 말없이 지나가면 그 둘이 어긋나 보인다.
+        # **미리보기와 --실행 둘 다에서 찍는다** — 미리보기에서만 찍으면 사람이
+        # 그 줄을 지나친 뒤 실행에서는 아무 말도 없다
+        print(f"{보관경고} 이 회차는 보관된 회차입니다 — 그대로 갑니다.")
+    return retreat
+
+
 def 팀키확인(db: Session, retreat: Retreat, 키들: set[str]) -> None:
     있는 = {d.key for d in db.scalars(
         select(Department).where(Department.retreat_id == retreat.id)) if d.key}
@@ -472,15 +491,8 @@ def 넣는다(db: Session, retreat: Retreat, 만들것: list[dict]) -> None:
 
 
 def 들여오기(db: Session, 종류: str, 경로: pathlib.Path, 회차id: int | None, 실행: bool) -> int:
-    retreat = 회차고르기(db, 회차id)
-    print(f"회차: {retreat.name} (id {retreat.id}) · 시트: {종류}")
-    if retreat.is_archived:
-        # **막지 않는다 — 말한다** (2026-09-11 에 사람이 정했다). 사람이 `--회차` 로
-        # 대놓고 고른 것이라 거절할 일이 아니지만, 안 주면 고르지 않는 기준이
-        # 「열려 있는 회차」 라서 말없이 넣으면 그 둘이 어긋나 보인다.
-        # **미리보기와 --실행 둘 다에서 찍는다** — 미리보기에서만 찍으면 사람이
-        # 그 줄을 지나친 뒤 실행에서는 아무 말도 없다
-        print(f"{보관경고} 이 회차는 보관된 회차입니다 — 그대로 넣습니다.")
+    retreat = 회차머리(db, 회차id)
+    print(f"시트: {종류}")
     뽑은, 셈 = 줄뽑기(종류, 경로)
     만들것, 수 = 고른다(db, retreat, 종류, 뽑은)
     if not 만들것:
