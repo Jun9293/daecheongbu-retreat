@@ -97,6 +97,8 @@
     {% if external_link %}
     {# 바깥 링크 (도막 4) — 값이 있을 때만 · 새 창. 주소는 DB 에서 온다 #}
     <a class="single" href="{{ external_link.url }}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>{{ external_link.name }} ↗</a>
+    {# 설명은 있을 때만 그린다 — 빈 줄이 있으면 그 자리가 무엇인지 또 묻게 된다 #}
+    {% if external_link.note %}<span class="extnote">{{ external_link.note }}</span>{% endif %}
     {% endif %}
     <a class="single" href="/settings" {% if active_tab == 'settings' %}aria-current="page"{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>설정</a>
   </nav>

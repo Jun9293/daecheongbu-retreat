@@ -42,8 +42,10 @@
           <input name="name" value="{{ external.name if external else '' }}" placeholder="사이드바에 보일 이름">
           <span class="k">주소</span>
           <input name="url" value="{{ external.url if external else '' }}" placeholder="https://…" inputmode="url">
+          <span class="k">설명</span>
+          <input name="note" value="{{ external.note if external else '' }}" placeholder="무엇인지 한 줄 (비워도 됩니다)">
         </div>
-        <div class="hint">값이 있으면 사이드바에 그 이름의 항목이 생겨 <b>새 창</b>으로 엽니다. 둘 다 비우면 항목이 사라집니다. 주소는 저장소가 아니라 여기(DB)에만 있습니다.</div>
+        <div class="hint">이름과 주소가 있으면 사이드바에 그 이름의 항목이 생겨 <b>새 창</b>으로 엽니다. 둘 다 비우면 항목이 사라집니다. 설명은 항목 아래에 작게 붙고 <b>비우면 안 그립니다</b>. 주소와 설명은 저장소가 아니라 여기(DB)에만 있습니다.</div>
         <div style="margin-top:10px"><button class="sbtn p" type="submit">저장</button></div>
       </form>
     </div>

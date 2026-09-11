@@ -437,33 +437,49 @@ def delete_department(
 # DB 에만 둔다. 값이 있으면 사이드바에 그 이름의 항목이 생겨 새 창으로 열린다.
 EXTERNAL_LINK_NAME = "external_link_name"
 EXTERNAL_LINK_URL = "external_link_url"
+EXTERNAL_LINK_NOTE = "external_link_note"
 
 
 def external_link(db: Session) -> dict | None:
-    """(이름, 주소) — 둘 다 있을 때만. 사이드바가 이것을 받아 그린다."""
+    """(이름, 주소, 설명) — **이름과 주소가 있을 때만.** 설명은 있으면 붙는다.
+
+    이름만 보고 「저게 뭐였더라」 를 묻게 되는 자리라 한 줄을 달 수 있게
+    했다(첨부의 링크에 설명을 비워 둘 수 없게 한 것과 같은 자리 — 4-9).
+    다만 **여기서는 비워도 된다**: 사이드바 항목은 하나뿐이고 이름이 이미
+    보이므로, 강제하면 값을 넣으려고 아무 말이나 적게 된다.
+    **비면 안 그린다** — 빈 줄이 있으면 그 자리가 무엇인지 또 묻게 된다.
+    """
     from app.models import SiteSetting
 
     name = db.get(SiteSetting, EXTERNAL_LINK_NAME)
     url = db.get(SiteSetting, EXTERNAL_LINK_URL)
     if name is None or url is None or not (name.value and url.value):
         return None
-    return {"name": name.value, "url": url.value}
+    note = db.get(SiteSetting, EXTERNAL_LINK_NOTE)
+    return {"name": name.value, "url": url.value,
+            "note": (note.value or "") if note is not None else ""}
 
 
 @router.post("/settings/external-link")
 def set_external_link(
     name: str = Form(""),
     url: str = Form(""),
+    note: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
     """총무팀만 고친다. 둘 다 비우면 지운 것 — 사이드바 항목이 사라진다."""
     from app.models import SiteSetting
 
-    name, url = name.strip(), url.strip()
+    name, url, note = name.strip(), url.strip(), note.strip()
     if url and not url.startswith(("http://", "https://")):
         return redirect("/settings", message="주소는 http:// 또는 https:// 로 시작해야 합니다.")
-    for key, value in ((EXTERNAL_LINK_NAME, name), (EXTERNAL_LINK_URL, url)):
+    # 주소를 지우면 설명도 함께 지운다 — 가리킬 곳이 없는 설명만 남으면
+    # 다음에 링크를 넣는 사람이 남의 설명을 물려받는다
+    if not url:
+        note = ""
+    for key, value in ((EXTERNAL_LINK_NAME, name), (EXTERNAL_LINK_URL, url),
+                       (EXTERNAL_LINK_NOTE, note)):
         row = db.get(SiteSetting, key)
         if row is None:
             row = SiteSetting(key=key)
