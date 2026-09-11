@@ -1,9 +1,14 @@
-"""초대 링크 로그인 (CLAUDE.md 4-12).
+"""로그인과 계정 (CLAUDE.md 4-12).
 
-수용 기준 2~6, 8, 9 에 대응한다.
+**2026-09-11 에 초대 링크를 걷고 아이디·비밀번호로 바꿨다.** 링크 자체를
+재던 시험들은 걷었고, 그 자리는 `tests/test_stage34.py` 가 잰다.
 
-토큰 원문을 저장하지 않는 것이 이 파일이 지키는 핵심이다 — DB 파일이 새면
-링크가 그대로 새는 구조를 만들지 않기 위해서다.
+여기 남은 것은 링크와 상관없이 그대로인 것들이다 — 세션 키가 고정인가,
+삭제 경로가 없는가, SMS 시절의 자국이 남아 있지 않은가, 그리고 설정 ›
+사용자의 부서 배정(키로 붙는가).
+
+**원문을 저장하지 않는다**는 규칙은 링크에서 비밀번호로 옮겨 갔을 뿐
+그대로다 — DB 파일이 새도 문이 함께 새지 않게 하려는 것이다.
 """
 
 from __future__ import annotations
@@ -16,82 +21,27 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import permissions as perm
-from app.domain import auth as invites
-from tests.conftest import app_session, dept_key_of, login_as
+from app.domain import login as 로그인
+from tests.conftest import app_session, dept_key_of, login_as, 시험비밀번호
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
 def person(admin_client):
-    """총무팀이 만든 계정 하나 (아직 링크를 쓰지 않은 상태)."""
+    """총무팀이 만든 계정 하나 (아직 안 들어온 상태)."""
     with app_session() as db:
-        row = models.User(name="스케치 담당", phone_number="01088887777", role="member")
+        row = models.User(name="스케치 담당", phone_number="01088887777", role="member",
+                          login_id="sketch1")
         db.add(row)
-        db.commit()
-        raw = invites.issue(db, user=row)
-        return {"user_id": row.id, "token": raw}
+        db.flush()
+        로그인.비밀번호를정한다(db, row, 시험비밀번호, 첫판=False)
+        return {"user_id": row.id, "login_id": "sketch1"}
 
 
 # ── 2 ─────────────────────────────────────────────────────────────────
-
-
-def test_02_링크로_들어오고_두_번째는_거부된다(person, client):
-    first = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert first.status_code == 303
-    # 들어오면 홈이다 (4-15) — 로그인 후 첫 화면이 곧 홈의 정의다
-    assert first.headers["location"].startswith("/")
-    assert not first.headers["location"].startswith("/board")
-
-    # 로그인이 실제로 붙었다
-    assert client.get("/board").status_code == 200
-
-    # 같은 링크를 다시 쓰면 거부된다
-    second = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert second.status_code == 403
-    assert "이미 사용한 링크" in second.text
-
-
 # ── 3 ─────────────────────────────────────────────────────────────────
-
-
-def test_03_7일_지난_링크는_거부된다(person, client):
-    with app_session() as db:
-        token = db.scalars(
-            select(models.InviteToken).where(
-                models.InviteToken.user_id == person["user_id"]
-            )
-        ).first()
-        assert (token.expires_at - token.created_at).days == invites.INVITE_TTL_DAYS
-        token.expires_at = dt.datetime.now() - dt.timedelta(minutes=1)
-        db.commit()
-
-    response = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert response.status_code == 403
-    assert "만료된 링크" in response.text
-    assert "7일" in response.text
-
-
 # ── 4 ─────────────────────────────────────────────────────────────────
-
-
-def test_04_토큰_원문이_DB_에_없다(person):
-    raw = person["token"]
-    with app_session() as db:
-        token = db.scalars(
-            select(models.InviteToken).where(
-                models.InviteToken.user_id == person["user_id"]
-            )
-        ).first()
-        assert token.token_hash != raw
-        assert len(token.token_hash) == 64            # sha256 hex
-        assert token.token_hash == invites.hash_token(raw)
-        # 어느 칸에도 원문이 들어 있지 않다
-        assert not hasattr(token, "token")
-        for column in token.__table__.columns:
-            assert getattr(token, column.name) != raw
-
-
 def test_04b_모델에_원문_칸_자체가_없다():
     names = {c.name for c in models.InviteToken.__table__.columns}
     assert "token_hash" in names
@@ -99,42 +49,6 @@ def test_04b_모델에_원문_칸_자체가_없다():
 
 
 # ── 5 ─────────────────────────────────────────────────────────────────
-
-
-def test_05_총무팀이_재발급하면_옛_링크가_죽는다(person, admin_client, client):
-    old = person["token"]
-    response = admin_client.post(
-        f"/admin/users/{person['user_id']}/invite", follow_redirects=False
-    )
-    assert response.status_code == 303
-    # 원문은 URL 을 타지 않는다 — 화면에서 꺼낸다
-    page = admin_client.get(response.headers["location"])
-    new = page.text.split("/invite/")[1].split('"')[0]
-    assert new != old
-
-    # 옛 링크는 취소됐다 — 재발급했는데 옛 것이 살아 있으면 "한 번 쓰면 만료"가 뜻을 잃는다
-    assert client.get(f"/invite/{old}", follow_redirects=False).status_code == 403
-    assert client.get(f"/invite/{new}", follow_redirects=False).status_code == 303
-
-
-def test_05b_총무팀이_취소할_수_있다(person, admin_client, client):
-    assert admin_client.post(
-        f"/admin/users/{person['user_id']}/revoke", follow_redirects=False
-    ).status_code == 303
-    response = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert response.status_code == 403
-    assert "취소된 링크" in response.text
-
-
-def test_05c_비활성화하면_링크도_함께_죽는다(person, admin_client, client):
-    admin_client.post(
-        f"/admin/users/{person['user_id']}/active", data={"active": ""},
-        follow_redirects=False,
-    )
-    response = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert response.status_code == 403
-
-
 # ── 6 ─────────────────────────────────────────────────────────────────
 
 
@@ -200,17 +114,6 @@ def test_08_사용자_삭제_경로가_없다(person, admin_client):
     with app_session() as db:
         row = db.get(models.User, person["user_id"])
         assert row is not None and row.is_active is False
-
-
-def test_08b_비활성_계정은_링크가_있어도_못_들어온다(person, client):
-    with app_session() as db:
-        db.get(models.User, person["user_id"]).is_active = False
-        db.commit()
-    response = client.get(f"/invite/{person['token']}", follow_redirects=False)
-    assert response.status_code == 403
-    assert "비활성화된 계정" in response.text
-
-
 # ── 9 ─────────────────────────────────────────────────────────────────
 
 
@@ -231,7 +134,7 @@ def test_09b_개발용_인증번호_화면이_없다(client):
     assert page.status_code == 200
     assert "data-dev-code" not in page.text
     assert 'name="code"' not in page.text
-    assert "초대 링크" in page.text
+    assert 'name="login_id"' in page.text and 'type="password"' in page.text
 
     # 옛 경로도 사라졌다
     assert client.post("/login/code", data={"phone_number": "01011112222"}).status_code == 404
@@ -269,8 +172,14 @@ def test_10b_demo_로_부르면_눌러볼_계정이_생긴다(client):
 
 
 def test_10c_로그인_방법을_안내한다():
-    """첫 관리자는 스크립트로 만든다 — 화면에 들어가려면 이미 관리자여야 하므로."""
-    assert (ROOT / "scripts" / "create_admin.py").exists()
+    """첫 관리자는 스크립트로 만든다 — 화면에 들어가려면 이미 관리자여야 하므로.
+
+    **길이 하나인지도 함께 본다** — 옛 스크립트가 남아 있으면 같은 일을 하는
+    자리가 둘이 되고, 그중 하나만 고쳐진다.
+    """
+    assert (ROOT / "scripts" / "계정문열기.py").exists()
+    for 지운것 in ("create_admin.py", "관리자링크.py"):
+        assert not (ROOT / "scripts" / 지운것).exists(), f"{지운것} 이(가) 아직 있다"
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -317,108 +226,7 @@ def _live_tokens(user_id: int) -> list[str]:
 
 
 # ── 마무리 1 · 2 ──────────────────────────────────────────────────────
-
-
-def test_마무리01_계정을_만들어도_주소창에_원문이_없다(with_departments, admin_client):
-    """총무팀은 이 링크를 자기가 쓰는 게 아니라 복사해서 보낸다.
-    주소창에 실리면 7일 내내 살아 있는 링크가 방문 기록에 남는다."""
-    response = admin_client.post(
-        "/admin/users/new",
-        data={"name": "박서진", "phone_number": "01099991111",
-              "role": "general", "dept_sketch": "member"},
-        follow_redirects=False,
-    )
-    assert response.status_code == 303
-    location = response.headers["location"]
-
-    with app_session() as db:
-        person = db.scalars(
-            select(models.User).where(models.User.name == "박서진")
-        ).first()
-    # 화면에서 원문을 꺼내 그것이 URL 어디에도 없는지 본다
-    page = admin_client.get(location)
-    raw = page.text.split("/invite/")[1].split('"')[0]
-    assert len(raw) > 20
-    assert invites.hash_token(raw) in _live_tokens(person.id)   # 진짜 그 링크다
-
-    assert raw not in location
-    assert "issued=" not in location
-    assert raw not in str(page.url)
-
-
-def test_마무리01b_재발급도_마찬가지다(with_departments, admin_client, person):
-    response = admin_client.post(
-        f"/admin/users/{person['user_id']}/invite", follow_redirects=False
-    )
-    location = response.headers["location"]
-    page = admin_client.get(location)
-    raw = page.text.split("/invite/")[1].split('"')[0]
-    assert raw not in location
-    assert raw not in str(page.url)
-
-
-def test_마무리02_서버가_보는_URL_에도_원문이_없다(with_departments, admin_client):
-    """접속 로그에 남는 것은 경로와 쿼리다. 거기에 원문이 있으면 안 된다."""
-    response = admin_client.post(
-        "/admin/users/new",
-        data={"name": "박서진", "phone_number": "01099991111",
-              "role": "general", "dept_sketch": "member"},
-        follow_redirects=False,
-    )
-    location = response.headers["location"]
-    page = admin_client.get(location)
-    raw = page.text.split("/invite/")[1].split('"')[0]
-
-    # 리다이렉트를 따라간 뒤의 최종 URL (= 서버 접속 로그에 남는 것)
-    with app_session() as db:
-        person_id = db.scalars(
-            select(models.User).where(models.User.name == "박서진")
-        ).first().id
-    followed = admin_client.post(
-        f"/admin/users/{person_id}/invite", follow_redirects=True
-    )
-    fresh = followed.text.split("/invite/")[1].split('"')[0]
-    for url in (location, str(page.url), str(followed.url)):
-        assert raw not in url
-        assert fresh not in url
-    # 쿼리에는 한 번 쓰면 사라지는 키만 있다
-    assert location.startswith("/admin/users?k=")
-    key = location.split("k=")[1]
-    assert key != raw and raw not in key
-
-
 # ── 마무리 3 ──────────────────────────────────────────────────────────
-
-
-def test_마무리03_새로고침하면_링크가_다시_나오지_않는다(with_departments, admin_client):
-    response = admin_client.post(
-        "/admin/users/new",
-        data={"name": "박서진", "phone_number": "01099991111",
-              "role": "general", "dept_sketch": "member"},
-        follow_redirects=False,
-    )
-    location = response.headers["location"]
-
-    first = admin_client.get(location)
-    assert "/invite/" in first.text
-    assert 'id="issued"' in first.text                 # 링크 배너가 떠 있다
-
-    again = admin_client.get(location)                 # 새로고침
-    assert "/invite/" not in again.text
-    # 「한 번만 보입니다」 글자로 재지 않는다 — 그 문장은 인라인 발급 JS 의
-    # 문자열 리터럴에도 있어 늘 페이지 소스에 실린다 (10장: 글자를 찾는
-    # 시험은 코드와 설명을 못 가린다). 배너 요소의 유무로 잰다.
-    assert 'id="issued"' not in again.text
-
-
-def test_마무리03b_꺼내는_자리는_한_번만_준다():
-    key = invites.stash("비밀-원문", "그 사람")
-    assert invites.take(key) == ("비밀-원문", "그 사람")   # 원문과 이름이 한 키에
-    assert invites.take(key) is None
-    assert invites.take("없는키") is None
-    assert invites.take(None) is None
-
-
 # ── 마무리 4 · 5 ──────────────────────────────────────────────────────
 
 
@@ -496,7 +304,7 @@ def test_마무리05b_부서_없음은_그대로_허용된다(with_departments, 
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert "k=" in response.headers["location"]
+    assert "k=" not in response.headers["location"]   # 계정만 만든다 — 값은 따로 발급
 
     with app_session() as db:
         person = db.scalars(
@@ -740,89 +548,6 @@ def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin
 # 자리표시자 문자열 자체를 이 파일에 적지 않는다 — 저장소 전체를 훑는
 # 시험(수용기준 4)이 자기 자신에게 걸리기 때문이다.
 PLACEHOLDER = "<" + "내-주소" + ">"
-
-
-def test_a01_완성된_주소가_나온다():
-    """수용기준 1 — 붙여넣으면 바로 열리는 주소."""
-    from app import config
-    from app.domain import auth as invites
-
-    made = invites.invite_url("abc123")
-    assert made == f"{config.BASE_URL}/invite/abc123"
-    assert "<" not in made and ">" not in made, "자리표시자가 남았다"
-    assert made.startswith("http"), "붙여넣어 바로 열리는 형태가 아니다"
-
-
-def test_a02_환경변수로_주소를_바꾼다(monkeypatch):
-    """수용기준 2 — DCB_BASE_URL."""
-    import importlib
-
-    from app import config
-    from app.domain import auth as invites
-
-    monkeypatch.setenv("DCB_BASE_URL", "https://다른주소.example.com/")
-    importlib.reload(config)
-    try:
-        # 뒤의 / 는 떼고 붙인다 — 안 그러면 //invite 가 된다
-        assert config.BASE_URL == "https://다른주소.example.com"
-        assert invites.invite_url("tok") == "https://다른주소.example.com/invite/tok"
-    finally:
-        monkeypatch.delenv("DCB_BASE_URL", raising=False)
-        importlib.reload(config)
-
-    # 직접 넘겨도 된다
-    assert invites.invite_url("tok", base="https://other.example.com/")         == "https://other.example.com/invite/tok"
-
-
-def test_a03_스크립트가_자리표시자를_찍지_않는다():
-    """수용기준 3 — 링크를 보여주는 스크립트가 전부 같은 곳에서 주소를 만든다."""
-    for path in ("scripts/create_admin.py", "scripts/merge_users.py",
-                 "scripts/healthcheck.py"):
-        source = open(path, encoding="utf-8").read()
-        for line in source.splitlines():
-            if not line.strip().startswith("print("):
-                continue
-            assert PLACEHOLDER not in line, f"{path} 가 자리표시자를 찍는다: {line}"
-
-    # create_admin 은 공용 헬퍼로 만든다 — 주소를 두 곳에서 만들지 않는다
-    made = open("scripts/create_admin.py", encoding="utf-8").read()
-    assert "invites.invite_url(raw)" in made
-
-
-def test_a04_화면도_완성된_주소를_보여준다(admin_client):
-    """수용기준 3 — /admin/users 화면도 같다.
-
-    앱은 127.0.0.1 에만 열려 있어서 `request.base_url` 은 바깥 주소가
-    아니다 — 그걸 복사해 보내면 받는 사람 브라우저에서 열리지 않는다.
-    """
-    from app import config
-
-    with app_session() as db:
-        person = models.User(
-            name="새 사람", phone_number="01077778888", role="member")
-        db.add(person)
-        db.commit()
-        person_id = person.id
-
-    issued = admin_client.post(
-        f"/admin/users/{person_id}/invite", follow_redirects=True)
-    assert issued.status_code == 200
-
-    text = issued.text
-    assert f"{config.BASE_URL}/invite/" in text, "완성된 주소가 아니다"
-    assert "127.0.0.1" not in text and "testserver" not in text
-    assert PLACEHOLDER not in text
-
-    view = open("app/templates/admin_users.html", encoding="utf-8").read()
-    assert "request.base_url" not in view, "화면이 자기 주소를 다시 만든다"
-
-
-def test_a05_자가진단이_주소를_손으로_받지_않아도_된다():
-    source = open("scripts/healthcheck.py", encoding="utf-8").read()
-    assert "else config.BASE_URL" in source
-    assert "from app import config" in source
-
-
 # ── 수용기준 4 — 저장소 전체를 훑는다 ─────────────────────────────────
 #
 # 한 곳만 고치면 나머지에서 같은 일이 또 난다. 설명하는 글에서도 그 문자열
@@ -845,25 +570,6 @@ def repo_files():
     if out.returncode != 0:                      # git 이 없는 곳에서는 건너뛴다
         return None
     return [ROOT / line for line in out.stdout.splitlines() if line.strip()]
-
-
-def test_a06_저장소_어디에도_자리표시자가_없다():
-    files = repo_files()
-    if files is None:
-        pytest.skip("git 저장소가 아니라 훑을 수 없습니다")
-    hits = []
-    for path in files:
-        if path.suffix.lower() not in SCAN_SUFFIXES or not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        if PLACEHOLDER in text:
-            hits.append(str(path.relative_to(ROOT)))
-    assert hits == [], f"자리표시자가 남아 있다: {hits}"
-
-
 # ── 수용기준 5 — 재발급하면 앞의 링크가 죽는다고 말한다 ────────────────
 #
 # 죽는다는 사실 자체는 원래도 그랬다(issue 가 revoke_all 한다). 문제는
@@ -871,32 +577,3 @@ def test_a06_저장소_어디에도_자리표시자가_없다():
 # 안내하게 되는 것이었다.
 
 WARNING = "이전에 발급한 링크는 이제 쓸 수 없습니다"
-
-
-def test_a07_화면이_옛_링크가_죽는다고_말한다(admin_client):
-    with app_session() as db:
-        person = models.User(
-            name="재발급 대상", phone_number="01066665555", role="member")
-        db.add(person)
-        db.commit()
-        person_id = person.id
-
-    first = admin_client.post(
-        f"/admin/users/{person_id}/invite", follow_redirects=True)
-    assert WARNING in first.text, "화면이 옛 링크가 죽는다고 말하지 않는다"
-
-    # 실제로도 죽는가 — 말과 동작이 같아야 한다
-    with app_session() as db:
-        raw_first = invites.issue(db, user=db.get(models.User, person_id))
-    with app_session() as db:
-        invites.issue(db, user=db.get(models.User, person_id))
-    with app_session() as db:
-        person, why = invites.redeem(db, raw_first)
-        assert person is None, "옛 링크가 아직 살아 있다"
-        assert why, "왜 안 되는지 말하지 않는다"
-
-
-def test_a08_스크립트도_같은_말을_한다():
-    for path in ("scripts/create_admin.py", "scripts/merge_users.py"):
-        source = open(path, encoding="utf-8").read()
-        assert WARNING in source, f"{path} 에 그 안내가 없다"

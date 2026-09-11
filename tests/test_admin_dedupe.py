@@ -1,10 +1,15 @@
-"""관리자 계정 중복 정리와 재발 방지 (CLAUDE.md 4-12). 수용 기준 1~11.
+"""관리자 계정 중복 정리와 재발 방지 (CLAUDE.md 4-12). 수용 기준 6~11.
 
 관리자 계정이 넷이 됐고 그중 셋이 같은 이름이었다. 초대 링크를 한 번 쓰고
-다시 열려다 403 이 나자 `create_admin.py` 를 또 돌린 결과다.
+다시 열려다 403 이 나자 계정을 또 만든 결과다.
 
 **조용한 문제가 아니다** — 총무팀 에스컬레이션은 admin 전원에게 가므로 같은
 사람에게 알림이 세 번 간다.
+
+**2026-09-11 에 초대 링크가 걷혔다.** 만들던 스크립트(`create_admin.py`)를
+보던 1~5 는 `scripts/계정문열기.py` 갈래 ① 로 옮겼고, 그것을 밟는 것은
+`tests/test_stage34.py` 의 `test34_h01` 이다. 여기 남은 것은 **이미 생긴
+중복을 정리하는 쪽**이다.
 """
 
 from __future__ import annotations
@@ -15,8 +20,7 @@ import pytest
 from sqlalchemy import select
 
 from app import models
-from app.domain import auth as invites
-from scripts import create_admin, healthcheck, merge_users
+from scripts import healthcheck, merge_users
 from tests.conftest import app_session
 
 
@@ -42,121 +46,8 @@ def users_named(db, name):
 
 
 # ---------------------------------------------------------------- 1. 같은 연락처
-
-
-def test_01_같은_연락처면_새_계정을_만들지_않고_링크만_재발급한다(admins, capsys):
-    with app_session() as db:
-        before = db.scalars(select(models.User)).all()
-        code = create_admin.create(db, "박민준", "01077770001", force=False)
-    assert code == 0
-
-    out = capsys.readouterr().out
-    assert "이미 있는 계정입니다" in out
-    assert "새 링크를 발급했습니다" in out
-
-    with app_session() as db:
-        after = db.scalars(select(models.User)).all()
-        assert len(after) == len(before), "계정이 늘었다"
-        # 링크는 실제로 새로 났다
-        live = db.scalars(select(models.InviteToken).where(
-            models.InviteToken.user_id == admins["real"],
-            models.InviteToken.used_at.is_(None),
-            models.InviteToken.revoked_at.is_(None))).all()
-        assert len(live) == 1
-
-
-def test_01b_비활성_계정이면_다시_켜고_관리자로_되돌린다(admins, capsys):
-    with app_session() as db:
-        person = db.get(models.User, admins["real"])
-        person.is_active = False
-        person.role = "member"
-        db.commit()
-
-    with app_session() as db:
-        create_admin.create(db, "박민준", "01077770001", force=False)
-    out = capsys.readouterr().out
-    assert "다시 켰습니다" in out and "관리자로 바꿨습니다" in out
-
-    with app_session() as db:
-        person = db.get(models.User, admins["real"])
-        assert person.is_active and person.role == "admin"
-
-
 # ---------------------------------------------------------------- 2·3. 같은 이름
-
-
-def test_02_같은_이름의_관리자가_있으면_멈추고_기존_계정을_보여준다(admins, capsys):
-    with app_session() as db:
-        before = len(db.scalars(select(models.User)).all())
-        code = create_admin.create(db, "박민준", "01099998888", force=False)
-
-    assert code == 1, "멈추지 않았다"
-    out = capsys.readouterr().out
-    assert "이미 있습니다" in out and "만들지 않았습니다" in out
-    assert "01077770001" in out and "01012345678" in out   # 기존 계정을 보여준다
-    assert "--reissue" in out                              # 링크만 받는 길을 안내
-    assert "--force" in out                                # 동명이인 길도 안내
-
-    with app_session() as db:
-        assert len(db.scalars(select(models.User)).all()) == before
-
-
-def test_03_force_로는_만들_수_있다_동명이인(admins, capsys):
-    with app_session() as db:
-        code = create_admin.create(db, "박민준", "01099998888", force=True)
-    assert code == 0
-
-    out = capsys.readouterr().out
-    assert "하나 더 만들었습니다" in out
-    assert "알림이 그만큼 갑니다" in out                    # 대가를 말해준다
-
-    with app_session() as db:
-        assert len(users_named(db, "박민준")) == 4
-
-
 # ---------------------------------------------------------------- 4. reissue
-
-
-def test_04_reissue_는_계정을_만들지_않고_링크만_준다(admins, capsys):
-    with app_session() as db:
-        before = len(db.scalars(select(models.User)).all())
-        code = create_admin.reissue(db, "01012345678")
-    assert code == 0
-
-    out = capsys.readouterr().out
-    assert "링크를 다시 발급했습니다" in out
-    assert "계정을 새로 만들지 않았습니다" in out
-    assert "/invite/" in out
-
-    with app_session() as db:
-        assert len(db.scalars(select(models.User)).all()) == before
-
-
-def test_04b_없는_연락처면_있는_관리자를_보여주고_멈춘다(admins, capsys):
-    with app_session() as db:
-        code = create_admin.reissue(db, "01011112222")
-    assert code == 1
-    out = capsys.readouterr().out
-    assert "계정이 없습니다" in out
-    assert "있는 관리자 계정" in out
-    assert "01077770001" in out
-
-
-def test_04c_옛_링크는_재발급하면_함께_취소된다(admins):
-    with app_session() as db:
-        person = db.get(models.User, admins["typo"])
-        old = invites.issue(db, user=person)
-        create_admin.reissue(db, "01012345678")
-
-    with app_session() as db:
-        live = db.scalars(select(models.InviteToken).where(
-            models.InviteToken.user_id == admins["typo"],
-            models.InviteToken.revoked_at.is_(None),
-            models.InviteToken.used_at.is_(None))).all()
-        assert len(live) == 1
-        assert live[0].token_hash != invites.hash_token(old)
-
-
 # ---------------------------------------------------------------- 5. 예시 번호
 
 
@@ -166,7 +57,7 @@ def test_05_도움말과_안내에_예시_번호가_없다():
 
     root = pathlib.Path(__file__).resolve().parent.parent
     # 화면의 입력 안내에도 두지 않는다 — 사람이 실제로 복사하는 자리다
-    for name in ("scripts/create_admin.py", "docs/배포-안내.md",
+    for name in ("scripts/계정문열기.py", "docs/배포-안내.md",
                  "app/templates/admin_users.html"):
         text = (root / name).read_text(encoding="utf-8")
         assert "01012345678" not in text, f"{name} 에 예시 번호가 남아 있다"
@@ -332,5 +223,5 @@ def test_11b_관리자가_없으면_만드는_법을_알려준다(client):
     ok, message = healthcheck.check_admin()
     assert ok is False
     assert "계정이 없습니다" in message
-    assert "create_admin.py" in message
+    assert "계정문열기.py" in message
     assert "01012345678" not in message          # 예시 번호를 주지 않는다

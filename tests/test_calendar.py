@@ -1180,8 +1180,9 @@ def test_r2_09_README_가_지금_상태와_맞는다():
     for path in ("/board", "/calendar", "/live", "/library", "/admin/users"):
         assert path in text, f"{path} 가 없다"
 
-    # 로그인은 초대 링크다
-    assert "초대 링크" in text and "create_admin.py" in text
+    # 로그인은 아이디와 비밀번호다 (4-12 · 2026-09-11)
+    assert "아이디" in text and "계정문열기.py" in text
+    assert "초대 링크" not in text, "옛 로그인 방식이 README 에 남아 있다"
 
     # 설계는 CLAUDE.md 를 가리키는가 (두 곳에 같은 것을 적지 않는다)
     assert "CLAUDE.md" in text

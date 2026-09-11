@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app import models
 from app.domain import permissions as perm
-from tests.conftest import app_session, dept_key_of
+from tests.conftest import app_session, dept_key_of, 시험비밀번호
 
 
 @pytest.fixture
@@ -46,11 +46,13 @@ def test_07_계정을_추가하고_부서는_키로_붙는다(rounds, admin_clie
     response = admin_client.post(
         "/admin/users/new",
         data={"name": "박서진", "phone_number": "010-9999-1111",
-              "role": "general", "dept_sketch": "lead"},
+              "login_id": "seojin", "role": "general", "dept_sketch": "lead"},
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert "k=" in response.headers["location"]           # 링크가 함께 발급된다
+    # **계정을 만들 때 비밀번호를 함께 만들지 않는다** — 한 번만 보이는 값이라
+    # 그 자리에서 놓치면 다시 발급해야 한다. 발급은 행의 단추로 따로 누른다
+    assert "k=" not in response.headers["location"]
 
     with app_session() as db:
         person = db.scalars(
@@ -58,6 +60,7 @@ def test_07_계정을_추가하고_부서는_키로_붙는다(rounds, admin_clie
         ).first()
         assert person is not None
         assert person.phone_number == "01099991111"        # 숫자만 남는다
+        assert person.login_id == "seojin"
         assert person.role == "general"
         # **키로** 붙었는지 — 어느 회차의 행이든 키가 sketch 면 된다
         assert dept_key_of(db, person) == "sketch"
@@ -290,7 +293,7 @@ def test_p6_비활성_계정이_놓은_번호는_곧바로_쓸_수_있다(rounds
 
     그런데 그러면 중복을 정리한 뒤 **남긴 계정에 실제 번호를 넣을 수 없다.**
     정리를 끝낼 방법이 없어진다. 그래서 비활성화할 때 번호를 놓게 하고
-    (로그인은 초대 링크로 하지 번호로 하지 않는다), 되살릴 때 그 사이 아무도
+    (로그인은 아이디로 하지 번호로 하지 않는다), 되살릴 때 그 사이 아무도
     안 쓰고 있으면 돌려준다 — 겹침은 그때 판단한다 (4-12)."""
     sleeping = make_person(admin_client, "정하윤", "01077778888")
     admin_client.post(f"/admin/users/{sleeping}/active", data={"active": ""},
@@ -346,33 +349,37 @@ def test_p8_총무팀이_아니면_403(rounds, admin_client, client):
         assert person.role == "general"             # 권한도 안 올라갔다
 
 
-def test_p9_연락처를_바꿔도_살아_있는_링크가_죽지_않는다(rounds, admin_client):
-    """링크는 계정에 붙지 번호에 붙지 않는다."""
-    from app.domain import auth as invites
+def test_p9_연락처를_바꿔도_아이디와_비밀번호가_그대로다(rounds, admin_client):
+    """문은 계정에 붙지 번호에 붙지 않는다 (4-12).
+
+    전화번호를 아이디로 쓰지 않는 이유가 여기 그대로 있다 — 번호가 바뀌어도
+    들어오는 길이 흔들리면 안 된다.
+    """
+    from app.domain import login as 로그인
 
     person_id = make_person(admin_client, "박서진", "01000000001")
     with app_session() as db:
         person = db.get(models.User, person_id)
-        raw = invites.issue(db, user=person)
-        before = invites.live_token(db, user=person)
-        assert before is not None
-        before_hash = before.token_hash
+        person.login_id = "seojin2"
+        로그인.비밀번호를정한다(db, person, 시험비밀번호, 첫판=False)
+        앞 = person.password_hash
 
     save(admin_client, person_id, phone_number="01055556666")
 
     with app_session() as db:
         person = db.get(models.User, person_id)
-        token = invites.live_token(db, user=person)
-        assert token is not None, "연락처를 바꿨다고 링크가 죽었다"
-        assert token.token_hash == before_hash
+        assert person.login_id == "seojin2", "연락처를 바꿨다고 아이디가 달라졌다"
+        assert person.password_hash == 앞
 
-    # 그 링크로 실제 로그인도 된다
+    # 그 아이디·비밀번호로 실제 로그인도 된다 — 저장된 값만 보고 끝내면
+    # 「남아 있다」 와 「그것으로 들어와진다」 가 구별되지 않는다
     from fastapi.testclient import TestClient
 
     from app.main import app
 
     fresh = TestClient(app)
-    assert fresh.get(f"/invite/{raw}", follow_redirects=False).status_code == 303
+    assert fresh.post("/login", data={"login_id": "seojin2", "password": 시험비밀번호},
+                      follow_redirects=False).status_code == 303
 
 
 def test_p10_바뀐_값이_활동_기록에_남고_안_바뀌었으면_남지_않는다(rounds, admin_client):
@@ -579,9 +586,9 @@ def test_r9_활성_변경이_활동_기록에_번호까지_남는다(rounds, adm
         assert "되돌리지 못함(정하윤 사용 중)" in log.summary
 
 
-def test_r10_번호가_비어도_초대_링크는_멀쩡하다(rounds, admin_client):
-    """링크는 계정에 붙지 번호에 붙지 않는다."""
-    from app.domain import auth as invites
+def test_r10_번호가_비어도_로그인은_멀쩡하다(rounds, admin_client):
+    """문은 계정에 붙지 번호에 붙지 않는다 (4-12)."""
+    from app.domain import login as 로그인
 
     person_id = make_person(admin_client, "박서진", "01077778888")
     deactivate(admin_client, person_id)
@@ -590,15 +597,16 @@ def test_r10_번호가_비어도_초대_링크는_멀쩡하다(rounds, admin_cli
         person = db.get(models.User, person_id)
         assert person.phone_number == ""
         person.is_active = True          # 번호는 비운 채로 되살린다
-        db.commit()
-        raw = invites.issue(db, user=person)
+        person.login_id = "seojin3"
+        로그인.비밀번호를정한다(db, person, 시험비밀번호, 첫판=False)
 
     from fastapi.testclient import TestClient
 
     from app.main import app
 
     fresh = TestClient(app)
-    assert fresh.get(f"/invite/{raw}", follow_redirects=False).status_code == 303
+    assert fresh.post("/login", data={"login_id": "seojin3", "password": 시험비밀번호},
+                      follow_redirects=False).status_code == 303
     # 번호 없이도 화면이 열린다
     assert fresh.get("/board").status_code in (200, 303)
 

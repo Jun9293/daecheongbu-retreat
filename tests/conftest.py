@@ -109,15 +109,20 @@ def client():
 
 
 def login_as(client, phone: str, name: str = "테스터"):
-    """초대 링크로 들어온다 (CLAUDE.md 4-12).
+    """**아이디와 비밀번호로 들어온다** (CLAUDE.md 4-12 · 2026-09-11).
 
-    실제 흐름과 같은 길을 쓴다 — 계정을 만들고 링크를 발급해 그 링크를 연다.
-    `phone` 은 사람을 알아보는 값일 뿐 더 이상 인증 수단이 아니다.
+    실제 흐름과 같은 길을 쓴다 — 계정을 만들고 아이디와 비밀번호를 정한 뒤
+    로그인 화면에 그대로 보낸다. 그래서 문이 고장 나면 **모든 시험이 함께
+    빨개진다.** `phone` 은 사람을 알아보는 값일 뿐 인증 수단이 아니다 —
+    전화번호는 아이디도 아니다(4-12).
+
+    **아이디는 계정 id 에서 만든다.** 연락처에서 만들면 번호가 비어 있는
+    계정끼리 같은 아이디가 되어, 시험이 엉뚱한 사람으로 들어간다.
     첫 사용자는 총무팀(admin)이 된다.
     """
     from sqlalchemy import func, select
 
-    from app.domain import auth as invites
+    from app.domain import login as 로그인
     from app.models import User
 
     from app.db import SessionLocal
@@ -127,15 +132,27 @@ def login_as(client, phone: str, name: str = "테스터"):
         if person is None:
             first = db.scalar(select(func.count()).select_from(User)) == 0
             person = User(
-                name=name, phone_number=phone, role="admin" if first else "general"
+                name=name, phone_number=phone, role="admin" if first else "general",
             )
             db.add(person)
             db.commit()
-        raw = invites.issue(db, user=person)
+        아이디 = f"u{person.id}"
+        person.login_id = 아이디
+        # **바꾸는 화면에 안 걸리게 첫판이 아니다** — 시험이 보려는 것은 그
+        # 화면이 아니다. 그 화면 자체는 test_stage34 가 따로 잰다
+        로그인.비밀번호를정한다(db, person, 시험비밀번호, 첫판=False)
 
-    response = client.get(f"/invite/{raw}", follow_redirects=False)
+    response = client.post(
+        "/login",
+        data={"login_id": 아이디, "password": 시험비밀번호},
+        follow_redirects=False,
+    )
     assert response.status_code == 303, response.text
     return response
+
+
+# 지어낸 값이다 — 운영과 겹칠 수 없는 자리에서 고른다
+시험비밀번호 = "지어낸비밀번호12"
 
 
 def dept_key_of(db, user):

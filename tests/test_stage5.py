@@ -509,7 +509,7 @@ def test5_s01_옛_껍데기가_없다():
 def test5_s02_로그인_전_화면도_같은_껍데기다(client, admin_client, fin):
     page = client.get("/login")
     assert page.status_code == 200
-    assert "css/retreat." in page.text and "초대 링크" in page.text   # 해시 주소 (11-2)
+    assert "css/retreat." in page.text and "아이디" in page.text     # 해시 주소 (11-2)
     # 로그인 전에는 사이드바가 없다 (글자가 아니라 마크업으로 — 10장)
     assert '<aside class="sidenav"' not in page.text
 

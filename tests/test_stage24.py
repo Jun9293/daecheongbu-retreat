@@ -55,9 +55,13 @@ def 여럿(admin_client):
                                   action="시험", target_type="x", target_id=1))
         db.add(models.ActivityLog(actor_type="user", actor_id=남길, actor_name="남길 사람",
                                   action="시험", target_type="x", target_id=1))
-        # 남길 계정의 살아 있는 링크와 지워질 계정의 링크
-        invites.issue(db, user=db.get(models.User, 남길))
-        invites.issue(db, user=db.get(models.User, 리더))
+        # 남길 계정과 지워질 계정의 옛 초대 링크 행 — **행은 지우지 않는다**(0장).
+        # 계정을 지우면 이 행들이 어떻게 되는지가 이 시험이 보는 것이라
+        # 링크를 걷은 뒤에도 그대로 심는다
+        for uid in (남길, 리더):
+            db.add(models.InviteToken(
+                user_id=uid, token_hash=f"옛해시-{uid}",
+                expires_at=models._now() + dt.timedelta(days=7)))
         db.get(models.User, 비활성).is_active = False
         db.commit()
     return {"남길": 남길, "리더": 리더, "부서원": 부서원, "비활성": 비활성}
@@ -188,11 +192,14 @@ def _토큰(db, uid, **덮어쓸):
     return t
 
 
-def test24_b01_취소됐거나_만료된_링크만_가진_사람은_안_받은_사람이다(admin_client):
-    """설정 › 사용자의 「링크 안 받은 사람」 이 `problem_with` 를 따른다.
+def test24_b01_살아_있는_링크의_뜻이_problem_with_하나다(admin_client):
+    """옛 초대 링크를 끊는 갈래(계정문열기 ③)가 `problem_with` 를 따른다.
 
-    ① 취소·만료만 가진 사람은 세어지고 ② 살아 있는 링크를 가진 사람은
-    안 세어지고 ③ 그 두 사람이 실제로 표에 있다."""
+    「살아 있다」 가 두 뜻이면 **끊었다고 말해 놓고 안 끊긴 것이 남는다.**
+
+    본다 — ① 취소·만료·사용된 것은 안 세어지고 ② 살아 있는 것만 세어지고
+    ③ 끊고 나면 0 이 되는가 ④ **행은 그대로인가**(0장).
+    """
     취소만 = make_user("취소만 가진 사람", "01077770011", "member")
     만료만 = make_user("만료만 가진 사람", "01077770012", "member")
     산것 = make_user("살아 있는 링크", "01077770013", "member")
@@ -202,23 +209,18 @@ def test24_b01_취소됐거나_만료된_링크만_가진_사람은_안_받은_�
         _토큰(db, 만료만, expires_at=지금 - dt.timedelta(days=1))
         _토큰(db, 산것)
         db.commit()
-        # 같은 것을 함수로도 확인 — 화면이 이것을 부른다
         assert invites.live_token(db, user=db.get(models.User, 취소만)) is None
         assert invites.live_token(db, user=db.get(models.User, 만료만)) is None
         assert invites.live_token(db, user=db.get(models.User, 산것)) is not None
 
-    page = admin_client.get("/admin/users").text
-    import re
-    m = re.search(r"링크 안 받은 사람 (\d+)명", page)
-    assert m, "③ 화면에 그 수가 없다"
-    안받음 = int(m.group(1))
-    # 관리자 자신은 이미 들어왔고, 새로 만든 셋 중 둘이 「안 받은 사람」 이다
-    with app_session() as db:
-        기대 = sum(
-            1 for p in db.scalars(select(models.User)) if p.is_active
-            and invites.live_token(db, user=p) is None and not invites.entered_ever(db, user=p))
-    assert 안받음 == 기대
-    assert 기대 >= 2, "③ 취소·만료 두 사람이 실제로 세어져야 한다"
+        산것들 = invites.살아있는것들(db)
+        assert [t.user_id for t in 산것들] == [산것], "「살아 있다」 의 뜻이 갈렸다"
+        모든행 = len(db.scalars(select(models.InviteToken)).all())
+        assert 모든행 >= 3, "심은 행이 실제로 있어야 이 시험이 뜻이 있다"
+
+        assert invites.전부끊는다(db) == 1
+        assert invites.살아있는것들(db) == []
+        assert len(db.scalars(select(models.InviteToken)).all()) == 모든행, "행을 지웠다"
 
 
 # 토큰의 세 칸을 **조건으로** 쓰는 모양들. 값을 찍기만 하는 것

@@ -348,64 +348,76 @@ def _저장소파일들() -> set[str]:
     return 모은
 
 
-def test31_d01_서버에서_뽑은_링크로_그_사람이_들어와진다(client, capsys):
-    """사) `scripts/관리자링크.py` 로 **실제로 발급하고 그 링크를 연다.**
+def test31_d01_서버에서_만든_비밀번호로_그_사람이_들어와진다(client, capsys):
+    """사) `scripts/계정문열기.py` 로 **실제로 만들고 그 값으로 들어간다.**
 
-    본다 — ① 링크가 찍히는가 ② 그 링크로 들어가면 **그 사람으로** 로그인되는가
-    (이름이 화면에 있다) ③ 없는 id 로는 멈추는가. ②가 이 판에서 새로 재는 것이다 —
-    있던 시험(test23_h04)은 토큰이 **늘어나는지**까지만 봤다."""
+    본다 — ① 값이 찍히는가 ② 그 값으로 들어가면 **그 사람으로** 로그인되는가
+    (이름이 화면에 있다 — 첫 비밀번호라 바꾸는 화면이 먼저 뜬다) ③ 없는
+    id 로는 멈추는가.
+
+    (2026-09-11 에 초대 링크를 걷으면서 같은 자리를 옮겼다.)"""
     from fastapi.testclient import TestClient
 
     from app.main import app
 
-    링크모듈 = _스크립트("관리자링크")
+    문열기 = _스크립트("계정문열기")
     관리자 = make_user("복구 총무 정하윤", "01077770001", "admin")
+    with app_session() as db:
+        db.get(models.User, 관리자).login_id = "bokgu"
+        db.commit()
 
     capsys.readouterr()
     with app_session() as db:
-        assert 링크모듈.링크(db, 관리자) == 0
+        assert 문열기.재설정(db, 관리자) == 0
     찍힌 = capsys.readouterr().out
-    잡힌 = re.search(r"/invite/([A-Za-z0-9_\-]+)", 찍힌)
-    assert 잡힌, f"링크를 안 찍었다: {찍힌!r}"
+    잡힌 = [ln.split()[-1] for ln in 찍힌.splitlines() if ln.strip().startswith("비밀번호 ")]
+    assert 잡힌, f"값을 안 찍었다: {찍힌!r}"
 
     새창 = TestClient(app)
-    들어감 = 새창.get(f"/invite/{잡힌.group(1)}", follow_redirects=False)
+    들어감 = 새창.post("/login", data={"login_id": "bokgu", "password": 잡힌[0]},
+                    follow_redirects=False)
     assert 들어감.status_code == 303, 들어감.text
-    안쪽 = 새창.get("/settings")
-    assert 안쪽.status_code == 200, "링크를 열었는데 로그인되지 않았다"
+    안쪽 = 새창.get("/password")
+    assert 안쪽.status_code == 200, "값을 넣었는데 로그인되지 않았다"
     assert "복구 총무 정하윤" in 안쪽.text, "다른 사람으로 들어와졌다"
 
-    # ③ 없는 id 는 멈춘다 — 발급하지 않고 1 로 끝난다
+    # ③ 없는 id 는 멈춘다 — 만들지 않고 1 로 끝난다
     with app_session() as db:
-        assert 링크모듈.링크(db, 999_999) == 1
+        assert 문열기.재설정(db, 999_999) == 1
 
 
-def test31_d02_발급해도_저장소에_링크가_적힌_파일이_생기지_않는다(client, capsys):
-    """아) **돌리기 전후의 파일 목록을 견준다.**
+def test31_d02_발급해도_저장소에_값이_적힌_파일이_생기지_않는다(client, capsys):
+    """아·자) **돌리기 전후의 파일 목록을 견준다.**
 
-    본다 — ① 새 파일이 하나도 안 생기는가 ② 뽑힌 **토큰 원문**이 저장소의 어느
-    파일에도 없는가(파일 수가 같아도 있던 파일에 덧붙였을 수 있다). `.gitignore`
-    의 `link.txt` 줄이 그 까닭을 이미 적고 있다 — 여기서 그것을 실제로 잰다."""
-    링크모듈 = _스크립트("관리자링크")
-    관리자 = make_user("링크 받는 총무 최도현", "01077770002", "admin")
+    본다 — ① 새 파일이 하나도 안 생기는가 ② 만들어진 **비밀번호 원문**이
+    저장소의 어느 파일에도 없는가(파일 수가 같아도 있던 파일에 덧붙였을 수
+    있다) ③ 훑은 것이 비지 않았는가.
+
+    「비밀번호 원문은 어디에도 저장하지 않고 로그에도 안 찍는다」 를 여기서
+    실제로 잰다."""
+    문열기 = _스크립트("계정문열기")
+    관리자 = make_user("값 받는 총무 최도현", "01077770002", "admin")
+    with app_session() as db:
+        db.get(models.User, 관리자).login_id = "dohyun"
+        db.commit()
 
     전 = _저장소파일들()
     capsys.readouterr()
     with app_session() as db:
-        assert 링크모듈.링크(db, 관리자) == 0
+        assert 문열기.재설정(db, 관리자) == 0
     찍힌 = capsys.readouterr().out
-    토큰 = re.search(r"/invite/([A-Za-z0-9_\-]+)", 찍힌).group(1)
+    값 = [ln.split()[-1] for ln in 찍힌.splitlines() if ln.strip().startswith("비밀번호 ")][0]
     후 = _저장소파일들()
 
     assert 후 - 전 == set(), f"발급이 파일을 만들었다: {sorted(후 - 전)}"
     # ③ 훑은 것이 비지 않았는가 — `무시할폴더` 가 한 줄 늘어 트리를 통째로 삼키면
     # 아래 단언이 조용히 통과한다(검토가 짚음)
     assert len(후) > 100, f"훑은 파일이 너무 적다 — 이 시험이 눈을 감았다: {len(후)}"
-    assert len(토큰) > 20, "토큰이 아니다 — 이 시험이 아무것도 안 보고 있다"
-    바이트 = 토큰.encode()
+    assert len(값) >= 8, "비밀번호가 아니다 — 이 시험이 아무것도 안 보고 있다"
+    바이트 = 값.encode()
     담긴곳 = [이름 for 이름 in 후
              if 바이트 in (ROOT / 이름).read_bytes()]
-    assert not 담긴곳, f"토큰이 저장소 안 파일에 적혔다: {담긴곳}"
+    assert not 담긴곳, f"비밀번호가 저장소 안 파일에 적혔다: {담긴곳}"
 
 
 def test31_d03_링크발급을_새로_만들지_않고_있던_것을_가리킨다():
@@ -414,11 +426,13 @@ def test31_d03_링크발급을_새로_만들지_않고_있던_것을_가리킨�
     본다 — ① 같은 일을 하는 스크립트가 **둘이 되지 않았는가** ② 있던 것을 돌리는
     법이 배포 안내에 있는가 ③ 되돌리기 절차에서도 그 길을 가리키는가(오늘 막힌
     자리가 바로 「사본으로 되돌린 뒤」 였다)."""
-    assert not (ROOT / "scripts/링크발급.py").exists(), \
-        "같은 일을 하는 스크립트가 둘이 됐다 — scripts/관리자링크.py 가 이미 있다"
+    for 없어야할것 in ("scripts/링크발급.py", "scripts/관리자링크.py",
+                    "scripts/create_admin.py"):
+        assert not (ROOT / 없어야할것).exists(), \
+            f"같은 일을 하는 스크립트가 둘이 됐다 — scripts/계정문열기.py 가 이미 있다: {없어야할것}"
     안내 = (ROOT / "docs/배포-안내.md").read_text(encoding="utf-8")
-    assert "관리자링크.py" in 안내
+    assert "계정문열기.py" in 안내
     되돌리기 = 안내.split("**되돌리려면**", 1)
     assert len(되돌리기) == 2, "되돌리기 절차를 못 찾았다"
-    assert "관리자링크.py" in 되돌리기[1][:1200], \
+    assert "계정문열기.py" in 되돌리기[1][:1200], \
         "되돌린 뒤 들어갈 길을 그 자리에서 안 가리킨다"

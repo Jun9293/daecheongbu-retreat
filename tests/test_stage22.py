@@ -331,50 +331,34 @@ def test22_e01_회의록_상세에_제안_자리가_있다():
 # ════════════════════════════════════════════════════════════════════
 
 
-def test22_f01_안_받은_사람_수가_맨_위에_있다(admin_client, world):
-    """열아홉 명에게 차례로 보내는 일이라, 목록을 훑어 세는 것은 사람이
+def test22_f01_아이디_없는_사람_수가_맨_위에_있다(admin_client, world):
+    """열아홉 명에게 차례로 주는 일이라, 목록을 훑어 세는 것은 사람이
     할 일이 아니다 (4-12). **수는 세어서 낸다** — 화면이 다시 세지 않는다."""
-    make_user("아직 안 보낸 사람", "01077770008", "member")
+    make_user("아직 아이디 없는 사람", "01077770008", "member")
     page = admin_client.get("/admin/users").text
-    # 관리자 자신은 들어왔고(로그인했다), 방금 만든 사람은 안 받았다
-    assert "링크 안 받은 사람 1명" in page
-    assert "들어온 사람 1명" in page
-    assert '<span class="tag done">들어옴</span>' in page
+    # 관리자 자신은 쓰고 있고(로그인했다), 방금 만든 사람은 아이디가 없다
+    assert "아이디 없는 사람 1명" in page
+    assert "쓰고 있는 사람 1명" in page
+    assert '<span class="tag done">쓰는 중</span>' in page
 
 
-def test22_f02_보냈지만_안_들어온_사람은_따로_센다(admin_client, world):
-    """② **「보냈는데 아직 안 들어온 사람」 은 「안 보낸 사람」 과 다른
-    일이다** — 앞은 기다리는 것이고 뒤는 보내는 것이다. 한 칸에 담으면
-    누구에게 보내야 하는지가 안 보인다 (4-12)."""
-    person = make_user("보낸 사람", "01077770009", "member")
-    admin_client.post(f"/admin/users/{person}/invite", follow_redirects=False)
-    page = admin_client.get("/admin/users").text
-    assert "링크 안 받은 사람 0명" in page
-    assert "보냈고 아직 안 들어옴 1명" in page
-
-
-def test22_f04_들어온_사람에게_다시_보낸_링크도_보인다(admin_client, world):
-    """**기기를 잃으면 재발급합니다** (4-12). 그때 그 사람은 「들어옴」 인
-    동시에 「살아 있는 링크가 있는」 사람이라, 하나로 끊으면 **그 링크가
-    언제까지인지가 화면에서 사라집니다** — 검토가 짚은 자리입니다."""
-    page = admin_client.get("/admin/users").text
-    assert '<span class="tag done">들어옴</span>' in page
-    assert "까지</span>" not in page.split('들어옴</span>')[1].split("</td>")[0]
-
+def test22_f02_비밀번호_안_받은_사람은_따로_센다(admin_client, world):
+    """② **「아이디를 아직 안 준 사람」 과 「비밀번호를 아직 안 준 사람」 은
+    다른 일이다** — 앞은 정하는 것이고 뒤는 만들어 전하는 것이다. 한 칸에
+    담으면 지금 무엇을 해야 하는지가 안 보인다 (4-12)."""
+    person = make_user("아이디만 있는 사람", "01077770009", "member")
     with app_session() as db:
-        me = _admin(db).id
-    admin_client.post(f"/admin/users/{me}/invite", follow_redirects=False)
+        db.get(models.User, person).login_id = "idonly"
+        db.commit()
     page = admin_client.get("/admin/users").text
-    칸 = page.split('들어옴</span>')[1].split("</td>")[0]
-    assert "까지</span>" in 칸, "들어온 사람의 살아 있는 링크가 안 보인다"
-
-
+    assert "아이디 없는 사람 0명" in page
+    assert "비밀번호 안 받은 사람 1명" in page
 def test22_f03_안내문_초안이_있고_실명이_없다():
-    """링크와 함께 보낼 글이다. **실명·연락처를 안 넣는다** (11-2) —
+    """아이디·비밀번호와 함께 보낼 글이다. **실명·연락처를 안 넣는다** (11-2) —
     저장소는 공개다."""
-    p = ROOT / "docs" / "초대-안내문.md"
+    p = ROOT / "docs" / "로그인-안내문.md"
     assert p.exists(), "안내문 초안이 없다"
     글 = p.read_text(encoding="utf-8")
-    assert "한 번만" in 글, "링크가 한 번만 열린다는 말이 없다"
+    assert "한 번만" in 글, "첫 비밀번호가 한 번만 보인다는 말이 없다"
     assert "총무팀" in 글, "안 되면 누구에게 말할지가 없다"
     assert re.search(r"01[016-9][-\s]?\d{3,4}[-\s]?\d{4}", 글) is None, "번호가 들어 있다"

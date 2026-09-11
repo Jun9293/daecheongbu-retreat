@@ -15,7 +15,7 @@ from sqlalchemy import JSON, String, Text
 from starlette.testclient import TestClient
 
 from app import models
-from tests.conftest import make_user
+from tests.conftest import make_user, app_session
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -39,36 +39,54 @@ def _map_or_skip(mod):
 # ════════════════════════════════════════════════════════════════════
 
 
-def test9_t01_이름과_링크가_한_키에_묶여_어긋날_자리가_없다(admin_client):
+def _아이디를준다(uid: int, 아이디: str) -> None:
+    from app.models import User
+    with app_session() as db:
+        db.get(User, uid).login_id = 아이디
+        db.commit()
+
+
+def test9_t01_이름과_비밀번호가_한_키에_묶여_어긋날_자리가_없다(admin_client):
+    """이름을 주소에 따로 실으면 「B 님의 비밀번호」 아래 A 의 값이 뜰 자리가
+    생긴다 (4-12). 값과 이름은 **한 키**에 묶여 온다."""
     person = make_user("묶인 사람", "01066670001", "member")
     other = make_user("딴 사람", "01066670002", "member")
+    _아이디를준다(person, "mukin")
 
-    r = admin_client.post(f"/admin/users/{person}/invite", follow_redirects=False)
+    r = admin_client.post(f"/admin/users/{person}/password", follow_redirects=False)
     location = r.headers["location"]
     assert "k=" in location and "u=" not in location      # 이름은 키 안에 있다
 
     # 주소에 남의 id 를 붙여도 아무것도 안 바뀐다 — u= 를 읽는 곳이 없다 (막는 쪽)
     page = admin_client.get(location + f"&u={other}")
-    assert "묶인 사람 님의 링크입니다" in page.text
+    assert "묶인 사람 님의 첫 비밀번호입니다" in page.text
     assert "딴 사람 님의" not in page.text
-    assert "/invite/" in page.text
+    assert 'id="firstpw"' in page.text
 
-    # 같은 키를 다시 열면 링크도 이름도 없다 — 한 번만 꺼내진다
+    # 같은 키를 다시 열면 값도 이름도 없다 — 한 번만 꺼내진다
     again = admin_client.get(location)
     assert 'id="issued"' not in again.text
 
 
-def test9_t02_화면의_이름과_그_링크로_로그인한_계정이_같다(admin_client):
+def test9_t02_화면의_이름과_그_값으로_로그인한_계정이_같다(admin_client):
+    """보여준 이름과 그 값이 여는 계정이 같은가 — 어긋나면 총무팀이 엉뚱한
+    사람에게 비밀번호를 보낸다."""
+    import re as _re
+
     person = make_user("일치 확인", "01066670003", "member")
-    data = admin_client.post(f"/admin/users/{person}/invite?inline=1").json()
-    assert data["name"] == "일치 확인"
-    token = data["url"].rsplit("/", 1)[-1]
+    _아이디를준다(person, "ilchi")
+    r = admin_client.post(f"/admin/users/{person}/password", follow_redirects=False)
+    page = admin_client.get(r.headers["location"]).text
+    assert "일치 확인 님의 첫 비밀번호입니다" in page
+    값 = _re.search(r'id="firstpw" readonly value="([^"]+)"', page).group(1)
 
     from app.main import app
 
     guest = TestClient(app)
-    guest.get(f"/invite/{token}", follow_redirects=True)
-    me = guest.get("/settings")                           # 내 정보 — 로그인한 이름
+    assert guest.post("/login", data={"login_id": "ilchi", "password": 값},
+                      follow_redirects=False).status_code == 303
+    # 첫 비밀번호라 바꾸는 화면이 먼저 뜬다 — 거기에 그 사람 이름이 있다
+    me = guest.get("/password")
     assert me.status_code == 200 and "일치 확인" in me.text
 
 
@@ -173,13 +191,18 @@ def test9_g03_모델에_없던_새_칸도_저절로_걸린다(tmp_path):
     assert dev.실명이있나(db_path).get("program_items.brand_new_note") == 1
 
 
-def test9_t03_인라인_결과_상자에도_사후_고지가_있다():
-    """4-12 문면 — 「이전에 발급한 링크는 이제 쓸 수 없습니다」 를 발급할
-    때마다 함께 적는다. 사전 confirm 과 별개로 상자에도 남는다."""
+def test9_t03_발급_배너가_사후_고지를_함께_적는다():
+    """4-12 문면 — 「이전 비밀번호는 이제 쓸 수 없습니다」 를 발급할 때마다
+    함께 적는다. 안 적으면 총무팀이 「아까 보낸 것으로 들어가세요」 라고
+    안내하게 된다.
+
+    **띄우는 길은 하나다** — 그 자리에서 띄우던 길은 걷었다(값이 실린
+    응답이 둘이 되면 한쪽만 no-store 를 놓쳐도 아무도 모른다).
+    """
     html = (ROOT / "app" / "templates" / "admin_users.html").read_text(encoding="utf-8")
-    inline_js = html[html.index("function showInline"):]
-    assert "이전에 발급한 링크는 이제 쓸 수 없습니다" in inline_js
-    assert "지금 링크는 못 쓰게 됩니다" in html            # 사전 confirm 도 그대로
+    assert "이전 비밀번호는 이제 쓸 수 없습니다" in html
+    assert "한 번만 보입니다" in html
+    assert "showInline" not in html, "값을 띄우는 길이 둘이다"
     # u= 를 만드는 곳이 없다. **낱말 시험이라 주석의 &u= 에도 걸린다** —
     # 가짜 빨강 쪽이라 안전해서 그대로 둔다(가짜 초록이 문제지 가짜
     # 빨강은 사람을 그 자리로 데려간다). 걸리면 주석을 다르게 적으면 된다

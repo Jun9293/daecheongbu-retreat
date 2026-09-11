@@ -1,7 +1,9 @@
-"""초대 링크를 화면에서 (+ 다듬기 후속) — 4-17 사용자 탭.
+"""첫 비밀번호를 화면에서 (+ 다듬기 후속) — 4-17 사용자 탭.
 
-발급·재발급·복사가 화면에서 되고, 만드는 것은 스크립트와 **같은 함수**
-(invites.issue)다. 막는 코드마다 막히는 쪽 시험이 함께 있다.
+**2026-09-11 에 초대 링크가 걷혔다.** 그 자리의 한 바퀴(발급 → 로그인 →
+바꾸기)는 `tests/test_stage34.py` 가 잰다 — 여기 남은 것은 그때 함께
+정한 **권한**과 **만드는 자리가 하나인가**다. 막는 코드마다 막히는 쪽
+시험이 함께 있다.
 """
 
 from __future__ import annotations
@@ -35,59 +37,45 @@ def person(admin_client):
 # ════════════════════════════════════════════════════════════════════
 # 1. 발급 → 로그인 → 재사용 403 → 재발급 → 옛 링크 403 → 화면에 안 남음 (1-g)
 # ════════════════════════════════════════════════════════════════════
-
-
-def test8_i01_발급부터_만료까지_한_바퀴(admin_client, person):
-    # 발급 — 화면의 JS 가 부르는 길(inline=1). 링크가 그 자리(JSON)로 온다
-    r = admin_client.post(f"/admin/users/{person}/invite?inline=1")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["name"] == "초대받을 사람" and "/invite/" in data["url"]
-    token = data["url"].rsplit("/", 1)[-1]
-
-    # 그 링크로 로그인 — 200 (홈으로)
-    guest = _fresh()
-    ok = guest.get(f"/invite/{token}", follow_redirects=True)
-    assert ok.status_code == 200
-
-    # 같은 링크 다시 — 한 번 쓰면 만료 (403)
-    again = _fresh().get(f"/invite/{token}")
-    assert again.status_code == 403
-
-    # 재발급 — 새 링크가 오고, 그것을 쓰기 전이라도 **또 재발급하면** 죽는다
-    first = admin_client.post(f"/admin/users/{person}/invite?inline=1").json()
-    second = admin_client.post(f"/admin/users/{person}/invite?inline=1").json()
-    old_token = first["url"].rsplit("/", 1)[-1]
-    new_token = second["url"].rsplit("/", 1)[-1]
-    assert _fresh().get(f"/invite/{old_token}").status_code == 403   # 옛 링크는 죽었다
-    assert _fresh().get(f"/invite/{new_token}", follow_redirects=True).status_code == 200
-
-    # 목록을 새로 열면 링크가 화면에 안 남는다 — 원문을 저장하지 않는다 (4-12)
-    page = admin_client.get("/admin/users")
-    assert "/invite/" not in page.text.replace('action="/admin/users', "")
-
-
 def test8_i02_발급은_총무팀만(client, admin_client, person):
+    """부서 리더는 남의 비밀번호를 만들 수 없다 — 만들 수 있으면 그 계정으로
+    들어갈 수 있다. **막는 쪽과 안 막히는 쪽을 함께 본다.**"""
     make_user("리더", "01066660002", "dept_lead")
     login_as(client, "01066660002")
-    denied = client.post(f"/admin/users/{person}/invite?inline=1")
+    denied = client.post(f"/admin/users/{person}/password")
     assert denied.status_code == 403                     # 막는 쪽
+    # 안 막히는 쪽 — 총무팀은 된다 (아이디가 있어야 하므로 먼저 준다)
+    admin_client.post(f"/admin/users/{person}/update",
+                      data={"role": "general", "login_id": "chodae"})
+    ok = admin_client.post(f"/admin/users/{person}/password", follow_redirects=False)
+    assert ok.status_code == 303 and "k=" in ok.headers["location"]
 
 
 def test8_i03_화면과_스크립트가_같은_함수를_부른다():
-    """만드는 길이 둘이면 하나만 고쳐진다 (1-d). issue 는 auth 한 곳이다."""
-    auth = (ROOT / "app" / "domain" / "auth.py").read_text(encoding="utf-8")
-    assert auth.count("\ndef issue(") == 1
+    """만드는 길이 둘이면 하나만 고쳐진다 (1-d).
+
+    본다 — ① 해시를 만드는 함수가 `domain/login` 한 곳인가 ② 화면과
+    스크립트가 **그것을** 부르는가 ③ 다른 곳에서 `hashlib.scrypt` 를 직접
+    부르지 않는가(셈이 두 벌이 되는 첫걸음이다) ④ 훑은 파일이 비지 않았나.
+    """
+    로그인 = (ROOT / "app" / "domain" / "login.py").read_text(encoding="utf-8")
+    assert 로그인.count("\ndef 해시한다(") == 1
     screen = (ROOT / "app" / "routers" / "admin_users.py").read_text(encoding="utf-8")
-    script = (ROOT / "scripts" / "create_admin.py").read_text(encoding="utf-8")
-    assert "invites.issue(" in screen and "invites.issue(" in script
-    assert "invites.invite_url(" in screen and "invites.invite_url(" in script
-    # 다른 길로 토큰을 만드는 곳이 없다 — InviteToken 을 직접 짓는 자리는 auth 뿐
-    for path in pathlib.Path(ROOT, "app").rglob("*.py"):
+    script = (ROOT / "scripts" / "계정문열기.py").read_text(encoding="utf-8")
+    assert "로그인.비밀번호를정한다(" in screen and "로그인.비밀번호를정한다(" in script
+    assert "로그인.첫비밀번호()" in screen and "로그인.첫비밀번호()" in script
+
+    본파일 = 0
+    for path in list(pathlib.Path(ROOT, "app").rglob("*.py")) + \
+            list(pathlib.Path(ROOT, "scripts").glob("*.py")):
         rel = str(path.relative_to(ROOT)).replace("\\", "/")
-        if rel == "app/domain/auth.py" or rel == "app/models.py":
-            continue
-        assert "InviteToken(" not in path.read_text(encoding="utf-8"), rel
+        본파일 += 1
+        글 = path.read_text(encoding="utf-8")
+        if rel != "app/domain/login.py":
+            assert "hashlib.scrypt" not in 글, rel
+        if rel not in ("app/domain/auth.py", "app/models.py"):
+            assert "InviteToken(" not in 글, rel
+    assert 본파일 > 20, "훑은 파일이 너무 적다 — 아무것도 안 본 검사다"
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -206,18 +194,3 @@ def test8_w03_해시를_맞바꾸면_걸린다(tmp_path):
     assert cn.미확인이미지(목록, 짝맞음) == []
     맞바꿈 = "docs/review/a.png | bbbbbbbbbbbb | 봤음\ndocs/review/b.png | aaaaaaaaaaaa | 봤음"
     assert len(cn.미확인이미지(목록, 맞바꿈)) == 2       # 막는 쪽 — 둘 다 걸린다
-
-
-def test8_i04_JS_없는_길의_배너가_이름을_말한다(admin_client, person):
-    """리다이렉트 배너(폴백)도 누구의 링크인지 밝힌다 — 이름 없는 링크가
-    이 화면이 안 쓰인 이유의 하나였다 (0-a)."""
-    r = admin_client.post(f"/admin/users/{person}/invite", follow_redirects=False)
-    assert r.status_code == 303
-    location = r.headers["location"]
-    assert "k=" in location and "u=" not in location      # 이름은 키에 묶여 간다
-    page = admin_client.get(location)
-    assert "초대받을 사람 님의 링크입니다" in page.text
-    assert 'id="invitelink"' in page.text and 'id="copylink"' in page.text
-    # 한 번만 보인다는 문장과, 그 자리(행)에서 여는 JS 훅이 화면에 있다
-    assert "한 번만 보입니다" in page.text
-    assert "issueform" in page.text and "inline=1" in page.text

@@ -208,68 +208,38 @@ def test23_g06_누를_수_없는_엑셀_단추를_그리지_않는다(client, ad
 
 
 # ════════════════════════════════════════════════════════════════════
-# 1. 관리자 링크 — 만드는 길이 하나인가
+# 1. 서버에서 문을 여는 길 — 만드는 자리가 하나인가
+#
+# **2026-09-11 에 초대 링크가 걷혔다.** `scripts/관리자링크.py` 가 하던 일은
+# `scripts/계정문열기.py` 갈래 ② 가 한다. 갈래를 실제로 밟는 것은
+# `tests/test_stage34.py` 와 `tests/test_stage31.py` 가 잰다 — 여기 남긴 것은
+# 「스스로 만들지 않는가」 와 「돌리는 법이 안내서에 있는가」 다.
 # ════════════════════════════════════════════════════════════════════
 
 
-def test23_h01_관리자링크가_초대_링크와_같은_함수를_부른다():
-    """**링크 만드는 코드를 새로 쓰지 않는다** (4-12) — 두 곳에서 만들면
+def test23_h01_계정문열기가_같은_함수를_부른다():
+    """**비밀번호 만드는 코드를 새로 쓰지 않는다** (4-12) — 두 곳에서 만들면
     한쪽만 고쳐진다.
 
-    **낱말만 잰다** — 실제로 도는지는 서버 컴퓨터에서 세 번 돌려 본
-    결과가 `docs/review/최근.md` 에 있다."""
-    글 = (ROOT / "scripts/관리자링크.py").read_text(encoding="utf-8")
+    **낱말만 잰다** — 갈래를 실제로 밟는 것은 test34_h01~h03 이다."""
+    글 = (ROOT / "scripts/계정문열기.py").read_text(encoding="utf-8")
     코드 = re.sub(r'"""[\s\S]*?"""', "", 글)
-    assert "invites.issue(" in 코드 and "invites.invite_url(" in 코드
-    # 스스로 토큰을 만들지 않는다 — 그 자리가 둘이 되는 첫걸음이다
-    for 만드는말 in ("token_urlsafe", "hash_token", "InviteToken("):
-        assert 만드는말 not in 코드, f"링크를 여기서 만들고 있다: {만드는말}"
+    assert "로그인.첫비밀번호()" in 코드 and "로그인.비밀번호를정한다(" in 코드
+    # 스스로 해시를 만들지 않는다 — 그 자리가 둘이 되는 첫걸음이다
+    for 만드는말 in ("hashlib", "scrypt", "token_urlsafe"):
+        assert 만드는말 not in 코드, f"비밀번호를 여기서 만들고 있다: {만드는말}"
 
 
 def test23_h02_admin_이_아니면_거절한다():
-    """**낱말만 잰다** — 실제 거절은 서버에서 돌린 결과가 보고에 있다.
+    """**낱말만 잰다** — 실제 거절은 `test34_h02` 가 밟는다.
     여기서는 그 갈래가 코드에 있는지만 본다(지우면 빨개진다)."""
-    코드 = (ROOT / "scripts/관리자링크.py").read_text(encoding="utf-8")
+    코드 = (ROOT / "scripts/계정문열기.py").read_text(encoding="utf-8")
     assert "person.role != perm.ADMIN" in 코드
-    assert "발급하지 않았습니다" in 코드
-
-
-def test23_h04_거절_갈래를_실제로_밟는다(client):
-    """**낱말만 재면 그 경로를 처음 밟는 것이 실제로 막아야 할 순간입니다**
-    (11-3). `h02` 는 문자열만 보므로 `perm.ADMIN` 이 없어져도 초록이고
-    부를 때 터집니다 — 그리고 그 순간은 「관리자가 다 막힌 날」 입니다.
-
-    셋을 함께 잽니다 — ① 관리자가 아니면 1 로 거절하는가
-    ② **관리자에게는 실제로 발급되는가** ③ 거절 쪽은 토큰을 안 만드는가
-    (안 늘어야 막은 것이다)."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "관리자링크", ROOT / "scripts/관리자링크.py")
-    모듈 = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(모듈)
-
-    리더 = make_user("링크 못 받는 리더", "01088880011", "dept_lead")
-    관리자 = make_user("링크 받는 총무", "01088880012", "admin")
-
-    def 토큰수(db):
-        return db.query(models.InviteToken).count()
-
-    with app_session() as db:
-        전 = 토큰수(db)
-        assert 모듈.링크(db, 리더) == 1, "관리자가 아닌데 발급했다"
-        assert 토큰수(db) == 전, "거절해 놓고 토큰을 만들었다"
-        # ② 통과해야 할 쪽이 통과하는가 — 이것이 없으면 「아무에게도 안
-        # 나간다」 와 「제대로 막았다」 가 구별되지 않는다
-        assert 모듈.링크(db, 관리자) == 0
-        assert 토큰수(db) == 전 + 1
-        # ③ 없는 id 도 같은 자리에서 받는다
-        assert 모듈.링크(db, 999_999) == 1
-
-
+    assert "만들지 않았습니다" in 코드
 def test23_h03_돌리는_법이_배포_안내에_있다():
     글 = (ROOT / "docs/배포-안내.md").read_text(encoding="utf-8")
-    assert "관리자링크.py" in 글, "돌리는 방법이 안내서에 없다"
+    assert "계정문열기.py" in 글, "돌리는 방법이 안내서에 없다"
+    assert "관리자링크.py" not in 글, "지운 스크립트를 아직 가리킨다"
 
 
 # ════════════════════════════════════════════════════════════════════

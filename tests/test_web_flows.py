@@ -104,12 +104,17 @@ def test_최초_로그인_사용자는_총무팀_관리자가_된다(client):
     assert user.name == "총무 김간사"
 
 
-def test_로그인_화면은_초대_링크로_들어오라고만_말한다(client):
-    """비밀번호도 인증번호도 없다 (CLAUDE.md 4-12)."""
+def test_로그인_화면은_아이디와_비밀번호를_받는다(client):
+    """인증번호도 전화번호도 받지 않는다 (CLAUDE.md 4-12).
+
+    **전화번호를 아이디로 쓰지 않는다** — 화면·기록·DB 에 번호가 계속 남고,
+    번호가 바뀌면 아이디까지 바꿔야 한다.
+    """
     response = client.get("/login")
 
     assert response.status_code == 200
-    assert "초대 링크" in response.text
+    assert 'name="login_id"' in response.text
+    assert 'type="password"' in response.text
     # 인증번호를 입력받는 자리가 없어야 한다 (문구에 그 낱말이 나오는 것과는 다르다)
     assert "data-dev-code" not in response.text
     assert 'name="code"' not in response.text
@@ -117,10 +122,16 @@ def test_로그인_화면은_초대_링크로_들어오라고만_말한다(clien
 
 
 def test_아무_링크나_넣으면_들어올_수_없다(client):
+    """옛 초대 주소는 **404 가 아니라 로그인 화면**으로 보낸다 (4-12).
+
+    카카오톡에 남은 링크를 누른 사람에게 「없는 주소」 를 보이면 시스템이
+    고장난 것으로 읽힌다. 다만 **들어와지지는 않는다.**
+    """
     response = client.get("/invite/아무거나-지어낸-토큰", follow_redirects=False)
 
-    assert response.status_code == 403
-    assert "링크를 찾을 수 없습니다" in response.text
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+    assert client.get("/", follow_redirects=False).headers["location"] == "/login"
     with app_session() as db:
         assert db.scalars(select(models.User)).all() == []
 
