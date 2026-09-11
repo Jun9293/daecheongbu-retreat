@@ -731,6 +731,11 @@ class EquipmentItem(Base):
 
     **묶음(어느 자리에서 챙기는가)은 여기 없다** — 품목은 회차를 넘고 쓰이는 자리는
     회차의 것이라 EquipmentRun.group_name 에 있다. 품목의 신분증은 (team_key, name) 뿐이다.
+
+    **비고도 여기 없다** — 「어디서 빌린다」·「이번엔 두 상자」 같은 말은 그 회차 그
+    자리에서 쓰는 것이라 EquipmentRun.note 에 있다(2026-09-11 · 도막 4). 여기 두었을
+    때는 회차가 둘이면 어느 회차의 말인지 알 수 없어서, 시트가 **비어 있을 때만**
+    적는 조건으로 덮고 있었다 — 그 조건 자체가 자리를 잘못 잡았다는 자국이었다.
     """
 
     __tablename__ = "equipment_items"
@@ -740,7 +745,6 @@ class EquipmentItem(Base):
     team_key: Mapped[str] = mapped_column(String(30), index=True)  # 부서 키 (2장) · 부서 없는 품목은 ""
     name: Mapped[str] = mapped_column(String(200))
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
 
     runs: Mapped[list[EquipmentRun]] = relationship(back_populates="item")
@@ -756,6 +760,10 @@ class EquipmentRun(Base):
     다음 회차에는 야외 세팅에서 챙길 수 있다. 품목에 두면 자리마다 딴 품목이 된다.
     같은 품목을 두 자리에서 챙기면 두 줄이고 각각 따로 체크한다 — 그래서 유니크가
     (회차, 품목, 묶음) 셋이다. 한 줄로 합치면 한쪽의 수량·체크를 잃는다.
+
+    **비고(note)도 회차의 것이다** — 묶음과 같은 이유다. 「어디서 빌린다」·「이번엔
+    두 상자」 는 이번 회차 이 자리에서 쓰는 말이고, 품목에 두면 회차가 둘일 때 어느
+    회차의 말인지 알 수 없다. 옮긴 것은 `scripts/비품비고옮기기.py`(2026-09-11).
     """
 
     __tablename__ = "equipment_runs"
@@ -779,6 +787,8 @@ class EquipmentRun(Base):
     # 정수로 두면 그 뜻을 잃는다. 더하지 않고 보여주기만 하는 칸이다
     quantity: Mapped[str | None] = mapped_column(String(50), nullable=True)
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 이 회차 이 자리에서 쓰는 말. 품목에 있던 것을 옮겨 왔다 (도막 4)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     checked_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

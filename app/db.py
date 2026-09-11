@@ -55,6 +55,10 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # equipment_runs)은 create_all 이 만들고 이 칸은 여기서 붙는다 — 둘 다
     # 이미 있으면 아무 일도 안 한다
     ("checklists", "moved_at", "DATETIME"),
+    # 비고가 품목에서 회차로 왔다 (4-18 · 도막 4). **붙이기만 한다** —
+    # equipment_items.note 를 걷는 것은 scripts/비품비고옮기기.py 안에서만 한다.
+    # 부팅이 걷으면 아직 안 옮긴 값이 소리 없이 사라진다
+    ("equipment_runs", "note", "TEXT"),
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
     ("task_library", "rules", "TEXT"),
@@ -409,11 +413,22 @@ def _warn_old_equipment_shape() -> None:
         with engine.connect() as conn:
             items = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_items)"))}
             runs = {row[1] for row in conn.execute(text("PRAGMA table_info(equipment_runs)"))}
-        if "group_name" in items or (runs and "group_name" not in runs):
-            print("!! bipum table is old shape: run scripts/bipum-mukum-omgigi"
-                  " (see CLAUDE.md 4-18)")
+            if "group_name" in items or (runs and "group_name" not in runs):
+                print("!! bipum table is old shape: run scripts/bipum-mukum-omgigi"
+                      " (see CLAUDE.md 4-18)")
+            # 비고가 아직 품목에 남아 있으면 말한다 — **고치지 않는다**(위와 같은
+            # 이유). 값이 있을 때만 말한다: 칸만 남고 비어 있으면 옮길 것이 없다
+            if "note" in items:
+                남음 = conn.execute(text(
+                    "SELECT COUNT(*) FROM equipment_items"
+                    " WHERE note IS NOT NULL AND note != ''")).scalar_one()
+                if 남음:
+                    print(f"!! {남음} bipum note(s) still on items:"
+                          " run scripts/bipum-bigo-omgigi (see CLAUDE.md 4-18)")
     except Exception as exc:                       # noqa: BLE001 - 알리는 말이 앱을 막지 않는다
-        print(f"!! equipment shape check skipped: {exc!r}")
+        # **ascii() 로 감싼다** — 예외 글에 한글이 섞이면 cp949 콘솔에서 이 줄이
+        # 죽고, 그러면 「알리는 말이 앱을 막지 않는다」 가 그 자리에서 깨진다
+        print(f"!! equipment shape check skipped: {ascii(repr(exc))}")
 
 
 def init_db() -> None:
