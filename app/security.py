@@ -19,6 +19,16 @@ class LoginRequired(HTTPException):
         super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail="로그인이 필요합니다.")
 
 
+class 비밀번호를바꿔야함(Exception):
+    """관리자가 발급한 첫 비밀번호로 들어온 채다 (4-12).
+
+    **막는 곳은 여기 하나다** — `get_current_user`. 화면마다 걸면 새 화면이
+    하나 늘 때마다 그 자리를 안 걸게 되고, 안 건 화면만 조용히 열린다.
+    바꾸는 화면 자신은 이 문을 안 쓴다(`get_optional_user` 로 받는다) —
+    그러지 않으면 바꾸러 가는 길이 스스로를 막는다.
+    """
+
+
 def set_session(response: Response, user_id: int) -> None:
     token = _serializer.dumps({"uid": user_id})
     response.set_cookie(
@@ -83,6 +93,10 @@ def _mark_first_seen(db: Session, user: User) -> None:
 def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
     if user is None:
         raise LoginRequired()
+    # 첫 비밀번호인 채로는 아무 화면도 안 연다 (4-12). 인증 의존이 하나라
+    # 여기서 한 번 막으면 전부 막힌다
+    if getattr(user, "must_change_password", False):
+        raise 비밀번호를바꿔야함()
     return user
 
 

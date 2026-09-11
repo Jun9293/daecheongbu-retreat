@@ -127,8 +127,8 @@ class User(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # 비었을 수 있다 — 비활성 계정은 번호를 놓는다. **로그인은 초대 링크로 하지
-    # 번호로 하지 않으므로** 번호가 없어도 계정은 멀쩡하다.
+    # 비었을 수 있다 — 비활성 계정은 번호를 놓는다. **로그인은 아이디로 하지
+    # 번호로 하지 않으므로** 번호가 없어도 계정은 멀쩡하다 (아래 `login_id`).
     phone_number: Mapped[str] = mapped_column(String(20), default=NO_PHONE)
     # 놓기 전에 쓰던 번호. 되살릴 때 돌려주기 위한 것이고, 화면에서 "누구였는지"
     # 를 보여주는 근거이기도 하다 — 빈 칸으로 두면 알 수 없다.
@@ -148,6 +148,31 @@ class User(Base):
     # 사이드바 배지가 이 값을 본다: 들어오기 전에 쌓인 것은 세지 않는다.
     # 없으면 아직 한 번도 안 들어온 것이고, 처음 들어오는 그 요청이 찍는다.
     first_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # ── 아이디와 비밀번호 (4-12 · 2026-09-11) ──────────────────────────
+    #
+    # **아이디는 이름의 로마자다. 전화번호를 쓰지 않는다** — 로그인 화면과
+    # 활동 기록과 DB 에 번호가 계속 남고, 번호가 바뀌면 아이디까지 바꿔야
+    # 한다. `phone_number` 는 지우지 않고 **연락처로** 남는다.
+    #
+    # 비었을 수 있다 — 아직 아이디를 안 받은 계정이다(그 계정은 못 들어온다).
+    # 겹치면 안 되므로 유니크이고, 비어 있는 행끼리는 겹침이 아니다
+    # (SQLite 는 NULL 끼리를 다른 값으로 본다 — 빈 문자열로 두지 않는 이유다).
+    login_id: Mapped[str | None] = mapped_column(String(50), unique=True, nullable=True)
+    # **원문은 어디에도 없다.** 셈(n·r·p)이 줄 안에 함께 있고 읽을 때 그것으로
+    # 센다 — `app/domain/login.py`.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 관리자가 발급한 첫 비밀번호인가. 참이면 화면이 안 열리고 바꾸는 자리로만
+    # 간다 — 막는 곳은 인증 의존 **한 곳**이다 (`security.get_current_user`).
+    # **DDL 에도 기본값을 적는다**(`server_default`). 파이썬 쪽 기본값만 두면
+    # 표를 만들 때 `NOT NULL` 만 걸리고, 이 칸을 모르는 옛 모양 INSERT 가
+    # 그 자리에서 죽는다 — 옮기기 스크립트들이 그렇게 넣는다.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("1"))
+    # 잇따라 틀린 수와 잠긴 때. **DB 에 둔다** — 메모리에 두면 서버를 다시
+    # 켜는 것으로 풀려서, 잠갔다는 말이 거짓이 된다.
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 소속 줄들 — **읽는 곳은 `domain/permissions` 하나다** (`my_dept_keys` ·
     # `is_lead_of` …). 다른 파일이 이것을 직접 훑으면 「소속」 의 뜻이 갈린다.

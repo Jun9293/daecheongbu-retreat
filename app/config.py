@@ -120,8 +120,12 @@ def secret_key_fingerprint(key: str | None = None) -> str:
 SECRET_KEY_FINGERPRINT = secret_key_fingerprint()
 
 SESSION_COOKIE = "dcb_session"
-# 초대 링크를 한 번 열면 그 기기에서 계속 로그인된 상태로 둔다 (CLAUDE.md 4-12).
-SESSION_MAX_AGE = 60 * 60 * 24 * 90  # 90일
+# **며칠인지는 여기 한 곳에만 적는다** (CLAUDE.md 4-12). 한 번 들어오면 그
+# 기기에서 그동안 로그인된 채로 둔다 — 휴대폰 홈 화면에 붙여 쓰는 앱이라
+# 짧게 두면 현장에서 다시 물어보게 된다. 로그인 화면이 이 값을 받아 찍으므로
+# 숫자를 화면에 박지 않는다.
+SESSION_DAYS = 90
+SESSION_MAX_AGE = 60 * 60 * 24 * SESSION_DAYS
 
 
 # 식대 1인당 지원 상한 기본값 (회차별로 재설정 가능 — 하드코딩 금지 원칙)

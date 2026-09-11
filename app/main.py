@@ -15,8 +15,9 @@ from starlette.exceptions import HTTPException
 
 from app.config import BASE_DIR, RISK_SCAN_INTERVAL_SECONDS
 from app.db import init_db
+from app.security import 비밀번호를바꿔야함
 from app.routers import (
-    invite,
+    login,
     attachments,
     board,
     home,
@@ -159,7 +160,7 @@ class HashedStatic(StaticFiles):
 
 app.mount("/static", HashedStatic(directory=str(STATIC_DIR)), name="static")
 
-app.include_router(invite.router)
+app.include_router(login.router)
 # / 는 홈이다 (4-15). 보드는 /board 그대로다
 app.include_router(home.router)
 app.include_router(board.router)
@@ -208,6 +209,16 @@ def service_worker():
     바뀌면 홈 화면에 추가한 앱이 다른 앱으로 읽힌다.
     """
     return FileResponse(STATIC_DIR / "js" / "sw.js", media_type="application/javascript")
+
+
+@app.exception_handler(비밀번호를바꿔야함)
+async def password_change_handler(request: Request, exc: Exception):
+    """첫 비밀번호인 채로 들어온 사람은 바꾸는 자리로만 간다 (4-12).
+
+    **판정은 `security.get_current_user` 하나**이고 여기서는 그것을 받아
+    보낼 곳만 정한다 — 화면마다 걸지 않는 이유가 그것이다.
+    """
+    return RedirectResponse(url="/password", status_code=303)
 
 
 @app.exception_handler(HTTPException)

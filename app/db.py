@@ -78,6 +78,18 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 처음 화면을 연 때 (4-16). 기존 행은 NULL — 아직 안 들어온 것으로 보고,
     # 다음에 들어올 때 찍힌다. 배지가 그 뒤에 온 것만 센다.
     ("users", "first_seen_at", "DATETIME"),
+    # 아이디와 비밀번호 (4-12 · 2026-09-11). **붙이기만 한다** — 유니크는
+    # ADD COLUMN 으로 못 걸어서 아래 `_login_id_index` 가 따로 만든다.
+    # 기존 행은 아이디도 해시도 NULL 이라 못 들어온다 — 관리자가 화면에서
+    # 아이디를 적고 첫 비밀번호를 발급하는 것이 그 문이다.
+    # `must_change_password` 는 **기본이 참**이다: 해시가 없는 계정이
+    # 거짓으로 서 있으면, 나중에 비밀번호만 받은 그 계정이 바꾸는 자리를
+    # 건너뛴다.
+    ("users", "login_id", "VARCHAR(50)"),
+    ("users", "password_hash", "VARCHAR(255)"),
+    ("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("users", "failed_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "locked_until", "DATETIME"),
     # 링크 첨부 (4-9). 기존 행은 NULL — 값이 없으면 파일이다.
     ("task_attachments", "url", "VARCHAR(2000)"),
     # 회의록의 출처와 옮기기 묶음. 기존 행은 NULL — 읽는 쪽이 '사람' 으로 본다.
@@ -126,6 +138,27 @@ def _catch_up_columns() -> None:
             if column in columns:
                 continue
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+
+def _login_id_index() -> None:
+    """`login_id` 의 유니크 인덱스. **`ADD COLUMN` 으로는 못 건다.**
+
+    아이디가 겹치면 로그인이 조용히 엉뚱한 계정으로 간다 — 연락처가 겹칠 때
+    링크가 엉뚱한 사람에게 가던 것(4-12)과 같은 모양인데, 이쪽은 문 자체다.
+    빈 값(NULL)끼리는 겹침이 아니다: 아직 아이디를 안 받은 계정이 여럿이다.
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+        if "login_id" not in columns:
+            return
+        conn.execute(
+            text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_login_id"
+                 " ON users (login_id) WHERE login_id IS NOT NULL")
+        )
 
 
 def _swap_phone_index() -> None:
@@ -440,6 +473,7 @@ def init_db() -> None:
     _warn_old_equipment_shape()
     _catch_up_columns()
     _swap_phone_index()
+    _login_id_index()
     _release_inactive_phones()
     _convert_stored_late()
     _link_discussion_runs()
