@@ -1747,6 +1747,29 @@ button.btn:disabled{opacity:.4;cursor:default}
   display:flex;align-items:center;justify-content:center}
 .tick.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .ticklabel{flex:1;font-size:var(--fz-md);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+/* 비고 (4-18 · 도막 5) — **제 줄을 통째로 차지한다.** `.ticklabel` 이 wrap 하는
+   flex 라 그냥 두면 이 칸이 flex 아이템으로 줄어들어, 좁은 화면에서 앞의 이름과
+   칩이 줄을 채우고 나면 **한 글자씩 세로로 쪼개집니다**(375px 에서 폭 33px ·
+   높이 129px 로 실제로 그랬다). `flex-basis:100%` 로 다음 줄에 내리고 폭을 다 준다.
+   색·크기는 `.sub` 가 준다 — 새 색을 만들지 않는다 (4-0) */
+/* **체크해도 비고에는 취소선을 안 긋는다**(검토 a). `.tickrow.done .ticklabel` 이
+   조상에서 긋는데 자식은 그것을 못 되돌리므로 여기서 끊는다 — 「빌린 것,
+   끝나고 돌려준다」 가 체크하는 순간 취소된 말로 읽히면 안 된다. 취소선의 뜻은
+   「이 줄은 챙겼다」 이지 「이 말은 무효다」 가 아니다 */
+.ticknote{flex:1 0 100%;margin-top:2px;text-decoration:none;display:block}
+/* 좁은 화면에서는 **줄 자체가 접힌다.** `.tickrow` 가 nowrap 이라 수량·위치 입력
+   폼(235px)이 이름 칸을 밀어 눌렀다 — 375px 에서 `.ticklabel` 이 33px 까지
+   줄어 글자가 한 자씩 세로로 섰다(잰 값). 비고를 보이기 전에도 이름이 같이
+   눌리고 있었는데, 칩 몇 개뿐이라 눈에 덜 띄었다. 목록 행(4-14)이 같은 폭에서
+   메타를 이름 아래로 내리는 것과 같은 판단이다 */
+@media (max-width:820px){
+  /* **비품 행에만 건다**(`data-run` 은 비품 화면의 행에만 있다). `.tickrow` 는
+     체크리스트 화면도 쓰는데 그쪽 행은 [체크][이름][삭제 ×] 라 눌리는 폼이
+     없다 — 거기까지 접으면 × 만 둘째 줄로 내려간다(검토 3). 근거가 닿는
+     화면에만 규칙을 건다 */
+  .tickrow[data-run]{flex-wrap:wrap}
+  .tickrow[data-run] .ticklabel{flex:1 1 calc(100% - 33px)}
+}
 
 /* ── 홈 (4-15) — 값은 목업의 홈 화면에서 옮겼다 */
 .pill{display:inline-block;background:var(--accent-soft);color:var(--accent);

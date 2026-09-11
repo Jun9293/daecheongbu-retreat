@@ -40,6 +40,12 @@
           {% if run.checked and run.checked_by_name %}
           <span class="sub">— {{ run.checked_by_name }} {{ run.checked_at.strftime('%m/%d') }}</span>
           {% endif %}
+          {# 비고는 **회차의 것**이라 run 에 붙는다(4-18 · 도막 4). 값이 있을 때만
+             줄을 그린다 — 빈 칸이 줄마다 서면 목록이 안 읽힌다. 수량·위치는 칩이고
+             이것은 아래 한 줄이라 눈으로 갈린다. 새 색을 만들지 않고 보조색(4-0)
+             하나만 쓴다. **제 줄을 통째로 차지하는 것은 `.ticknote` 가 한다** —
+             그냥 두면 좁은 화면에서 한 글자씩 세로로 쪼개진다(CSS 에 잰 값) #}
+          {% if run.note %}<span class="sub ticknote">{{ run.note }}</span>{% endif %}
         </span>
         {% if editable %}
         {% if run.included %}
