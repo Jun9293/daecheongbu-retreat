@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
 from app.db import get_db
+from app.domain import login as 로그인
 from app.domain import permissions as perm
 from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
@@ -67,13 +68,62 @@ def settings_page(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """내 정보 탭 — 이름 · 연락처 · 부서 · 이 기기의 푸시 구독 · 로그아웃."""
+    """내 정보 탭 — 이름 · 연락처 · 부서 · **비밀번호** · 푸시 구독 · 로그아웃."""
     return render(
         request,
         "settings.html",
         {**_base_ctx(request, db, user), "push_public_key": push_key(),
-         "external": external_link(db)},
+         "external": external_link(db),
+         # **비밀번호가 있을 때만 그 자리를 그린다** (4-17). 없는 사람에게는
+         # 바꿀 것이 없고, 그 사람이 할 일은 총무팀에서 첫 비밀번호를 받는
+         # 것이다 — 안 되는 자리를 보여 주면 거기서 시간을 쓴다
+         "can_change_password": bool(user.password_hash),
+         "min_length": 로그인.MIN_LENGTH},
     )
+
+
+@router.post("/settings/password")
+def change_my_password(
+    request: Request,
+    password: str = Form(""),
+    password2: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """설정 › 내 정보에서 본인이 바꾼다 (4-17 · 2026-09-11 에 사람이 정함).
+
+    **지금 비밀번호는 묻지 않습니다.** 그렇게 정한 대가와 남는 것은
+    `docs/봐둘것.md` AS-a 에 적혀 있습니다.
+
+    **판정은 `domain/login.바꿔도되나` 하나**이고 첫 비밀번호를 바꾸는
+    화면과 같은 것을 부릅니다 — 두 벌이면 한쪽에서만 통과하는 값이
+    생기고 갈린 쪽을 아무도 눈치채지 못합니다.
+
+    **비밀번호가 없는 계정은 여기로 못 들어옵니다** — 화면에 자리가 안
+    보이는 것과 같은 판정을 서버도 다시 봅니다(화면만 감춘 것이 아닙니다).
+    """
+    if not user.password_hash:
+        return redirect(
+            "/settings",
+            message="아직 비밀번호가 없습니다 — 총무팀에서 첫 비밀번호를 받으세요.",
+        )
+    탈 = 로그인.바꿔도되나(password, password2)
+    if 탈:
+        return redirect("/settings", message=탈)
+
+    # 첫판이 아니므로 `must_change_password` 가 거짓으로 내려간다
+    로그인.비밀번호를정한다(db, user, password)
+    # **바꿨다는 사실만** 남긴다. 값은 남기지 않는다
+    log_activity(
+        db,
+        retreat_id=None,
+        actor=user,
+        action=로그인.바꾼_행위,
+        target_type="user",
+        target_id=user.id,
+        summary=로그인.바꾼_말(user),
+    )
+    return redirect("/settings", message="비밀번호를 바꿨습니다.")
 
 
 def _expense_stats(db: Session, retreat_id: int) -> tuple[int, int]:

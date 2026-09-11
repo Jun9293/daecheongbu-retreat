@@ -32,6 +32,32 @@
       </form>
     </div>
 
+    {# 비밀번호는 **본인만** 바꿉니다 (4-17 · 2026-09-11 에 사람이 정함).
+       지금 비밀번호는 묻지 않습니다 — 그 대가는 docs/봐둘것.md AS-a 에.
+       **비밀번호가 없는 계정에는 이 자리를 안 그립니다**: 바꿀 것이 없고
+       그 사람이 할 일은 총무팀에서 첫 비밀번호를 받는 것입니다 #}
+    {% if can_change_password %}
+    <div class="fld">
+      <h3>비밀번호 바꾸기</h3>
+      <form method="post" action="/settings/password" class="loginform">
+        <div>
+          <label for="mypw">새 비밀번호 ({{ min_length }}자 이상)</label>
+          <input type="password" id="mypw" name="password"
+                 autocomplete="new-password" required>
+        </div>
+        <div>
+          <label for="mypw2">한 번 더</label>
+          <input type="password" id="mypw2" name="password2"
+                 autocomplete="new-password" required>
+        </div>
+        <button type="submit">바꾸기</button>
+      </form>
+      <div class="hint">규칙은 길이 하나뿐입니다. 바꾸면 이 기기의 로그인은
+        그대로이고, <b>다른 기기에서 다음에 들어올 때부터</b> 새 비밀번호를
+        씁니다. <b>남의 기기에서 쓰셨으면 끝나고 로그아웃해 주세요.</b></div>
+    </div>
+    {% endif %}
+
     {% if is_admin(user) %}
     {# 바깥 링크 (도막 4) — 주소는 DB 에만. 값이 있으면 사이드바에 새 창 항목이 생긴다 #}
     <div class="fld">

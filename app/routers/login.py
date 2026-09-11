@@ -113,10 +113,11 @@ def password_submit(
                       {"user": user, "min_length": 로그인.MIN_LENGTH, "error": 말},
                       status_code=400)
 
-    if password != password2:
-        return 다시("두 번 적은 값이 다릅니다.")
-    if 로그인.너무짧나(password):
-        return 다시(f"비밀번호는 {로그인.MIN_LENGTH}자 이상이어야 합니다.")
+    # **판정은 `domain/login.바꿔도되나` 하나다** — 설정 › 내 정보의 그
+    # 자리와 같은 것을 부른다(4-17). 여기서 다시 가르면 두 화면이 갈린다
+    탈 = 로그인.바꿔도되나(password, password2)
+    if 탈:
+        return 다시(탈)
 
     로그인.비밀번호를정한다(db, user, password)
     # **바꿨다는 사실만** 남긴다. 값은 남기지 않는다
@@ -124,9 +125,9 @@ def password_submit(
         db,
         retreat_id=None,
         actor=user,
-        action="비밀번호_변경",
+        action=로그인.바꾼_행위,
         target_type="user",
         target_id=user.id,
-        summary=f"{user.name} 님이 비밀번호를 바꿨습니다.",
+        summary=로그인.바꾼_말(user),
     )
     return redirect("/", message="비밀번호를 바꿨습니다.")
