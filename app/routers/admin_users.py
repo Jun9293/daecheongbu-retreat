@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-import re
-
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -57,19 +55,10 @@ def _department_choices(db: Session, retreat) -> list[dict]:
     ]
 
 
-# 아이디에 쓸 수 있는 글자. 화면은 **이름의 로마자**를 적으라고 안내하지만
-# 규칙으로 묶지는 않는다 — 동명이인은 뒤에 무언가를 붙여야 한다.
-아이디글자 = re.compile(r"^[a-z0-9][a-z0-9._-]{1,49}$")
-
-
-def 아이디다듬기(raw: str) -> str:
-    """소문자로 눕혀 돌려준다. 빈 값은 「아이디 없음」 이라 그대로 둔다.
-
-    **대소문자를 가리지 않는다** — 휴대폰이 첫 글자를 제멋대로 키우는데,
-    그것 때문에 못 들어오면 사람은 계정이 잘못됐다고 생각한다. 찾는 쪽도
-    같은 규칙이다 (`domain/login.아이디로찾기`).
-    """
-    return (raw or "").strip().lower()
+# 아이디의 글자 규칙과 다듬기는 `domain/login` 하나다 — 화면에만 두었더니
+# 스크립트로 규칙 밖 값이 들어갔다(검토). 여기서는 부르기만 한다.
+아이디다듬기 = 로그인.아이디다듬기
+아이디안내 = 로그인.아이디안내
 
 
 def 아이디가겹치나(db: Session, login_id: str, *, exclude_id: int | None = None) -> User | None:
@@ -80,12 +69,6 @@ def 아이디가겹치나(db: Session, login_id: str, *, exclude_id: int | None 
     if found is None or found.id == exclude_id:
         return None
     return found
-
-
-아이디안내 = (
-    "아이디는 영문 소문자·숫자와 . _ - 만 쓸 수 있고 두 글자 이상이어야 합니다"
-    " (이름의 로마자를 권합니다)."
-)
 
 
 class 배정불가(Exception):
@@ -251,7 +234,7 @@ async def create_user(
     if db.scalars(select(User).where(User.phone_number == phone)).first():
         return redirect("/admin/users", message="이미 등록된 연락처입니다.")
     login_id = 아이디다듬기(login_id)
-    if login_id and not 아이디글자.match(login_id):
+    if 로그인.아이디가이상한가(login_id):
         return redirect("/admin/users", message=아이디안내)
     owner = 아이디가겹치나(db, login_id)
     if owner is not None:
@@ -370,7 +353,7 @@ async def update_user(
     new_id = person.login_id or ""
     if login_id is not None:
         new_id = 아이디다듬기(login_id)
-        if new_id and not 아이디글자.match(new_id):
+        if 로그인.아이디가이상한가(new_id):
             return redirect("/admin/users", message=아이디안내)
         owner = 아이디가겹치나(db, new_id, exclude_id=person.id)
         if owner is not None:

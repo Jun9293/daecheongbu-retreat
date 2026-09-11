@@ -459,7 +459,10 @@ def test34_h01_첫관리자는_없을_때만_만든다(client, 문열기, capsys
         앞 = db.scalars(select(User)).all()
 
     with app_session() as db:
-        assert 문열기.첫관리자(db, "최도현", "dohyun") != 0 or True
+        # **거절은 1 이다.** 전에 여기 `!= 0 or True` 라고 적혀 있었는데 그것은
+        # 늘 참이라 아무것도 안 보는 줄이었고, 그렇게 적힌 까닭은 갈래 ① 이
+        # 거절하면서 0 으로 끝났기 때문이다(검토가 짚음). 스크립트를 고쳤다
+        assert 문열기.첫관리자(db, "최도현", "dohyun") == 1
         assert 로그인.아이디로찾기(db, "dohyun") is None, "이미 있는데 또 만들었다"
         assert len(db.scalars(select(User)).all()) == len(앞)
     assert "이미 관리자 계정이" in capsys.readouterr().out
@@ -519,6 +522,151 @@ def test34_h03_링크끊기는_먼저_세고_행을_지우지_않는다(client, 
         assert all(t.revoked_at is not None for t in 전부)
         assert 문열기.링크끊기(db) == 0
     assert "끊을 것이 없습니다" in capsys.readouterr().out
+
+
+# ── 아이디 — 겹침과 글자 규칙 (가장 비싼 자리) ────────────────────────
+#
+# 4-12 가 「겹치면 **로그인 자체가 엉뚱한 계정으로 갑니다**」 라고 적어 둔
+# 자리다. 검토 전에는 이 판에서 **유일하게 안 재진** 자리였다.
+
+def test34_m01_겹치는_아이디로는_저장이_안_되고_누구_것인지_말한다(admin_client, client):
+    """막히는 쪽 — 겹침.
+
+    본다 — ① 남이 쓰는 아이디로 바꾸려 하면 거절하는가 ② **누구 것인지**
+    말하는가(안 말하면 총무팀이 왜 막혔는지 모른다) ③ **아이디가 실제로
+    안 바뀌었는가** ④ 대소문자만 다른 것도 같은 아이디로 보는가(휴대폰이
+    첫 글자를 키운다) ⑤ 자기 아이디를 그대로 저장하는 것은 막지 않는가.
+    """
+    가 = _사람(client, 아이디="gapdol", 이름="정하윤", phone="01055550011")
+    나 = _사람(client, 아이디="eulsun", 이름="최도현", phone="01055550012")
+
+    답 = admin_client.post(f"/admin/users/{나}/update",
+                         data={"role": "general", "login_id": "GapDol"},
+                         follow_redirects=True)
+    assert "정하윤" in 답.text, "누구 것인지 안 말한다"
+    with app_session() as db:
+        assert db.get(User, 나).login_id == "eulsun", "겹치는데 바뀌었다"
+        assert db.get(User, 가).login_id == "gapdol"
+
+    # ⑤ 안 막히는 쪽 — 자기 것을 그대로 저장하는 것은 지나간다
+    admin_client.post(f"/admin/users/{나}/update",
+                      data={"role": "general", "login_id": "EulSun"})
+    with app_session() as db:
+        assert db.get(User, 나).login_id == "eulsun"
+
+
+def test34_m02_규칙_밖_아이디는_화면도_스크립트도_거절한다(admin_client, client, 문열기, capsys):
+    """막히는 쪽 — 글자 규칙. **두 길에서 같이 잰다.**
+
+    규칙이 화면에만 있으면 스크립트로 규칙 밖 값이 들어가고, 그렇게 들어간
+    계정은 **설정 › 사용자에서 저장 자체가 안 됩니다** — 폼이 그 값을 되돌려
+    받아 거절하면서 권한·부서·연락처까지 못 고치게 됩니다(검토 F5).
+
+    본다 — ① 화면이 거절하는가 ② **스크립트도 거절하는가** ③ 둘 다
+    값이 안 바뀌었는가 ④ 규칙 안 값은 지나가는가.
+    """
+    uid = _사람(client, 아이디="ok.name-1", phone="01055550013")
+    with app_session() as db:
+        assert db.get(User, uid).login_id == "ok.name-1", "④ 규칙 안 값이 막혔다"
+
+    for 나쁜값 in ("하윤", "a", "has space", "UPPER!", "-start"):
+        admin_client.post(f"/admin/users/{uid}/update",
+                          data={"role": "general", "login_id": 나쁜값})
+        with app_session() as db:
+            assert db.get(User, uid).login_id == "ok.name-1", f"① 화면이 통과시켰다: {나쁜값}"
+
+    관리자 = _사람(client, 아이디="seobeo", 이름="정하윤", phone="01055550014")
+    with app_session() as db:
+        db.get(User, 관리자).role = "admin"
+        db.commit()
+    capsys.readouterr()
+    with app_session() as db:
+        assert 문열기.아이디를준다(db, db.get(User, 관리자), "하윤") == 1, "② 스크립트가 통과시켰다"
+        assert db.get(User, 관리자).login_id == "seobeo", "③ 거절했는데 바뀌었다"
+    assert "아이디는" in capsys.readouterr().out
+
+
+def test34_m03_유니크_인덱스가_실제로_서_있고_빈_값끼리는_안_겹친다(client):
+    """③ **검사가 볼 것을 보고 있는가** — 화면이 막는 것과 DB 가 막는 것은
+    다른 층이다. 화면만 막으면 스크립트·손질이 그 아래로 지나간다.
+
+    본다 — ① 인덱스가 실제로 서 있는가 ② 그 인덱스로 **DB 가 겹침을
+    거절하는가**(같은 값을 날 연결로 넣어 본다) ③ **빈 값(NULL)끼리는
+    겹침이 아닌가**(아직 아이디를 안 받은 계정이 여럿이다).
+    """
+    import sqlalchemy as sa
+    from app.db import engine
+
+    이름들 = {r[0] for r in engine.connect().execute(
+        sa.text("SELECT name FROM sqlite_master WHERE type='index'"))}
+    assert "ix_users_login_id" in 이름들, "① 인덱스가 없다"
+
+    _사람(client, 아이디="dupkey", phone="01055550015")
+    with app_session() as db:
+        db.add(User(name="겹치는 사람", phone_number="01055550016", role="general",
+                    login_id="dupkey"))
+        try:
+            db.commit()
+            raise AssertionError("② DB 가 겹침을 받아들였다")
+        except sa.exc.IntegrityError:
+            db.rollback()
+
+    # ③ 빈 값끼리는 여럿이어도 된다
+    with app_session() as db:
+        for n in (17, 18):
+            db.add(User(name=f"아이디 없는 사람 {n}", phone_number=f"010555500{n}",
+                        role="general"))
+        db.commit()
+
+
+def test34_m04_자기_자신에게_발급하면_값을_안_보이고_바꾸는_화면으로_간다(admin_client):
+    """물음 2 — **그 갈래를 실제로 밟는다.**
+
+    본다 — ① 자기 것은 `k=` 없이 `/password` 로 가는가 ② 그래도 비밀번호는
+    실제로 새로 생겼는가(말만 하고 안 만들면 더 나쁘다) ③ 그 뒤 사용자
+    화면이 안 열리는가(발급하면 첫 비밀번호 상태가 된다).
+    """
+    with app_session() as db:
+        나 = db.scalars(select(User)).first()
+        나.login_id = "gansa"
+        db.commit()
+        uid, 앞 = 나.id, 나.password_hash
+
+    답 = admin_client.post(f"/admin/users/{uid}/password", follow_redirects=False)
+    assert 답.status_code == 303
+    assert 답.headers["location"] == "/password" and "k=" not in 답.headers["location"]
+    with app_session() as db:
+        사람 = db.get(User, uid)
+        assert 사람.password_hash != 앞, "② 값이 안 바뀌었다"
+        assert 사람.must_change_password
+    막힘 = admin_client.get("/admin/users", follow_redirects=False)
+    assert 막힘.status_code == 303 and 막힘.headers["location"] == "/password"
+
+
+def test34_m05_가르는_것과_안_가르는_것의_경계가_문서와_같다(client):
+    """나·다 · 검토 F6 — **어디까지 가르지 않는지**를 잰다.
+
+    4-12 는 「없는 아이디와 틀린 비밀번호만 같은 말이고, 비활성과 잠김은
+    일부러 다르게 말한다」 고 적었다. 문서가 넷 전부라고 읽히면 다음 사람이
+    그것을 믿는다.
+
+    본다 — ① 그 둘은 같은 말인가 ② 비활성·잠김은 **다른 말**인가(그래서
+    되살려야 하는 사람과 기다리면 되는 사람이 갈린다) ③ 없는 아이디는
+    아무리 틀려도 잠김으로 안 넘어가는가(그 갈림의 한 자락이다).
+    """
+    _사람(client, 아이디="gyeonggye", phone="01055550019")
+    with app_session() as db:
+        _, 없는쪽 = 로그인.들어온다(db, "없는아이디", 지어낸값)
+        _, 틀린쪽 = 로그인.들어온다(db, "gyeonggye", "틀린값입니다")
+        assert 없는쪽 == 틀린쪽 == 로그인.TOLD
+
+        # ③ 없는 아이디는 셀 행이 없어 영영 안 잠긴다
+        for _ in range(로그인.MAX_FAILS + 2):
+            _, 사유 = 로그인.들어온다(db, "없는아이디", "틀린값입니다")
+        assert 사유 == 로그인.TOLD, "없는 아이디가 잠겼다 — 문서를 다시 봐야 한다"
+
+    assert len({로그인.TOLD, 로그인.TOLD_INACTIVE, 로그인.TOLD_LOCKED}) == 3, \
+        "② 비활성·잠김이 보통의 거절과 같은 말이 됐다 — 4-12 의 경계가 달라졌다"
 
 
 # ── 자) 비밀번호가 저장소 어느 파일에도 없다 ──────────────────────────

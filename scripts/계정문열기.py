@@ -23,7 +23,11 @@
     .venv\\Scripts\\python.exe scripts/계정문열기.py
     .venv\\Scripts\\python.exe scripts/계정문열기.py --첫관리자 "이름" 아이디
     .venv\\Scripts\\python.exe scripts/계정문열기.py --재설정 3
+    .venv\\Scripts\\python.exe scripts/계정문열기.py --재설정 3 --아이디 아이디
     .venv\\Scripts\\python.exe scripts/계정문열기.py --링크끊기
+
+넷째 줄은 **아이디가 아직 없는 관리자**에게 아이디를 붙이면서 비밀번호를
+만듭니다 — 비밀번호만 있고 아이디가 없으면 못 들어옵니다.
 
 **연락처는 여기서 받지 않습니다.** 명령줄에 적으면 그 번호가 PowerShell
 기록에 남습니다. 연락처는 들어간 뒤 설정 › 사용자에서 넣습니다 — 로그인에
@@ -122,11 +126,20 @@ def 첫관리자(db: Session, name: str, login_id: str) -> int:
         print("  비밀번호만 다시 만들려면 id 를 골라 이렇게 부르세요:")
         print("    python scripts/계정문열기.py --재설정 <id>")
         print()
-        return 목록(db)
+        목록(db)
+        # **거절은 1 로 끝낸다.** 이 파일의 다른 거절이 전부 1 이라,
+        # 여기만 0 이면 부르는 쪽이 「만들었다」 와 구별할 수 없다 —
+        # 실제로 그 어긋남 때문에 시험이 늘 참인 단언으로 적혔다(검토)
+        return 1
 
-    login_id = (login_id or "").strip().lower()
+    login_id = 로그인.아이디다듬기(login_id)
     if not login_id:
         print("아이디를 함께 주세요 — 이름의 로마자를 씁니다.")
+        return 1
+    # **규칙은 화면과 같은 것 하나다** — 여기만 지나가게 두면 규칙 밖
+    # 아이디가 들어가고, 그 계정은 설정 › 사용자에서 저장이 안 된다(검토)
+    if 로그인.아이디가이상한가(login_id):
+        print(로그인.아이디안내)
         return 1
     if 로그인.아이디로찾기(db, login_id) is not None:
         print("그 아이디를 이미 쓰는 계정이 있습니다.")
@@ -150,7 +163,10 @@ def 첫관리자(db: Session, name: str, login_id: str) -> int:
 
 def 아이디를준다(db: Session, person: User, login_id: str) -> int:
     """`--재설정 <id> --아이디 <아이디>` — 아이디가 없는 관리자에게 붙인다."""
-    login_id = (login_id or "").strip().lower()
+    login_id = 로그인.아이디다듬기(login_id)
+    if 로그인.아이디가이상한가(login_id):
+        print(로그인.아이디안내)
+        return 1
     있는사람 = 로그인.아이디로찾기(db, login_id)
     if 있는사람 is not None and 있는사람.id != person.id:
         print(f"그 아이디는 이미 {있는사람.name} 님이 쓰고 있습니다 — 바꾸지 않았습니다.")
@@ -261,10 +277,18 @@ def main() -> int:
                         return 코드
                 return 재설정(db, args.재설정)
             return 목록(db)
-        except OperationalError:
+        except OperationalError as exc:
+            # **두 가지를 갈라 말한다.** 둘을 한 말로 묶으면 틀린 진단이
+            # 나가고, 그때 그 사람은 정확히 「화면으로 돌아올 길이 없는」
+            # 상태다 — 이 스크립트가 있는 이유가 그것이다(머리말).
+            말 = str(exc)
+            if "no such column" in 말 or "no such table: users" in 말 and "login" in 말:
+                print("계정 표에 아이디·비밀번호 칸이 아직 없습니다.")
+                print("  앱을 한 번 띄우면 부팅이 그 칸을 붙입니다 (4-12).")
+                print("  작업 스케줄러의 앱을 켜거나 서버를 한 번 재시작한 뒤 다시 부르세요.")
+                return 1
             # **데이터 폴더를 잘못 짚으면 sqlite 가 빈 파일을 만든다** — 그러면
-            # 첫 조회에서 트레이스백으로 죽는다. 머리에 「안내를 못 찍고 죽으면
-            # 막힌 사람이 무엇을 할지 모른다」 고 적어 두었으므로 사람 말로 받는다
+            # 첫 조회에서 트레이스백으로 죽는다
             print("데이터베이스를 열었는데 표가 없습니다 — 빈 파일을 만든 것 같습니다.")
             print(f"  지금 보고 있는 곳: {config.DATABASE_URL}")
             print("  DCB_DATA_DIR 이 운영 데이터 폴더를 가리키는지 보고,")

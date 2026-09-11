@@ -101,6 +101,11 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
     # 사람에게 「총무팀이 전해 준 첫 비밀번호를 바꾸세요」 라고 말하면
     # 거짓이고, 세션이 살아 있던 열몇 사람이 서버를 다시 켜는 순간 그
     # 화면에 갇힌다. 관리자가 발급하면 해시가 생기면서 그때 막힌다.
+    #
+    # **이것은 「…일 때만」 꼴이라 언젠가 조용히 뚫린다**(검토-원칙 7).
+    # 지금 안전한 이유는 **해시를 지우는 길이 없기** 때문이다 — 비밀번호를
+    # 회수하거나 비우는 길을 만드는 순간, 참인 채로 해시만 사라진 계정이
+    # 이 문을 그냥 지나간다. 그때 이 줄을 함께 봐야 한다.
     if getattr(user, "must_change_password", False) and getattr(user, "password_hash", None):
         raise 비밀번호를바꿔야함()
     return user

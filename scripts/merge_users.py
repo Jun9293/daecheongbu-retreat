@@ -129,7 +129,8 @@ def merge(db: Session, *, keep_id: int, apply: bool) -> dict:
     if apply and targets:
         for person in targets:
             person.is_active = False
-            # 비활성화하면 살아 있던 링크도 함께 죽는다 (4-12)
+            # 비활성화하면 로그인이 막힌다 — 비밀번호가 맞아도 못 들어온다 (4-12).
+        # 남아 있던 옛 초대 링크도 함께 끊는다(행은 지우지 않는다 — 0장)
             invites.revoke_all(db, user=person)
         if not keeper.is_active:
             keeper.is_active = True

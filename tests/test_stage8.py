@@ -14,7 +14,6 @@ import re
 
 import pytest
 from sqlalchemy import select
-from starlette.testclient import TestClient
 
 from app import models
 from tests.conftest import app_session, login_as, make_user
@@ -23,19 +22,15 @@ TODAY = dt.date.today()
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def _fresh():
-    from app.main import app
-
-    return TestClient(app)
-
-
 @pytest.fixture
 def person(admin_client):
     return make_user("초대받을 사람", "01066660001", "member")
 
 
 # ════════════════════════════════════════════════════════════════════
-# 1. 발급 → 로그인 → 재사용 403 → 재발급 → 옛 링크 403 → 화면에 안 남음 (1-g)
+# 1. 권한과 「만드는 자리가 하나인가」
+#
+# 한 바퀴(발급 → 로그인 → 바꾸기)는 tests/test_stage34.py 가 잰다.
 # ════════════════════════════════════════════════════════════════════
 def test8_i02_발급은_총무팀만(client, admin_client, person):
     """부서 리더는 남의 비밀번호를 만들 수 없다 — 만들 수 있으면 그 계정으로

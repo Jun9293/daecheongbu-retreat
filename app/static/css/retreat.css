@@ -1691,8 +1691,9 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fld .hint{color:var(--ink-2);font-size:var(--fz-xs);margin-top:8px}
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .fgrid .full{grid-column:1/-1}
-/* 초대 링크 (4-17) — 발급을 누른 **그 자리**에 뜬다. 링크는 저장되지 않아
-   한 번만 보이고, 닫으면 사라진다. */
+/* 첫 비밀번호를 한 번만 보이는 상자 (4-12). 값은 저장되지 않아 그 화면을
+   벗어나면 다시 볼 수 없다. **그 자리에서 띄우던 길은 걷었다** — 값이 실린
+   응답이 둘이 되면 한쪽만 no-store 를 놓쳐도 아무도 모른다. */
 /* 바깥 링크 항목 아래의 한 줄. **옆의 링크 이름이 뜻을 지는 자리**라
    흐림이 아니라 보조색이다 — 이 줄이 없으면 아무것도 안 남는다 (4-0). */
 .sidenav nav .extnote{display:block;margin:-2px 0 6px 42px;font-size:var(--fz-sm);
@@ -2030,7 +2031,7 @@ body.dopen:has(.drawer.inline){padding-right:0}
   text-decoration:none;padding:4px 9px;border:1px solid var(--rule);border-radius:999px}
 .mt-tosug:hover{background:var(--hover);color:var(--ink)}
 
-/* 설정 › 사용자 맨 위 — 누구에게 아직 링크를 안 보냈는지 (4-12).
+/* 설정 › 사용자 맨 위 — 누구에게 아이디·비밀번호가 아직 없는지 (4-12).
    남은 사람이 있을 때만 옅게 채운다: 0 이면 채울 이유가 없다 */
 .doorsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:14px;
   padding:9px 12px;border:1px solid var(--rule);border-radius:8px;

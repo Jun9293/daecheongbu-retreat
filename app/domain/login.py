@@ -33,6 +33,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import re
 import secrets
 
 from sqlalchemy import func, select
@@ -131,6 +132,38 @@ def 너무짧나(raw: str) -> bool:
 def 첫비밀번호() -> str:
     """관리자가 본인에게 전할 값. **저장하지 않고 화면에만 한 번 보인다.**"""
     return "".join(secrets.choice(_FIRST_ALPHABET) for _ in range(FIRST_LENGTH))
+
+
+# ── 아이디 ────────────────────────────────────────────────────────────
+#
+# **규칙이 한 곳에 있어야 합니다.** 화면에만 두었더니 스크립트로는 규칙 밖
+# 아이디가 들어갔고, 그렇게 들어간 행은 **설정 › 사용자에서 저장이 안
+# 됐습니다** — 폼이 그 값을 되돌려 받아 거절하면서, 그 사람의 권한·부서·
+# 연락처까지 아무것도 못 고치게 됩니다(검토가 짚었습니다).
+#
+# 화면은 **이름의 로마자**를 권하지만 규칙으로 묶지는 않습니다 —
+# 동명이인은 뒤에 무언가를 붙여야 합니다.
+아이디글자 = re.compile(r"^[a-z0-9][a-z0-9._-]{1,49}$")
+
+아이디안내 = (
+    "아이디는 영문 소문자·숫자와 . _ - 만 쓸 수 있고 두 글자 이상이어야 합니다"
+    " (이름의 로마자를 권합니다)."
+)
+
+
+def 아이디다듬기(raw: str) -> str:
+    """소문자로 눕혀 돌려준다. 빈 값은 「아이디 없음」 이라 그대로 둔다.
+
+    **대소문자를 가리지 않는다** — 휴대폰이 첫 글자를 제멋대로 키우는데,
+    그것 때문에 못 들어오면 사람은 계정이 잘못됐다고 생각한다. 찾는 쪽도
+    같은 규칙이다 (아래 `아이디로찾기`).
+    """
+    return (raw or "").strip().lower()
+
+
+def 아이디가이상한가(login_id: str) -> bool:
+    """빈 값은 이상한 것이 아니다 — 아직 아이디를 안 받은 계정이다."""
+    return bool(login_id) and not 아이디글자.match(login_id)
 
 
 def 아이디로찾기(db: Session, login_id: str) -> User | None:

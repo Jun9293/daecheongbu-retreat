@@ -39,8 +39,6 @@ def person(admin_client):
         return {"user_id": row.id, "login_id": "sketch1"}
 
 
-# ── 2 ─────────────────────────────────────────────────────────────────
-# ── 3 ─────────────────────────────────────────────────────────────────
 # ── 4 ─────────────────────────────────────────────────────────────────
 def test_04b_모델에_원문_칸_자체가_없다():
     names = {c.name for c in models.InviteToken.__table__.columns}
@@ -209,20 +207,6 @@ def with_departments(admin_client):
             )
         db.commit()
         return retreat.id
-
-
-def _live_tokens(user_id: int) -> list[str]:
-    with app_session() as db:
-        return [
-            t.token_hash
-            for t in db.scalars(
-                select(models.InviteToken).where(
-                    models.InviteToken.user_id == user_id,
-                    models.InviteToken.used_at.is_(None),
-                    models.InviteToken.revoked_at.is_(None),
-                )
-            )
-        ]
 
 
 # ── 마무리 1 · 2 ──────────────────────────────────────────────────────
@@ -534,46 +518,3 @@ def test_배포06_회차가_하나도_없어도_화면이_죽지_않는다(admin
     )
     assert blocked.status_code == 200
     assert "아직 회차가 없어" in blocked.text
-
-
-# ════════════════════════════════════════════════════════════════════
-#  초대 링크는 완성된 채로 나간다 (4-12) — 작업 A 수용기준 1~5
-# ════════════════════════════════════════════════════════════════════
-#
-# 전에는 주소 앞부분을 자리표시자로 찍고 사람이 그것을 손으로 갈아 끼웠는데,
-# 그러다 **토큰까지 건드려 링크가 깨졌습니다** — 하루에 대여섯 번.
-# 재발급하면 앞의 링크가 죽으므로, 그때마다 어느 것이 살아 있는지도
-# 알 수 없게 됐습니다.
-
-# 자리표시자 문자열 자체를 이 파일에 적지 않는다 — 저장소 전체를 훑는
-# 시험(수용기준 4)이 자기 자신에게 걸리기 때문이다.
-PLACEHOLDER = "<" + "내-주소" + ">"
-# ── 수용기준 4 — 저장소 전체를 훑는다 ─────────────────────────────────
-#
-# 한 곳만 고치면 나머지에서 같은 일이 또 난다. 설명하는 글에서도 그 문자열
-# 자체는 쓰지 않는다 — 남아 있으면 다음 사람이 그것을 보고 다시 복사해 쓴다.
-
-# **git 이 아는 파일만 훑는다.** "저장소" 는 커밋되는 것을 말한다 —
-# gitignore 로 빠지는 것(발급 메모 link.txt, data/ 아래 실물 자료)까지 세면
-# 시험이 각자의 작업 폴더 사정에 따라 갈린다. 목록을 손으로 적는 대신
-# git 에게 물으면 규칙이 한 곳(.gitignore)에만 있게 된다.
-SCAN_SUFFIXES = {".py", ".md", ".html", ".js", ".css", ".bat", ".txt", ".json", ".cfg", ".ini"}
-
-
-def repo_files():
-    import subprocess
-
-    out = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
-    )
-    if out.returncode != 0:                      # git 이 없는 곳에서는 건너뛴다
-        return None
-    return [ROOT / line for line in out.stdout.splitlines() if line.strip()]
-# ── 수용기준 5 — 재발급하면 앞의 링크가 죽는다고 말한다 ────────────────
-#
-# 죽는다는 사실 자체는 원래도 그랬다(issue 가 revoke_all 한다). 문제는
-# **화면에 그 말이 없어서** 총무팀이 "아까 보낸 링크로 들어가세요" 라고
-# 안내하게 되는 것이었다.
-
-WARNING = "이전에 발급한 링크는 이제 쓸 수 없습니다"
