@@ -55,18 +55,6 @@ def problem_with(token: InviteToken | None) -> str | None:
     return None
 
 
-def live_token(db: Session, *, user: User) -> InviteToken | None:
-    """그 사람에게 아직 살아 있는 링크가 있는지."""
-    for token in db.scalars(
-        select(InviteToken)
-        .where(InviteToken.user_id == user.id)
-        .order_by(InviteToken.id.desc())
-    ):
-        if problem_with(token) is None:
-            return token
-    return None
-
-
 def revoke_all(db: Session, *, user: User) -> int:
     """그 사람의 살아 있는 링크를 전부 끊는다."""
     count = 0

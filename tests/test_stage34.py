@@ -651,8 +651,10 @@ def test34_m05_가르는_것과_안_가르는_것의_경계가_문서와_같다(
     그것을 믿는다.
 
     본다 — ① 그 둘은 같은 말인가 ② 비활성·잠김은 **다른 말**인가(그래서
-    되살려야 하는 사람과 기다리면 되는 사람이 갈린다) ③ 없는 아이디는
-    아무리 틀려도 잠김으로 안 넘어가는가(그 갈림의 한 자락이다).
+    되살려야 하는 사람과 기다리면 되는 사람이 갈린다) ③ **같은 판에서**
+    없는 아이디는 아무리 틀려도 잠김이 안 나오고 **있는 아이디는 열 번째에
+    잠기는가** — 그 갈림이 이 경계의 한 자락이고, 둘을 따로 재면 「같은
+    횟수를 틀렸는데 한쪽만 잠긴다」 가 안 보인다.
     """
     _사람(client, 아이디="gyeonggye", phone="01055550019")
     with app_session() as db:
@@ -660,13 +662,68 @@ def test34_m05_가르는_것과_안_가르는_것의_경계가_문서와_같다(
         _, 틀린쪽 = 로그인.들어온다(db, "gyeonggye", "틀린값입니다")
         assert 없는쪽 == 틀린쪽 == 로그인.TOLD
 
-        # ③ 없는 아이디는 셀 행이 없어 영영 안 잠긴다
-        for _ in range(로그인.MAX_FAILS + 2):
-            _, 사유 = 로그인.들어온다(db, "없는아이디", "틀린값입니다")
-        assert 사유 == 로그인.TOLD, "없는 아이디가 잠겼다 — 문서를 다시 봐야 한다"
+        # ③ 같은 횟수를 **나란히** 틀린다 — 있는 쪽은 이미 한 번 틀렸으므로
+        # 남은 것만 채우고, 없는 쪽은 그보다 더 틀려 본다
+        없는것 = []
+        있는것 = []
+        for i in range(로그인.MAX_FAILS + 2):
+            _, 없 = 로그인.들어온다(db, "없는아이디", "틀린값입니다")
+            없는것.append(없)
+            if i < 로그인.MAX_FAILS - 1:
+                _, 있 = 로그인.들어온다(db, "gyeonggye", "틀린값입니다")
+                있는것.append(있)
+
+        assert set(없는것) == {로그인.TOLD}, "없는 아이디가 잠겼다 — 문서를 다시 봐야 한다"
+        assert 있는것[-1] == 로그인.TOLD_LOCKED, "있는 아이디가 열 번째에 안 잠겼다"
+        assert set(있는것[:-1]) == {로그인.TOLD}, "아홉 번째까지 벌써 잠겼다"
 
     assert len({로그인.TOLD, 로그인.TOLD_INACTIVE, 로그인.TOLD_LOCKED}) == 3, \
         "② 비활성·잠김이 보통의 거절과 같은 말이 됐다 — 4-12 의 경계가 달라졌다"
+
+
+def test34_n01_걷을_것만_걷었다(client):
+    """가) **걷은 것과 남긴 것을 같은 판에서 본다.**
+
+    한쪽만 보면 「다 지웠다」 와 「걷을 것만 걷었다」 가 구별되지 않는다.
+
+    본다 — ① 그 함수가 모듈에 없는가 ② `app/` 과 `tests/` 어디에서도
+    **부르지 않는가** ③ **훑은 파일이 비지 않았나**(0개를 훑고 통과하면
+    아무것도 안 본 것이다) ④ 함께 남기기로 한 것은 **남아 있고 실제로
+    불리는가** — `revoke_all` 은 `scripts/merge_users.py` 가 아직 부른다
+    ⑤ 남긴 것이 실제로 도는가(이름만 있고 죽어 있으면 남긴 뜻이 없다).
+
+    **찾는 모양은 `이름(` 이다** — 이 독스트링이 그 이름을 설명하려고
+    담고 있어서, 낱말로 찾으면 이 시험이 자기 자신에게 걸린다(10장).
+    """
+    from app.domain import auth as 옛링크
+    from app.models import InviteToken
+
+    걷은것 = "live_token" + "("
+    assert not hasattr(옛링크, 걷은것[:-1])
+
+    본파일 = 0
+    부르는곳 = []
+    for 뿌리 in ("app", "tests"):
+        for path in (ROOT / 뿌리).rglob("*.py"):
+            본파일 += 1
+            if 걷은것 in path.read_text(encoding="utf-8"):
+                부르는곳.append(str(path.relative_to(ROOT)))
+    assert 본파일 > 50, f"훑은 파일이 {본파일}개뿐이다 — 아무것도 안 본 검사다"
+    assert not 부르는곳, f"걷었다는데 아직 부른다: {부르는곳}"
+
+    # ④ 남긴 것 — 있고, 부르는 곳도 있다
+    assert hasattr(옛링크, "revoke_all")
+    머지 = (ROOT / "scripts/merge_users.py").read_text(encoding="utf-8")
+    assert "revoke_all(" in 머지, "남기기로 한 까닭(부르는 곳이 있다)이 사라졌다"
+
+    # ⑤ 이름만 남은 것이 아니라 실제로 돈다
+    uid = _사람(client, 아이디="namgin", phone="01055550021")
+    with app_session() as db:
+        db.add(InviteToken(user_id=uid, token_hash="옛해시-남긴것",
+                           expires_at=dt.datetime.now() + dt.timedelta(days=7)))
+        db.commit()
+        assert 옛링크.revoke_all(db, user=db.get(User, uid)) == 1
+        assert 옛링크.살아있는것들(db) == []
 
 
 # ── 자) 비밀번호가 저장소 어느 파일에도 없다 ──────────────────────────

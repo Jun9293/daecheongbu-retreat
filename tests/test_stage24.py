@@ -121,8 +121,11 @@ def test24_a03_실행하면_하나만_남고_참조가_정리된다(여럿, tmp_
                           .where(models.Notification.user_id == 여럿["리더"])).scalar_one() == 0
         assert db.execute(select(func.count()).select_from(models.InviteToken)
                           .where(models.InviteToken.user_id == 여럿["리더"])).scalar_one() == 0
-        # 남길 계정의 살아 있는 링크는 남는다
-        assert invites.live_token(db, user=db.get(models.User, 남길)) is not None
+        # 남길 계정의 링크 행은 그대로 남는다 — **지워지는 것은 지워질 계정
+        # 쪽뿐**이다. (전에는 `live_token` 으로 물었는데 그 함수는 2026-09-11 에
+        # 걷혔다 — 재던 것은 「행이 남았는가」 이지 그 함수가 아니다)
+        assert db.execute(select(func.count()).select_from(models.InviteToken)
+                          .where(models.InviteToken.user_id == 남길)).scalar_one() == 1
         # FK 없는 칸 — 비워지되 이름은 남는다
         고아 = db.execute(text(
             "select count(*) from activity_logs where actor_id is not null "
@@ -209,11 +212,10 @@ def test24_b01_살아_있는_링크의_뜻이_problem_with_하나다(admin_clien
         _토큰(db, 만료만, expires_at=지금 - dt.timedelta(days=1))
         _토큰(db, 산것)
         db.commit()
-        assert invites.live_token(db, user=db.get(models.User, 취소만)) is None
-        assert invites.live_token(db, user=db.get(models.User, 만료만)) is None
-        assert invites.live_token(db, user=db.get(models.User, 산것)) is not None
-
         산것들 = invites.살아있는것들(db)
+        살아있는사람 = {t.user_id for t in 산것들}
+        assert 취소만 not in 살아있는사람 and 만료만 not in 살아있는사람
+        assert 산것 in 살아있는사람
         assert [t.user_id for t in 산것들] == [산것], "「살아 있다」 의 뜻이 갈렸다"
         모든행 = len(db.scalars(select(models.InviteToken)).all())
         assert 모든행 >= 3, "심은 행이 실제로 있어야 이 시험이 뜻이 있다"
