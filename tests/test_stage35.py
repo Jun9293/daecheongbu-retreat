@@ -137,6 +137,10 @@ def test35_b01_짧거나_다른_값은_거절하고_그때_안_바뀐다(admin_c
     with app_session() as db:
         앞 = db.get(User, uid).password_hash
 
+    # ④ 가 뜻을 가지려면 새값이 **규칙 안**이어야 한다 — 다음 사람이 위의
+    # 새값을 짧게 바꾸면 「규칙 안 값이 지나간다」 를 재는 줄이 조용히 죽는다
+    assert not 로그인.너무짧나(새값), "새값이 규칙 밖이면 ④ 가 뜻을 잃는다"
+
     짧은값 = "a" * (로그인.MIN_LENGTH - 1)
     for 값, 둘째 in ((새값, 새값 + "x"), (짧은값, 짧은값)):
         admin_client.post("/settings/password", data={"password": 값, "password2": 둘째})
@@ -208,6 +212,62 @@ def test35_d01_두_화면이_같은_판정을_부른다():
         assert "비밀번호를정한다" in 이름들, f"② {rel} 이 저장을 안 부른다"
         글 = (ROOT / rel).read_text(encoding="utf-8")
         assert "너무짧나" not in 글, f"③ {rel} 이 판정을 또 한다"
+
+
+def test35_d02_같은_값에_두_화면이_같은_답을_낸다(admin_client):
+    """라) **부르는지**만 보면 「한쪽에만 규칙이 하나 더」 가 안 걸립니다.
+
+    `d01` 은 두 라우터가 그 함수를 **부르는지**를 봅니다. 그런데 부르고 나서
+    자기 자리에서 **다른 축의 규칙을 하나 더** 얹으면(길이가 아니라 이를테면
+    「숫자만이면 거절」) 호출은 그대로라 `d01` 이 지나갑니다 — 2026-09-11
+    검토가 그 변이를 실제로 심어 보고 짚었습니다.
+
+    그래서 **값으로** 견줍니다 — 같은 값 한 벌을 두 화면에 먹여 **받아들임과
+    거절이 같은지** 봅니다. 어느 한쪽에만 규칙이 붙으면 그 값에서 갈립니다.
+
+    봅니다 — ① 값마다 두 화면의 답이 같은가 ② 받아들인 값과 거절한 값이
+    **둘 다 있었는가**(다 거절하거나 다 받아들이면 ① 은 공짜로 참입니다).
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    짧은값 = "a" * (로그인.MIN_LENGTH - 1)
+    값들 = [
+        (지어낸값, 지어낸값),                  # 규칙 안
+        ("12345678901234", "12345678901234"),  # 숫자만 · 길이는 넉넉
+        ("a" * 로그인.MIN_LENGTH, "a" * 로그인.MIN_LENGTH),  # 딱 경계
+        (짧은값, 짧은값),                      # 한 글자 모자람
+        (새값, 새값 + "x"),                    # 두 번 적은 값이 다름
+        ("", ""),                              # 빈 값
+    ]
+    uid = _나()
+    답들 = []
+    for 새, 확인 in 값들:
+        본 = {}
+        for 어디 in ("/password", "/settings/password"):
+            with app_session() as db:
+                # 두 화면 다 열리는 자리에서 시작한다 — `/password` 는 첫판일
+                # 때, `/settings` 는 첫판이 아닐 때 열린다
+                로그인.비밀번호를정한다(db, db.get(User, uid), 지어낸값,
+                                 첫판=(어디 == "/password"))
+            with app_session() as db:
+                앞 = db.get(User, uid).password_hash
+            창 = TestClient(app)
+            창.post("/login", data={"login_id": _아이디(uid), "password": 지어낸값})
+            창.post(어디, data={"password": 새, "password2": 확인})
+            with app_session() as db:
+                본[어디] = db.get(User, uid).password_hash != 앞
+        assert 본["/password"] == 본["/settings/password"],             f"① 두 화면이 갈렸다: {새!r} — {본}"
+        답들.append(본["/password"])
+
+    assert any(답들), "② 하나도 안 받아들였다 — ① 이 공짜로 참이다"
+    assert not all(답들), "② 하나도 안 거절했다 — ① 이 공짜로 참이다"
+
+
+def _아이디(uid: int) -> str:
+    with app_session() as db:
+        return db.get(User, uid).login_id
 
 
 # ── 마) 기록에 변경은 남고 값은 안 남는다 ─────────────────────────────
@@ -306,14 +366,6 @@ def test35_f02_사람이_스물이_되어도_화면이_읽힌다(admin_client, �
         전체 = len(db.scalars(select(User)).all())
     assert 전체 == len(가명) + 1, f"미리 만든 수가 다르다: {전체}"
 
-    목록 = admin_client.get("/admin/users")
-    assert 목록.status_code == 200
-    assert 목록.text.count('name="login_id"') >= 전체, "① 사람을 다 안 그린다"
-
-    for 자리 in ("/tasks", "/live/staff"):
-        답 = admin_client.get(자리)
-        assert 답.status_code == 200, f"{자리} 가 {답.status_code}"
-
     # ② **담당자를 고르는 자리**는 목록이 아니라 이 응답입니다(4-14) — 행에
     # 명단을 실어 보내지 않고 서버가 한 번에 줍니다. 그 명단이 수를 타고
     # 자라는 자리라, **몇 명이 실리고 그동안 질의가 몇 번 도는지**를 잽니다.
@@ -333,8 +385,17 @@ def test35_f02_사람이_스물이_되어도_화면이_읽힌다(admin_client, �
     사람수2, 명단수2, 질의수2 = _고르는자리(admin_client, run_id)
     assert 사람수2 == 사람수 * 2 - 1, f"두 배로 안 늘었다: {사람수} → {사람수2}"
     assert 명단수2 == 사람수2, "② 늘린 사람이 고르는 자리에 안 뜬다"
-    print(f"[잰 값] 고르는 자리 — 사람 {사람수}명 질의 {질의수}번"
-          f" · 사람 {사람수2}명 질의 {질의수2}번")
+    assert 질의수2 > 질의수, "고르는 자리가 수를 안 탄다면 AU-a 가 낡은 것이다"
+
+    # **세 화면은 여기서 엽니다 — 늘린 뒤입니다.** 먼저 열면 잰 값이 11명의
+    # 것인데 보고에는 21명으로 적히게 됩니다(2026-09-11 검토가 그렇게 잡혔습니다).
+    # 「검사를 했다는 기록이 있는데 검사가 못 본 것」 이 안 한 것보다 나쁩니다.
+    목록 = admin_client.get("/admin/users")
+    assert 목록.status_code == 200, f"① 설정 › 사용자가 {목록.status_code}"
+    assert 목록.text.count('name="login_id"') >= 사람수2, "① 사람을 다 안 그린다"
+    for 자리 in ("/tasks", "/live/staff"):
+        답 = admin_client.get(자리)
+        assert 답.status_code == 200, f"{자리} 가 {답.status_code}"
 
 
 def _고르는자리(client, run_id: int) -> tuple[int, int, int]:
