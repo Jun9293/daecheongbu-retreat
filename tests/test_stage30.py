@@ -209,7 +209,7 @@ def test30_b01_미리보기는_아무것도_안_바꾸고_수만_찍는다(모�
         후 = _수(db)
     assert 전 == 후 == {"품목": 0, "run": 0}
     out = capsys.readouterr().out
-    assert "읽은 줄 3개 · 물품 이름이 있는 줄 3개 · 건너뛴 빈 줄 0개" in out
+    assert "머리글 아래 3개 · 그중 물품 이름이 있는 줄 3개 · 건너뛴 빈 줄 0개" in out
     assert "사무용품 2" in out and "포토존 1" in out
     assert "새로 설 품목 3개" in out and "새로 설 run 3개" in out
     assert "볼펜" not in out and "폴라로이드" not in out, "품목 이름은 안 찍는다"
@@ -287,25 +287,29 @@ def test30_b03_같은_회차_품목_묶음의_run_은_덮지_않고_건너뛴다
         assert 새.quantity == "3" and 새.checked is False
 
 
-def test30_b02b_비고는_빈_note_만_채우고_적힌_것은_안_민다(모듈, tmp_path, monkeypatch, 회차):
-    """(검토가 짚음) 이미 있는 품목의 note 가 **비었으면** 시트의 비고가 채우고,
-    **적혀 있으면** 그대로 둔다. 운영에서 이 갈래를 밟는 줄이 있다.
-    본다: 두 품목의 note · 품목 수가 안 느는가."""
+def test30_b02b_비고는_run_에_붙고_품목에는_그_칸이_없다(모듈, tmp_path, monkeypatch, 회차):
+    """**도막 4 에서 자리가 바뀌었다** — 비고는 품목이 아니라 회차(run)의 것이다.
+    전에는 「비어 있을 때만 채운다」 였는데, 그 조건은 한 칸을 여러 회차가 나눠
+    쓰던 시절의 것이다.
+
+    본다 — ① 들여온 비고가 run 에 있는가 ② 품목 수가 안 느는가
+    ③ `EquipmentItem` 에 그 칸이 아예 없는가(있으면 자리가 둘이다)."""
     with app_session() as db:
-        db.add(models.EquipmentItem(team_key="chongmu", name="볼펜"))                 # note 없음
-        db.add(models.EquipmentItem(team_key="chongmu", name="매직", note="사람이 적은 메모"))
+        db.add(models.EquipmentItem(team_key="chongmu", name="볼펜"))
+        db.add(models.EquipmentItem(team_key="chongmu", name="매직"))
         db.commit()
     p = 총무자료(tmp_path, [
         ["사무용품", "볼펜", "", "10", "", "", "시트가 적은 비고"],
-        ["사무용품", "매직", "", "2", "", "", "시트가 밀면 안 되는 비고"],
+        ["사무용품", "매직", "", "2", "", "", "또 다른 비고"],
     ])
     _사본준비(모듈, tmp_path, monkeypatch)
     with app_session() as db:
         assert 모듈.들여오기(db, "총무", p, 회차["retreat"], 실행=True) == 0
     with app_session() as db:
-        note = {i.name: i.note for i in db.scalars(select(models.EquipmentItem))}
-        assert note == {"볼펜": "시트가 적은 비고", "매직": "사람이 적은 메모"}
+        note = {r.item.name: r.note for r in db.scalars(select(models.EquipmentRun))}
+        assert note == {"볼펜": "시트가 적은 비고", "매직": "또 다른 비고"}
         assert _수(db)["품목"] == 2
+    assert not hasattr(models.EquipmentItem, "note"), "품목에 비고 칸이 아직 있다"
 
 
 # ── 차. 최종 x 는 included 를 끈다 ─────────────────────────────────────
@@ -326,7 +330,7 @@ def test30_b04_최종이_x_면_included_가_꺼지고_행은_남는다(모듈, t
         assert len(runs) == 3, "행은 셋 다 남는다"
         assert (runs["볼펜"].included, runs["매직"].included, runs["가위"].included) == (False, False, True)
         담긴글 = " ".join(f"{r.group_name}{r.quantity or ''}{r.location or ''}"
-                        f"{r.item.note or ''}{n}" for n, r in runs.items())
+                        f"{r.note or ''}{n}" for n, r in runs.items())
         assert "박민준" not in 담긴글, "최종 칸의 그 밖의 값은 안 들여온다"
 
 
@@ -348,7 +352,7 @@ def test30_b05_코람데오는_헤브론_담당만_헤브론이고_개인_이름
         팀 = {r.item.name: r.item.team_key for r in db.scalars(select(models.EquipmentRun))}
         assert 팀 == {"스탠드 마이크": "hebron", "기타 케이블": "koram", "인이어": "koram"}
         모든글 = " ".join(
-            f"{i.name}{i.note or ''}{i.unit or ''}" for i in db.scalars(select(models.EquipmentItem))
+            f"{i.name}{i.unit or ''}" for i in db.scalars(select(models.EquipmentItem))
         ) + " ".join(
             f"{r.group_name}{r.quantity or ''}{r.location or ''}{r.checked_by_name or ''}"
             for r in db.scalars(select(models.EquipmentRun)))

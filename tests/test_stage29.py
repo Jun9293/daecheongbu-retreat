@@ -153,7 +153,13 @@ def test29_c02_실행하면_품목이_합쳐지고_run_은_둘_다_남는다(옛
         assert (runs[4].group_name, runs[4].item_id, runs[4].location) == ("새친구 비품", 4, "창고")
         items = {i.id: i for i in db.scalars(select(models.EquipmentItem))}
         assert set(items) == {1, 3, 4} and items[1].name == "릴선" and items[4].team_key == "sketch"
-        assert (items[1].unit, items[1].note) == ("m", "야외용 30m"), "사라지는 쪽의 unit·note 가 남는 쪽에"
+        assert items[1].unit == "m", "사라지는 쪽의 unit 이 남는 쪽에"
+        # **note 는 모델에 없다** — 도막 4 에서 회차(run)로 옮겼다. 그런데 이 스크립트가
+        # 다루는 것은 그 이전 모양이라 옛 칸을 제가 세워 값을 받아 둔다(다음 단계인
+        # 비고옮기기가 run 으로 옮기고 걷는다). 그래서 모델이 아니라 **날 질의**로 본다
+        옛비고 = db.execute(text(
+            "SELECT note FROM equipment_items WHERE id = 1")).scalar_one()
+        assert 옛비고 == "야외용 30m", "사라지는 쪽의 note 가 남는 쪽에"
         ddl = {r[0]: r[1] for r in db.execute(text(
             "SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE 'equipment%'"))}
         assert set(ddl) == {"equipment_items", "equipment_runs"}, "옛 표(_old)가 안 남는다"
