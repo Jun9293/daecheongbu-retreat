@@ -310,13 +310,15 @@ def test36_d01_화면이_잴_자리를_그린다(admin_client):
         로그인.비밀번호를정한다(db, db.get(User, uid), "지어낸비밀번호36", 첫판=False)
 
     글 = admin_client.get("/settings").text
-    자리 = 글[글.index('action="/settings/password"'):]
-    자리 = 자리[:자리.index("</div>\n    {% endif %}") if "{% endif %}" in 자리 else len(자리)]
 
     assert 'class="sbtn p" type="submit">바꾸기' in 글, "① 단추가 어휘를 안 밝힌다"
     assert '<div class="pwwarn">' in 글, "② 경고가 자기 자리에 없다"
     assert "로그아웃해 주세요" in 글.split('class="pwwarn"')[1][:120], \
         "② 그 자리에 든 말이 다르다"
+    # ③ **페이지 전체에서 셉니다** — 바) 가 「같은 페이지의 다른 .hint 는
+    #    안 올라갔다」 이므로 이 카드 밖의 것도 남아 있어야 합니다.
+    #    급이 실제로 무엇인지는 브라우저가 재고(보고 3-1), 여기서는 그 자리가
+    #    아직 `.hint` 인지만 봅니다
     assert 글.count('class="hint"') >= 2, "③ 그 페이지의 다른 안내가 사라졌다"
     assert '<div class="hint">규칙은 길이 하나뿐입니다.' in 글, \
         "③ 같은 카드의 나머지 안내까지 옮겨졌다"
