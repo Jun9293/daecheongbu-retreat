@@ -1693,13 +1693,14 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fgrid .full{grid-column:1/-1}
 /* 초대 링크 (4-17) — 발급을 누른 **그 자리**에 뜬다. 링크는 저장되지 않아
    한 번만 보이고, 닫으면 사라진다. */
-.invitebox{display:flex;gap:6px;align-items:center;margin-top:6px}
-.invitebox input{flex:1;min-width:260px;font:inherit;font-size:var(--fz-sm);
+/* 바깥 링크 항목 아래의 한 줄. **옆의 링크 이름이 뜻을 지는 자리**라
+   흐림이 아니라 보조색이다 — 이 줄이 없으면 아무것도 안 남는다 (4-0). */
+.sidenav nav .extnote{display:block;margin:-2px 0 6px 42px;font-size:var(--fz-sm);
+  color:var(--ink-2);line-height:1.4}
+.keybox{display:flex;gap:6px;align-items:center;margin-top:6px}
+.keybox input{flex:1;min-width:260px;font:inherit;font-size:var(--fz-sm);
   font-family:var(--mono);color:var(--ink);background:var(--paper);
   border:1px solid var(--rule-2);border-radius:5px;padding:5px 8px}
-.issuedrow{margin-top:8px;padding:9px 11px;background:var(--st-wait-bg);
-  border:1px solid var(--rule);border-radius:6px;font-size:var(--fz-md);
-  line-height:1.6;max-width:520px}
 
 /* 라벨-값 줄 — 값 칸은 평소에 글자처럼, 마우스를 올리면 테두리 (4-9 와 같은 판단) */
 .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;
@@ -1894,6 +1895,24 @@ button.btn:disabled{opacity:.4;cursor:default}
 .barecard.center{text-align:center}
 .barecard .bigcode{font-size:var(--fz-4xl);font-weight:800;letter-spacing:-.04em;color:var(--ink-3)}
 .barecard .sbtn{display:inline-block;text-decoration:none;margin-top:6px}
+/* ── 로그인 칸 (4-12) ─────────────────────────────────────────────────
+   **비밀번호 칸을 눈금 밖에 두지 않는다.** 16px 보다 작으면 아이폰 사파리가
+   그 칸을 누르는 순간 화면을 확대하고 되돌려 주지 않는다 — 로그인 화면이
+   옆으로 잘린 채 남고, 홈 화면에 붙인 앱에는 주소창이 없어 되돌릴 길도
+   없다. 같은 노트북의 다른 앱에서 실제로 밟은 자리라 여기서는 처음부터
+   한 단 위(`--fz-lg`)를 준다. 위의 `select,input[type=text]…` 묶음은
+   `--fz-base`(15px)라 그 선에 못 닿으므로 여기 따로 적는다.
+   아이디 칸도 같은 줄에 서므로 함께 올린다. */
+input[type=password]{font:inherit;font-size:var(--fz-lg);
+  padding:10px 12px;border:1px solid var(--rule-2);border-radius:6px;
+  background:var(--paper);color:var(--ink)}
+.loginform{display:flex;flex-direction:column;gap:12px;margin:16px 0 4px}
+.loginform label{display:block;font-size:var(--fz-sm);color:var(--ink-2);margin-bottom:5px}
+.loginform input[type=text],.loginform input[type=password]{
+  width:100%;box-sizing:border-box;font-size:var(--fz-lg);padding:10px 12px;
+  border-radius:6px}
+.loginform button{font:inherit;font-size:var(--fz-lg);padding:11px 12px;border-radius:6px;
+  border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
 .bareerr{background:var(--st-late-bg);color:var(--st-late-fg);border-radius:6px;padding:8px 12px}
 
 /* ── 목록 (4-14) — 행은 마법사 3단계와 같은 partial(taskrow)이다 */
@@ -2013,11 +2032,11 @@ body.dopen:has(.drawer.inline){padding-right:0}
 
 /* 설정 › 사용자 맨 위 — 누구에게 아직 링크를 안 보냈는지 (4-12).
    남은 사람이 있을 때만 옅게 채운다: 0 이면 채울 이유가 없다 */
-.invsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:14px;
+.doorsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:14px;
   padding:9px 12px;border:1px solid var(--rule);border-radius:8px;
   background:var(--card);font-size:var(--fz-md)}
-.invsum.many{background:var(--st-wait-bg);border-color:transparent}
-.invsum span{color:var(--ink-2);font-size:var(--fz-sm)}
+.doorsum.many{background:var(--st-wait-bg);border-color:transparent}
+.doorsum span{color:var(--ink-2);font-size:var(--fz-sm)}
 
 /* 홈의 「내 할 일」 이 비었을 때 내는 한 줄 (4-15) — 빈 칸 대신 다음
    할 일을 가리킨다. 경고가 아니라 안내라 붉지 않다 */

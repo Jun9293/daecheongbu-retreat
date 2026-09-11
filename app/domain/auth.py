@@ -1,56 +1,32 @@
-"""초대 링크 (CLAUDE.md 4-12).
+# -*- coding: utf-8 -*-
+"""옛 초대 링크 (CLAUDE.md 4-12).
 
-SMS 인증을 접은 이유는 4-12 와 1장 확정사항에 적었다. 여기서는 그 결정을
-안전하게 구현하는 것만 다룬다.
+**2026-09-11 에 걷었습니다.** 로그인은 아이디와 비밀번호로 합니다
+(`app/domain/login.py`) — 휴대폰 홈 화면에 붙인 앱은 쿠키가 사파리와 따로라
+사파리에서 연 링크로는 그 앱 안에서 로그인되지 않고, 그 안에는 링크를 붙여
+넣을 주소창도 없기 때문입니다.
 
-**토큰 원문을 저장하지 않는다.** 해시만 남기고 원문은 발급 화면에서 한 번만
-보여준다 — DB 파일이 새면 링크가 그대로 새는 구조를 만들지 않기 위해서다.
-비밀번호를 평문으로 두지 않는 것과 같은 이유다.
+**만드는 길은 남기지 않았습니다** — 발급·사용·주소 만들기를 지웠습니다.
+코드를 남겨 두면 그것이 곧 열린 문입니다. 옛 주소(`/invite/<토큰>`)는
+토큰을 보지 않고 로그인 화면으로 보냅니다 (`app/routers/login.py`).
+
+**표(`invite_tokens`)와 행은 지우지 않습니다** (0장) — 누가 언제 들어왔는지가
+거기 남아 있습니다. 아직 살아 있는 링크를 끊는 것은
+`scripts/계정문열기.py` 갈래 ③ 이고, 그때 「살아 있다」 의 뜻은
+아래 `problem_with` 하나입니다.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import secrets
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import InviteToken, User
 
-INVITE_TTL_DAYS = 7        # 링크의 유효기간
-TOKEN_BYTES = 32           # secrets.token_urlsafe 에 넘길 바이트 수
-
-
-def invite_url(raw: str, *, base: str | None = None) -> str:
-    """붙여넣으면 바로 열리는 초대 주소.
-
-    **자리표시자를 남기지 않습니다.** 전에는 주소 앞부분을 자리표시자로
-    찍고 사람이 손으로 갈아 끼웠는데, 그러다 토큰까지 건드려
-    링크가 깨졌습니다.
-
-    주소를 만드는 곳은 **여기 하나**입니다 — 스크립트와 화면이 같이 씁니다.
-    두 곳에서 만들면 한쪽만 고쳐집니다.
-    """
-    from app import config
-
-    root = (base or config.BASE_URL or "").rstrip("/")
-    return f"{root}/invite/{raw}"
-
-
-def normalize_phone(raw: str) -> str:
-    """연락처를 숫자만 남겨 정규화한다.
-
-    로그인에는 더 이상 쓰지 않는다 (초대 링크로 바꿨다). 사람을 알아보고
-    총무팀이 연락할 때 쓰는 값이라 형식만 맞춘다.
-    """
-    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
-    if not digits:
-        raise ValueError("연락처를 입력해주세요.")
-    if len(digits) < 9 or len(digits) > 11:
-        raise ValueError("연락처 형식이 올바르지 않습니다.")
-    return digits
+INVITE_TTL_DAYS = 7        # 만들던 시절의 유효기간 — 아래 사유 문구가 쓴다
 
 
 def _now() -> dt.datetime:
@@ -58,87 +34,29 @@ def _now() -> dt.datetime:
 
 
 def hash_token(raw: str) -> str:
+    """옛 행과 견줄 때만 쓴다. 원문은 저장한 적이 없다."""
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def issue(db: Session, *, user: User, actor: User | None = None) -> str:
-    """새 초대 링크를 발급하고 **원문을 돌려준다.**
-
-    같은 사람에게 남아 있던 링크는 함께 취소한다 — 재발급했는데 옛 링크가
-    계속 살아 있으면 "한 번 쓰면 만료" 가 뜻을 잃는다.
-    """
-    revoke_all(db, user=user)
-
-    raw = secrets.token_urlsafe(TOKEN_BYTES)
-    db.add(
-        InviteToken(
-            user_id=user.id,
-            token_hash=hash_token(raw),
-            expires_at=_now() + dt.timedelta(days=INVITE_TTL_DAYS),
-            created_by_id=actor.id if actor else None,
-        )
-    )
-    db.commit()
-    return raw
-
-
-def revoke_all(db: Session, *, user: User) -> int:
-    """그 사람의 살아 있는 링크를 전부 취소한다.
-
-    **「살아 있다」 를 여기서 다시 정하지 않는다** — `problem_with` 하나가
-    그 답이다. 전에는 이 함수가 `used_at`·`revoked_at` 둘만 보고 기한을
-    안 봐서, 같은 파일 안에 「살아 있다」 가 두 뜻으로 있었다. 그렇게
-    갈리면 어느 쪽이 맞는지 아무도 눈치채지 못한다.
-    """
-    count = 0
-    for token in db.scalars(
-        select(InviteToken).where(InviteToken.user_id == user.id)
-    ):
-        if problem_with(token) is not None:
-            continue
-        token.revoked_at = _now()
-        count += 1
-    if count:
-        db.commit()
-    return count
-
-
 def problem_with(token: InviteToken | None) -> str | None:
-    """쓸 수 없는 링크면 사유를, 괜찮으면 None."""
+    """쓸 수 없는 링크면 사유를, **아직 살아 있으면 None.**
+
+    「살아 있다」 를 이 파일 안에서 두 번 정하지 않는다 — 전에 그러다
+    한쪽이 기한을 안 봐서 같은 파일에 두 뜻이 있었다.
+    """
     if token is None:
-        return "링크를 찾을 수 없습니다. 총무팀에 다시 요청해주세요."
+        return "링크를 찾을 수 없습니다."
     if token.revoked_at is not None:
-        return "취소된 링크입니다. 총무팀에 다시 요청해주세요."
+        return "취소된 링크입니다."
     if token.used_at is not None:
-        return "이미 사용한 링크입니다. 링크는 한 번만 쓸 수 있습니다."
+        return "이미 사용한 링크입니다."
     if token.expires_at < _now():
-        return f"만료된 링크입니다 (유효기간 {INVITE_TTL_DAYS}일). 총무팀에 다시 요청해주세요."
+        return f"만료된 링크입니다 (유효기간 {INVITE_TTL_DAYS}일)."
     return None
 
 
-def redeem(db: Session, raw: str) -> tuple[User | None, str | None]:
-    """링크를 쓴다. (사용자, 사유) 중 하나만 채워 돌려준다."""
-    token = db.scalars(
-        select(InviteToken).where(InviteToken.token_hash == hash_token(raw))
-    ).first()
-
-    reason = problem_with(token)
-    if reason is not None:
-        return None, reason
-
-    user = db.get(User, token.user_id)
-    if user is None:
-        return None, "계정을 찾을 수 없습니다. 총무팀에 문의해주세요."
-    if not user.is_active:
-        return None, "비활성화된 계정입니다. 총무팀에 문의해주세요."
-
-    token.used_at = _now()
-    db.commit()
-    return user, None
-
-
 def live_token(db: Session, *, user: User) -> InviteToken | None:
-    """아직 쓸 수 있는 링크가 있는지 (원문은 알 수 없다 — 해시만 있으므로)."""
+    """그 사람에게 아직 살아 있는 링크가 있는지."""
     for token in db.scalars(
         select(InviteToken)
         .where(InviteToken.user_id == user.id)
@@ -149,92 +67,29 @@ def live_token(db: Session, *, user: User) -> InviteToken | None:
     return None
 
 
-def last_used_at(db: Session, *, user: User) -> dt.datetime | None:
-    """**링크를 마지막으로 쓴 때.** 없으면 None.
-
-    「마지막 로그인」 이 아니다 — 그런 칸은 없다(세션이 90일이라 화면을
-    언제 열었는지는 아무 데도 안 남는다). 여기서 낼 수 있는 가장 가까운
-    사실은 이것뿐이고, 부르는 쪽도 **그 이름 그대로** 찍는다.
-
-    `entered_ever` 와 같은 것을 묻되 **때까지** 돌려준다 — 스크립트가
-    토큰 표를 스스로 뒤지지 않게 하려고 여기 둔다(4-12 「만드는 것도 보는
-    것도 한 곳」).
-    """
-    return db.scalars(
-        select(InviteToken.used_at)
-        .where(InviteToken.user_id == user.id, InviteToken.used_at.is_not(None))
-        .order_by(InviteToken.used_at.desc())
-    ).first()
+def revoke_all(db: Session, *, user: User) -> int:
+    """그 사람의 살아 있는 링크를 전부 끊는다."""
+    count = 0
+    for token in db.scalars(select(InviteToken).where(InviteToken.user_id == user.id)):
+        if problem_with(token) is None:
+            token.revoked_at = _now()
+            count += 1
+    if count:
+        db.commit()
+    return count
 
 
-def entered_ever(db: Session, *, user: User) -> bool:
-    """이 계정으로 **초대 링크를 한 번이라도 쓴 적이 있는가.**
-
-    로그인 길이 초대 링크 하나뿐이라(4-12), 이것이 곧 「들어와 본 적이
-    있는가」 다. 계정을 만든 것과 다르다 — 총무팀이 먼저 만들어 두고
-    링크는 나중에 보낸다.
-
-    쓰인 링크는 만료돼도 `used_at` 이 남으므로 **살아 있는 링크가 있는지와
-    다른 질문**이다. 둘을 한 값으로 보면 「보냈는데 아직 안 들어온 사람」 과
-    「들어왔고 링크는 만료된 사람」 이 같은 칸에 들어간다.
-    """
-    return bool(
-        db.scalars(
-            select(InviteToken).where(
-                InviteToken.user_id == user.id, InviteToken.used_at.is_not(None)
-            )
-        ).first()
-    )
+def 살아있는것들(db: Session) -> list[InviteToken]:
+    """아직 살아 있는 링크 전부. **먼저 세어 사람에게 보이려고** 따로 둔다."""
+    return [t for t in db.scalars(select(InviteToken)) if problem_with(t) is None]
 
 
-# ── 발급 직후 한 번만 꺼내지는 자리 ──────────────────────────────────
-#
-# 원문을 URL 에 실으면 총무팀 브라우저의 **주소창과 방문 기록**, Cloudflare 접속
-# 로그에 7일 내내 살아 있는 링크가 남는다. 총무팀은 그 링크를 자기가 쓰는 것이
-# 아니라 복사해서 보내므로 링크는 그동안 계속 쓸 수 있는 상태다 — 그 컴퓨터를
-# 잠깐 쓰는 사람이 방문 기록에서 꺼내 그 사람으로 로그인할 수 있다.
-# 해시로 저장한 이유가 거기서 무너진다.
-#
-# 그래서 원문은 서버 메모리에만 두고 URL 에는 **한 번 쓰면 사라지는 키**만 싣는다.
-# 새로고침하면 이미 없으므로 링크가 다시 나오지 않는다.
-_HANDOFF_TTL_SECONDS = 600      # 발급 화면을 띄우는 데 이보다 오래 걸릴 일은 없다
-_HANDOFF_MAX = 50               # 무한히 쌓이지 않게
-_handoff: dict[str, tuple[str, dt.datetime]] = {}
-
-
-def _sweep_handoff(now: dt.datetime) -> None:
-    for key in [k for k, (_, _, at) in _handoff.items()
-                if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS]:
-        _handoff.pop(key, None)
-    while len(_handoff) > _HANDOFF_MAX:
-        _handoff.pop(next(iter(_handoff)), None)
-
-
-def stash(raw: str, name: str = "") -> str:
-    """원문과 **누구의 것인지**를 함께 담아 두고 꺼낼 키를 돌려준다.
-
-    이름을 따로(u=) 실으면 링크와 이름이 어긋날 자리가 생긴다 — 주소를
-    손보면 「B 님의 링크」 아래 A 의 링크가 뜬다. 한 키에 묶어 두면
-    take 한 번에 둘 다 나오므로 그 자리가 없다.
-    """
-    now = _now()
-    _sweep_handoff(now)
-    key = secrets.token_urlsafe(9)
-    _handoff[key] = (raw, name, now)
-    return key
-
-
-def take(key: str | None) -> tuple[str, str] | None:
-    """(원문, 이름). 한 번만 꺼내진다. 두 번째부터는 None —
-    새로고침해도 다시 보이지 않는다."""
-    if not key:
-        return None
-    now = _now()
-    _sweep_handoff(now)
-    found = _handoff.pop(key, None)
-    if found is None:
-        return None
-    raw, name, at = found
-    if (now - at).total_seconds() > _HANDOFF_TTL_SECONDS:
-        return None
-    return raw, name
+def 전부끊는다(db: Session) -> int:
+    """살아 있는 링크를 전부 끊고 몇 개였는지 돌려준다 (계정문열기 갈래 ③)."""
+    at = _now()
+    tokens = 살아있는것들(db)
+    for token in tokens:
+        token.revoked_at = at
+    if tokens:
+        db.commit()
+    return len(tokens)
