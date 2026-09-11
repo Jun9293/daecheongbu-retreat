@@ -25,7 +25,7 @@ if not exist "data\app.db" (
 echo   주소 : http://127.0.0.1:8000
 echo.
 echo   바깥에서는 Cloudflare 터널 주소로 들어옵니다.
-echo   로그인은 초대 링크로 합니다 - /admin/users 에서 발급하세요.
+echo   로그인은 아이디와 비밀번호입니다 - /admin/users 에서 만드세요.
 echo.
 echo   ** 이 검은 창을 닫으면 프로그램이 종료됩니다. **
 echo.

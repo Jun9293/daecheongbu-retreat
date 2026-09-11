@@ -212,7 +212,7 @@ def check_admin() -> tuple[bool, str]:
     if not admins:
         return False, (
             "총무팀(관리자) 계정이 없습니다. 아래로 하나 만드세요:\n"
-            '        python scripts/create_admin.py "이름" <연락처>'
+            '        python scripts/계정문열기.py --첫관리자 "이름" 아이디'
         )
 
     counted = Counter(a.name.strip() for a in admins)

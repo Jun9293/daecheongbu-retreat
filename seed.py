@@ -161,7 +161,7 @@ def seed(demo: bool = False) -> None:
             print(f"  부서 {len(L.DEPARTMENTS)}개 · 업무 라이브러리 "
                   f"{len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 (실행 이력 1회차)")
             print("  계정은 만들지 않았습니다 — 첫 관리자는 아래로 만드세요:")
-            print("    .venv\\Scripts\\python.exe scripts/create_admin.py \"이름\" 01012345678")
+            print("    .venv\\Scripts\\python.exe scripts/계정문열기.py --첫관리자 \"이름\" 아이디")
             return
 
         # 사용자 (demo 전용 — 자리표시자 번호다)
@@ -443,8 +443,8 @@ def seed(demo: bool = False) -> None:
     print(f"  일정 {len(D.SCHEDULE_DAYS)}일차 / 총 {sum(len(d['items']) for d in D.SCHEDULE_DAYS)}건")
     print(f"  할 일 {len(D.TASKS)}건 · 체크리스트 {len(D.CHECKLISTS)}개 · 회의록 {len(D.MEETINGS)}건")
     print(f"  지출 {len(D.MEAL_EXPENSES) + len(D.GENERAL_EXPENSES)}건")
-    print("\n※ demo 계정입니다. 전화번호는 자리표시자이고 로그인은 초대 링크로 합니다.")
-    print("   초대 링크는 /admin/users 에서 발급합니다.")
+    print("\n※ demo 계정입니다. 전화번호는 자리표시자이고 로그인은 아이디로 합니다.")
+    print("   아이디와 첫 비밀번호는 /admin/users 에서 만듭니다.")
 
 
 if __name__ == "__main__":
