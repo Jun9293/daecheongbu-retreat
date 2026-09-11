@@ -40,7 +40,11 @@
              style="width:42px;height:30px;padding:2px;border:1px solid var(--rule-2);border-radius:5px">
       <button class="sbtn p" type="submit">추가</button>
     </form>
-    <div class="hint">회차를 넘어 쓸 키는 마법사 2단계에서 발급됩니다 (6-6). 여기서 만든 부서는 이 회차에만 붙습니다.</div>
+    {# 한 줄에 둘이 섞여 있었습니다 — 뒷문장은 **혼자 집니다**(2장의 함정:
+       부서 행은 회차마다 새로 섭니다), 앞문장은 어디서 키가 나오는지 가리키는
+       말입니다. 갈라서 뒤엣것만 올립니다 (4-0 · `.hint.lone`) #}
+    <div class="hint lone">여기서 만든 부서는 <b>이 회차에만</b> 붙습니다.</div>
+    <div class="hint">회차를 넘어 쓸 키는 마법사 2단계에서 발급됩니다 (6-6).</div>
   </div>
 </main>
 {% endblock %}
