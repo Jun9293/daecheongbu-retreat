@@ -63,7 +63,8 @@
     .venv\\Scripts\\python.exe scripts/비품들여오기.py 총무 data/비품-총무.real.tsv --실행
     .venv\\Scripts\\python.exe scripts/비품들여오기.py 코람데오 data/비품-코람데오.real.tsv
 
-`--회차 <id>` 로 회차를 고릅니다. 안 주면 열려 있는 회차를 쓰고 그 이름을 먼저 찍습니다.
+`--회차 <id>` 로 회차를 고릅니다. **열려 있는 회차가 둘 이상이면 안 주면 멈춥니다** —
+id 와 이름을 늘어놓고 고르라고 합니다. 하나뿐일 때만 그것을 쓰고 이름을 먼저 찍습니다.
 """
 
 from __future__ import annotations
@@ -77,6 +78,8 @@ for _stream in (_sys.stdout, _sys.stderr):
         pass
 
 import argparse
+import csv
+import io
 import pathlib
 import re
 import sys
@@ -185,6 +188,17 @@ def 묶음이름(값: str) -> str:
 # ── TSV 읽기 ──────────────────────────────────────────────────────────
 
 def 읽는다(경로: pathlib.Path) -> list[list[str]]:
+    """한 **레코드**가 시트의 한 행이다 — 줄로 자르지 않고 `csv` 에 맡긴다.
+
+    전에는 `splitlines()` 로만 잘랐는데, 그러면 **칸 안에 줄을 바꾼 값**(비고에
+    흔하다)이 두 줄로 쪼개져 그 아래 모든 줄의 번호가 하나씩 밀린다 — 오늘 고친
+    것과 **같은 종류의 고장**이고, 「찍는 번호는 시트에서 사람이 보는 행 번호」 라는
+    보증이 거기서 깨진다(검토가 짚었다). 시트에서 내려받은 TSV 는 그런 칸을
+    따옴표로 감싸므로 csv 가 한 레코드로 읽는다.
+
+    지금 재료 둘에는 그런 칸이 없어 **바꿔도 값이 달라지지 않는다** — 두 판독기를
+    칸까지 견주어 같은 것을 확인하고 바꿨다(보고 3장).
+    """
     raw = 경로.read_bytes()
     for enc in ("utf-8-sig", "utf-8", "cp949"):
         try:
@@ -194,7 +208,8 @@ def 읽는다(경로: pathlib.Path) -> list[list[str]]:
             continue
     else:
         raise 멈춤(f"{경로} 를 읽지 못했습니다 (utf-8 도 cp949 도 아닙니다).")
-    return [ln.split("\t") for ln in 글.splitlines()]
+    # newline="" 이어야 csv 가 줄바꿈을 직접 다룬다 — 안 주면 감싼 칸에서 터진다
+    return list(csv.reader(io.StringIO(글, newline=""), delimiter="\t"))
 
 
 def 칸자리(줄들: list[list[str]], 이름들: dict[str, str]) -> tuple[int, dict[str, int]]:
@@ -232,7 +247,13 @@ def 줄뽑기(종류: str, 경로: pathlib.Path) -> tuple[list[dict], dict[str, 
 
     칸 = lambda 줄, j: (줄[j] if len(줄) > j else "").strip()   # noqa: E731
     뽑은, 이어받은, 빈줄 = [], "", 0
-    for 줄 in 줄들[머리 + 1:]:
+    # **읽으면서 센다.** 전에는 멈출 때 `줄들.index(줄)` 로 자리를 물었는데,
+    # 그것은 **같은 내용의 줄 중 맨 앞엣것**을 돌려준다 — 시트에는 같은 물품이
+    # 같은 수량으로 두 번 적힌 줄이 흔하고, 그러면 사람이 찍힌 번호를 열어 보고
+    # **아무것도 없는 줄**을 본다(2026-09-11 에 실제로 그랬다).
+    # 세는 시작은 `머리 + 2` 다 — 줄들[i] 가 시트의 i+1 행이고 머리글 다음
+    # 줄부터 도니까, 찍히는 수가 **사람이 시트에서 보는 행 번호**와 같다.
+    for 시트행, 줄 in enumerate(줄들[머리 + 1:], start=머리 + 2):
         앞 = 칸(줄, 구분자리)
         if 앞:
             이어받은 = 앞          # 합친 칸 — 비어 있으면 바로 위의 값을 물려받는다
@@ -241,7 +262,7 @@ def 줄뽑기(종류: str, 경로: pathlib.Path) -> tuple[list[dict], dict[str, 
             빈줄 += 1
             continue
         if 사람자국(이름):
-            raise 멈춤(f"품목 이름에 사람 자국이 있습니다 (시트의 {줄들.index(줄) + 1}번째 줄) — "
+            raise 멈춤(f"품목 이름에 사람 자국이 있습니다 (시트의 {시트행}행) — "
                       "이름은 버릴 수 없는 칸이라 멈춥니다. 시트를 고치고 다시 돌리세요.")
         뽑은.append({
             "구분": 이어받은, "이름": 이름,
@@ -266,6 +287,15 @@ def 회차고르기(db: Session, 회차id: int | None) -> Retreat:
                           .order_by(Retreat.start_date.desc(), Retreat.id.desc())))
     if not 열린:
         raise 멈춤("열려 있는 회차가 없습니다 — --회차 <id> 로 골라 주세요.")
+    if len(열린) > 1:
+        # **고르지 않고 멈춘다.** 전에는 「시작일이 늦은 것」 을 말없이 골랐는데,
+        # 그 규칙은 **열린 회차가 하나일 때만** 맞았다 — 다음 회차를 미리 열어 두면
+        # 가장 늦은 것이 곧 **아직 아무것도 없는 회차**라, 2026-09-11 에 코람데오
+        # 28줄이 그리로 들어갔다. 넣고 나서야 알았고 사람이 되돌렸다.
+        고를것 = "\n".join(f"    --회차 {r.id}   {r.name}" for r in 열린)
+        raise 멈춤(f"열려 있는 회차가 {len(열린)}개라 어디에 넣을지 알 수 없습니다 — "
+                  f"--회차 <id> 로 골라 주세요.\n{고를것}")
+    print(f"열려 있는 회차가 하나뿐이라 그것을 씁니다: {열린[0].name} (id {열린[0].id})")
     return 열린[0]
 
 
@@ -404,7 +434,8 @@ def main() -> int:
     )
     ap.add_argument("종류", choices=sorted(시트들), help="시트 종류")
     ap.add_argument("파일", help="TSV 경로 (data/*.real.tsv — 저장소에 안 들어갑니다)")
-    ap.add_argument("--회차", type=int, default=None, help="회차 id (안 주면 열려 있는 회차)")
+    ap.add_argument("--회차", type=int, default=None,
+                help="회차 id (열려 있는 회차가 둘 이상이면 반드시 줍니다)")
     ap.add_argument("--실행", action="store_true", help="실제로 넣습니다")
     args = ap.parse_args()
 
