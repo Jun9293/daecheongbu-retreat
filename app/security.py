@@ -94,8 +94,14 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
     if user is None:
         raise LoginRequired()
     # 첫 비밀번호인 채로는 아무 화면도 안 연다 (4-12). 인증 의존이 하나라
-    # 여기서 한 번 막으면 전부 막힌다
-    if getattr(user, "must_change_password", False):
+    # 여기서 한 번 막으면 전부 막힌다.
+    #
+    # **비밀번호가 있을 때만 막는다.** 이 칸이 붙기 전에 만들어진 계정은
+    # 기본값이 참인 채로 서 있는데 **바꿀 비밀번호가 아예 없다** — 그런
+    # 사람에게 「총무팀이 전해 준 첫 비밀번호를 바꾸세요」 라고 말하면
+    # 거짓이고, 세션이 살아 있던 열몇 사람이 서버를 다시 켜는 순간 그
+    # 화면에 갇힌다. 관리자가 발급하면 해시가 생기면서 그때 막힌다.
+    if getattr(user, "must_change_password", False) and getattr(user, "password_hash", None):
         raise 비밀번호를바꿔야함()
     return user
 

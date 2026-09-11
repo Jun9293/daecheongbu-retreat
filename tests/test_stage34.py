@@ -303,6 +303,40 @@ def test34_e02_짧거나_서로_다른_값은_거절한다(client):
         assert db.get(User, uid).password_hash == 앞
 
 
+def test34_e03_비밀번호가_없는_옛_계정은_그_화면에_안_갇힌다(client):
+    """마) **막히면 안 되는 쪽.**
+
+    이 칸이 붙기 전에 만들어진 계정은 기본값이 참인 채로 서는데 **바꿀
+    비밀번호가 아예 없다.** 그때도 막으면, 세션이 살아 있던 사람들이 서버를
+    다시 켜는 순간 바꾸는 화면에 갇힌다 — 거기서 값을 정해도 아이디가 없어
+    다음 로그인은 여전히 막힌다.
+
+    본다 — ① 참이지만 해시가 없는 계정은 화면이 열리는가 ② **해시가 생기면
+    그때 막히는가**(둘을 같은 판에서 봐야 「안 막는다」 가 「영영 안 막는다」 가
+    아니라는 것이 보인다).
+    """
+    uid = _사람(client, 아이디="yetgye", 비번=None)
+    with app_session() as db:
+        사람 = db.get(User, uid)
+        사람.must_change_password = True
+        db.commit()
+    # 세션만 있는 상태를 만든다 — 로그인 화면은 해시가 없으면 못 지난다.
+    # 쿠키를 서명하는 곳은 `security` 하나라 그것을 그대로 쓴다
+    from fastapi.testclient import TestClient
+
+    from app import config, security
+    from app.main import app
+
+    옛사람 = TestClient(app)
+    옛사람.cookies.set(config.SESSION_COOKIE, security._serializer.dumps({"uid": uid}))
+    assert 옛사람.get("/", follow_redirects=False).status_code == 200,         "바꿀 비밀번호가 없는데 바꾸는 화면에 갇혔다"
+
+    with app_session() as db:
+        로그인.비밀번호를정한다(db, db.get(User, uid), 지어낸값, 첫판=True)
+    막힘 = 옛사람.get("/", follow_redirects=False)
+    assert 막힘.status_code == 303 and 막힘.headers["location"] == "/password"
+
+
 # ── 바) 발급 응답에만 no-store ─────────────────────────────────────────
 
 def test34_f01_비밀번호가_실린_응답에만_no_store_다(admin_client, client):
