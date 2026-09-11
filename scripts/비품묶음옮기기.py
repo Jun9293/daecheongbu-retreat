@@ -194,6 +194,12 @@ def 옮긴다(db: Session) -> dict[str, int]:
     x("ALTER TABLE equipment_runs RENAME TO equipment_runs_old")
     x("ALTER TABLE equipment_items RENAME TO equipment_items_old")
     Base.metadata.create_all(bind=conn, tables=[EquipmentItem.__table__, EquipmentRun.__table__])
+    # **note 는 이제 모델에 없다**(도막 4 에서 회차로 옮겼다). 그런데 이 스크립트가
+    # 다루는 것은 **그 이전 모양**이라, 옮겨 담을 값이 아직 품목에 있다. 여기서만
+    # 옛 칸을 다시 세워 값을 받아 두고, 회차로 옮기고 칸을 걷는 것은 그다음 단계인
+    # `scripts/비품비고옮기기.py` 가 한다 — 순서는 묶음 → 비고 → 들여오기다.
+    # 여기서 버리면 0장(아무것도 잃지 않는다)에 걸린다.
+    x("ALTER TABLE equipment_items ADD COLUMN note TEXT")
     # 남는 품목 한 줄 — unit 은 남는 쪽 것이 비면 사라지는 쪽 것, note 는 서로 다른 것을
     # 「 / 」 로 이어 붙인다. 버리면 0장(아무것도 잃지 않는다)에 걸린다
     x("""INSERT INTO equipment_items (id, team_key, name, unit, note, created_at)
@@ -206,9 +212,17 @@ def 옮긴다(db: Session) -> dict[str, int]:
                       ORDER BY o.id)),
                 k.created_at
            FROM equipment_items_old k WHERE k.id IN (SELECT keep FROM _eq_map)""")
-    x(f"""INSERT INTO equipment_runs ({RUN_COLS})
-          SELECT r.id, r.retreat_id, m.keep, r.group_name, r.included, r.quantity, r.location,
-                 r.checked, r.checked_by_id, r.checked_by_name, r.checked_at, r.sort_order
+    # **run 의 note 도 함께 옮긴다** — 도막 4 에서 비고가 회차로 왔고, 옛 모양 DB
+    # 라도 앱을 한 번 켰으면 부팅이 그 칸을 붙여 둔다. 안 실으면 새 표로 옮겨
+    # 담을 때 그 값이 조용히 사라진다(검토 봐2). 칸이 없던 DB 도 있으므로 **있을
+    # 때만** 싣는다 — 목록을 글자로 박으면 둘 중 하나에서 터진다
+    옛run칸 = {r[1] for r in x("PRAGMA table_info(equipment_runs_old)")}
+    실을것 = RUN_COLS + (", note" if "note" in 옛run칸 else "")
+    고를것 = ("r.id, r.retreat_id, m.keep, r.group_name, r.included, r.quantity, r.location, "
+             "r.checked, r.checked_by_id, r.checked_by_name, r.checked_at, r.sort_order"
+             + (", r.note" if "note" in 옛run칸 else ""))
+    x(f"""INSERT INTO equipment_runs ({실을것})
+          SELECT {고를것}
             FROM equipment_runs_old r JOIN _eq_map m ON m.id = r.item_id""")
     x("DROP TABLE equipment_runs_old")
     x("DROP TABLE equipment_items_old")
