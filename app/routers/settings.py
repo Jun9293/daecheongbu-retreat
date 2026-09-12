@@ -518,7 +518,10 @@ def set_external_link(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    """총무팀만 고친다. 둘 다 비우면 지운 것 — 사이드바 항목이 사라진다."""
+    """총무팀만 고친다. **이름이나 주소 한쪽만 비어도** 사이드바 항목이
+    사라진다 — 위의 `external_link()` 가 둘 다 있을 때만 내주기 때문이다.
+    화면 안내도 같은 말이다(`settings.html` 의 `.hint.lone` 줄).
+    """
     from app.models import SiteSetting
 
     name, url, note = name.strip(), url.strip(), note.strip()

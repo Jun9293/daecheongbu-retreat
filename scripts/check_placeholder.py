@@ -57,7 +57,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # 찾는 말. 앞에 이름이 붙은 꼴(`COMMIT_…` · `PYTEST_…`)도 이 한 낱말을 담는다
 찾는꼴 = re.compile("[A-Z0-9_]*PLACEHOLDER[A-Z0-9_]*")
 
-# 검토자 원문 덩어리의 두 끝. 11-3 이 정한 글자다
+# 검토자 원문 덩어리의 두 끝. 11-3 이 정한 글자다.
+#
+# **줄이 그 글자로 시작할 때만 경계로 본다.** 「들어 있으면」 으로 두면
+# **본문이 그 표시를 인용하는 순간 그 아래가 통째로 검사 밖**이 된다 —
+# 이 저장소는 규약 글자를 자주 인용하고, 이 파일의 설명문 자체가 그렇다.
+# 2026-09-12 커밋 전 검토가 재어 짚었다.
 원문시작 = "━━━ 검토자 여기부터"
 원문끝 = "━━━ 검토자 여기까지"
 
@@ -71,9 +76,9 @@ def 본다(글: str) -> list[str]:
     """
     탈, 원문안 = [], False
     for 번호, 줄 in enumerate(글.splitlines(), start=1):
-        if 원문시작 in 줄:
+        if 줄.startswith(원문시작):
             원문안 = True
-        elif 원문끝 in 줄:
+        elif 줄.startswith(원문끝):
             원문안 = False
             continue
         if 원문안:

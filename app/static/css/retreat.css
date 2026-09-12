@@ -1690,11 +1690,13 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fld h3{font-size:var(--fz-md);font-weight:600;margin:0 0 10px}
 .fld .hint{color:var(--ink-2);font-size:var(--fz-xs);margin-top:8px}
 /* **혼자 뜻을 지는 hint 줄** (4-0 · 2026-09-12 에 사람이 정함).
-   `.hint` 규칙은 CSS 에 여섯인데 **설정의 이것만 장식 단(12px)** 이었고
-   나머지 다섯(`.linkform` · `wizfoot` · `.ph-h` · `.sheetbar` ·
-   `.calundated`)은 13~14px 이다. 그래서 이 표시는 **새 규칙을 파는 것이
-   아니라 나머지와 맞추는 것**이다 — 4-0 이 혼자 뜻을 지는 글자에 둔 하한이
-   14px 이고, 여기 붙는 줄들이 그 하한 아래에 있었다.
+   같은 이름의 규칙이 여러 화면에 있는데(`.linkform` · `wizfoot` · `.ph-h` ·
+   `.sheetbar` · `.calundated` — `font-size` 를 주는 `.hint` 를 찾으면 나온다)
+   **설정의 것만 장식 단(12px)** 이었고 나머지는 13~14px 이다. 그래서 이 표시는
+   **새 규칙을 파는 것이 아니라 나머지와 맞추는 것**이다 — 4-0 이 혼자 뜻을
+   지는 글자에 둔 하한이 14px 이고, 여기 붙는 줄들이 그 하한 아래에 있었다.
+   **수를 세어 적지 않는다**(10장) — 이 주석에 「여섯」 이라고 적었더니 바로
+   아래 줄이 일곱째가 되어 같은 판 안에서 틀렸다.
    **`.hint` 를 통째로 올리지 않는다** — 그 카드들의 다른 줄은 옆의 칸·값이
    뜻을 지는 자리다. 붙는 자리는 `tests/test_typescale.py` 의 `올린자리` 에
    까닭과 함께 있다.
@@ -1934,7 +1936,10 @@ input[type=password]{font:inherit;font-size:var(--fz-lg);
    `:not(.sbtn)` 이 경계입니다: 어휘를 안 밝힌 단추만 로그인 것으로 봅니다. */
 .loginform button:not(.sbtn){font:inherit;font-size:var(--fz-lg);padding:11px 12px;border-radius:6px;
   border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
-/* **이 한 줄만 `.hint` 보다 한 급 위입니다** (4-0 · 2026-09-11 에 사람이 정함).
+/* **`.hint` 보다 한 급 위인 자리 둘 중 하나입니다** (4-0). 다른 하나는
+   위의 `.fld .hint.lone` 이고 **크기만** 올립니다 — 이쪽은 색과 굵기까지
+   올려 다른 말을 합니다. 2026-09-11 에 사람이 정했고, 그때는 하나뿐이라
+   「이 한 줄만」 이라고 적혀 있었습니다 (2026-09-12 에 둘째가 생겼습니다).
    설정 › 내 정보의 비밀번호 카드에서 「남의 기기에서 쓰고 나면 로그아웃한다」
    를 담는 자리입니다. `.hint`(장식 단 12px)에 두었더니 **옆에 뜻을 대신 져 줄
    값이 없는 문장이 장식 단에** 놓였습니다 — 4-0 은 혼자 뜻을 지는 글자에
