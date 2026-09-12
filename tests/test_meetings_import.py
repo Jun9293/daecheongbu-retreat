@@ -1403,11 +1403,18 @@ def test_y_13f_정렬이_통과여부를_바꿀_수_없다():
     # 고치지 않습니다」 라고 적어 둔 그 창이다. 그때 여기서 빨개지면 고장이
     # 아닌데 빨간 것이고, 고치는 길은 시험이 아니라 **재시작**이다.
     # 2026-09-12 에 실제로 그랬다(`moved_offset_days` 를 더한 판).
+    # **한 표만 보지 않는다.** 다음에 다른 표에만 칸이 붙으면 그때 이 시험은
+    # 건너뛰지 않고 빨개지고, 사람은 또 고장이 아닌 빨강을 본다 — 검토-원칙 7
+    # 의 「…뿐」 꼴이다 (2026-09-12 검토가 짚었다). 붙는 길에 적힌 표를 전부 본다
+    from app.db import _ADDED_COLUMNS
+
+    안붙은것 = []
     with 엔진.connect() as conn:
-        있는칸 = {row[1] for row in conn.execute(sa.text("PRAGMA table_info(task_runs)"))}
-    from app import models as _m
-    모델칸 = {c.name for c in _m.TaskRun.__table__.columns}
-    if 모델칸 - 있는칸:
+        for 표, 칸, _ddl in _ADDED_COLUMNS:
+            있는칸 = {row[1] for row in conn.execute(sa.text(f"PRAGMA table_info({표})"))}
+            if 있는칸 and 칸 not in 있는칸:
+                안붙은것.append(f"{표}.{칸}")
+    if 안붙은것:
         엔진.dispose()
         pytest.skip("운영 DB 에 아직 새 칸이 안 붙었다 — 서버를 다시 켜면 붙는다 (11-3 2단계)")
     try:

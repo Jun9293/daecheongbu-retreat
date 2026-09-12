@@ -408,6 +408,43 @@ const 점검 = async () => {
            '논의 입력칸이 권한과 어긋남');
     }
 
+    /* **「어느 자리를 따르나」 한 줄** (6-4). 옮긴 적이 없는 업무에는 안 뜨는
+       것이 맞으므로 **없으면 건너뛴다** — 「안 뜬다」 를 고장으로 세면 대부분의
+       업무에서 맞는 동작이 ✗ 로 난다(논의 입력칸에서 배운 그 자리).
+       뜬 판에서는 **누른 뒤에도 주변이 그대로인가**를 잰다(10장의 두 번째
+       규칙) — 그 단추는 드로어 안에서 POST 를 쏘고 패널 일부를 다시 그린다. */
+    {
+      const 줄 = $('dmoved');
+      /* **안 뜬 것도 보이게 적는다.** 조용히 지나가면 「이 화면에서는 한 번도
+         안 쟀다」 가 결과에 안 남는다 — 건너뜀을 세는 이유와 같은 자리다. */
+      if (!줄 || !shown(줄)) {
+        results.push('· 옮긴 자리 줄 — 이 업무는 손으로 옮긴 적이 없어 건너뜀');
+      } else {
+        잰다(줄.textContent.trim().length > 0, ' 옮긴 자리 줄에 글이 있음',
+             '옮긴 자리 줄이 비어 있음');
+        const 단추 = 줄.querySelector('button');
+        const canEdit = !document.querySelector('#statchip[disabled]');
+        잰다(canEdit ? !!단추 : !단추,
+             ` 되돌리기 단추가 ${단추 ? '있음' : '없음'} (고칠 수 ${canEdit ? '있음' : '없음'})`,
+             '되돌리기 단추가 권한과 어긋남');
+        if (단추) {
+          const 앞글 = 줄.textContent.trim();
+          const 앞시작 = $('dstart') ? $('dstart').value : null;
+          await 누른다('자리 되돌리기', 단추,
+            {until: () => $('dmoved') && $('dmoved').textContent.trim() !== 앞글});
+          잰다($('dstart') ? $('dstart').value !== 앞시작 : true,
+               ' 되돌리니 기간 칸도 함께 바뀜', '줄만 바뀌고 기간 칸이 옛 값 그대로');
+          const 되돌린다 = $('dmoved') && $('dmoved').querySelector('button');
+          if (되돌린다) {
+            await 누른다('자리 다시 되돌리기', 되돌린다,
+              {until: () => $('dmoved') && $('dmoved').textContent.trim() === 앞글});
+            잰다($('dstart') ? $('dstart').value === 앞시작 : true,
+                 ' 왕복하면 원래 자리로', '왕복했는데 원래 자리가 아님');
+          }
+        }
+      }
+    }
+
     await check('탭 — 업무 규칙', () => $('dtabs').querySelector('[data-p="rules"]').click(),
       {until: () => shown($('p-rules'))});
     if ($('drulesopen')) {

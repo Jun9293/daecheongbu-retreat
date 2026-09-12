@@ -253,7 +253,7 @@ def round_labels(db: Session, *, exclude_retreat_id: int | None = None) -> list[
 # ---------------------------------------------------------------- 선후행 관계
 #
 # 관련업무(related_library_ids)와 섞지 않는다. 관련은 방향이 없고 양쪽에 서로
-# 적지만, 선행은 방향이 있고 **가물러선 쪽에만** 적는다. 후속("나를 기다리는 업무")은
+# 적지만, 선행은 방향이 있고 **가진 쪽에만** 적는다. 후속("나를 기다리는 업무")은
 # 저장하지 않고 여기서 계산한다 — 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이
 # 맞는지 알 수 없기 때문이다. (CLAUDE.md 2장)
 
@@ -787,8 +787,30 @@ def offset_of(lib: TaskLibrary, open_date: dt.date, start: dt.date) -> int:
 
 
 def week_of_start(open_date: dt.date, start: dt.date) -> int | None:
-    """옮긴 자리의 D-주차. 개회일 뒤면 없다 (`move_dates` 와 같은 규칙)."""
+    """그 날짜의 D-주차. 개회일 뒤면 없다 (`move_dates` 와 같은 규칙)."""
     return dweek.week_of(open_date, start) if start < open_date else None
+
+
+def put_dates(run: TaskRun, lib: TaskLibrary, open_date: dt.date,
+              start: dt.date, end: dt.date) -> None:
+    """정해진 자리를 run 에 얹는다 — **날짜와 D-주차를 함께.**
+
+    `dates_for` 가 날짜만 돌려주던 시절에는 D-주차를 정하는 줄이 부르는
+    자리마다 따로 있었다(`reschedule` 과 `follow_dates`). 지금은 같지만
+    **한쪽만 고쳐질 자리**라 여기로 모은다 — 14장이 「어느 자리에 서는지를
+    정하는 곳은 여기 하나다」 라고 적어 둔 그 하나 밖이었다
+    (2026-09-12 검토가 짚었다).
+
+    손으로 옮긴 자리를 따를 때는 **선 자리에서 D-주차를 다시 세고**(끌어
+    옮긴 그 자리가 어느 주인지가 답이다), 아니면 라이브러리 값을 그대로
+    쓴다.
+    """
+    run.start_date, run.end_date = start, end
+    run.d_week = (
+        week_of_start(open_date, start)
+        if hand_wins(run, lib)
+        else lib.default_d_week
+    )
 
 
 def _plan(db: Session, retreat: Retreat, open_date: dt.date):
@@ -845,12 +867,7 @@ def reschedule(db: Session, retreat: Retreat) -> int:
             continue
         if (run.start_date, run.end_date) == (start, end):
             continue
-        run.start_date, run.end_date = start, end
-        run.d_week = (
-            week_of_start(retreat.start_date, start)
-            if 쪽 == "밀기"
-            else run.library.default_d_week
-        )
+        put_dates(run, run.library, retreat.start_date, start, end)
         moved += 1
     db.commit()
     return moved

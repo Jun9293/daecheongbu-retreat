@@ -257,7 +257,7 @@ def task_detail(
         "related": related,
         "prerequisites": prerequisites,
         "dependents": dependents,
-        # 선후행을 고칠 수 있는 사람은 '선행을 가물러선 쪽' 업무의 담당 부서와 총무팀이다.
+        # 선후행을 고칠 수 있는 사람은 '선행을 가진 쪽' 업무의 담당 부서와 총무팀이다.
         # A 가 B 를 기다린다고 적는 것은 A 쪽의 판단이므로 A 의 부서가 적는다.
         "link_candidates": [
             {
@@ -548,10 +548,17 @@ def moved_state(run: TaskRun, retreat: Retreat) -> dict | None:
         return None
     lib = run.library
     따름 = lib_domain.hand_wins(run, lib)
-    기본 = None
+    기본, 그자리 = None, None
     if retreat.start_date is not None:
-        s, _ = lib_domain.library_dates(lib, retreat.start_date)
+        s, e = lib_domain.library_dates(lib, retreat.start_date)
         기본 = s.isoformat()
+        # **지금 실제로 그 자리에 서 있는가.** 「어느 쪽이 이기나」 와 다르다 —
+        # 라이브러리를 고쳐도 그 자리에서 run 은 안 움직이고(`edit_library_task`
+        # 가 「이미 치른 회차의 실행 기록은 건드리지 않는다」), 다음 번
+        # `reschedule` 에서야 옮겨진다. 그 사이에 화면이 「그쪽을 따르고
+        # 있습니다」 라고 하면 바로 위 기간과 두 말을 한다
+        # (2026-09-12 검토가 짚었다)
+        그자리 = (run.start_date, run.end_date) == (s, e)
     return {
         "offset": run.moved_offset_days,
         "hand": 따름,
@@ -559,6 +566,7 @@ def moved_state(run: TaskRun, retreat: Retreat) -> dict | None:
         # 둘은 화면에서 다른 말을 해야 한다
         "why": ("hand" if 따름 else ("dropped" if run.moved_at is None else "library")),
         "library_start": 기본,
+        "at_library": 그자리,
     }
 
 
@@ -598,12 +606,7 @@ def follow_dates(
     }
     run.moved_at = models_now() if payload.hand else None
     start, end = lib_domain.dates_for(run, run.library, retreat.start_date)
-    run.start_date, run.end_date = start, end
-    run.d_week = (
-        lib_domain.week_of_start(retreat.start_date, start)
-        if payload.hand
-        else run.library.default_d_week
-    )
+    lib_domain.put_dates(run, run.library, retreat.start_date, start, end)
     db.commit()
     log_activity(
         db,
@@ -1165,7 +1168,7 @@ def set_prerequisites(
     회차에도 그대로 따라간다. 이번 회차의 blocked_by_run_ids 는 그 결과를 지금
     보드에 비추는 사본이다.
 
-    고칠 수 있는 사람은 선행을 '가물러선 쪽' 업무의 담당 부서와 총무팀이다.
+    고칠 수 있는 사람은 선행을 '가진 쪽' 업무의 담당 부서와 총무팀이다.
     """
     run = _load_run(db, retreat, run_id)
     if not _can_edit(db, user, run):

@@ -140,6 +140,51 @@ def test37_a01_개회일을_옮기면_업무가_D주차를_지킨_채_따라온�
         "⑥ 회차 상세가 안 열린다"
 
 
+def test37_a02_날짜를_안_바꾸면_업무도_안_움직인다(admin_client, 회차):
+    """가) 반대쪽 — **막히면 안 되는 것이 통과하는가**의 짝입니다.
+
+    `a01` 이 「옮기면 따라온다」 를 재므로, 이 줄은 **「안 옮기면 안 따라온다」**
+    를 잽니다. 둘이 있어야 「늘 다시 계산한다」 와 구별됩니다 — 늘 계산하면
+    사람이 이름만 고쳐도 날짜가 흔들립니다.
+
+    **판별력이 어디서 나오는지가 이 판에서 바뀌었습니다.** 전에는 「날짜 없이
+    켜진 run 이 D-13 날짜를 얻는 것」 이 `update_retreat` 의 가드를 재 주고
+    있었는데, 2026-09-12 판이 그 갈래(AW-c)를 닫았습니다 — 그 판의 독스트링이
+    「**AW-c 를 고치는 날 이 줄은 조용히 아무것도 안 재게 됩니다**」 라고 미리
+    적어 둔 그 자리입니다. 그래서 판별력을 **라이브러리 셈과 다른 자리에 선
+    run** 으로 옮깁니다: 가드를 떼면 `reschedule` 이 그것을 셈한 자리로
+    되돌리므로 ② 가 빨개집니다.
+
+    봅니다 — ① 이름만 바꾼 저장이 되는가 ② **업무 날짜가 한 건도 안 바뀌는가**
+    ③ 회차 이름은 실제로 바뀌었나(① 이 「아무것도 안 했다」 가 아님)
+    ④ **셈과 다른 자리에 선 run 이 실제로 있는가** — 없으면 ② 가 가드를
+    안 재고 「계산이 멱등이다」 만 재게 됩니다.
+    """
+    with app_session() as db:
+        run = db.scalars(select(TaskRun).where(
+            TaskRun.retreat_id == 회차, TaskRun.run_no == 1)).first()
+        run.start_date = run.start_date + dt.timedelta(days=2)
+        run.end_date = (run.end_date or run.start_date) + dt.timedelta(days=2)
+        db.commit()
+        from app.domain import library as _lib
+        셈, _ = _lib.library_dates(run.library, 첫개회)
+        비뚤어졌나 = run.start_date != 셈
+    assert 비뚤어졌나, "④ 셈과 같은 자리라 ② 가 가드를 안 잰다"
+
+    앞 = _줄들(회차)
+    답 = admin_client.post(f"/retreats/{회차}/update", data={
+        "name": "2027 여름수련회 (이름만 고침)",
+        "start_date": 첫개회.isoformat(),
+        "end_date": (첫개회 + dt.timedelta(days=2)).isoformat(),
+        "meal_subsidy_per_person": 8000,
+    }, follow_redirects=False)
+    assert 답.status_code == 303, "① 저장이 안 된다"
+
+    assert _줄들(회차) == 앞, "② 날짜를 안 바꿨는데 업무가 움직였다"
+    with app_session() as db:
+        assert db.get(Retreat, 회차).name.endswith("(이름만 고침)"), "③ 이름이 안 바뀌었다"
+
+
 # `test37_a03` 은 없앴습니다 — 「손으로 옮긴 날짜는 개회일이 바뀌면 되돌아간다」
 # 를 재던 줄인데, **2026-09-12 판이 그 고장을 닫았습니다**(봐둘것 AW-b).
 # 그 줄이 실제로 재던 것 — DB 에 직접 쓴 날짜는 「옮김」 이 아니라서 다시

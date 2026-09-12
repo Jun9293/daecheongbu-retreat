@@ -54,7 +54,8 @@ def 회차(admin_client):
                     end_date=첫개회 + dt.timedelta(days=2))
         db.add(r)
         db.flush()
-        db.add(Department(retreat_id=r.id, key="seongyo", name="3 선교사회", sort_order=0))
+        dept = Department(retreat_id=r.id, key="seongyo", name="3 선교사회", sort_order=0)
+        db.add(dept)
         db.flush()
         # (D-주차, 켤까, 그 주 일요일에서 며칠, 며칠짜리, 날짜를 넣을까)
         차림 = [(13, True, 3, 3, True), (8, True, 0, 6, True),
@@ -68,6 +69,7 @@ def 회차(admin_client):
             시작 = (_그주(첫개회, dw) + dt.timedelta(days=오프셋)) if 날짜있음 else None
             db.add(TaskRun(library_id=lib.id, retreat_id=r.id, included=inc,
                            run_no=i + 1, d_week=dw if 날짜있음 else None,
+                           department_id=dept.id,
                            start_date=시작,
                            end_date=(시작 + dt.timedelta(days=기간)) if 시작 else None))
         db.commit()
@@ -356,6 +358,58 @@ def test39_e02_되돌린_것이_활동_기록에_남는다(admin_client, 회차)
             ActivityLog.action == "업무_날짜_기준_변경")).all()
     assert len(줄) == 1, f"① 기록이 {len(줄)}줄이다"
     assert "라이브러리" in (줄[0].summary or ""), f"② 어느 쪽인지 안 적혔다: {줄[0].summary}"
+
+
+def test39_e03_남의_부서_업무는_되돌리지_못한다(admin_client, client, 회차):
+    """마) **막는 코드에 막히는 쪽 시험이 함께 있어야 합니다**(11-3).
+    날짜를 바꾸는 길이고 부서 경계를 넘습니다 — 같은 성격의 다른 쓰기
+    엔드포인트(`/status` · `/dates`)에는 그 짝이 있는데 이 새 길에만
+    없었습니다 (2026-09-12 검토가 짚었습니다).
+
+    봅니다 — ① 남의 부서 사람에게 403 인가 ② **막힌 뒤에도 값이 그대로인가**
+    (거절하면서 절반만 쓰지 않았는가) ③ 관리자에게는 같은 요청이 통하나 —
+    안 그러면 「늘 막는 문」 이라 ① 이 아무것도 안 잽니다.
+    """
+    _끈다(admin_client, 회차, 1, 끈날)
+    앞 = _값(회차)[1]
+    rid1 = _run_id(회차, 1)
+
+    from tests.conftest import login_as
+    login_as(client, "01099998888", name="남의 부서 사람")
+    막힘 = client.post(f"/board/task/{rid1}/dates/follow", json={"hand": False})
+    assert 막힘.status_code == 403, f"① 남의 부서인데 {막힘.status_code} 다"
+    assert _값(회차)[1] == 앞, "② 막혔는데 값이 바뀌었다"
+
+    통함 = admin_client.post(f"/board/task/{rid1}/dates/follow", json={"hand": False})
+    assert 통함.status_code == 200, f"③ 관리자에게도 막힌다 — ① 이 아무것도 안 잰다"
+
+
+def test39_d03_라이브러리를_고친_직후에는_아직_그_자리에_안_선다(admin_client, 회차):
+    """라) **개회일이 바뀌기 전 구간**입니다. `edit_library_task` 는 run 을
+    안 건드리므로(「이미 치른 회차의 실행 기록은 건드리지 않는다」), 라이브러리를
+    고친 순간 **판정은 뒤집히지만 날짜는 손 자리 그대로**입니다.
+
+    그때 화면이 「그쪽을 따르고 있습니다」 라고 하면 바로 위 기간과 두 말을
+    합니다 — 2026-09-12 검토가 짚었고, 문구를 미래형으로 갈랐습니다.
+    **운영에서는 개회일을 바꾸는 일보다 라이브러리를 고치는 일이 잦으므로
+    이 구간이 기본 상태에 가깝습니다.**
+
+    봅니다 — ① 판정이 뒤집혔나 ② **날짜는 아직 손 자리인가**
+    ③ 화면이 그 둘을 구별하는 값을 내는가(`at_library` 가 거짓)
+    ④ 개회일을 바꾸면 그때 실제로 라이브러리 자리에 서고 ③ 이 참이 되는가.
+    """
+    끈자리 = _끈다(admin_client, 회차, 1, 끈날)
+    _라이브러리를고친다(회차, 1, 새주차=11)
+
+    상세 = admin_client.get(f"/board/task/{_run_id(회차, 1)}").json()
+    assert 상세["moved"]["why"] == "library", "① 판정이 안 뒤집혔다"
+    assert _값(회차)[1][0] == 끈자리, "② 날짜가 벌써 움직였다"
+    assert 상세["moved"]["at_library"] is False, \
+        f"③ 아직 그 자리가 아닌데 그렇다고 말한다: {상세['moved']}"
+
+    _개회일을바꾼다(admin_client, 회차, 새개회)
+    상세 = admin_client.get(f"/board/task/{_run_id(회차, 1)}").json()
+    assert 상세["moved"]["at_library"] is True, "④ 옮긴 뒤에도 그 자리가 아니라고 한다"
 
 
 # ── 바. 이미 선 업무는 「안 옮김」 으로 시작한다 ───────────────────────
