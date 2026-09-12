@@ -65,6 +65,16 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("task_library", "prerequisite_library_ids", "TEXT"),
     ("task_runs", "started_at", "DATE"),
     ("task_runs", "completed_at", "DATE"),
+    # 사람이 보드에서 옮겨 둔 자리 (6-4 · 봐둘것 AW-b). **붙이기만 한다** —
+    # 값을 채우지 않는다. 기존 행은 NULL 이라 「안 옮김」 으로 시작한다:
+    # 지금 날짜가 라이브러리 셈과 다르다고 해서 사람이 옮긴 것이라고
+    # 단정할 수 없다(라이브러리를 나중에 고쳤어도 그렇게 된다). 지어낸
+    # 기록을 심지 않는다 (6-9)
+    ("task_runs", "moved_offset_days", "INTEGER"),
+    ("task_runs", "moved_at", "DATETIME"),
+    # 라이브러리의 상대 위치를 마지막으로 고친 때 (6-4). 옮긴 자리와
+    # 견주어 나중 것이 이긴다. 기존 행은 NULL = 고친 적 없음
+    ("task_library", "dates_changed_at", "DATETIME"),
     # 나중에 붙었다. 기존 행은 NULL 이므로 읽는 쪽이 'person' 으로 본다 (5-2)
     ("program_items", "scope", "VARCHAR(10)"),
     # 봉사자 시간표(5-8) 때문에 붙었다. 기존 행은 NULL —

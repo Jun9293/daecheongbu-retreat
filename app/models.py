@@ -947,7 +947,7 @@ class TaskLibrary(Base):
     # 관련업무 — 방향이 없다. 양쪽에 서로 적는다.
     related_library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
     # 선행업무 — 방향이 있다. "저쪽이 끝나야 이쪽을 시작할 수 있다".
-    # 가진 쪽에만 적는다. 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이 맞는지 알 수 없다.
+    # 가물러선 쪽에만 적는다. 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이 맞는지 알 수 없다.
     # 후속("나를 기다리는 업무")은 저장하지 않고 조회할 때 계산한다.
     prerequisite_library_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
 
@@ -957,6 +957,10 @@ class TaskLibrary(Base):
     default_d_week: Mapped[int | None] = mapped_column(Integer, nullable=True)
     default_offset_days: Mapped[int] = mapped_column(Integer, default=0)
     default_span_days: Mapped[int] = mapped_column(Integer, default=0)
+    # 위 네 값을 마지막으로 고친 때. **사람이 보드에서 옮긴 자리와 부딪히면
+    # 나중 것이 이긴다**(6-4) — 그 견줌에만 쓴다. NULL 이면 고친 적이 없는
+    # 것이고, 그때는 옮긴 자리가 이긴다.
+    dates_changed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 총무팀이 손으로 "이건 매 회차 반드시"라고 지정한 업무.
     # 실행 이력이 얕거나 아예 없어도 구멍 방지 경고가 작동하게 하는 장치다.
@@ -1029,6 +1033,19 @@ class TaskRun(Base):
     # started_at 과 달리 '완료' 를 벗어나면 지운다 — 착수는 사실이지만 완료는 취소된다.
     completed_at: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     blocked_by_run_ids: Mapped[list[int] | None] = mapped_column(JSON, default=list)
+    # ── 사람이 보드에서 옮겨 둔 자리 (4-6 · 6-4 · 봐둘것 AW-b) ──────────
+    # **날짜가 아니라 「그때 셈한 자리에서 며칠」 을 둔다.** 날짜를 두면
+    # 개회일이 바뀔 때 며칠 밀렸던 것인지를 다시 알아내야 하는데, 그러려면
+    # 옛 개회일이 있어야 한다 — reschedule 은 그것을 안 받는다. 며칠인지를
+    # 두면 새 개회일에서 셈한 자리에 그대로 더하면 된다.
+    # NULL 이면 **안 옮긴 것**이고 라이브러리 셈을 그대로 따른다.
+    # 0 도 값이다 — 사람이 기본 자리로 끌어다 놓은 것.
+    moved_offset_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 그 자리를 정한 때. **라이브러리 쪽 시각과 견주어 나중 것이 이긴다**
+    # (`TaskLibrary.dates_changed_at`). NULL 이면 지금은 그 자리를 안 따르는
+    # 것이고, **`moved_offset_days` 는 그대로 남는다** — 되돌릴 수 있어야
+    # 한다(0장). 물러선 쪽을 지우지 않는 자리가 여기다
+    moved_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     # 출처 — 회의 항목에서 전환된 업무면 그 회의록 (8장). 논의의
     # source_meeting_id(4-9)와 같은 자리다: 논의는 논의 쪽에, 업무는 업무
     # 쪽에 단다. 비면 보드·마법사에서 사람이 만든 것이다.
