@@ -95,6 +95,17 @@ def test_03_사이드바는_접힌_채로_시작하고_토글과_가장자리_�
 
     js = (ROOT / "app" / "static" / "js" / "sidenav.js").read_text(encoding="utf-8")
     assert "mouseenter" in js and "sidepin" in js
+
+    # **좁은 화면에도 여는 길이 있다.** 호버만 있던 때 휴대폰에서는 여는
+    # 길이 아예 없었다 — 토글은 CSS 가 1280px 아래에서 무시하는 클래스만
+    # 붙였고, 상단 탭 줄이 없어 이동 수단이 통째로 사라졌다 (2026-09-12).
+    # 글자를 찾는 시험이라 「그 분기가 있다」 까지만 본다 — 실제로 눌리는지는
+    # `docs/checks/phone.js` 가 휴대폰 폭에서 잰다 (10장 · 11-3 2단계).
+    # **파일 어디에 있나가 아니라 토글 핸들러 안에 있나를 본다.** 그 글자는
+    # 고치기 전 파일에도 두 번 있었다(`pinned` · `setPinned`) — 통째로
+    # 되돌려도 초록인 단언이었고, 커밋 전 검토가 재서 짚었다.
+    assert re.search(r'toggle\.addEventListener\("click"[\s\S]{0,600}innerWidth >= 1280', js),         "토글이 폭을 안 가른다 — 좁은 화면에서 고정만 붙인다"
+    assert re.search(r"@media \(hover:\s*none\)\{[^}]*\.sideedge\{display:none", CSS),         "호버가 없는 기기에서 가장자리 띠가 본문의 누름을 가져간다"
     # 한 번도 켠 적 없으면 접힘이다
     # 저장된 고정 여부는 **첫 그림 전에** 읽는다. 그린 뒤에 붙이면 화면을
     # 옮길 때마다 사이드바와 본문이 밀려 들어온다.
