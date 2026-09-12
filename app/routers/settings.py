@@ -351,6 +351,32 @@ def create_retreat(
     return redirect("/settings/retreats", message=f"'{retreat.name}' 회차를 만들었습니다.")
 
 
+@router.get("/retreats/{retreat_id}/reschedule-preview")
+def reschedule_preview(
+    retreat_id: int,
+    open_date: str = "",
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """개회일을 그날로 바꾸면 무엇이 달라지는지 — **저장하기 전에** (6-4).
+
+    **세는 것은 `library.reschedule_preview` 하나**이고 실제로 옮기는
+    `reschedule` 이 같은 `_plan` 을 쓴다. 두 곳에서 따로 세면 보여준 수와
+    실제가 갈리고, 갈린 쪽을 아무도 눈치채지 못한다.
+    """
+    from app.domain.library import reschedule_preview as 센다
+
+    retreat = db.get(Retreat, retreat_id)
+    if retreat is None:
+        raise HTTPException(status_code=404, detail="회차를 찾을 수 없습니다.")
+    새개회 = _parse_date(open_date)
+    if 새개회 is None:
+        raise HTTPException(status_code=400, detail="개회일이 없습니다.")
+    if 새개회 == retreat.start_date:
+        return {"changed": False}
+    return {"changed": True, **센다(db, retreat, 새개회)}
+
+
 @router.post("/retreats/{retreat_id}/update")
 def update_retreat(
     retreat_id: int,

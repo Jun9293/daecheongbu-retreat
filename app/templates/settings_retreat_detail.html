@@ -24,8 +24,13 @@
           <span class="k">식대 1인 상한</span><input name="meal_subsidy_per_person" type="number" min="0" step="500" value="{{ target.meal_subsidy_per_person }}">
         </div>
         {# **혼자 뜻을 지는 줄이라 한 급 위다** (4-0 · `.hint.lone`) — 칸만
-           보고는 알 수 없고 되돌리기 어려운 결과입니다 #}
-        <div class="hint lone">개회일을 바꾸면 모든 업무 날짜가 D-주차를 유지한 채 함께 움직입니다 (6-4).</div>
+           보고는 알 수 없고 되돌리기 어려운 결과입니다.
+           손으로 옮겨 둔 업무는 **같은 간격만큼 함께 밀립니다**(6-4) #}
+        <div class="hint lone">개회일을 바꾸면 업무 날짜가 함께 움직입니다 —
+          손으로 옮겨 둔 것은 그 간격을 지킨 채로 (6-4).</div>
+        {# **저장하기 전에** 무엇이 달라지는지 (6-4). 수는 서버가 셉니다 —
+           화면이 세면 보여준 수와 실제가 갈립니다 #}
+        <div class="hint lone" id="rsprev" hidden></div>
         <div style="margin-top:10px;display:flex;gap:6px"><button class="sbtn p" type="submit">저장</button></div>
       </form>
       {% else %}
@@ -68,4 +73,27 @@
     </div>
   </div>
 </main>
+<script>
+/* 개회일을 고치면 **저장하기 전에** 무엇이 달라지는지 묻는다 (6-4).
+   수를 화면에서 세지 않는다 — 서버가 `library.reschedule_preview` 로
+   세고, 실제로 옮기는 `reschedule` 이 같은 `_plan` 을 쓴다. */
+(function () {
+  var box = document.getElementById('rsprev');
+  var input = document.querySelector('input[name=start_date]');
+  if (!box || !input) return;
+  var 처음 = input.value;
+  input.addEventListener('change', async function () {
+    if (!input.value || input.value === 처음) { box.hidden = true; return; }
+    var r = await fetch('/retreats/{{ target.id }}/reschedule-preview?open_date=' +
+                        encodeURIComponent(input.value));
+    if (!r.ok) { box.hidden = true; return; }
+    var d = await r.json();
+    if (!d.changed) { box.hidden = true; return; }
+    box.innerHTML = '저장하면 — 다시 셀 업무 <b>' + d['다시셈'] + '건</b> · ' +
+      '손으로 옮긴 자리 그대로 밀 업무 <b>' + d['밀기'] + '건</b> · ' +
+      '날짜가 빈 채 남을 업무 <b>' + d['빈채'] + '건</b>';
+    box.hidden = false;
+  });
+})();
+</script>
 {% endblock %}
