@@ -3,6 +3,10 @@
  * 쓰는 법: **보드(/board) · 달력(/calendar) · 목록(/tasks)** 을 연 뒤 브라우저
  * 콘솔에 이 파일 내용을 붙여넣습니다. 화면을 고쳤으면 "됐다"고 말하기 전에 돌립니다.
  *
+ * **넓은 화면(1280px 위)에서 돌립니다 — 전제입니다.** 그 아래에서는 사이드바
+ * 갈래가 달라져 이 점검이 재는 것이 뜻을 잃으므로, 돌지 않고 그렇게 말합니다.
+ * 휴대폰 폭에서 누르는 것은 `docs/checks/phone.js` 가 잽니다.
+ *
  * **세 화면에서 각각 돌립니다.** 패널은 한 벌이지만(templates/partials/drawer.html ·
  * static/js/drawer.js), 그것을 여는 자리와 고쳐 그리는 코드는 화면마다 다릅니다.
  * 한쪽만 통과하면 패널이 실제로는 한 벌이 아니라는 뜻입니다 (CLAUDE.md 4-13 · 4-14).
@@ -156,6 +160,20 @@ const 점검 = async () => {
   };
 
   if (!dw) return {치명: '이 화면에는 상세 패널이 없습니다 (/board · /calendar · /tasks 에서 돌리세요)'};
+
+  /* ── 전제: 넓은 화면인가 ──────────────────────────────────────────
+     이 점검은 **1280px 위**를 전제로 씁니다 — 사이드바 갈래가 그 경계에서
+     갈리고(4-0), 1280 아래에서 토글은 고정을 푸는 것이 아니라 겹쳐 띄우는
+     것이라 「고정을 풀면 접힌다」 가 뜻을 잃습니다.
+     전에는 폭으로 갈래를 나눠 **좁아도 도는 척**했는데, 좁게 돌리면 그 줄이
+     ✗ 로 나옵니다 — **화면이 틀린 것이 아니라 전제가 틀린 것**이고, 그 둘이
+     같은 빨강으로 나오면 아무것도 못 정합니다.
+     휴대폰 폭은 `docs/checks/phone.js` 가 잽니다 — 그쪽은 반대로 820px
+     위에서 돌기를 거절합니다. 폭을 항목이 아니라 **전제**로 둡니다. */
+  const 폭 = window.innerWidth;
+  if (폭 < 1280) return {치명: `창이 ${폭}px 입니다 — 이 점검은 1280px 위에서 돌립니다.`
+    + ' 그 아래에서는 사이드바 갈래가 달라 「고정을 풀면 접힌다」 가 뜻을 잃습니다'
+    + ' (휴대폰 폭은 docs/checks/phone.js 입니다).'};
 
   /* ── 어느 화면인가 ────────────────────────────────────────────────
      패널은 같지만 "무엇을 눌러 여는가" 와 "보던 자리가 무엇인가" 는 다르다.
@@ -885,7 +903,6 @@ const 점검 = async () => {
       const nav = document.getElementById('sidenav');
       const edge = document.getElementById('sideedge');
       const toggle = document.getElementById('sidetoggle');
-      const wideScreen = window.innerWidth >= 1280;
       // 미끄러지는 동안을 재지 않는다. 탭이 가려져 있으면 브라우저가 그리기를
       // 멈춰 전환이 진행되지 않고, 그러면 "안 열렸다"고 잘못 말한다 — 화면이
       // 틀린 게 아니라 재는 방법이 틀린 것이다. 여기서만 전환을 끄고 끝나면 되돌린다.
@@ -896,13 +913,13 @@ const 점검 = async () => {
       const pinned = () => document.body.classList.contains('sidepin');
       const wasPinned = pinned();
 
-      // 기본 상태 — 저장값이 없으면 넓은 화면은 펼침, 좁은 화면은 접힘.
+      // 기본 상태 — 여기는 넓은 화면이 전제라(위) 저장값이 없으면 펼침이다.
       let saved = null; try { saved = localStorage.getItem('dcb.sidepin'); } catch (e) {}
-      const expectPinned = saved === '1' || (saved === null && wideScreen);
+      const expectPinned = saved !== '0';   // 넓은 화면이 전제라 저장값이 없으면 펼침
       잰다(pinned() === expectPinned,
         ` 사이드바 기본 상태가 1280px 기준과 저장값을 따른다 (pinned=${pinned()})`,
         '사이드바 기본 상태가 틀림');
-      if (wideScreen) {
+      {
         const openWide = !pinned() || (at() === 0 && parseInt(getComputedStyle(document.body).paddingLeft, 10) > 100);
         잰다(openWide, ' 넓은 화면 고정 시 펼쳐지고 본문이 밀린다', '넓은 화면에서 고정이 본문을 밀지 않음');
       }
@@ -932,12 +949,13 @@ const 점검 = async () => {
       nav.dispatchEvent(new MouseEvent('mouseleave', {bubbles: false}));
       await 될때까지('가장자리에서 손 떼기', () => at() < 0, 1500);
 
-      // 토글 — 고정한다. 본문이 밀리는 것은 ≥1280 에서만이다 (그 아래는 CSS 가 무시).
+      // 토글 — 고정한다. 넓은 화면이라 본문이 밀린다 (1280 아래는 겹쳐 뜨고,
+      //        그쪽은 phone.js 가 잰다).
       await 누른다('사이드바 — 토글로 고정', toggle,
         {until: () => pinned() && at() === 0, mayScroll: true});
       const pad = parseInt(getComputedStyle(document.body).paddingLeft, 10);
-      const pin = pinned() && (wideScreen ? (at() === 0 && pad > 100) : pad === 0);
-      잰다(pin, (wideScreen ? ' 토글로 고정하면 본문이 밀린다' : ' 좁은 화면에서는 고정해도 본문이 밀리지 않는다'),
+      const pin = pinned() && at() === 0 && pad > 100;
+      잰다(pin, ' 토글로 고정하면 본문이 밀린다',
            '토글 고정이 1280px 기준과 다르게 동작함');
       await 누른다('사이드바 — 토글로 접기', toggle,
         {until: () => !pinned(), mayScroll: true});
@@ -1254,18 +1272,38 @@ const 줄을지켜본다 = 손본다 => {
 };
 
 /* **시작일 칸의 값을 붙든다.** 값(`value`)이 바뀌는 것은 DOM 변경이 아니라
-   지켜보기로는 못 잡습니다 — 짧은 되풀이로 붙듭니다. 처음 본 값을 기억해
-   그것으로 되돌리므로, **드로어가 뜨기 전에 심어도** 뜨는 순간의 값을
-   잡습니다. */
+   지켜보기로는 못 잡습니다. 처음 본 값을 기억해 그것으로 되돌리므로,
+   **드로어가 뜨기 전에 심어도** 뜨는 순간의 값을 잡습니다.
+
+   **되풀이로 「도로 써넣는」 방식은 흔들렸습니다.** 5ms 마다 값을 되돌려
+   놓았는데, 앱이 값을 고친 **그 직후·다음 되풀이 전에** 점검이 읽으면 새
+   값이 보여 **고장을 심었는데 통과로 지나갑니다** — 2026-09-12 에 ⑮ 가
+   관리자 보드에서 두 판 연달아 그랬습니다(혼자 돌린 판에서도). 심는 것이
+   흔들리면 **놓친 것과 안 새는 것이 같은 모양**이 됩니다.
+
+   그래서 **읽는 쪽을 붙듭니다** — 그 칸의 `value` 게터를 갈아 끼워, 언제
+   읽든 붙든 값이 나옵니다. 되풀이는 **새로 그려진 칸에 다시 거는 일**만
+   합니다(패널이 다시 그려지면 요소가 갈립니다). */
 const 값을붙든다 = (언제, 값 = null) => {
-  let 첫값 = null;
+  let 첫값 = null, 걸린것 = null;
+  const 바탕 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  const 건다 = el => {
+    if (걸린것 === el) return;
+    if (걸린것) delete 걸린것.value;
+    걸린것 = el;
+    Object.defineProperty(el, 'value', {
+      configurable: true,
+      get() { return 언제() ? (값 === null ? 첫값 : 값) : 바탕.get.call(this); },
+      set(v) { 바탕.set.call(this, v); },
+    });
+  };
   const t = setInterval(() => {
     const s = document.getElementById('dstart');
     if (!s) return;
-    if (첫값 === null) { 첫값 = s.value; return; }
-    if (언제()) s.value = 값 === null ? 첫값 : 값;
+    if (첫값 === null) 첫값 = 바탕.get.call(s);
+    건다(s);
   }, 5);
-  return () => clearInterval(t);
+  return () => { clearInterval(t); if (걸린것) delete 걸린것.value; };
 };
 
 const 고장들 = [
