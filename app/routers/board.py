@@ -20,6 +20,7 @@ from app.domain import library as lib_domain
 from app.domain import permissions as perm
 from app.domain.departments import short_name
 from app.models import DiscussionEntry, Meeting, Retreat, TaskRun, User
+from app.models import _now as models_now
 from app.routers import attachments
 from app.security import get_current_user
 from app.templating import render
@@ -230,6 +231,8 @@ def task_detail(
         "start": run.start_date.isoformat() if run.start_date else None,
         "end": (run.end_date or run.start_date).isoformat() if run.start_date else None,
         "d_week": run.d_week,
+        # 어느 자리를 따르고 있나 (6-4). 옮긴 적이 없으면 None 이라 화면이 조용하다
+        "moved": moved_state(run, retreat),
         "department": run.department.name if run.department else "담당 없음",
         "department_color": run.department.color if run.department else "#69726D",
         "assignee_id": run.assignee_id,
@@ -254,7 +257,7 @@ def task_detail(
         "related": related,
         "prerequisites": prerequisites,
         "dependents": dependents,
-        # 선후행을 고칠 수 있는 사람은 '선행을 가진 쪽' 업무의 담당 부서와 총무팀이다.
+        # 선후행을 고칠 수 있는 사람은 '선행을 가물러선 쪽' 업무의 담당 부서와 총무팀이다.
         # A 가 B 를 기다린다고 적는 것은 A 쪽의 판단이므로 A 의 부서가 적는다.
         "link_candidates": [
             {
@@ -491,9 +494,20 @@ def move_dates(
     before = {
         "start": run.start_date.isoformat() if run.start_date else None,
         "end": run.end_date.isoformat() if run.end_date else None,
+        "moved_offset_days": run.moved_offset_days,
     }
     run.start_date, run.end_date = start, end
-    run.d_week = dweek.week_of(retreat.start_date, start) if start < retreat.start_date else None
+    run.d_week = lib_domain.week_of_start(retreat.start_date, start)
+    # **옮긴 사실을 남긴다** (6-4 · 봐둘것 AW-b). 안 남기면 개회일이 바뀔 때
+    # 라이브러리 셈으로 되돌아가고 **아무 표시도 안 난다.** 날짜가 아니라
+    # 「셈한 자리에서 며칠」 을 두는 까닭은 `domain/library.dates_for` 에.
+    #
+    # **드로어에서 마감일만 고쳐도 여기로 온다** — 그때 며칠은 0 이지만
+    # 그것도 「사람이 정한 자리」 다. 안 남기면 늘려 둔 기간이 개회일이
+    # 바뀔 때 라이브러리 길이로 조용히 되돌아간다.
+    if retreat.start_date is not None:
+        run.moved_offset_days = lib_domain.offset_of(run.library, retreat.start_date, start)
+        run.moved_at = models_now()
     db.commit()
     log_activity(
         db,
@@ -504,7 +518,8 @@ def move_dates(
         target_id=run.id,
         summary=f"{run.library.title}: {before['start']} → {start.isoformat()}",
         before_value=before,
-        after_value={"start": start.isoformat(), "end": end.isoformat()},
+        after_value={"start": start.isoformat(), "end": end.isoformat(),
+                     "moved_offset_days": run.moved_offset_days},
     )
     # 날짜를 옮기면 **기한 초과가 바뀌고, 달력의 점 색이 그것을 따라간다** (4-13).
     # 화면에서 다시 계산하지 않도록 상태 변경과 **같은 모양**으로 실어 보낸다.
@@ -515,6 +530,102 @@ def move_dates(
         "d_week": run.d_week,
         "label": f"{start.month}/{start.day}"
         + (f"–{end.month}/{end.day}" if end != start else ""),
+        "moved": moved_state(run, retreat),
+    }
+
+
+def moved_state(run: TaskRun, retreat: Retreat) -> dict | None:
+    """이 업무가 지금 어느 자리를 따르고 있나 — 화면에 한 줄로 뜬다 (6-4).
+
+    **판정을 여기서 새로 하지 않는다** — `library.hand_wins` 를 부른다.
+    두 벌이 되면 화면이 말하는 것과 실제 날짜가 갈린다.
+
+    `None` 이면 옮긴 적이 없는 업무라 화면에 아무 줄도 안 뜬다 — 대부분이
+    그럴 테니 조용하고, 옮긴 것만 눈에 띈다 (4-9 의 논의 「걸린 곳」 과
+    같은 판단).
+    """
+    if run.moved_offset_days is None:
+        return None
+    lib = run.library
+    따름 = lib_domain.hand_wins(run, lib)
+    기본 = None
+    if retreat.start_date is not None:
+        s, _ = lib_domain.library_dates(lib, retreat.start_date)
+        기본 = s.isoformat()
+    return {
+        "offset": run.moved_offset_days,
+        "hand": 따름,
+        # 왜 안 따르는가 — 사람이 내린 것인가, 라이브러리가 나중에 바뀐 것인가.
+        # 둘은 화면에서 다른 말을 해야 한다
+        "why": ("hand" if 따름 else ("dropped" if run.moved_at is None else "library")),
+        "library_start": 기본,
+    }
+
+
+class FollowIn(BaseModel):
+    hand: bool
+
+
+@router.post("/board/task/{run_id}/dates/follow")
+def follow_dates(
+    run_id: int,
+    payload: FollowIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """옮겨 둔 자리와 라이브러리 자리 사이를 오간다 — **되돌리는 길** (6-4).
+
+    **어느 쪽도 지우지 않는다.** 옮긴 값(`moved_offset_days`)은 그대로 있고
+    라이브러리 자리는 언제든 다시 셀 수 있다. 오가는 것은 `moved_at` 하나다.
+
+    - `hand=true` — 옮겨 둔 자리로. `moved_at` 을 지금으로 올려 라이브러리가
+      나중에 바뀌었던 것보다 뒤가 되게 한다
+    - `hand=false` — 라이브러리 자리로. `moved_at` 을 비운다
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 옮길 수 있습니다.")
+    if run.moved_offset_days is None:
+        raise HTTPException(status_code=400, detail="손으로 옮긴 적이 없는 업무입니다.")
+    if retreat.start_date is None:
+        raise HTTPException(status_code=400, detail="회차에 개회일이 없습니다.")
+
+    before = {
+        "start": run.start_date.isoformat() if run.start_date else None,
+        "end": run.end_date.isoformat() if run.end_date else None,
+        "hand": lib_domain.hand_wins(run, run.library),
+    }
+    run.moved_at = models_now() if payload.hand else None
+    start, end = lib_domain.dates_for(run, run.library, retreat.start_date)
+    run.start_date, run.end_date = start, end
+    run.d_week = (
+        lib_domain.week_of_start(retreat.start_date, start)
+        if payload.hand
+        else run.library.default_d_week
+    )
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="업무_날짜_기준_변경",
+        target_type="task_run",
+        target_id=run.id,
+        summary=f"{run.library.title}: "
+        + ("옮겨 둔 자리로" if payload.hand else "라이브러리 자리로"),
+        before_value=before,
+        after_value={"start": start.isoformat(), "end": end.isoformat(),
+                     "hand": payload.hand},
+    )
+    return {
+        **board_view.paint_of(run, dt.date.today()),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "d_week": run.d_week,
+        "label": f"{start.month}/{start.day}"
+        + (f"–{end.month}/{end.day}" if end != start else ""),
+        "moved": moved_state(run, retreat),
     }
 
 
@@ -1054,7 +1165,7 @@ def set_prerequisites(
     회차에도 그대로 따라간다. 이번 회차의 blocked_by_run_ids 는 그 결과를 지금
     보드에 비추는 사본이다.
 
-    고칠 수 있는 사람은 선행을 '가진 쪽' 업무의 담당 부서와 총무팀이다.
+    고칠 수 있는 사람은 선행을 '가물러선 쪽' 업무의 담당 부서와 총무팀이다.
     """
     run = _load_run(db, retreat, run_id)
     if not _can_edit(db, user, run):

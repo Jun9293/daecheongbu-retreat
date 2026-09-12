@@ -1953,6 +1953,21 @@ input[type=password]{font:inherit;font-size:var(--fz-lg);
 .fld .pwwarn{font-size:var(--fz-md);color:var(--ink);font-weight:500;
   margin-top:8px;line-height:1.5}
 
+/* 드로어의 「어느 자리를 따르나」 한 줄 (6-4). **혼자 뜻을 지는 글자라
+   본문 단(14px)이다** — 4-0 의 하한이 그것이고, 이 줄이 없으면 개회일이
+   바뀐 뒤에 자리가 왜 그런지 화면 어디에도 안 적혀 있다.
+   색은 앱 토큰만 쓴다. 라이브러리가 이겨서 옮긴 자리를 안 따르는 동안은
+   비침(`--span`)으로 깔아 **지금 무언가가 어긋나 있다**는 것을 보인다 —
+   붉은색은 지연이고 파랑은 선택이라 둘 다 쓸 수 없다 (4-0). */
+.dmoved{font-size:var(--fz-md);color:var(--ink-2);line-height:1.5;
+  margin:10px 0 0;padding:8px 10px;border:1px solid var(--rule);border-radius:6px}
+.dmoved.off{background:var(--span)}
+.dmoved b{color:var(--ink);font-weight:500}
+.dmoved button{font:inherit;font-size:var(--fz-sm);margin-left:6px;padding:3px 9px;
+  border:1px solid var(--rule-2);border-radius:999px;background:var(--card);
+  color:var(--ink-2);cursor:pointer}
+.dmoved button:hover{background:var(--hover);color:var(--ink)}
+
 .bareerr{background:var(--st-late-bg);color:var(--st-late-fg);border-radius:6px;padding:8px 12px}
 
 /* ── 목록 (4-14) — 행은 마법사 3단계와 같은 partial(taskrow)이다 */

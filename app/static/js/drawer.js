@@ -117,6 +117,61 @@ $('dtabs').onclick = e => {
 };
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); closeDrawer(); } });
 
+/* 「어느 자리를 따르나」 한 줄 (6-4 · 봐둘것 AW-b).
+
+   **옮긴 적이 없으면 아무것도 안 그린다** — 대부분이 그럴 테니 화면이
+   조용하고 옮긴 것만 눈에 띈다. 판정은 서버가 한다(`board.moved_state`
+   → `library.hand_wins`): 여기서 다시 가르면 화면이 말하는 것과 실제
+   날짜가 갈리고, **갈린 쪽을 아무도 눈치채지 못한다.** */
+function renderMoved() {
+  const box = $('dmoved');
+  if (!box) return;
+  const m = detail && detail.moved;
+  if (!m) { box.hidden = true; box.innerHTML = ''; return; }
+  const 며칠 = Math.abs(m.offset);
+  const 자리 = m.offset === 0 ? '기본 자리' :
+    `${며칠}일 ${m.offset < 0 ? '당긴' : '미룬'} 자리`;
+  let 글, 단추 = '';
+  if (m.why === 'hand') {
+    글 = `손으로 옮긴 자리입니다 — <b>${자리}</b>. 개회일이 바뀌어도 이 간격을 지킵니다.`;
+    if (detail.can_edit) 단추 = `<button data-hand="0">기본 자리로</button>`;
+  } else if (m.why === 'library') {
+    글 = `라이브러리 기준이 <b>그 뒤에 바뀌어</b> 그쪽을 따르고 있습니다 — `
+       + `손으로 옮겨 둔 ${자리}는 그대로 남아 있습니다.`;
+    if (detail.can_edit) 단추 = `<button data-hand="1">옮긴 자리로</button>`;
+  } else {
+    글 = `라이브러리 자리를 따르고 있습니다 — 손으로 옮겨 둔 <b>${자리}</b>는 그대로 남아 있습니다.`;
+    if (detail.can_edit) 단추 = `<button data-hand="1">옮긴 자리로</button>`;
+  }
+  box.className = 'dmoved' + (m.why === 'hand' ? '' : ' off');
+  box.innerHTML = 글 + 단추;
+  box.hidden = false;
+  const b = box.querySelector('button');
+  if (b) b.onclick = () => followDates(b.dataset.hand === '1');
+}
+
+async function followDates(hand) {
+  const res = await fetch(`/board/task/${detail.run_id}/dates/follow`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hand: hand}),
+  });
+  if (!res.ok) {
+    // **조용히 삼키지 않는다** — 되돌린 줄 알고 넘어간다 (5-0 과 같은 자리)
+    alert((await res.json().catch(() => ({}))).detail || '자리를 바꾸지 못했습니다.');
+    return;
+  }
+  const saved = await res.json();
+  detail.start = saved.start;
+  detail.end = saved.end;
+  detail.moved = saved.moved;
+  renderMoved();
+  const s = $('dstart'), e = $('dend'), sp = $('dspan');
+  if (s) s.value = saved.start;
+  if (e) e.value = saved.end;
+  if (sp) sp.textContent = spanLabel(saved.start, saved.end);
+  call('onDates', detail.run_id, saved);
+}
+
 /* ── 본문 ── */
 function renderDrawer() {
   const d = detail;
@@ -175,6 +230,8 @@ function renderDrawer() {
              d.related_departments.map(esc).join(', ') || '—'}<i class="mark">✎</i></button>`
         : (d.related_departments.map(esc).join(', ') || '—')}</dd>`;
 
+  renderMoved();
+
   if (d.can_edit) {
     const start = $('dstart'), end = $('dend');
     const saveDates = async () => {
@@ -190,6 +247,8 @@ function renderDrawer() {
       if (span) span.textContent = spanLabel(saved.start, saved.end);
       detail.start = saved.start;
       detail.end = saved.end;
+      detail.moved = saved.moved;
+      renderMoved();
       call('onDates', d.run_id, saved);
     };
     start.onchange = saveDates;

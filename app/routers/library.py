@@ -19,6 +19,7 @@ from app.deps import all_retreats, log_activity, resolve_retreat
 from app.domain import library as lib_domain
 from app.domain.departments import DEPARTMENT_COLORS, DEPARTMENT_NAMES
 from app.models import TaskLibrary, User
+from app.models import _now
 from app.security import require_admin
 from app.templating import redirect, render
 
@@ -307,7 +308,12 @@ def edit_library_task(
     lib.title = title
     lib.kind = payload.kind
     lib.default_department_key = payload.department_key
-    for field, value in _relative(payload).items():
+    # **상대 위치가 실제로 바뀐 때만 찍는다** (6-4). 제목만 고쳐도 찍으면
+    # 손으로 옮긴 자리가 아무 관계 없는 수정에 밀린다.
+    상대 = _relative(payload)
+    if any(getattr(lib, f) != v for f, v in 상대.items()):
+        lib.dates_changed_at = _now()
+    for field, value in 상대.items():
         setattr(lib, field, value)
     if payload.kind != "sub":
         lib.parent_library_id = None
