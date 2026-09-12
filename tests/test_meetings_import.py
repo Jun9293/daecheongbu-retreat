@@ -1397,7 +1397,19 @@ def test_y_13f_정렬이_통과여부를_바꿀_수_없다():
     from app.domain import suggest as S
 
     엔진 = sa.create_engine(f"sqlite:///{운영}")
-    # **엔진을 닫는다.** 서버가 같은 파일을 쥔 채 돌고 있다
+    # **칸이 아직 안 붙었으면 건너뛴다.** 부팅이 `_catch_up_columns` 로 붙이므로
+    # (14장 「스키마 변경」), 칸을 더한 판과 **운영을 다시 켜기 전** 사이에는
+    # 모델이 아는 칸이 그 파일에 없다 — 11-2 가 「서버를 켜 둔 채 코드를
+    # 고치지 않습니다」 라고 적어 둔 그 창이다. 그때 여기서 빨개지면 고장이
+    # 아닌데 빨간 것이고, 고치는 길은 시험이 아니라 **재시작**이다.
+    # 2026-09-12 에 실제로 그랬다(`moved_offset_days` 를 더한 판).
+    with 엔진.connect() as conn:
+        있는칸 = {row[1] for row in conn.execute(sa.text("PRAGMA table_info(task_runs)"))}
+    from app import models as _m
+    모델칸 = {c.name for c in _m.TaskRun.__table__.columns}
+    if 모델칸 - 있는칸:
+        엔진.dispose()
+        pytest.skip("운영 DB 에 아직 새 칸이 안 붙었다 — 서버를 다시 켜면 붙는다 (11-3 2단계)")
     try:
         with sa.orm.Session(엔진) as db:
             r = db.scalars(select(models.Retreat).where(

@@ -1051,13 +1051,15 @@ def test_r2_02d_생김새를_만드는_곳이_하나다():
     assert "def paint_of(" in board_src
     assert "board_domain.paint_of(" in cal_src, "달력이 따로 칠하고 있다"
     assert "board_domain.bar_style(" not in cal_src, "달력에 두 번째 계산이 남아 있다"
-    # `/status` · `/dates` · `/assignee` 셋 다 생김새를 함께 낸다.
-    # 담당자는 점에 안 적히지만 **툴팁에는 들어가서**, 안 실어 보내면 화면이
-    # 옛 이름으로 문장을 다시 쓴다 — 실제로 그랬다.
-    # 넷째는 상세(task_detail)의 배지 (4-3), 다섯째는 `/title` 의 툴팁이다 —
-    # 제목이 바뀌면 점의 툴팁 문장도 바뀌는데, 그 문장도 같은 한 곳에서 나온다.
-    assert router_src.count("paint_of(") == 5, "세 API + 상세 배지 + 제목, 다섯 곳이어야 한다"
-    for path in ("/status", "/dates", "/assignee"):
+    # 값을 바꾸는 API 는 **생김새를 함께 내야 한다.** 담당자는 점에 안 적히지만
+    # **툴팁에는 들어가서**, 안 실어 보내면 화면이 옛 이름으로 문장을 다시 쓴다 —
+    # 실제로 그랬다. 상세(task_detail)의 배지(4-3)와 `/title` 의 툴팁도 같은 곳에서
+    # 나온다.
+    #
+    # **부르는 자리 수를 세지 않는다**(10장). 전에 `== 5` 로 박아 두었는데
+    # `/dates/follow` 가 생기면서 같은 판 안에서 여섯이 됐다 — 고장이 아닌데
+    # 빨개지는 자리다. 두 번째 계산이 생기는 것은 아래 `bar_style` 로 막는다.
+    for path in ("/status", "/dates", "/dates/follow", "/assignee"):
         at = router_src.index('@router.post("/board/task/{run_id}' + path + '")')
         block = router_src[at : router_src.index("@router.", at + 10)]
         assert "paint_of(" in block, f"{path} 가 생김새를 안 낸다"
