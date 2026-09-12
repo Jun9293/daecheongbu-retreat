@@ -1239,6 +1239,35 @@ const 캡처막기 = (골라, 무엇 = 'click') => {
   return () => document.removeEventListener(무엇, f, true);
 };
 
+/* **다시 그려도 살아남게 심는다.** 끈 자리 줄(`#dmoved`)은 드로어를 열
+   때마다 `renderMoved` 가 `innerHTML` 로 다시 씁니다 — 심을 때 한 번
+   손보면 **열리는 순간 지워지고 고장이 없던 일이 됩니다.** 실제로 그렇게
+   넷이 「통과로 지나감」 으로 나왔습니다 (2026-09-12).
+   그래서 **그 줄을 지켜보며 다시 쓸 때마다** 손봅니다. */
+const 줄을지켜본다 = 손본다 => {
+  const 줄 = document.getElementById('dmoved');
+  if (!줄) return () => {};
+  const ob = new MutationObserver(() => 손본다(줄));
+  ob.observe(줄, {childList: true, subtree: true, characterData: true});
+  손본다(줄);
+  return () => ob.disconnect();
+};
+
+/* **시작일 칸의 값을 붙든다.** 값(`value`)이 바뀌는 것은 DOM 변경이 아니라
+   지켜보기로는 못 잡습니다 — 짧은 되풀이로 붙듭니다. 처음 본 값을 기억해
+   그것으로 되돌리므로, **드로어가 뜨기 전에 심어도** 뜨는 순간의 값을
+   잡습니다. */
+const 값을붙든다 = (언제, 값 = null) => {
+  let 첫값 = null;
+  const t = setInterval(() => {
+    const s = document.getElementById('dstart');
+    if (!s) return;
+    if (첫값 === null) { 첫값 = s.value; return; }
+    if (언제()) s.value = 값 === null ? 첫값 : 값;
+  }, 5);
+  return () => clearInterval(t);
+};
+
 const 고장들 = [
   {갈래: '① 주변 붕괴', 고장: '드로어 안을 누르면 패널이 닫힌다',
    나와야: '드로어가 닫힘',
@@ -1332,6 +1361,66 @@ const 고장들 = [
      죽었고, **그때 알아본 것은 사람이지 출력이 아니었습니다**(AJ-b).
      이제 출력이 스스로 말하므로 그것도 심어서 잰다 — 한복판에서
      예외를 던지고 `완주: false` 가 나오는지 본다. */
+  /* ── 끈 자리 줄 (6-4) — 2026-09-12 에 항목 여섯이 생겼고, 그 판은
+        **떠서 ✓ 가 붙은 것**만 봤지 심어서 ✗ 가 나는 것을 못 봤다.
+        여기서 그것을 잰다.
+
+        **넷으로 여섯을 덮는다.** 「되돌리기」 와 「다시 되돌리기」 는
+        `누른다` 라 단추가 죽으면 **✗ 가 아니라 「못 쟀음」** 이 된다 —
+        그 둘은 ⑮ 가 **바로 뒤의 잰다**로 잡는다(눌렸는데 기간 칸이
+        안 따라왔다). 세우려면 누르는 자리마다 잰다를 하나씩 더해야 하고,
+        그러면 같은 것을 두 번 재게 된다.
+
+        **옮긴 적이 없는 업무를 연 판에서는 못 심는다** — 그 줄이 아예
+        안 뜬다. 그때는 ✗ 가 아니라 「못 심음」 이 그쪽의 정답이다. */
+  {갈래: '⑬ 끈 자리 — 줄이 빈다', 고장: '어느 자리를 따르는지 글이 사라진다',
+   나와야: '옮긴 자리 줄이 비어 있음',
+   못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')),
+   심는다: () => 줄을지켜본다(줄 => { if (줄.textContent) 줄.textContent = ''; })},
+  /* **여기도 계정을 보고 반대로 심는다** (④ 와 같은 까닭). 고칠 수 있는
+     계정에서는 단추를 없애고, 못 고치는 계정에서는 **만들어 둔다**. */
+  {갈래: '⑭ 끈 자리 — 단추가 권한과 반대', 고장: '되돌리기 단추가 권한과 반대로 있다',
+   나와야: '되돌리기 단추가 권한과 어긋남',
+   못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')),
+   심는다: 항목 => {
+     const 못고침 = 항목.some(r => String(r).includes('고칠 수 없음'));
+     const 걷는다 = 줄을지켜본다(줄 => {
+       const b = 줄.querySelector('button');
+       if (!못고침) { if (b) b.remove(); return; }
+       if (b) return;
+       const n = document.createElement('button');
+       n.dataset.심음 = '1';
+       n.textContent = '지어낸 단추';
+       줄.appendChild(n);
+     });
+     return () => {
+       걷는다();
+       const b = document.querySelector('#dmoved button[data-심음]');
+       if (b) b.remove();
+     };
+   }},
+  {갈래: '⑮ 끈 자리 — 눌러도 기간 칸이 안 따라옴',
+   고장: '되돌려도 기간 칸이 옛 값 그대로다',
+   나와야: '줄만 바뀌고 기간 칸이 옛 값 그대로',
+   못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')
+     || String(r).includes('되돌리기 단추가 없음')),
+   심는다: () => 값을붙든다(() => true)},
+  {갈래: '⑯ 끈 자리 — 왕복해도 안 돌아옴',
+   고장: '두 번 되돌려도 원래 자리가 아니다',
+   나와야: '왕복했는데 원래 자리가 아님',
+   못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')
+     || String(r).includes('되돌리기 단추가 없음')),
+   심는다: () => {
+     /* **두 번째 되돌림부터만** 붙든다 — 첫 번째까지 막으면 ⑮ 와 같은
+        것을 재게 되고, 두 갈래가 한 고장을 나눠 갖는다. */
+     let 눌린수 = 0;
+     const 센다 = e => {
+       if (e.target instanceof Element && e.target.closest('#dmoved button')) 눌린수++;
+     };
+     document.addEventListener('click', 센다, true);
+     const 걷는다 = 값을붙든다(() => 눌린수 >= 2, '1999-01-01');
+     return () => { document.removeEventListener('click', 센다, true); 걷는다(); };
+   }},
   {갈래: '⑫ 점검이 중간에 죽음', 고장: '한복판에서 예외를 던진다',
    나와야: '점검이 중간에 죽었다', 완주못함: true,
    심는다: () => {
