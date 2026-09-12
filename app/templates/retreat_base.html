@@ -118,7 +118,11 @@
 <header class="mast-wrap">
   <div class="mast">
     <button class="sidetoggle" id="sidetoggle" type="button"
-            aria-pressed="false" aria-label="사이드바 고정" title="사이드바 고정 (왼쪽 가장자리에 마우스를 대도 잠깐 열립니다)">☰</button>
+            aria-pressed="false" aria-label="사이드바 여닫기"
+            {# 「고정」 은 넓은 화면의 뜻이다 — 좁은 화면에서 이 단추는 고정하지 않고
+               겹쳐 연다(4-0). 그리고 손가락 기기에는 가장자리 띠가 아예 없으므로
+               (`@media (hover:none)`) 옛 title 이 없는 길을 가리키고 있었다. #}
+            title="사이드바 여닫기 (넓은 화면에서는 펼친 채 고정합니다)">☰</button>
     <div class="title">
       {{ retreat.name if retreat else '대청부 수련회' }}
       {# 부제 없이 오는 화면(404 등)에서 「· 」 만 남지 않게 #}
