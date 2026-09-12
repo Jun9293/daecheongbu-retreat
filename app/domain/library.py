@@ -253,7 +253,7 @@ def round_labels(db: Session, *, exclude_retreat_id: int | None = None) -> list[
 # ---------------------------------------------------------------- 선후행 관계
 #
 # 관련업무(related_library_ids)와 섞지 않는다. 관련은 방향이 없고 양쪽에 서로
-# 적지만, 선행은 방향이 있고 **가진 쪽에만** 적는다. 후속("나를 기다리는 업무")은
+# 적지만, 선행은 방향이 있고 **가물러선 쪽에만** 적는다. 후속("나를 기다리는 업무")은
 # 저장하지 않고 여기서 계산한다 — 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이
 # 맞는지 알 수 없기 때문이다. (CLAUDE.md 2장)
 
@@ -721,30 +721,136 @@ def excluded_count(db: Session, retreat: Retreat) -> int:
     )
 
 
-def reschedule(db: Session, retreat: Retreat) -> int:
-    """개회일이 바뀌면 모든 업무 날짜를 D-주차를 유지한 채 옮긴다.
+# ── 업무 날짜를 어떻게 정하는가 — **여기 하나다** (CLAUDE.md 6-4) ──────
+#
+# 라이브러리에는 절대 날짜가 없고 상대 위치만 있다. 그런데 사람이 보드에서
+# 바를 끌어 자리를 옮길 수 있고(4-6), 그 자리를 안 남기면 개회일이 바뀔 때
+# **조용히 되돌아간다** — 봐둘것 AW-b 가 그 자리였다.
+#
+# 그래서 run 은 「그때 셈한 자리에서 며칠」(`moved_offset_days`)과 「그 자리를
+# 정한 때」(`moved_at`)를 갖는다. 라이브러리는 상대 위치를 고친 때
+# (`dates_changed_at`)를 갖는다. **부딪히면 나중 것이 이긴다.**
 
-    라이브러리에는 절대 날짜가 없고 상대 위치만 있으므로, 새 개회일로
-    다시 계산하기만 하면 된다 (CLAUDE.md 6-4).
+
+def hand_wins(run: TaskRun, lib: TaskLibrary) -> bool:
+    """손으로 옮긴 자리를 따르는가 — **판정은 여기 하나다.**
+
+    - 옮긴 적이 없으면(`moved_offset_days` 가 NULL) 라이브러리를 따른다
+    - `moved_at` 이 비면 **지금은 안 따르는 것**이다. 옮긴 값은 그대로
+      남아 있어 되돌릴 수 있다(0장) — 물러선 쪽을 지우지 않는 자리가 여기다
+    - 라이브러리를 고친 적이 없으면 옮긴 자리가 이긴다
+    - 둘 다 있으면 **나중 것**이 이긴다
+    """
+    if run.moved_offset_days is None or run.moved_at is None:
+        return False
+    if lib.dates_changed_at is None:
+        return True
+    return run.moved_at >= lib.dates_changed_at
+
+
+def library_dates(lib: TaskLibrary, open_date: dt.date) -> tuple[dt.date, dt.date]:
+    """라이브러리가 말하는 자리. 손으로 옮긴 것과 상관없다."""
+    return dweek.resolve_dates(
+        open_date,
+        anchor=lib.date_anchor,
+        d_week=lib.default_d_week,
+        offset_days=lib.default_offset_days,
+        span_days=lib.default_span_days,
+    )
+
+
+def dates_for(run: TaskRun, lib: TaskLibrary, open_date: dt.date) -> tuple[dt.date, dt.date]:
+    """이 run 이 그 개회일에서 설 자리.
+
+    손으로 옮긴 자리를 따를 때는 **셈한 자리에서 같은 간격만큼 민다** —
+    8월 13일 기준으로 사흘 당겨 뒀으면 8월 20일 기준에서도 사흘 당겨진
+    자리다. 기간(길이)은 **그 run 이 지금 가진 길이**를 지킨다: 끌어 옮기는
+    것도 드로어에서 마감일을 고치는 것도 같은 자리로 들어오므로(4-6),
+    라이브러리 길이로 되돌리면 늘려 둔 기간이 조용히 사라진다.
+    """
+    start, end = library_dates(lib, open_date)
+    if not hand_wins(run, lib):
+        return start, end
+    span = (
+        run.end_date - run.start_date
+        if run.start_date and run.end_date
+        else end - start
+    )
+    start += dt.timedelta(days=run.moved_offset_days or 0)
+    return start, start + span
+
+
+def offset_of(lib: TaskLibrary, open_date: dt.date, start: dt.date) -> int:
+    """그 날짜가 라이브러리 셈에서 며칠 밀린 자리인가. `dates_for` 의 역방향."""
+    셈, _ = library_dates(lib, open_date)
+    return (start - 셈).days
+
+
+def week_of_start(open_date: dt.date, start: dt.date) -> int | None:
+    """옮긴 자리의 D-주차. 개회일 뒤면 없다 (`move_dates` 와 같은 규칙)."""
+    return dweek.week_of(open_date, start) if start < open_date else None
+
+
+def _plan(db: Session, retreat: Retreat, open_date: dt.date):
+    """개회일이 `open_date` 가 되면 run 마다 무엇을 할지.
+
+    **부르는 곳이 둘이다** — 실제로 옮기는 `reschedule` 과 저장 전에 보여
+    주는 `reschedule_preview`. 두 곳에서 따로 판정하면 **보여준 수와 실제가
+    갈리고, 갈린 쪽을 아무도 눈치채지 못한다.**
+
+    내주는 것 — (run, 새 시작, 새 마감, 무엇으로 셌나).
+    「무엇으로 셌나」 는 `다시셈` · `밀기` · `빈채` 셋이다.
+    """
+    runs = list(db.scalars(select(TaskRun).where(TaskRun.retreat_id == retreat.id)))
+    for run in runs:
+        if not run.included:
+            continue
+        # **켠 채 날짜가 빈 업무는 빈 채로 둔다** (봐둘것 AW-c). 전에는
+        # `d_week or FIRST_D_WEEK` 로 떨어져 **없던 날짜를 얻었고**, 4-13 이
+        # 따로 모아 두기로 한 「날짜 없는 업무」 자리가 조용히 비었다.
+        if run.start_date is None:
+            yield run, None, None, "빈채"
+            continue
+        lib = run.library
+        start, end = dates_for(run, lib, open_date)
+        yield run, start, end, ("밀기" if hand_wins(run, lib) else "다시셈")
+
+
+def reschedule_preview(db: Session, retreat: Retreat, open_date: dt.date) -> dict:
+    """저장하기 전에 무엇이 달라지는지 (6-4).
+
+    **수를 코드에 박지 않는다** — 지금 자료를 세어서 낸다.
+    `_plan` 을 `reschedule` 과 함께 쓰므로 보여준 수와 실제가 안 갈린다.
+    """
+    수 = {"다시셈": 0, "밀기": 0, "빈채": 0}
+    for run, start, end, 쪽 in _plan(db, retreat, open_date):
+        if 쪽 == "빈채":
+            수["빈채"] += 1
+        elif (run.start_date, run.end_date) != (start, end):
+            수[쪽] += 1
+    return 수
+
+
+def reschedule(db: Session, retreat: Retreat) -> int:
+    """개회일이 바뀌면 업무 날짜를 함께 옮긴다 (CLAUDE.md 6-4).
+
+    안 옮긴 업무는 라이브러리에서 다시 세고, 손으로 옮긴 업무는 **같은
+    간격만큼 함께 민다.** 켠 채 날짜가 빈 업무는 **빈 채로 둔다.**
     """
     if retreat.start_date is None:
         return 0
-    runs = list(db.scalars(select(TaskRun).where(TaskRun.retreat_id == retreat.id)))
     moved = 0
-    for run in runs:
-        lib = run.library
-        start, end = dweek.resolve_dates(
-            retreat.start_date,
-            anchor=lib.date_anchor,
-            d_week=lib.default_d_week,
-            offset_days=lib.default_offset_days,
-            span_days=lib.default_span_days,
-        )
-        if not run.included:
+    for run, start, end, 쪽 in _plan(db, retreat, retreat.start_date):
+        if 쪽 == "빈채":
             continue
-        if run.start_date != start or run.end_date != end:
-            run.start_date, run.end_date = start, end
-            run.d_week = lib.default_d_week
-            moved += 1
+        if (run.start_date, run.end_date) == (start, end):
+            continue
+        run.start_date, run.end_date = start, end
+        run.d_week = (
+            week_of_start(retreat.start_date, start)
+            if 쪽 == "밀기"
+            else run.library.default_d_week
+        )
+        moved += 1
     db.commit()
     return moved
