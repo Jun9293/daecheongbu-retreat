@@ -1,7 +1,18 @@
 """테스트 공통 픽스처.
 
-app 패키지를 import 하기 전에 임시 DB/업로드 경로를 환경변수로 지정한다.
-(운영 데이터가 있는 data/ 를 테스트가 건드리지 않도록)
+맨 위에서 임시 DB/업로드 경로를 환경변수로 지정한다.
+
+**그런데 그것은 보호가 아니다** (2026-09-13 사고 · 봐둘것 AZ-a).
+환경변수는 **이 파일이 app 보다 먼저 읽힐 때만** 듣는다. 앞지르는 길이
+여럿이다 — `pytest -p <플러그인>` · `PYTHONSTARTUP` · IDE 가 끼우는 플러그인 ·
+이 파일보다 먼저 읽히는 다른 conftest. 그중 하나(`-p`)가 실제로 app 을 먼저
+import 해 운영 주소로 엔진을 만들었고, `client` 의 `drop_all` 이 운영 표를
+지웠다.
+
+**그래서 입구를 막지 않고 지우는 자리를 막는다** — `_시험DB가_아니면_멈춘다`.
+입구는 셀 수 없고 하나를 막으면 다음 것이 온다(11-2 「볼 목록이 불완전하다」).
+지우는 자리는 여기 있고, **지우기 직전에 매번** 엔진이 가리키는 파일이 이
+파일이 만든 임시 폴더 안인지 본다. 순서가 바뀌어도 이 검사는 돈다.
 """
 
 import os
@@ -22,6 +33,39 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app import models  # noqa: E402
 from app.db import Base  # noqa: E402
+
+
+def _시험DB가_아니면_멈춘다(engine) -> None:
+    """엔진이 이 conftest 가 만든 임시 폴더 밖의 파일을 가리키면 멈춘다.
+
+    **「임시 폴더면 된다」 가 아니라 「`_TMP` 안이어야 한다」** 다 — 운영과 같은
+    꼴의 경로를 `%TEMP%` 아래 만들어 재면 넓은 기준은 그것을 통과시킨다.
+    메모리 DB(`sqlite://`)는 지울 파일이 없어 지나간다. 조용히 건너뛰지 않고
+    **세션을 멈춘다** — 한 시험만 건너뛰면 나머지가 같은 엔진으로 계속 쓴다.
+    """
+    url = engine.url
+    파일 = url.database
+    if url.get_backend_name() == "sqlite" and (not 파일 or 파일 == ":memory:"):
+        return
+    if url.get_backend_name() == "sqlite" and pathlib.Path(파일).resolve().is_relative_to(_TMP.resolve()):
+        return
+    pytest.exit(
+        "\n시험이 연 DB 가 시험용 임시 폴더 밖입니다 — 아무것도 지우지 않고 멈춥니다.\n"
+        f"  연 DB : {url.render_as_string(hide_password=True)}\n"
+        f"  임시 폴더 : {_TMP}\n"
+        "  왜 : app 이 tests/conftest.py 보다 먼저 import 되어 DCB_DATABASE_URL 을\n"
+        "       못 들었습니다. pytest 앞에 -p 플러그인 · PYTHONSTARTUP · IDE 플러그인을\n"
+        "       끼웠는지 보세요 (CLAUDE.md 11-3 · 봐둘것 AZ-a).",
+        returncode=3,
+    )
+
+
+def pytest_sessionstart(session):
+    """시험 하나라도 돌기 전에 한 번 — `SessionLocal` 로 쓰는 시험도 운영에 닿지 않게.
+    지우는 자리의 검사(`client`)는 이것과 따로 매번 돈다."""
+    from app.db import engine
+
+    _시험DB가_아니면_멈춘다(engine)
 
 
 def _make_engine():
@@ -99,12 +143,14 @@ def client():
     from app.db import engine
     from app.main import app
 
+    _시험DB가_아니면_멈춘다(engine)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
     with TestClient(app) as test_client:
         yield test_client
 
+    _시험DB가_아니면_멈춘다(engine)
     Base.metadata.drop_all(engine)
 
 
