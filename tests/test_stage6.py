@@ -363,6 +363,23 @@ def test6_g03b_막히는_쪽이_콘솔에서도_말을_한다():
     assert "__stage6_cp949_tmp".encode("cp949") in r.stdout   # 무엇이 막았는지 말한다
 
 
+def test6_g05_ps1_이_BOM_으로_저장돼_있다():
+    """**Windows PowerShell 5.1 은 BOM 이 없으면 `.ps1` 을 시스템 코드페이지로
+    읽는다** — 한글 이름이 깨져 파싱부터 실패한다(`.bat` 을 cp949 로 두는
+    것과 같은 자리 · 11-2). 실제로 이 저장소의 첫 `.ps1` 이 그렇게 한 번
+    안 돌았다.
+
+    편집기가 한 번 다시 저장하면 조용히 깨지는데 **그때 아무것도 안 막는
+    상태**였다(2026-09-12 커밋 전 검토가 짚었다). 이름을 세어 두지 않고
+    (10장) 저장소의 `.ps1` 전부를 본다."""
+    것들 = sorted(ROOT.rglob("*.ps1"))
+    것들 = [f for f in 것들 if ".venv" not in f.parts]
+    assert 것들, "저장소에 .ps1 이 하나도 없다 — 이 시험이 아무것도 안 본다"
+    for f in 것들:
+        머리 = f.read_bytes()[:3]
+        assert 머리 == b"\xef\xbb\xbf", f"{f.name} 에 BOM 이 없다 — 붙여 넣으면 파싱부터 실패한다"
+
+
 def test6_g04_devserve_가_검사를_지나서만_뜬다():
     bat = (ROOT / "scripts" / "devserve.bat").read_bytes().decode("cp949")
     assert "check_dev_db.py" in bat
