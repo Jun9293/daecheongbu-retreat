@@ -813,6 +813,33 @@ def put_dates(run: TaskRun, lib: TaskLibrary, open_date: dt.date,
     )
 
 
+def 어느쪽(run: TaskRun, lib: TaskLibrary, open_date: dt.date,
+         start: dt.date, end: dt.date) -> str:
+    """이 run 이 그 자리에 서는 까닭 — **손 자리가 실제로 무엇을 바꾸는가.**
+
+    「손으로 옮긴 적이 있는가」 로만 가르면 **수가 부풀어 사람이 그 수로
+    판단할 수 없습니다.** 드로어에서 마감일만 고쳐도 같은 엔드포인트로
+    들어오므로(4-6) 그때도 「옮김」 이 되는데, 그 run 은 자리가 아니라
+    **길이만** 다릅니다. 셋이 한 수에 들어가면 「자리를 민 업무 N건」 이
+    실제로 민 것보다 큽니다 (2026-09-12 에 사람이 재라고 한 자리).
+
+    - `다시셈` — 손 자리를 따르지 않거나, **따라도 날짜가 라이브러리 셈과
+      같은** 것. 뒤엣것은 기본 자리로 되돌려 둔 run 이다: 며칠도 0 이고
+      길이도 같아 **날짜에서 달라지는 것이 없다**.
+      **D-주차까지 같다는 말은 아니다** — `put_dates` 는 여전히 `hand_wins`
+      로 갈라 선 자리에서 다시 세므로, 라이브러리 값과 같아 보여도 나오는
+      길이 다르다. 지금 자료에서는 두 값이 같다
+    - `밀기` — 며칠이 0 이 아니다. 자리가 실제로 밀린다
+    - `기간만` — 며칠은 0 인데 길이가 라이브러리와 다르다. **자리는 그대로고
+      늘려 둔 기간만 지켜진다**
+    """
+    if not hand_wins(run, lib):
+        return "다시셈"
+    if (start, end) == library_dates(lib, open_date):
+        return "다시셈"
+    return "밀기" if run.moved_offset_days else "기간만"
+
+
 def _plan(db: Session, retreat: Retreat, open_date: dt.date):
     """개회일이 `open_date` 가 되면 run 마다 무엇을 할지.
 
@@ -821,7 +848,7 @@ def _plan(db: Session, retreat: Retreat, open_date: dt.date):
     갈리고, 갈린 쪽을 아무도 눈치채지 못한다.**
 
     내주는 것 — (run, 새 시작, 새 마감, 무엇으로 셌나).
-    「무엇으로 셌나」 는 `다시셈` · `밀기` · `빈채` 셋이다.
+    「무엇으로 셌나」 는 `다시셈` · `밀기` · `기간만` · `빈채` 넷이다.
     """
     runs = list(db.scalars(select(TaskRun).where(TaskRun.retreat_id == retreat.id)))
     for run in runs:
@@ -835,7 +862,7 @@ def _plan(db: Session, retreat: Retreat, open_date: dt.date):
             continue
         lib = run.library
         start, end = dates_for(run, lib, open_date)
-        yield run, start, end, ("밀기" if hand_wins(run, lib) else "다시셈")
+        yield run, start, end, 어느쪽(run, lib, open_date, start, end)
 
 
 def reschedule_preview(db: Session, retreat: Retreat, open_date: dt.date) -> dict:
@@ -844,7 +871,7 @@ def reschedule_preview(db: Session, retreat: Retreat, open_date: dt.date) -> dic
     **수를 코드에 박지 않는다** — 지금 자료를 세어서 낸다.
     `_plan` 을 `reschedule` 과 함께 쓰므로 보여준 수와 실제가 안 갈린다.
     """
-    수 = {"다시셈": 0, "밀기": 0, "빈채": 0}
+    수 = {"다시셈": 0, "밀기": 0, "기간만": 0, "빈채": 0}
     for run, start, end, 쪽 in _plan(db, retreat, open_date):
         if 쪽 == "빈채":
             수["빈채"] += 1

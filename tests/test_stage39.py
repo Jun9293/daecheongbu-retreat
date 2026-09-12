@@ -4,7 +4,7 @@
 |---|---|
 | 가 | 옮긴 업무는 **같은 간격**을 지키고 안 옮긴 업무는 다시 셈해진다 |
 | 나 | 켠 채 날짜가 빈 업무는 **빈 채로 남는다** — 전에는 없던 날짜를 얻었다 |
-| 다 | 저장 전에 보이는 **세 수**가 실제와 같다 |
+| 다 | 저장 전에 보이는 **갈래별 수**가 실제와 같다 · 기간만 고친 것이 따로 세어지나 |
 | 라 | 부딪히면 **나중 것**이 이긴다 — 양쪽 다 |
 | 마 | **물러선 쪽이 안 지워진다** — 실제로 되돌려서 잰다 |
 | 바 | 이미 선 업무는 **「안 옮김」** 으로 시작한다 |
@@ -199,14 +199,14 @@ def test39_b01_날짜가_빈_채_켜진_업무는_빈_채로_남는다(admin_cli
     assert 뒤[2][0] != 앞[2][0], "④ 개회일이 안 바뀌었다 — 이 판이 아무것도 안 했다"
 
 
-# ── 다. 저장 전에 보이는 세 수 ────────────────────────────────────────
+# ── 다. 저장 전에 보이는 갈래별 수 ────────────────────────────────────
 
 
-def test39_c01_저장_전에_보이는_세_수가_실제와_같다(admin_client, 회차):
+def test39_c01_저장_전에_보이는_갈래별_수가_실제와_같다(admin_client, 회차):
     """다) **수를 시험에 박지 않습니다** — 자료를 세어 기대값을 만듭니다.
     박으면 차림을 한 줄 고칠 때 시험이 막고, 그 막힘은 고장이 아닙니다.
 
-    봅니다 — ① 미리보기가 세 값을 다 내는가 ② **실제로 저장한 뒤 달라진
+    봅니다 — ① 미리보기가 네 값을 다 내는가 ② **실제로 저장한 뒤 달라진
     수와 같은가**(이것이 이 줄의 전부입니다 — 미리보기만 재면 그 수가
     맞는지는 아무도 안 봅니다) ③ 같은 개회일이면 「달라질 것 없음」 인가
     ④ 셋이 다 0 이 아닌가 — 전부 0 이면 아무것도 안 재는 판입니다.
@@ -218,7 +218,7 @@ def test39_c01_저장_전에_보이는_세_수가_실제와_같다(admin_client,
     assert 답.status_code == 200, 답.text
     본것 = 답.json()
     assert 본것["changed"] is True
-    assert {"다시셈", "밀기", "빈채"} <= set(본것), f"① 세 값이 다 없다: {본것}"
+    assert {"다시셈", "밀기", "기간만", "빈채"} <= set(본것), f"① 네 값이 다 없다: {본것}"
 
     같은날 = admin_client.get(
         f"/retreats/{회차}/reschedule-preview?open_date={첫개회.isoformat()}").json()
@@ -227,20 +227,90 @@ def test39_c01_저장_전에_보이는_세_수가_실제와_같다(admin_client,
     assert _개회일을바꾼다(admin_client, 회차, 새개회).status_code == 303
     뒤 = _값(회차)
 
-    실제 = {"다시셈": 0, "밀기": 0, "빈채": 0}
+    실제 = {"다시셈": 0, "밀기": 0, "기간만": 0, "빈채": 0}
     with app_session() as db:
-        for no, run in _줄들(회차).items():
+        for run in db.scalars(select(TaskRun).where(TaskRun.retreat_id == 회차)).all():
+            no = run.run_no
             if not run.included:
                 continue
             if 앞[no][0] is None:
                 실제["빈채"] += 1
-            elif 앞[no][2] is not None:          # 손으로 옮긴 업무
-                if (뒤[no][0], 뒤[no][1]) != (앞[no][0], 앞[no][1]):
-                    실제["밀기"] += 1
-            elif (뒤[no][0], 뒤[no][1]) != (앞[no][0], 앞[no][1]):
-                실제["다시셈"] += 1
+                continue
+            if (뒤[no][0], 뒤[no][1]) == (앞[no][0], 앞[no][1]):
+                continue
+            셈, 셈끝 = lib_domain.library_dates(run.library, 새개회)
+            if 앞[no][2] is None or (뒤[no][0], 뒤[no][1]) == (셈, 셈끝):
+                실제["다시셈"] += 1      # 손 자리에서 남는 것이 없다
+            elif 앞[no][2]:
+                실제["밀기"] += 1        # 며칠이 0 이 아니다
+            else:
+                실제["기간만"] += 1      # 자리는 그대로, 길이만 지켜진다
     assert {k: 본것[k] for k in 실제} == 실제, f"② 보여준 수와 실제가 다르다: {본것} vs {실제}"
-    assert all(v for v in 실제.values()), f"④ 셋 중 0 이 있다 — 그 갈래를 안 쟀다: {실제}"
+    assert 실제["다시셈"] and 실제["밀기"] and 실제["빈채"], \
+        f"④ 세 갈래 중 0 이 있다 — 그 갈래를 안 쟀다: {실제}"
+
+
+def _기간만늘린다(client, rid: int, no: int, 며칠: int):
+    """**자리는 그대로 두고 마감일만 뒤로.** 드로어에서 하는 그 일이고,
+    같은 엔드포인트로 들어옵니다(4-6) — 그래서 이것도 「손으로 정한 자리」 로
+    남고 며칠은 0 입니다."""
+    with app_session() as db:
+        run = db.scalars(select(TaskRun).where(
+            TaskRun.retreat_id == rid, TaskRun.run_no == no)).first()
+        시작 = run.start_date
+        새끝 = (run.end_date or run.start_date) + dt.timedelta(days=며칠)
+    답 = client.post(f"/board/task/{_run_id(rid, no)}/dates",
+                    json={"start": 시작.isoformat(), "end": 새끝.isoformat()})
+    assert 답.status_code == 200, 답.text
+    return 시작
+
+
+def test39_c02_기간만_고친_것과_자리를_옮긴_것이_한_수에_안_들어간다(admin_client, 회차):
+    """다) **부풀림을 잽니다** (2026-09-12 에 사람이 재라고 한 자리).
+
+    드로어에서 마감일만 고쳐도 같은 엔드포인트로 들어오므로 「손으로 정한
+    자리」 가 됩니다. 그 둘이 한 수에 들어가면 **「자리를 민 업무 N건」 이
+    실제로 민 것보다 크고**, 사람이 그 수를 보고 판단할 수 없습니다.
+
+    **수를 시험에 박지 않습니다** — 자료를 세어 기대값을 만듭니다.
+
+    봅니다 — ① 둘 다 「손으로 정한 자리」 로 남나(며칠 0 과 0 아님)
+    ② 미리보기가 **둘을 다른 수로** 내나 ③ **합치면 부풀던 그 수가 되나**
+    — 가르기 전에는 이 둘이 한 수였다는 증거입니다 ④ 기간만 고친 쪽이
+    실제로 자리는 그대로이고 길이만 지켜지나.
+    """
+    _끈다(admin_client, 회차, 1, 끈날)
+    _기간만늘린다(admin_client, 회차, 2, 2)
+    앞 = _값(회차)
+    assert 앞[1][2] == 끈날 and 앞[2][2] == 0, \
+        f"① 둘 중 하나가 「손으로 정한 자리」 로 안 남았다: {앞[1][2]} · {앞[2][2]}"
+
+    본것 = admin_client.get(
+        f"/retreats/{회차}/reschedule-preview?open_date={새개회.isoformat()}").json()
+
+    # 기대값을 자료에서 만든다 — 며칠이 0 이 아닌 것과 0 인 것
+    with app_session() as db:
+        손자리 = [r for r in db.scalars(select(TaskRun).where(
+            TaskRun.retreat_id == 회차)).all()
+            if r.included and r.start_date and r.moved_offset_days is not None]
+        민것 = sum(1 for r in 손자리 if r.moved_offset_days)
+        기간만 = len(손자리) - 민것
+    assert 민것 and 기간만, f"③ 한쪽이 0 이라 가른 뜻이 없다: {민것} · {기간만}"
+
+    assert 본것["밀기"] == 민것, f"② 민 수가 다르다: {본것['밀기']} vs {민것}"
+    assert 본것["기간만"] == 기간만, f"② 기간만 지킬 수가 다르다: {본것['기간만']} vs {기간만}"
+    assert 본것["밀기"] + 본것["기간만"] == len(손자리), \
+        "③ 합이 「손으로 정한 자리」 전부와 안 맞는다 — 가르기 전 그 수다"
+
+    # ④ 실제로 저장해 보고 확인한다
+    _개회일을바꾼다(admin_client, 회차, 새개회)
+    with app_session() as db:
+        run2 = db.scalars(select(TaskRun).where(
+            TaskRun.retreat_id == 회차, TaskRun.run_no == 2)).first()
+        셈, 셈끝 = lib_domain.library_dates(run2.library, 새개회)
+        선자리, 선끝 = run2.start_date, run2.end_date
+    assert 선자리 == 셈, f"④ 자리가 밀렸다: {선자리} vs {셈}"
+    assert 선끝 != 셈끝, "④ 늘려 둔 기간이 라이브러리 길이로 되돌아갔다"
 
 
 # ── 라. 부딪히면 나중 것이 이긴다 ─────────────────────────────────────
