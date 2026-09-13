@@ -484,3 +484,75 @@ def test44_g01_pytest_에_p_를_끼우면_막는다(monkeypatch):
     # 막히면 안 되는 것 — 옵션 없는 실행과 비슷한 이름의 긴 옵션
     conftest.pytest_configure(설정())
     conftest.pytest_configure(설정("tests/test_stage44.py", "--pdb", "-q"))
+
+
+# ── 앱 밖 자리는 흔적을 안 남긴다 (2026-09-13 넷째 판) ────────────────────────
+
+
+def _있는것(뿌리):
+    """뿌리 아래 모든 경로와 크기·수정 시각 — 폴더가 하나 생겨도 갈린다."""
+    if not 뿌리.exists():
+        return None
+    return {(p.relative_to(뿌리).as_posix(), p.is_dir(), None if p.is_dir() else (p.stat().st_size, p.stat().st_mtime_ns))
+            for p in 뿌리.rglob("*")}
+
+
+def _맨몸으로_살핀다(데이터폴더):
+    """서명키 환경변수를 **빼고** 부른다 — 그래야 app.config 가 읽히면 키 파일을 새로 쓴다.
+    넣고 부르면 흔적이 안 나도 「안 읽어서」 인지 「환경변수가 있어서」 인지 못 가린다."""
+    import os
+
+    env = {k: v for k, v in os.environ.items() if k not in ("DCB_SECRET_KEY", "DCB_DATABASE_URL")}
+    env.update(PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1", DCB_DATA_DIR=str(데이터폴더))
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "backup.py"), "--살핀다"],
+                       capture_output=True, text=True, encoding="utf-8", env=env, timeout=120)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test44_h01_data가_빈_자리에서_살펴도_흔적이_안_남고_말은_한다(tmp_path):
+    """수용 기준 가)·나) — 사고 직후 모양: data/ 에 백업 폴더만 남았다(app.db · 서명키 ·
+    uploads 없음). 부르기 전후의 경로·크기·시각을 통째로 견준다. 같은 판에서 성한 data/
+    (DB · 서명키 · uploads 가 있음)에 같은 백업을 두고 **글자까지 같은 말**인지 본다."""
+    빈 = tmp_path / "빈" / "data"
+    _백업폴더(빈)
+    제목 = f"새벽 백업이 비어 있습니다 — app-{_때(9)}.db"
+
+    전 = _있는것(빈.parent)
+    빈말 = _맨몸으로_살핀다(빈)
+    assert _있는것(빈.parent) == 전, "살피기만 했는데 무언가 생기거나 바뀌었다"
+    assert not (빈 / "secret_key.txt").exists() and not (빈 / "uploads").exists()
+    assert 제목 in 빈말, f"흔적은 안 남겼지만 말도 못 했다: {빈말}"
+
+    성한 = tmp_path / "성한" / "data"
+    _백업폴더(성한)
+    (성한 / "uploads").mkdir()
+    (성한 / "secret_key.txt").write_text("시험용-키", encoding="utf-8")
+    sqlite3.connect(성한 / "app.db").close()
+    assert _맨몸으로_살핀다(성한) == 빈말, "data/ 상태에 따라 앱 밖 자리의 말이 달라졌다"
+
+
+def test44_h02_data_가_아예_없어도_만들지_않는다(tmp_path):
+    없는 = tmp_path / "없음" / "data"
+    assert "빈 판 없음" in _맨몸으로_살핀다(없는)
+    assert not 없는.exists() and not 없는.parent.exists(), "없는 data/ 를 만들었다"
+
+
+def test44_h03_backup_py_는_폴더를_만드는_설정을_맨_위에서_안_읽는다():
+    """수용 기준 다) 쪽 — 경로는 `app.paths` 한 곳에서 오고, 판정은 `의심말들` 한 곳이다.
+    **모듈 맨 위에서** `app.config` 를 읽으면 `--살핀다` 도 그것을 지난다(함수 안의
+    지연 import — 알린다 — 는 앱 안 갈래라 괜찮다). 문자열이 아니라 구문 나무로 본다(10장)."""
+    import ast
+
+    나무 = ast.parse((ROOT / "scripts" / "backup.py").read_text(encoding="utf-8"))
+    맨위 = {n.module for n in 나무.body if isinstance(n, ast.ImportFrom)}
+    맨위 |= {a.name for n in 나무.body if isinstance(n, ast.Import) for a in n.names}
+    assert "app.paths" in 맨위 and not any(m and m.startswith("app.") and m != "app.paths" for m in 맨위), 맨위
+    import app.config as 설정
+    import app.paths as 경로
+    assert (설정.DATA_DIR, 설정.UPLOAD_DIR) == (경로.DATA_DIR, 경로.UPLOAD_DIR), "경로 셈이 두 곳으로 갈렸다"
+    # 판정 한 곳: 알린다와 살핀다 둘 다 의심말들 을 부른다
+    함수 = {n.name: n for n in 나무.body if isinstance(n, ast.FunctionDef)}
+    for 이름 in ("알린다", "살핀다"):
+        불린 = {c.func.id for c in ast.walk(함수[이름]) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+        assert "의심말들" in 불린, f"{이름} 이 의심말들 을 안 부른다"
