@@ -311,7 +311,7 @@ def write_rows(out_dir: pathlib.Path, stamp: str) -> dict:
     return rows
 
 
-def rows_of(out_dir: pathlib.Path, stamp: str) -> dict | None:
+def rows_of(out_dir: pathlib.Path, stamp: str, *, 기록: bool = True) -> dict | None:
     """옆 파일에서 읽는다. 없거나 · 모양이 틀렸거나 · 판보다 옛것이면 다시 세어 남긴다.
     못 읽으면 None.
 
@@ -332,12 +332,13 @@ def rows_of(out_dir: pathlib.Path, stamp: str) -> dict | None:
     except (OSError, ValueError):
         pass
     try:
-        return write_rows(out_dir, stamp)
+        # 기록=False 면 세기만 하고 옆 파일을 안 쓴다 — 앱 밖에서 **읽기만** 하는 자리(`살핀다`)
+        return write_rows(out_dir, stamp) if 기록 else count_rows(db_file)
     except (sqlite3.Error, OSError):
         return None
 
 
-def suspects(out_dir: pathlib.Path, stamps: list[str]) -> set[str]:
+def suspects(out_dir: pathlib.Path, stamps: list[str], *, 기록: bool = True) -> set[str]:
     """비었거나 터무니없이 적은 판 — 기준은 `SUSPECT_RATIO` 위의 글.
 
     **견주는 것은 가장 큰 판이 아니라 가운데 판(중앙값)이다.** 가장 큰 판을 쓰면
@@ -348,7 +349,7 @@ def suspects(out_dir: pathlib.Path, stamps: list[str]) -> set[str]:
     """
     import statistics
 
-    rows = {s: rows_of(out_dir, s) for s in stamps}
+    rows = {s: rows_of(out_dir, s, 기록=기록) for s in stamps}
     totals = [r["total"] for r in rows.values() if r]
     middle = statistics.median(totals) if totals else 0
     out = set()
@@ -435,6 +436,43 @@ def prune(
 BACKUP_NOTICE_KIND = "백업"
 
 
+def 의심말들(out_dir: pathlib.Path, *, 기록: bool = True) -> list[tuple[str, str, str]]:
+    """**빈 판 경고의 판정과 말이 서는 곳은 여기 하나다** — (판의 때, 제목, 본문).
+
+    앱 안(`알린다` → 알림 화면)과 앱 밖(`살핀다` → 되살아나나.ps1)이 **같은 이것을** 부른다.
+    두 곳이 저마다 판정하거나 글을 적으면 한쪽만 고쳐져 두 자리가 다른 말을 한다.
+    **DB 를 안 연다** — 백업 폴더만 읽는다. 그래서 운영 DB 가 비어도 말한다.
+    `지키는판` 은 안 낸다.
+    """
+    나온것 = []
+    전부 = stamps_in(out_dir)
+    for stamp in sorted(s for s in suspects(out_dir, 전부, 기록=기록) if s not in 지키는판):
+        r = rows_of(out_dir, stamp, 기록=기록) or {"total": "?", "tables": {}}
+        나온것.append((
+            stamp,
+            f"새벽 백업이 비어 있습니다 — app-{stamp}.db",
+            (f"회차 {r['tables'].get('retreats', '?')} · 행 {r['total']}. "
+             "먼저 운영 DB 가 비지 않았는지 보세요 — 홈에 회차와 업무가 보이면 "
+             "성한 것입니다. 비었으면 이 판이 아니라 그 앞 날짜의 성한 판으로 "
+             "되돌립니다(배포-안내 「되돌리려면」). 이 판은 성한 판의 칸에 안 "
+             "세고, 지울지는 사람이 정합니다."),
+        ))
+    return 나온것
+
+
+def 살핀다(out_dir: pathlib.Path = BACKUP_DIR) -> list[str]:
+    """**앱 밖 알림 자리** — DB 를 안 열고 백업 폴더만 읽어, 의심 판이 있으면 그 말을 줄로
+    돌려준다. 없으면 빈 목록. `scripts/되살아나나.ps1` 이 부른다.
+
+    앱 안 알림은 **DB 가 성할 때만** 선다 — 계정까지 빈 사고에서는 알릴 사람이 DB 에
+    없다(봐둘것 AZ-c). 이 자리는 DB 와 무관해서 그때도 말한다. **읽기만 한다** — 옆 파일을
+    안 쓴다(운영 자료는 읽기만).
+    """
+    if not out_dir.exists():
+        return []
+    return [f"!! {제목}\n     {본문}" for _, 제목, 본문 in 의심말들(out_dir, 기록=False)]
+
+
 def 알린다(db_path: pathlib.Path, out_dir: pathlib.Path) -> tuple[int, str | None]:
     """의심 판마다 **총무팀 전원의 앱 알림**에 한 번 세운다 — (새로 세운 수, 못 세운 까닭).
 
@@ -448,8 +486,8 @@ def 알린다(db_path: pathlib.Path, out_dir: pathlib.Path) -> tuple[int, str | 
     - `지키는판` 은 안 세운다 — 사람이 이미 알고 남기기로 정한 판이다
     - **못 세우면 까닭을 돌려준다** — 조용히 삼키면 경고가 안 선 것과 구별이 안 된다
     """
-    의심 = sorted(s for s in suspects(out_dir, stamps_in(out_dir)) if s not in 지키는판)
-    if not 의심:
+    말들 = 의심말들(out_dir)
+    if not 말들:
         return 0, None
     try:
         from sqlalchemy import create_engine, inspect
@@ -467,18 +505,16 @@ def 알린다(db_path: pathlib.Path, out_dir: pathlib.Path) -> tuple[int, str | 
                 총무 = perm.admins(db)
                 if not 총무:
                     return 0, "알릴 총무팀 계정이 없습니다"
-                for stamp in 의심:
-                    r = rows_of(out_dir, stamp) or {"total": "?", "tables": {}}
+                for stamp, 제목, 본문 in 말들:
                     새로 += len(notify_service.notify(
                         db, users=총무, retreat_id=None, kind=BACKUP_NOTICE_KIND,
-                        title=f"새벽 백업이 비어 있습니다 — app-{stamp}.db",
-                        body=(f"회차 {r['tables'].get('retreats', '?')} · 행 {r['total']}. "
-                              "먼저 운영 DB 가 비지 않았는지 보세요 — 홈에 회차와 업무가 보이면 "
-                              "성한 것입니다. 비었으면 이 판이 아니라 그 앞 날짜의 성한 판으로 "
-                              "되돌립니다(배포-안내 「되돌리려면」). 이 판은 성한 판의 칸에 안 "
-                              "세고, 지울지는 사람이 정합니다."),
+                        title=제목, body=본문,
                         link="/settings/checkup",
                         dedupe_key=f"backup-suspect:{stamp}",
+                        # **웹 푸시로 안 보낸다** (2026-09-13 에 사람이 정함) — 새벽 3시에
+                        # 자는 사람 휴대폰이 울린다. 백업이 이상한 것은 그 순간 뛰어갈 일이
+                        # 아니라 아침에 보면 되는 일이고, 급한 알림과 섞이면 둘 다 안 읽힌다
+                        push=False,
                     ))
             return 새로, None
         finally:
@@ -537,6 +573,11 @@ def mb(size: int) -> str:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--살핀다"]:
+        # 앱 밖 자리 — DB 를 안 열고 백업 폴더만 읽는다(되살아나나.ps1 이 부른다)
+        줄들 = 살핀다()
+        print("\n".join(줄들) if 줄들 else "  빈 판 없음")
+        raise SystemExit(0)
     result = run()
     if not result["ok"]:
         print("백업하지 못했습니다 —", result["reason"])

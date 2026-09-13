@@ -110,8 +110,14 @@ def notify(
     target_type: str | None = None,
     target_id: int | None = None,
     exclude_user_id: int | None = None,
+    push: bool = True,
 ) -> list[Notification]:
-    """알림을 만든다. 같은 사용자에게 같은 dedupe_key면 다시 만들지 않는다."""
+    """알림을 만든다. 같은 사용자에게 같은 dedupe_key면 다시 만들지 않는다.
+
+    **웹 푸시는 기본으로 함께 시도한다** — `push=False` 면 앱 안(배지 · 알림 화면)에만 선다.
+    끄는 기준은 **「그 순간 사람이 움직일 일인가」** 다: 아침에 보면 되는 일이 급한 알림과
+    섞이면 둘 다 안 읽힌다. 끈 자리는 `push=False` 로 찾는다(처음 끈 것은 `scripts/backup.py` 의 새벽 백업 알림).
+    """
     created: list[Notification] = []
     # 담당자와 부서원 목록이 겹칠 수 있으므로 먼저 중복을 제거한다
     # (안 하면 같은 (user_id, dedupe_key) 가 두 번 들어가 UNIQUE 제약을 위반한다)
@@ -143,7 +149,8 @@ def notify(
 
     if created:
         db.commit()
-        _try_push(db, created)
+        if push:
+            _try_push(db, created)
     return created
 
 
