@@ -50,6 +50,27 @@ KEEP = 30                      # 이만큼만 남기고 오래된 것부터 지�
 # 잡혀 멀쩡한 백업을 지운다.
 MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024        # 10GB
 
+# ── 빈 백업을 정리 대상에서 뺀다 (2026-09-13 · 봐둘것 AZ-a) ────────────
+#
+# 시험이 운영 DB 를 비운 날 새벽 3시에 이 스크립트가 **빈 DB 를 떴다.** 이름만
+# 보면 그것이 가장 최근 판이고, 개수(30)로 지우면 빈 판이 하루 한 칸씩 성한 판을
+# 밀어낸다 — 시간이 더 지났으면 성한 판이 다 밀려나고 빈 판만 남는다.
+#
+# 그래서 뜰 때 **표마다 행 수를 옆 파일(`app-<때>.rows.json`)에 남긴다** — 백업을
+# 안 열고도 성한지 안다. 그리고 **의심스러운 판은 개수에도 크기에도 안 세고
+# 지우지도 않는다.** 지울지는 사람이 정한다(증거일 수 있다).
+#
+# **의심의 기준에 「몇 행 미만」 을 박지 않는다.** 행 수는 회차가 쌓이면 자라서
+# 오늘 맞는 숫자가 내년에는 성한 판을 빈 판으로 부른다. 대신 둘을 본다.
+#   ① 회차 표(`retreats`)가 있는데 0 행 — 이 앱의 운영 DB 는 회차 없이는 뜻이
+#      없다(구조의 신호). 표가 아예 없는 판은 이 앱의 DB 가 아니라 이 기준을 안 건다
+#   ② 행 합이 **가장 큰 판의 `SUSPECT_RATIO` 미만** — 상대 기준.
+#      「반으로 줄었다」 로 잡지 않는 까닭: 2026-09-10 에 계정 정리로 행이 실제로
+#      절반 가까이 줄었다(3091 → 1604). 그 판은 성한 판이다.
+# 행 수를 못 읽는 판(SQLite 가 아닌 파일)은 **의심에 안 넣는다** — 그 판으로는
+# 되돌릴 수도 없어서 지워도 잃는 것이 없고, 넣으면 영영 안 지워지고 쌓인다.
+SUSPECT_RATIO = 0.10
+
 BACKUP_DIR = DATA_DIR / "backups"
 DB_PATH = DATA_DIR / "app.db"
 VAPID_PATH = DATA_DIR / "vapid_private.pem"
@@ -202,6 +223,11 @@ README_TEXT = """이 폴더에 대해 — 읽고 복사하세요
 
 ■ 되돌릴 때
 
+  **먼저 그 날짜의 app-날짜.rows.json 을 메모장으로 여세요.** 표마다 행 수가
+  적혀 있습니다. 이름이 가장 최근인 것이 성한 것이 아닙니다 — 운영 DB 가 빈
+  채로 새벽 백업이 돌면 가장 최근 판이 빈 판입니다(2026-09-13 에 실제로 그랬습니다).
+  "retreats" 가 0 이거나 total 이 다른 날보다 터무니없이 적으면 그 판을 쓰지 마세요.
+
   서버를 끄고, **같은 날짜끼리 셋을 함께** 되돌립니다.
     app-날짜.db      →  data\\app.db
     uploads-날짜.zip  →  풀어서 data\\uploads\\
@@ -222,12 +248,65 @@ def write_readme(out_dir: pathlib.Path) -> pathlib.Path:
 
 
 def files_of(out_dir: pathlib.Path, stamp: str) -> tuple[pathlib.Path, ...]:
-    """한 회차의 세 파일. 같은 날짜끼리 함께 지우고 함께 되돌린다."""
+    """한 회차의 파일. 같은 날짜끼리 함께 지우고 함께 되돌린다."""
     return (
         out_dir / f"app-{stamp}.db",
         out_dir / f"vapid-{stamp}.pem",
         out_dir / f"uploads-{stamp}.zip",
+        rows_path(out_dir, stamp),
     )
+
+
+def rows_path(out_dir: pathlib.Path, stamp: str) -> pathlib.Path:
+    return out_dir / f"app-{stamp}.rows.json"
+
+
+def count_rows(db_file: pathlib.Path) -> dict:
+    """표마다 행 수 — **읽기 전용으로** 연다(백업을 세다 고치면 안 된다)."""
+    conn = sqlite3.connect(f"{db_file.resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        names = [r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        tables = {n: conn.execute(f'SELECT count(*) FROM "{n}"').fetchone()[0] for n in sorted(names)}
+    finally:
+        conn.close()
+    return {"total": sum(tables.values()), "tables": tables}
+
+
+def write_rows(out_dir: pathlib.Path, stamp: str) -> dict:
+    import json
+
+    rows = count_rows(out_dir / f"app-{stamp}.db")
+    rows_path(out_dir, stamp).write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    return rows
+
+
+def rows_of(out_dir: pathlib.Path, stamp: str) -> dict | None:
+    """옆 파일에서 읽는다. 없으면(이 규칙 전의 판) 한 번 세어 남긴다. 못 읽으면 None."""
+    import json
+
+    try:
+        return json.loads(rows_path(out_dir, stamp).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    try:
+        return write_rows(out_dir, stamp)
+    except (sqlite3.Error, OSError):
+        return None
+
+
+def suspects(out_dir: pathlib.Path, stamps: list[str]) -> set[str]:
+    """비었거나 터무니없이 적은 판 — 기준은 `SUSPECT_RATIO` 위의 글."""
+    rows = {s: rows_of(out_dir, s) for s in stamps}
+    biggest = max((r["total"] for r in rows.values() if r), default=0)
+    out = set()
+    for s, r in rows.items():
+        if r is None:
+            continue            # 못 읽는 판은 되돌릴 수도 없다 — 지워도 잃는 것이 없다
+        tables = r["tables"]
+        if ("retreats" in tables and tables["retreats"] == 0) or r["total"] < biggest * SUSPECT_RATIO:
+            out.add(s)
+    return out
 
 
 def disk_used(paths) -> int:
@@ -265,8 +344,12 @@ def prune(
 
     **개수와 크기를 함께 본다.** 개수만 보면 200MB 짜리 첨부가 들어온 뒤로
     디스크가 조용히 차고, 크기만 보면 작은 백업이 무한정 쌓인다.
+
+    **의심스러운 판(`suspects`)은 세지도 지우지도 않는다** — 빈 판이 칸을 차지해
+    성한 판을 밀어내지 않게. 그 판을 지울지는 사람이 정한다.
     """
     stamps = stamps_in(out_dir)
+    stamps = [s for s in stamps if s not in suspects(out_dir, stamps)]
     removed: list[pathlib.Path] = []
 
     def drop(stamp: str) -> None:
@@ -301,6 +384,8 @@ def run(
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     db_copy = snapshot(db_path, out_dir, stamp=stamp)
+    rows = write_rows(out_dir, stamp)
+    suspect = stamp in suspects(out_dir, stamps_in(out_dir))
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
     uploads_copy, uploads_fresh = copy_uploads(uploads, out_dir, stamp=stamp)
     removed = prune(out_dir, keep=keep, max_total=max_total)
@@ -308,6 +393,9 @@ def run(
     return {
         "ok": True,
         "db": db_copy,
+        "rows": rows["total"],
+        # 비었거나 터무니없이 적어 정리에서 뺀 판인가 (SUSPECT_RATIO)
+        "suspect": suspect,
         "vapid": key_copy,
         "uploads": uploads_copy,
         # 바뀐 것이 없어 지난 zip 에 이어 붙였는가
@@ -331,7 +419,10 @@ if __name__ == "__main__":
     if not result["ok"]:
         print("백업하지 못했습니다 —", result["reason"])
         raise SystemExit(1)
-    print(f"백업했습니다: {result['db'].name} ({mb(result['db'].stat().st_size)})")
+    print(f"백업했습니다: {result['db'].name} ({mb(result['db'].stat().st_size)} · 행 {result['rows']:,})")
+    if result["suspect"]:
+        print("  !! 이 백업은 비었거나 터무니없이 적습니다 — 정리 대상에서 뺐습니다."
+              " 운영 DB 가 비지 않았는지 보세요 (봐둘것 AZ-a)")
     if result["vapid"]:
         print(f"  VAPID 키도 함께: {result['vapid'].name}")
     else:
