@@ -64,7 +64,8 @@ MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024        # 10GB
 # 오늘 맞는 숫자가 내년에는 성한 판을 빈 판으로 부른다. 대신 둘을 본다.
 #   ① 회차 표(`retreats`)가 있는데 0 행 — 이 앱의 운영 DB 는 회차 없이는 뜻이
 #      없다(구조의 신호). 표가 아예 없는 판은 이 앱의 DB 가 아니라 이 기준을 안 건다
-#   ② 행 합이 **가장 큰 판의 `SUSPECT_RATIO` 미만** — 상대 기준.
+#   ② 행 합이 **가운데 판(중앙값)의 `SUSPECT_RATIO` 미만** — 상대 기준.
+#      가장 큰 판과 견주지 않는 까닭은 `suspects` 에 있다(한 판이 튀면 전부 의심이 된다).
 #      「반으로 줄었다」 로 잡지 않는 까닭: 2026-09-10 에 계정 정리로 행이 실제로
 #      절반 가까이 줄었다(3091 → 1604). 그 판은 성한 판이다.
 # 행 수를 못 읽는 판(SQLite 가 아닌 파일)은 **의심에 안 넣는다** — 그 판으로는
@@ -208,13 +209,19 @@ README_TEXT = """이 폴더에 대해 — 읽고 복사하세요
   $받을곳 = "D:\\대청부백업"          # USB 나 클라우드 폴더로 바꾸세요
   New-Item -ItemType Directory -Force $받을곳 | Out-Null
   Get-ChildItem $원본 -Filter "app-*.db" |
-    Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object {{
+    Sort-Object Name -Descending |
+    Where-Object {{
+      $행수 = Join-Path $원본 ($_.BaseName + ".rows.json")
+      -not (Test-Path $행수) -or ((Get-Content $행수 -Raw -Encoding UTF8 | ConvertFrom-Json).tables.retreats -ne 0)
+    }} |
+    Select-Object -First 3 | ForEach-Object {{
       $날짜 = $_.BaseName -replace '^app-',''
       Get-ChildItem $원본 -Filter "*-$날짜.*" | Copy-Item -Destination $받을곳 -Force
     }}
 
-  이렇게 나오면 성공 — 받을곳에 app-…db · uploads-…zip · vapid-…pem 이
-  날짜별로 세 벌씩 들어 있습니다.
+  이렇게 나오면 성공 — 받을곳에 app-…db · uploads-…zip · vapid-…pem 과
+  행 수 파일(app-…rows.json)이 날짜별로 들어 있습니다.
+  회차가 0 인 판(빈 판)은 건너뜁니다 — 이름순으로만 고르면 빈 판부터 복사합니다.
 
 ■ 옛 zip 을 열어서 고쳐 저장하지 마세요
 
@@ -282,11 +289,23 @@ def write_rows(out_dir: pathlib.Path, stamp: str) -> dict:
 
 
 def rows_of(out_dir: pathlib.Path, stamp: str) -> dict | None:
-    """옆 파일에서 읽는다. 없으면(이 규칙 전의 판) 한 번 세어 남긴다. 못 읽으면 None."""
+    """옆 파일에서 읽는다. 없거나 · 모양이 틀렸거나 · 판보다 옛것이면 다시 세어 남긴다.
+    못 읽으면 None.
+
+    **옆 파일을 그냥 믿지 않는다** — 사람이 메모장으로 여는 파일이라 고쳐질 수 있고,
+    판(`app-<때>.db`)을 다른 사본으로 바꿔 넣으면 옛 수가 남는다. 모양이 틀리면
+    `prune` 이 죽고, 새벽 작업의 실패는 아무에게도 안 닿는다(봐둘것 AZ-c).
+    """
     import json
 
+    db_file = out_dir / f"app-{stamp}.db"
+    side = rows_path(out_dir, stamp)
     try:
-        return json.loads(rows_path(out_dir, stamp).read_text(encoding="utf-8"))
+        rows = json.loads(side.read_text(encoding="utf-8"))
+        if (isinstance(rows, dict) and isinstance(rows.get("total"), int)
+                and isinstance(rows.get("tables"), dict)
+                and side.stat().st_mtime >= db_file.stat().st_mtime):
+            return rows
     except (OSError, ValueError):
         pass
     try:
@@ -296,15 +315,25 @@ def rows_of(out_dir: pathlib.Path, stamp: str) -> dict | None:
 
 
 def suspects(out_dir: pathlib.Path, stamps: list[str]) -> set[str]:
-    """비었거나 터무니없이 적은 판 — 기준은 `SUSPECT_RATIO` 위의 글."""
+    """비었거나 터무니없이 적은 판 — 기준은 `SUSPECT_RATIO` 위의 글.
+
+    **견주는 것은 가장 큰 판이 아니라 가운데 판(중앙값)이다.** 가장 큰 판을 쓰면
+    한 판이 튀는 순간(시험 자료를 크게 넣었다 뺀 날) 그 뒤의 판이 전부 의심이 되고,
+    의심 판은 개수·크기에 안 세므로 **아무것도 안 지워진 채 쌓인다** — 커밋 전
+    검토가 50,001행 한 판 뒤 2,002행 40판으로 재어 짚었다. 중앙값은 한 판에 안 흔들린다.
+    빈 판이 절반을 넘게 쌓이면 중앙값이 내려가 ②가 약해지지만, 그때는 ①이 잡는다.
+    """
+    import statistics
+
     rows = {s: rows_of(out_dir, s) for s in stamps}
-    biggest = max((r["total"] for r in rows.values() if r), default=0)
+    totals = [r["total"] for r in rows.values() if r]
+    middle = statistics.median(totals) if totals else 0
     out = set()
     for s, r in rows.items():
         if r is None:
             continue            # 못 읽는 판은 되돌릴 수도 없다 — 지워도 잃는 것이 없다
         tables = r["tables"]
-        if ("retreats" in tables and tables["retreats"] == 0) or r["total"] < biggest * SUSPECT_RATIO:
+        if ("retreats" in tables and tables["retreats"] == 0) or r["total"] < middle * SUSPECT_RATIO:
             out.add(s)
     return out
 
@@ -349,7 +378,8 @@ def prune(
     성한 판을 밀어내지 않게. 그 판을 지울지는 사람이 정한다.
     """
     stamps = stamps_in(out_dir)
-    stamps = [s for s in stamps if s not in suspects(out_dir, stamps)]
+    빼둘 = suspects(out_dir, stamps)            # 한 번만 센다 — 줄마다 부르면 판 수의 제곱
+    stamps = [s for s in stamps if s not in 빼둘]
     removed: list[pathlib.Path] = []
 
     def drop(stamp: str) -> None:
@@ -384,7 +414,11 @@ def run(
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     db_copy = snapshot(db_path, out_dir, stamp=stamp)
-    rows = write_rows(out_dir, stamp)
+    # **행 수를 못 세도 백업은 이어 간다** — 여기서 멈추면 VAPID·업로드가 안 남는다
+    try:
+        rows = write_rows(out_dir, stamp)
+    except (sqlite3.Error, OSError):
+        rows = None
     suspect = stamp in suspects(out_dir, stamps_in(out_dir))
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
     uploads_copy, uploads_fresh = copy_uploads(uploads, out_dir, stamp=stamp)
@@ -393,7 +427,7 @@ def run(
     return {
         "ok": True,
         "db": db_copy,
-        "rows": rows["total"],
+        "rows": rows["total"] if rows else None,
         # 비었거나 터무니없이 적어 정리에서 뺀 판인가 (SUSPECT_RATIO)
         "suspect": suspect,
         "vapid": key_copy,
@@ -419,7 +453,8 @@ if __name__ == "__main__":
     if not result["ok"]:
         print("백업하지 못했습니다 —", result["reason"])
         raise SystemExit(1)
-    print(f"백업했습니다: {result['db'].name} ({mb(result['db'].stat().st_size)} · 행 {result['rows']:,})")
+    print(f"백업했습니다: {result['db'].name} ({mb(result['db'].stat().st_size)} · "
+          + (f"행 {result['rows']:,})" if result["rows"] is not None else "행 수를 못 셌습니다)"))
     if result["suspect"]:
         print("  !! 이 백업은 비었거나 터무니없이 적습니다 — 정리 대상에서 뺐습니다."
               " 운영 DB 가 비지 않았는지 보세요 (봐둘것 AZ-a)")

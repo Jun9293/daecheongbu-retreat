@@ -70,8 +70,9 @@ def test43_a02_규칙이_없으면_이_판에서_성한_판을_잃는다(tmp_pat
 def test43_a03_행이_터무니없이_적으면_회차가_있어도_의심이다(tmp_path):
     out = tmp_path / "backups"
     큰 = 1000
-    _판(out, "20260901-000000", 회차=2, 행=큰)
-    적은 = int(큰 * backup.SUSPECT_RATIO) - 10          # 기준 바로 아래
+    for i in range(3):
+        _판(out, f"20260901-00000{i}", 회차=2, 행=큰)
+    적은 = int(큰 * backup.SUSPECT_RATIO) - 10          # 가운데 판 기준 바로 아래
     _판(out, "20260902-000000", 회차=1, 행=적은)
     assert backup.suspects(out, backup.stamps_in(out)) == {"20260902-000000"}
 
@@ -84,6 +85,19 @@ def test43_a03b_회차가_0_이면_행이_많아도_의심이다(tmp_path):
     _판(out, "20260901-000000", 회차=2, 행=200)
     _판(out, "20260902-000000", 회차=0, 행=200)
     assert backup.suspects(out, backup.stamps_in(out)) == {"20260902-000000"}
+
+
+def test43_a03c_한_판이_튀어도_나머지가_의심이_되지_않는다(tmp_path):
+    """가장 큰 판과 견주면 한 판이 튀는 순간 그 뒤가 전부 의심이 되고, 의심 판은
+    개수·크기에 안 세므로 **아무것도 안 지워진 채 쌓인다**(커밋 전 검토가 50,001행
+    한 판 뒤 2,002행 40판으로 재어 짚었다). 가운데 판과 견주면 안 흔들린다."""
+    out = tmp_path / "backups"
+    _판(out, "20260901-000000", 회차=2, 행=50_000)
+    for i in range(12):
+        _판(out, f"20260902-{i:06d}", 회차=2, 행=2_000)
+    assert backup.suspects(out, backup.stamps_in(out)) == set()
+    지운 = backup.prune(out, keep=5)
+    assert len(backup.stamps_in(out)) == 5 and 지운, "튀는 판 뒤에서 개수 제한이 풀렸다"
 
 
 def test43_a04_절반으로_줄어든_판은_성한_판이다(tmp_path):
@@ -137,6 +151,25 @@ def test43_b03_옆_파일은_그_판과_함께_지운다(tmp_path):
         backup.rows_of(out, s)                     # 이 규칙 전의 판 — 한 번 세어 남긴다
     backup.prune(out, keep=1)
     assert sorted(p.name for p in out.glob("*.rows.json")) == ["app-20260901-000002.rows.json"]
+
+
+def test43_b04_옆_파일의_모양이_틀리거나_판보다_옛것이면_다시_센다(tmp_path):
+    """사람이 메모장으로 여는 파일이다 — 모양이 틀리면 `prune` 이 죽었고(검토가 재현),
+    판을 다른 사본으로 바꿔 넣으면 옛 수가 남았다."""
+    import os
+
+    out = tmp_path / "backups"
+    _판(out, "20260901-000000", 회차=2, 행=10)
+    옆 = backup.rows_path(out, "20260901-000000")
+    옆.write_text('{"total": 10}', encoding="utf-8")        # tables 가 빠진 모양
+    assert backup.rows_of(out, "20260901-000000")["tables"]["retreats"] == 2
+    backup.prune(out, keep=30)                              # 죽지 않는다
+
+    옆.write_text('{"total": 999, "tables": {"retreats": 0}}', encoding="utf-8")
+    db = out / "app-20260901-000000.db"
+    나중 = 옆.stat().st_mtime + 10
+    os.utime(db, (나중, 나중))                               # 판을 바꿔 넣은 것처럼
+    assert backup.rows_of(out, "20260901-000000")["total"] == 12
 
 
 def test43_c01_되돌리는_안내가_행_수를_먼저_보라고_한다():

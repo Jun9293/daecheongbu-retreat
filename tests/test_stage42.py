@@ -167,7 +167,8 @@ def test42_b03_운영을_여는_시험은_읽기전용엔진을_쓴다():
         if '"data" / "app.db"' not in src:
             continue
         본 += 1
-        assert "읽기전용엔진(" in src, f"{f.name} 이 운영을 읽기 전용 엔진 없이 연다"
+        # 정의 줄(`def 읽기전용엔진(`)이 채우지 않게 **부르는 꼴**을 찾는다 (커밋 전 검토 [G])
+        assert "읽기전용엔진(운영)" in src, f"{f.name} 이 운영을 읽기 전용 엔진 없이 연다"
         assert 'create_engine(f"sqlite:///{운영}")' not in src, f"{f.name} 에 쓰기 가능한 운영 엔진이 있다"
     assert 본 >= 1, "운영을 여는 시험을 하나도 못 찾았다 — 이 시험이 아무것도 안 본다"
 
