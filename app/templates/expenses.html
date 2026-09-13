@@ -105,6 +105,7 @@
     <div class="grouphead">
       {% if group.row %}
       <b>{{ group.row.category.display_name }}</b>
+      {% if group.row.category.canceled_at %}<span class="cancelchip">취소된 예산 항목</span>{% endif %}
       <span class="gnum">예산 {{ group.row.planned|won }} · 집행 {{ group.row.spent|won }} ·
         <i class="{% if group.row.remaining < 0 %}overrun{% endif %}">잔액 {{ group.row.remaining|won }}</i></span>
       {% else %}
@@ -147,7 +148,8 @@
             </td>
             <td class="mono nowrap">{{ e.expense_date|short_date }}</td>
             <td class="r mono">{{ e.amount|num }}</td>
-            <td class="r mono">{{ (e.subsidy_amount if e.is_meal_expense else e.amount)|num }}</td>
+            {# 집행 금액은 모델의 한 곳에서 — 화면이 식을 다시 적지 않는다 (7장) #}
+            <td class="r mono">{{ e.settlement_amount|num }}</td>
             <td class="r mono">{% if e.is_meal_expense and e.personal_burden_amount %}{{ e.personal_burden_amount|num }}{% else %}<span class="dim">–</span>{% endif %}</td>
             <td class="nowrap">{{ e.payer_name or '–' }}
               {#

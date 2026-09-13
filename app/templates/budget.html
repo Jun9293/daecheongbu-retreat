@@ -18,7 +18,7 @@
        빨갛게 띄우지 않고 「수입 미입력」 으로 말한다. 수입이 하나라도 있으면
        계산하고, 음수면 붉다 (UI 정리 판 1 · 2-a·2-b) #}
     <div class="kpi"><div class="l">잔액</div>
-      {% if summary.incomes %}
+      {% if summary.active_incomes %}
       <div class="v" {% if summary.balance < 0 %}style="color:var(--now)"{% endif %}>{{ summary.balance|won }}</div>
       <div class="d">총 수입 − 총 지출예산</div>
       {% else %}
@@ -91,9 +91,10 @@
                 <input name="planned_amount" type="number" min="0" value="{{ cat.planned_amount }}" placeholder="예산금액" data-calc="planned">
                 <button class="sbtn p" type="submit">저장</button>
               </form>
-              <form method="post" action="/budget/categories/{{ cat.id }}/delete"
-                    onsubmit="return confirm('이 예산 항목을 삭제할까요?')">
-                <button class="sbtn" type="submit">삭제</button>
+              {# 지우지 않는다 (0장) — 취소 표시만 하고 아래에서 되살린다 (7-3) #}
+              <form method="post" action="/budget/categories/{{ cat.id }}/cancel"
+                    onsubmit="return confirm('이 예산 항목을 취소할까요? 행은 아래에 흐리게 남고 합계에서 빠집니다. 걸린 지출은 그대로 남습니다.')">
+                <button class="sbtn" type="submit">취소</button>
               </form>
             </details></td>
             {% endif %}
@@ -113,6 +114,30 @@
             <td class="r mono">{{ summary.uncategorized_spent|num }}</td><td></td><td></td>
             {% if is_admin(user) %}<td></td>{% endif %}</tr>
           {% endif %}
+          {# 취소된 항목에 걸린 지출의 집행 — 총계에 들어 있다. 줄이 없으면 총계가 줄의 합과 안 맞는다 #}
+          {% if summary.canceled_category_spent %}
+          <tr><td colspan="8" class="dim">(취소된 예산 항목에 걸린 지출)</td>
+            <td class="r mono">{{ summary.canceled_category_spent|num }}</td><td></td><td></td>
+            {% if is_admin(user) %}<td></td>{% endif %}</tr>
+          {% endif %}
+          {# 취소된 예산 항목 — 행은 남고 흐리다. 합계·비율에는 안 든다 (0장 · 7-3) #}
+          {% for row in summary.canceled_categories %}
+          {% set cat = row.category %}
+          <tr class="canceled">
+            <td>{{ cat.level1 }}</td>
+            <td>{{ cat.level2 }} <span class="cancelchip">취소됨</span></td>
+            <td class="l3">{{ cat.level3 or '' }}</td>
+            {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
+            <td class="r mono">{{ row.planned|num }}</td>
+            <td class="r mono dim">–</td>
+            <td class="r mono">{{ row.spent|num }}</td>
+            <td class="r mono dim">–</td><td class="r mono dim">–</td>
+            {% if is_admin(user) %}
+            <td class="r"><form method="post" action="/budget/categories/{{ cat.id }}/cancel">
+              <button class="sbtn" type="submit">되살리기</button></form></td>
+            {% endif %}
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -138,23 +163,24 @@
 
   {# ── 수입 (7-3) — 잔액에만 쓴다. 홈 집행률 분모는 지출예산 총액이다 ── #}
   <div class="fld">
-    <h3>수입 <small class="cnt">{{ summary.incomes|length }}건 · {{ summary.total_income|won }}</small></h3>
+    <h3>수입 <small class="cnt">{{ summary.active_incomes|length }}건 · {{ summary.total_income|won }}</small></h3>
     <div class="tblwrap">
       <table class="fintbl">
         <thead><tr><th>이름</th><th class="r">단가</th><th class="r">명수</th>
           <th class="r">금액</th><th>비고</th>{% if is_admin(user) %}<th></th>{% endif %}</tr></thead>
         <tbody>
           {% for income in summary.incomes %}
-          <tr>
-            <td>{{ income.name }}</td>
+          <tr{% if income.canceled_at %} class="canceled"{% endif %}>
+            <td>{{ income.name }}{% if income.canceled_at %} <span class="cancelchip">취소됨</span>{% endif %}</td>
             <td class="r mono">{{ income.unit_price|num if income.unit_price is not none else '' }}</td>
             <td class="r mono">{{ income.headcount if income.headcount is not none else '' }}</td>
             <td class="r mono">{{ income.amount|num }}</td>
             <td class="dim">{{ income.note or '' }}</td>
             {% if is_admin(user) %}
-            <td class="r"><form method="post" action="/budget/incomes/{{ income.id }}/delete"
-                  onsubmit="return confirm('이 수입 항목을 삭제할까요?')">
-              <button class="sbtn" type="submit">삭제</button></form></td>
+            {# 지우지 않는다 (0장) — 같은 단추로 취소·되살림 (7-3) #}
+            <td class="r"><form method="post" action="/budget/incomes/{{ income.id }}/cancel"
+                  {% if not income.canceled_at %}onsubmit="return confirm('이 수입을 취소할까요? 행은 흐리게 남고 합계에서 빠집니다.')"{% endif %}>
+              <button class="sbtn" type="submit">{{ '되살리기' if income.canceled_at else '취소' }}</button></form></td>
             {% endif %}
           </tr>
           {% else %}
@@ -162,7 +188,7 @@
           {% endfor %}
           {# 위의 잔액 카드와 같은 규칙 — 수입이 없으면 계산하지 않는다 #}
           <tr class="grand"><td>잔액 (총 수입 − 총 지출예산)</td><td></td><td></td>
-            {% if summary.incomes %}
+            {% if summary.active_incomes %}
             <td class="r mono{% if summary.balance < 0 %} overrun{% endif %}">{{ summary.balance|num }}</td>
             {% else %}
             <td class="r dim">수입 미입력</td>
