@@ -60,6 +60,33 @@ def _시험DB가_아니면_멈춘다(engine) -> None:
     )
 
 
+def pytest_configure(config):
+    """**`-p` 를 받지 않는다 — 예외 없이** (CLAUDE.md 11-3 · 2026-09-13 에 사람이 정함).
+
+    `-p` 는 운영 DB 를 비운 사고의 입구였다. 「앱을 안 읽히는 `-p no:…` 는 괜찮다」 같은
+    예외는 **사람이 그때그때 판단해야** 지켜지고, 그 판단이 없는 때에 뚫린다 — 지킬 수 없는
+    예외보다 불편한 금지가 낫다. 이 창이 치는 명령은 저장소에 안 남아 글로는 못 보므로
+    **도는 순간 여기서** 본다 — 명령줄 · `PYTEST_ADDOPTS` · ini 의 `addopts` ·
+    `PYTEST_PLUGINS`(pytest 가 conftest 보다 먼저 플러그인을 읽는 입구 중 여기서 보이는 것 전부).
+    PYTHONSTARTUP · sitecustomize · 설치된 플러그인 entry point 는 여기서 못 본다.
+    """
+    import shlex
+
+    받은것 = list(config.invocation_params.args)
+    받은것 += shlex.split(os.environ.get("PYTEST_ADDOPTS", ""))
+    받은것 += list(config.getini("addopts"))
+    끼운것 = [a for a in 받은것 if a == "-p" or (a.startswith("-p") and not a.startswith("--"))]
+    if os.environ.get("PYTEST_PLUGINS", "").strip():
+        끼운것.append(f"PYTEST_PLUGINS={os.environ['PYTEST_PLUGINS']}")
+    if 끼운것:
+        pytest.exit(
+            "\npytest 앞에 -p 를 끼웠습니다 — 예외 없이 막습니다 (CLAUDE.md 11-3).\n"
+            f"  받은 것: {' '.join(끼운것)}\n"
+            "  왜 : -p 는 2026-09-13 운영 DB 를 비운 사고의 입구였습니다. 필요한 일은 -p 없이 합니다.",
+            returncode=4,
+        )
+
+
 def pytest_sessionstart(session):
     """시험 하나라도 돌기 전에 한 번 — `SessionLocal` 로 쓰는 시험도 운영에 닿지 않게.
     지우는 자리의 검사(`client`)는 이것과 따로 매번 돈다."""
