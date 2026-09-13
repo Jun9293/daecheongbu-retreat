@@ -16,6 +16,7 @@
 도는 시험도 있었고, 그 반대도 됩니다. 작업 폴더를 못 읽는 프로세스(권한)는
 **내 것이 아닌 쪽**에 둡니다 — 모르는 것을 멈추는 쪽으로 틀리면 되돌릴 수 없습니다.
 
+**이 도구 자신과 그것을 부른 셸·런처는 뺍니다** — 무늬가 그 명령줄에도 들어 있기 때문입니다.
 **이 저장소 안에서 다른 창이 도는 것은 못 가릅니다** — 작업 폴더가 같기 때문입니다.
 그래서 멈추기 전에 고른 것을 늘 찍습니다.
 
@@ -26,7 +27,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import sys
 
@@ -47,14 +47,25 @@ def _안인가(폴더: str | None, 뿌리: pathlib.Path) -> bool:
         return False
 
 
+def _나와조상() -> set[int]:
+    """이 도구 자신과 그것을 부른 쪽 전부 — 셸 · `.venv` 런처 · 그 위.
+
+    **무늬는 명령줄 인자로 들어가므로 부른 쪽 명령줄에 늘 들어 있고, 그 셸의 작업
+    폴더도 이 저장소다.** 빼지 않으면 `--멈춤` 이 그 명령을 친 셸과 런처를 멈춘다 —
+    커밋 전 검토가 무늬 하나로 돌려 셸 셋과 런처가 「이 저장소 안」 으로 뜨는 것을 봤다.
+    """
+    나 = psutil.Process()
+    return {나.pid} | {p.pid for p in 나.parents()}
+
+
 def 훑는다(무늬: str) -> list[dict]:
-    """명령줄에 무늬가 든 프로세스 **전부** — 가르기 전의 목록(자기 자신은 뺀다)."""
+    """명령줄에 무늬가 든 프로세스 **전부** — 가르기 전의 목록(자기와 조상은 뺀다)."""
     if not 무늬.strip():
         raise ValueError("무늬가 비었습니다 — 빈 무늬는 기계의 모든 프로세스를 고릅니다")
-    나 = os.getpid()
+    뺄것 = _나와조상()
     나온것 = []
     for p in psutil.process_iter(["pid", "cmdline"]):
-        if p.info["pid"] == 나:
+        if p.info["pid"] in 뺄것:
             continue
         명령줄 = " ".join(p.info["cmdline"] or [])
         if 무늬 not in 명령줄:
@@ -63,7 +74,9 @@ def 훑는다(무늬: str) -> list[dict]:
             폴더 = p.cwd()
         except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
             폴더 = None
-        나온것.append({"pid": p.info["pid"], "cwd": 폴더, "cmdline": 명령줄})
+        # 훑을 때의 Process 를 함께 넘긴다 — 멈출 때 PID 로 다시 만들면 그사이 그 PID 가
+        # 다른 프로세스로 다시 쓰였을 때 엉뚱한 것을 멈춘다(psutil 이 만든 때를 견준다)
+        나온것.append({"pid": p.info["pid"], "cwd": 폴더, "cmdline": 명령줄, "proc": p})
     return 나온것
 
 
@@ -81,7 +94,7 @@ def 멈춘다(줄들: list[dict], 기다림: float = 5.0) -> list[int]:
     procs = []
     for 줄 in 줄들:
         try:
-            p = psutil.Process(줄["pid"])
+            p = 줄.get("proc") or psutil.Process(줄["pid"])
             p.terminate()
             procs.append(p)
         except psutil.NoSuchProcess:

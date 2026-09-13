@@ -91,6 +91,32 @@ def test44_a02_멈추면_안의_것만_멈추고_밖은_산다(tmp_path):
         _치운다(밖, 안)
 
 
+def test44_a05_명령줄로_부르면_부른_쪽은_안_고른다():
+    """**무늬는 부른 쪽 명령줄에도 들어 있다** — 셸·런처가 그 무늬를 달고 작업 폴더도
+    이 저장소라, 빼지 않으면 `--멈춤` 이 그 명령을 친 셸을 멈춘다(커밋 전 검토 [A]).
+    함수를 프로세스 안에서 부르면 이 모양이 안 재지므로 **CLI 를 부모 프로세스로
+    감싸 띄운다** — 부모의 명령줄에 무늬를 넣고 작업 폴더를 이 저장소로 둔다.
+    같은 무늬의 잠자는 프로세스를 안에 하나 두어, 「아무것도 안 골랐다」 가 아니라
+    「그것만 골랐다」 를 본다."""
+    import re
+
+    무늬 = f"dcb-marker-{uuid.uuid4().hex}"
+    안 = _잠든다(ROOT, 무늬)
+    try:
+        _기다린다(무늬, 2)
+        안나무 = _나무(안)
+        감싸기 = (f"import subprocess, sys; "
+                 f"r = subprocess.run([sys.executable, r'{ROOT / 'scripts' / '내프로세스.py'}', '{무늬}'], "
+                 f"capture_output=True, text=True, encoding='utf-8'); print(r.stdout)  # {무늬}")
+        r = subprocess.run([sys.executable, "-c", 감싸기], cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"})
+        안쪽 = r.stdout.split("밖이거나")[0]
+        고른것 = {int(x) for x in re.findall(r"^\s+(\d+)\s", 안쪽, re.M)}
+        assert 고른것 == 안나무, f"부른 쪽까지 골랐거나 안의 것을 놓쳤다: {r.stdout}"
+    finally:
+        _치운다(안)
+
+
 def test44_a03_빈_무늬는_거절한다():
     with pytest.raises(ValueError):
         내프로세스.훑는다("  ")
@@ -267,7 +293,7 @@ def test44_c05_알림_표가_없으면_까닭을_돌려준다(tmp_path):
 # ── 추적 전 새 파일도 글 검사가 본다 (앞 판의 「7/7」 이 틀렸던 자리) ─────────
 
 
-@pytest.mark.parametrize("검사", ["check_stale", "check_counts"])
+@pytest.mark.parametrize("검사", ["check_stale", "check_counts", "check_names"])
 def test44_d01_추적_전_새_파일도_볼파일에_든다(검사):
     """얼린 판을 `git add` 하기 전에 돌려도 그 판이 검사 안에 든다.
     저장소 안에 추적 안 된 글 파일을 잠깐 만들어 재고 곧바로 지운다."""
@@ -277,7 +303,12 @@ def test44_d01_추적_전_새_파일도_볼파일에_든다(검사):
     새것 = ROOT / "docs" / "review" / f"zz-추적전-{uuid.uuid4().hex}.md"
     새것.write_text("추적 전 새 파일\n", encoding="utf-8")
     try:
-        assert 새것.resolve() in {p.resolve() for p in 모듈.볼파일()}, "추적 전 새 파일을 안 본다"
+        if 검사 == "check_names":          # 인자를 받는다 — 경로 없이 기본(저장소 전체)으로
+            from types import SimpleNamespace
+            본것 = 모듈.볼파일(SimpleNamespace(경로=[], staged=False))
+        else:
+            본것 = 모듈.볼파일()
+        assert 새것.resolve() in {p.resolve() for p in 본것}, "추적 전 새 파일을 안 본다"
     finally:
         새것.unlink()
 
