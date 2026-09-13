@@ -57,8 +57,9 @@ MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024        # 10GB
 # 밀어낸다 — 시간이 더 지났으면 성한 판이 다 밀려나고 빈 판만 남는다.
 #
 # 그래서 뜰 때 **표마다 행 수를 옆 파일(`app-<때>.rows.json`)에 남긴다** — 백업을
-# 안 열고도 성한지 안다. 그리고 **의심스러운 판은 개수에도 크기에도 안 세고
-# 지우지도 않는다.** 지울지는 사람이 정한다(증거일 수 있다).
+# 안 열고도 성한지 안다. 그리고 **의심스러운 판은 성한 판의 칸(KEEP)에 안 센다** —
+# 따로 `SUSPECT_KEEP` 까지 남기고, 크기가 넘치면 성한 판보다 먼저 지운다(아래).
+# 증거로 남길 판은 `지키는판` 에 까닭과 함께 적는다.
 #
 # **의심의 기준에 「몇 행 미만」 을 박지 않는다.** 행 수는 회차가 쌓이면 자라서
 # 오늘 맞는 숫자가 내년에는 성한 판을 빈 판으로 부른다. 대신 둘을 본다.
@@ -71,6 +72,28 @@ MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024        # 10GB
 # 행 수를 못 읽는 판(SQLite 가 아닌 파일)은 **의심에 안 넣는다** — 그 판으로는
 # 되돌릴 수도 없어서 지워도 잃는 것이 없고, 넣으면 영영 안 지워지고 쌓인다.
 SUSPECT_RATIO = 0.10
+
+# ── 의심 판에도 상한을 둔다 (2026-09-13 · 사람이 정함) ─────────────────
+#
+# 의심 판은 성한 판의 칸(KEEP)을 안 차지하지만, 그대로 두면 **운영이 빈 채로
+# 오래 가는 날 하루 하나씩 한없이 쌓인다.** 그래서 의심 판은 따로 이만큼만 남기고
+# 넘는 것은 오래된 것부터 지운다. 크기가 넘칠 때도 **의심 판을 성한 판보다 먼저**
+# 지운다 — 빈 판으로는 되돌릴 수 없으므로 잃는 것이 가장 적은 쪽부터다.
+#
+# **7 인 까닭** — 빈 판이 뜨면 그날 아침 앱의 알림에 선다(`알린다`). 한 주 동안
+# 아무도 그 알림을 안 봤다면 의심 판을 더 쌓아 둔다고 달라질 것이 없다. 증거로
+# 볼 것은 **처음 빈 날의 판**이고 그 판은 아래의 `지키는판` 이 따로 붙든다.
+# 성한 판 30(KEEP)과 겹치지 않는 별도 칸이라, 의심 판이 몇이든 성한 판은 30 이
+# 그대로 남는다.
+SUSPECT_KEEP = 7
+
+# **어떤 경우에도 안 지우는 판** — 날짜와 까닭을 함께 적는다. 개수·크기·의심 상한
+# 어느 것도 이 판을 안 세고 안 지운다. 앱 알림도 안 세운다: 사람이 이미 알고
+# 남기기로 정한 판이라 「지울지 정하세요」 가 매번 설 까닭이 없다.
+지키는판 = {
+    "20260913-030001": "2026-09-13 시험이 운영 DB 를 비운 채 돈 새벽 백업 — 사고의 증거"
+                       "라 지우지 않기로 사람이 정했다(봐둘것 AZ-a)",
+}
 
 BACKUP_DIR = DATA_DIR / "backups"
 DB_PATH = DATA_DIR / "app.db"
@@ -374,12 +397,14 @@ def prune(
     **개수와 크기를 함께 본다.** 개수만 보면 200MB 짜리 첨부가 들어온 뒤로
     디스크가 조용히 차고, 크기만 보면 작은 백업이 무한정 쌓인다.
 
-    **의심스러운 판(`suspects`)은 세지도 지우지도 않는다** — 빈 판이 칸을 차지해
-    성한 판을 밀어내지 않게. 그 판을 지울지는 사람이 정한다.
+    **의심스러운 판(`suspects`)은 성한 판의 칸에 안 센다** — 빈 판이 칸을 차지해
+    성한 판을 밀어내지 않게. 의심 판은 따로 `SUSPECT_KEEP` 까지만 남기고, 크기가
+    넘칠 때는 **의심 판부터** 지운다. `지키는판` 은 어느 셈에도 안 든다.
     """
-    stamps = stamps_in(out_dir)
-    빼둘 = suspects(out_dir, stamps)            # 한 번만 센다 — 줄마다 부르면 판 수의 제곱
-    stamps = [s for s in stamps if s not in 빼둘]
+    전부 = [s for s in stamps_in(out_dir) if s not in 지키는판]
+    빼둘 = suspects(out_dir, 전부)             # 한 번만 센다 — 줄마다 부르면 판 수의 제곱
+    stamps = [s for s in 전부 if s not in 빼둘]
+    의심 = [s for s in 전부 if s in 빼둘]       # 최근 것이 앞
     removed: list[pathlib.Path] = []
 
     def drop(stamp: str) -> None:
@@ -388,19 +413,78 @@ def prune(
                 path.unlink()
                 removed.append(path)
 
+    for stamp in 의심[SUSPECT_KEEP:]:
+        drop(stamp)
+    의심 = 의심[:SUSPECT_KEEP]
     for stamp in stamps[keep:]:
         drop(stamp)
     kept = stamps[:keep]
 
     # 남은 것의 총합이 기준을 넘으면 개수가 30 이하여도 오래된 것부터 지운다.
-    # **마지막 하나는 남긴다** — 크기 때문에 백업이 하나도 없게 되는 것은
-    # 디스크가 차는 것보다 나쁘다.
-    while len(kept) > 1 and disk_used(
-        path for stamp in kept for path in files_of(out_dir, stamp)
-    ) > max_total:
-        drop(kept.pop())
+    # **의심 판을 먼저** 지운다. **성한 판의 마지막 하나는 남긴다** — 크기 때문에
+    # 백업이 하나도 없게 되는 것은 디스크가 차는 것보다 나쁘다.
+    def 합() -> int:
+        return disk_used(path for stamp in kept + 의심 for path in files_of(out_dir, stamp))
+
+    while 합() > max_total and (의심 or len(kept) > 1):
+        drop(의심.pop() if 의심 else kept.pop())
 
     return removed
+
+
+BACKUP_NOTICE_KIND = "백업"
+
+
+def 알린다(db_path: pathlib.Path, out_dir: pathlib.Path) -> tuple[int, str | None]:
+    """의심 판마다 **총무팀 전원의 앱 알림**에 한 번 세운다 — (새로 세운 수, 못 세운 까닭).
+
+    새벽 작업의 출력은 작업 스케줄러가 남기지 않아 아무에게도 안 닿았다(봐둘것 AZ-c).
+    그래서 사람이 평소에 지나는 자리 — 사이드바 배지와 알림 화면 — 에 세운다.
+    **새 자리를 만들지 않고** `app.notifications.notify` 를 그대로 부른다.
+
+    - **같은 판으로 두 번 안 선다** — `dedupe_key` 가 판의 때라 사람마다 한 번이다.
+      매일 새벽 같은 줄이 쌓이면 아무도 안 읽는다
+    - **의심 판이 없으면 아무 말도 안 한다** — 「이상 없음」 이 쌓이면 진짜 경고가 묻힌다
+    - `지키는판` 은 안 세운다 — 사람이 이미 알고 남기기로 정한 판이다
+    - **못 세우면 까닭을 돌려준다** — 조용히 삼키면 경고가 안 선 것과 구별이 안 된다
+    """
+    의심 = sorted(s for s in suspects(out_dir, stamps_in(out_dir)) if s not in 지키는판)
+    if not 의심:
+        return 0, None
+    try:
+        from sqlalchemy import create_engine, inspect
+        from sqlalchemy.orm import Session
+
+        from app import notifications as notify_service
+        from app.domain import permissions as perm
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            if not {"notifications", "users"} <= set(inspect(engine).get_table_names()):
+                return 0, "이 DB 에 알림 표가 없습니다"
+            새로 = 0
+            with Session(engine, expire_on_commit=False) as db:
+                총무 = perm.admins(db)
+                if not 총무:
+                    return 0, "알릴 총무팀 계정이 없습니다"
+                for stamp in 의심:
+                    r = rows_of(out_dir, stamp) or {"total": "?", "tables": {}}
+                    새로 += len(notify_service.notify(
+                        db, users=총무, retreat_id=None, kind=BACKUP_NOTICE_KIND,
+                        title=f"새벽 백업이 비어 있습니다 — app-{stamp}.db",
+                        body=(f"회차 {r['tables'].get('retreats', '?')} · 행 {r['total']}. "
+                              "먼저 운영 DB 가 비지 않았는지 보세요 — 홈에 회차와 업무가 보이면 "
+                              "성한 것입니다. 비었으면 이 판이 아니라 그 앞 날짜의 성한 판으로 "
+                              "되돌립니다(배포-안내 「되돌리려면」). 이 판은 성한 판의 칸에 안 "
+                              "세고, 지울지는 사람이 정합니다."),
+                        link="/settings/checkup",
+                        dedupe_key=f"backup-suspect:{stamp}",
+                    ))
+            return 새로, None
+        finally:
+            engine.dispose()
+    except Exception as e:  # 알림이 백업을 막으면 안 된다 — 까닭은 돌려준다
+        return 0, f"{type(e).__name__}: {e}"
 
 
 def run(
@@ -423,6 +507,7 @@ def run(
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
     uploads_copy, uploads_fresh = copy_uploads(uploads, out_dir, stamp=stamp)
     removed = prune(out_dir, keep=keep, max_total=max_total)
+    알림수, 알림못함 = 알린다(db_path, out_dir)
     write_readme(out_dir)
     return {
         "ok": True,
@@ -430,6 +515,9 @@ def run(
         "rows": rows["total"] if rows else None,
         # 비었거나 터무니없이 적어 정리에서 뺀 판인가 (SUSPECT_RATIO)
         "suspect": suspect,
+        # 의심 판을 앱 알림에 새로 세운 수 · 못 세웠으면 그 까닭
+        "notified": 알림수,
+        "notify_error": 알림못함,
         "vapid": key_copy,
         "uploads": uploads_copy,
         # 바뀐 것이 없어 지난 zip 에 이어 붙였는가
@@ -455,6 +543,10 @@ if __name__ == "__main__":
         raise SystemExit(1)
     print(f"백업했습니다: {result['db'].name} ({mb(result['db'].stat().st_size)} · "
           + (f"행 {result['rows']:,})" if result["rows"] is not None else "행 수를 못 셌습니다)"))
+    if result["notify_error"]:
+        print(f"  !! 빈 판 경고를 앱 알림에 못 세웠습니다 — {result['notify_error']}")
+    elif result["notified"]:
+        print(f"  빈 판 경고를 앱 알림에 세웠습니다 ({result['notified']}건)")
     if result["suspect"]:
         print("  !! 이 백업은 비었거나 터무니없이 적습니다 — 정리 대상에서 뺐습니다."
               " 운영 DB 가 비지 않았는지 보세요 (봐둘것 AZ-a)")
