@@ -14,7 +14,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from app.domain.budget import BudgetSummary, is_refund_target
+from app.domain.budget import BudgetSummary, refund_sheet
 from app.models import ExpenseEntry
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3A5F")
@@ -122,10 +122,15 @@ def write(
         ws2.cell(row=total_row, column=col).font = BOLD
     if summary.uncategorized_spent:
         ws2.append(["(예산 항목 미지정 지출)", "", "", 0, summary.uncategorized_spent, "", "", ""])
-    if summary.incomes:
+    # 취소된 예산 항목은 줄로 안 싣지만, 거기 걸린 지출의 집행은 총계에 들어 있다 —
+    # 줄이 없으면 총계와 줄의 합이 안 맞아 보이므로 따로 한 줄 (7-3)
+    if summary.canceled_category_spent:
+        ws2.append(["(취소된 예산 항목에 걸린 지출)", "", "", 0,
+                    summary.canceled_category_spent, "", "", ""])
+    if summary.active_incomes:
         ws2.append([])
         ws2.append(["수입", "", "", "", "", "", "", ""])
-        for income in summary.incomes:
+        for income in summary.active_incomes:
             ws2.append([income.name, income.note, "", income.amount, "", "", "", ""])
         ws2.append(["총 수입", "", "", summary.total_income, "", "", "", ""])
         ws2.append(["잔액 (총 수입 − 총 지출예산)", "", "", summary.balance, "", "", "", ""])
@@ -144,8 +149,8 @@ def write(
         환급열.append("계좌")
     환급열.append("지급여부")
     ws3.append(환급열)
-    refund_rows = [e for e in entries if is_refund_target(e)]
-    for e in refund_rows:
+    refund = refund_sheet(entries)
+    for e in refund.rows:
         ws3.append(
             [
                 ", ".join(str(r.number) for r in e.receipts) or None,
@@ -158,10 +163,10 @@ def write(
             + ["지급완료" if e.paid else "미지급"]
         )
     ws3.append([])
-    unpaid = [e for e in refund_rows if not e.paid]
-    ws3.append(["미지급 합계", "", "", sum(e.settlement_amount for e in unpaid), ""]
+    # 합계·건수는 domain.budget.refund_sheet 가 센다 — 파일은 놓기만 한다
+    ws3.append(["미지급 합계", "", "", refund.unpaid_total, ""]
                + ([""] if 계좌를_보인다 else [])
-               + [f"{len(unpaid)}건"])
+               + [f"{refund.unpaid_count}건"])
     for row in ws3.iter_rows(min_row=2, min_col=4, max_col=4):
         for cell in row:
             cell.number_format = MONEY

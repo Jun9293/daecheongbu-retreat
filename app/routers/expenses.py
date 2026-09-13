@@ -21,9 +21,11 @@ from app.config import ALLOWED_UPLOAD_EXTS, MAX_UPLOAD_BYTES, UPLOAD_DIR
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
 from app.domain.budget import (
+    FILTERS,
     build_budget_summary,
     entries_of,
-    is_refund_target,
+    filter_entries,
+    list_totals,
     next_receipt_number,
 )
 from app.domain import permissions as perm
@@ -41,9 +43,6 @@ from app.templating import redirect, render
 from app.domain.departments import departments_of
 
 router = APIRouter()
-
-# 칩과 홈 결산이 같은 정의를 쓴다 (4-15) — 홈의 N = 그 필터 화면의 행 수
-FILTERS = ("all", "meal", "unpaid", "refund", "noreceipt")
 
 
 def _parse_date(raw: str | None) -> dt.date | None:
@@ -198,33 +197,15 @@ def expense_list(
     if unpaid_only:
         filter = "unpaid"
 
-    entries = entries_of(db, retreat)
-    # 취소된 행은 「전체」 에만 흐리게 남는다 (7-4) — 나머지 필터는 챙길 일의
-    # 목록이라, 안 쓴 돈이 끼면 홈의 숫자와도 갈린다
-    if filter == "meal":
-        entries = [e for e in entries if e.is_meal_expense and e.canceled_at is None]
-    elif filter == "unpaid":
-        entries = [e for e in entries if not e.paid and e.canceled_at is None]
-    elif filter == "refund":
-        # 홈 결산의 「미지급 환급 N건」 과 같은 정의 — budget.refund_entries (4-15)
-        entries = [e for e in entries
-                   if is_refund_target(e) and not e.paid and e.canceled_at is None]
-    elif filter == "noreceipt":
-        entries = [e for e in entries if not e.receipts and e.canceled_at is None]
+    # 필터 조건도 합도 domain.budget 에서 — 홈 결산의 N 과 같은 정의다 (4-15)
+    entries = filter_entries(entries_of(db, retreat), filter)
+    totals = list_totals(entries)
 
-    # 취소된 행은 합계에 넣지 않는다 (7-4) — 「전체」 에서 행은 보여도
-    # 숫자는 실제로 쓴 돈이어야 한다
-    live = [e for e in entries if e.canceled_at is None]
-    totals = {
-        "amount": sum(e.amount for e in live),
-        "subsidy": sum(e.subsidy_amount for e in live if e.is_meal_expense),
-        "burden": sum(e.personal_burden_amount for e in live if e.is_meal_expense),
-        "settlement": sum(e.settlement_amount for e in live),
-    }
-
-    # 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 summary 의 그 항목 값이다 (7-4)
+    # 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 summary 의 그 항목 값이다 (7-4).
+    # 취소된 예산 항목에 걸린 지출도 그 항목 아래에 남는다(머리가 「취소된 항목」 을 말함)
     summary = build_budget_summary(db, retreat=retreat)
-    row_by_category = {row.category.id: row for row in summary.categories}
+    row_by_category = {row.category.id: row
+                       for row in summary.categories + summary.canceled_categories}
     groups: list[dict] = []
     seen: dict[int | None, dict] = {}
     for e in entries:
@@ -299,6 +280,10 @@ def create_expense(
         category = db.get(BudgetCategory, int(budget_category_id))
         if category is None or category.retreat_id != retreat.id:
             raise HTTPException(status_code=404, detail="예산 항목을 찾을 수 없습니다.")
+        # 취소된 항목은 선택지에 없다 — 옛 화면이나 손으로 보낸 요청이 거기 새 지출을
+        # 붙이면 합계에서 「취소된 항목에 걸린 지출」 로만 보여 알아채기 어렵다
+        if category.canceled_at is not None:
+            raise HTTPException(status_code=400, detail="취소된 예산 항목입니다. 되살린 뒤에 붙여주세요.")
 
     is_meal = bool(is_meal_expense)
     headcount = int(meal_headcount) if (is_meal and meal_headcount) else None

@@ -16,7 +16,7 @@ from app.db import get_db
 from app.deps import get_current_retreat
 from app.domain import budget_xlsx
 from app.domain import permissions as perm
-from app.domain.budget import build_budget_summary, entries_of
+from app.domain.budget import build_budget_summary, entries_of, live_entries
 from app.models import Retreat, User
 from app.security import require_editor
 
@@ -36,7 +36,7 @@ def export_expenses(
     summary = build_budget_summary(db, retreat=retreat)
     # 취소된 지출은 결산 파일에 넣지 않는다 (7-4) — summary 가 이미 빼고
     # 세므로, 행만 남기면 파일 안에서 합계와 행이 서로 안 맞는다
-    entries = [e for e in entries_of(db, retreat) if e.canceled_at is None]
+    entries = live_entries(entries_of(db, retreat))
     # **판정은 여기서 하지 않습니다** — `permissions.can_see_account` 하나가
     # 정하고 화면·칩도 같은 것을 부릅니다. 못 보는 사람의 파일에는 계좌
     # **칸 자체가 없습니다**(빈 칸이 아니라 없는 칸).

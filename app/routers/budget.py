@@ -6,14 +6,16 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
-from app.domain.budget import build_budget_summary, planned_amount_of
-from app.models import BudgetCategory, ExpenseEntry, IncomeItem, Retreat, User
+from app.domain.budget import build_budget_summary, income_amount_of, planned_amount_of
+from app.models import BudgetCategory, IncomeItem, Retreat, User
 from app.security import get_current_user, require_admin
 from app.templating import redirect, render
 
@@ -163,41 +165,56 @@ def update_category(
     return redirect(f"/budget?retreat_id={retreat.id}", message="예산 항목을 수정했습니다.")
 
 
-@router.post("/categories/{category_id}/delete")
-def delete_category(
+def _category_values(category: BudgetCategory) -> dict:
+    """취소·되살림 기록에 남길 그때의 값 — 되살리면 이것이 돌아온다 (7-3)."""
+    return {
+        "name": category.display_name,
+        "planned_amount": category.planned_amount,
+        "unit_price": category.unit_price,
+        "headcount": category.headcount,
+        "times": category.times,
+    }
+
+
+@router.post("/categories/{category_id}/cancel")
+def toggle_category_canceled(
     category_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
     retreat: Retreat = Depends(get_current_retreat),
 ):
+    """예산 항목은 지우지 않는다 (0장) — 지출과 같은 취소 표시를 토글한다 (7-3).
+
+    전에는 행을 지웠고, 걸린 지출이 한 건이라도 있으면 「먼저 지출을 옮겨주세요」 로
+    막았다. **그 가드는 걷었다**(2026-09-14 · 사람이 정한 나-ㄴ) — 취소된 지출까지
+    세어 막아서 「취소된 지출만 걸린 항목」 이 영영 못 내려갔고, 이제는 행을 안
+    지우므로 걸린 지출이 갈 곳을 잃을 일도 없다. 걸린 지출은 그 항목에 남고, 그
+    집행은 summary 의 canceled_category_spent 로 합계에 계속 든다.
+    """
     category = db.get(BudgetCategory, category_id)
     if category is None or category.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="예산 항목을 찾을 수 없습니다.")
 
-    linked = db.scalar(
-        select(func.count())
-        .select_from(ExpenseEntry)
-        .where(ExpenseEntry.budget_category_id == category_id)
-    )
-    if linked:
-        return redirect(
-            f"/budget?retreat_id={retreat.id}",
-            message=f"지출 {linked}건이 연결되어 있어 삭제할 수 없습니다. 먼저 지출을 옮겨주세요.",
-        )
-
-    name = category.display_name
-    db.delete(category)
+    values = _category_values(category)
+    if category.canceled_at is None:
+        category.canceled_at = dt.datetime.now()
+        action, message = "예산항목_취소", "예산 항목을 취소했습니다. 행은 아래에 흐리게 남고 합계에서 빠집니다."
+    else:
+        category.canceled_at = None
+        action, message = "예산항목_되살림", "예산 항목을 되살렸습니다."
     db.commit()
     log_activity(
         db,
         retreat_id=retreat.id,
         actor=user,
-        action="예산항목_삭제",
+        action=action,
         target_type="budget_category",
         target_id=category_id,
-        summary=name,
+        summary=f"{values['name']} / {values['planned_amount']:,}원",
+        before_value=values,
+        after_value=values,
     )
-    return redirect(f"/budget?retreat_id={retreat.id}", message="예산 항목을 삭제했습니다.")
+    return redirect(f"/budget?retreat_id={retreat.id}", message=message)
 
 
 # ── 수입 (7-3) — 예산 페이지의 섹션이다. 집행률 분모에는 안 들어간다 ────
@@ -224,14 +241,13 @@ def create_income(
     )
     unit = _int_or_none(unit_price)
     head = _int_or_none(headcount)
-    # 단가 × 명수가 있으면 그것이 금액이다 — 근거 없는 숫자를 남기지 않는다
-    value = unit * head if (unit is not None and head is not None) else amount
     income = IncomeItem(
         retreat_id=retreat.id,
         name=name.strip(),
         unit_price=unit,
         headcount=head,
-        amount=max(0, value),
+        # 단가 × 명수가 있으면 그것이 금액이다 — 식은 domain 에 (7-3)
+        amount=max(0, income_amount_of(unit, head, amount)),
         note=note.strip() or None,
         sort_order=max_order + 1,
     )
@@ -249,26 +265,37 @@ def create_income(
     return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 추가했습니다.")
 
 
-@router.post("/incomes/{income_id}/delete")
-def delete_income(
+@router.post("/incomes/{income_id}/cancel")
+def toggle_income_canceled(
     income_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
     retreat: Retreat = Depends(get_current_retreat),
 ):
+    """수입은 지우지 않는다 (0장) — 지출과 같은 취소 표시를 토글한다 (7-3)."""
     income = db.get(IncomeItem, income_id)
     if income is None or income.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="수입 항목을 찾을 수 없습니다.")
-    name = income.name
-    db.delete(income)
+    values = {
+        "name": income.name, "amount": income.amount, "unit_price": income.unit_price,
+        "headcount": income.headcount, "note": income.note,
+    }
+    if income.canceled_at is None:
+        income.canceled_at = dt.datetime.now()
+        action, message = "수입_취소", "수입을 취소했습니다. 행은 흐리게 남고 합계에서 빠집니다."
+    else:
+        income.canceled_at = None
+        action, message = "수입_되살림", "수입을 되살렸습니다."
     db.commit()
     log_activity(
         db,
         retreat_id=retreat.id,
         actor=user,
-        action="수입_삭제",
+        action=action,
         target_type="income",
         target_id=income_id,
-        summary=name,
+        summary=f"{income.name} / {income.amount:,}원",
+        before_value=values,
+        after_value=values,
     )
-    return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 삭제했습니다.")
+    return redirect(f"/budget?retreat_id={retreat.id}", message=message)

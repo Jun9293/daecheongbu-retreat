@@ -42,6 +42,9 @@ def clone_retreat(
         )
 
     for cat in source.budget_categories:
+        # 취소된 예산 항목은 가져오지 않는다 (7-3) — 그 회차에서 안 하기로 한 것이다
+        if cat.canceled_at is not None:
+            continue
         db.add(
             BudgetCategory(
                 retreat_id=new_retreat.id,

@@ -2,8 +2,17 @@
 
 예산 페이지 · 지출 페이지의 그룹 헤더 · 홈의 「예산 집행」 카드 · 결산 홈의
 「미지급 환급 · 영수증 없는 지출」 · 회차 상세의 「남은 지출」 · 엑셀 —
-전부 이 모듈의 같은 함수를 부른다. **라우터와 템플릿에는 세는 코드가 없다.**
+전부 이 모듈의 같은 함수를 부른다. **라우터와 템플릿과 엑셀 쪽에는 세는 코드가 없다.**
 두 벌이 되면 반드시 어긋나고, 어긋난 쪽이 돈이면 아무도 그냥 넘어가지 않는다.
+
+2026-09-13 에 재어 보니 이 문장이 사실이 아니었다 — 지출 화면의 지표 넷 · 필터 조건 ·
+엑셀 환급 시트의 미지급 합계 · 수입 금액 식 · 회차 목록의 지출 건수와 합이 밖에 있었다.
+2026-09-14 에 전부 여기로 모았다(`list_totals` · `filter_entries` · `live_entries` ·
+`refund_sheet` · `income_amount_of` · `expense_stats`). `tests/test_stage45.py` 가 밖에서
+합·사칙 셈으로 다시 세는지 코드에서 끌어낸 이름으로 잰다 — **필터 조건과 건수는 못 본다.**
+
+**취소된 예산 항목·수입은 합에 안 든다** (0장 · 7-3). 취소된 예산 항목에 걸린 지출은
+사라지지 않고 `canceled_category_spent` 로 total_spent 에 든다.
 
 식대 지출은 지원금액만 수련회 예산에서 집행된 것으로 본다(초과분은 개인부담 —
 공식은 domain.meal). 홈 집행률의 분모는 **지출예산 총액**이고 수입(IncomeItem)은
@@ -14,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import BudgetCategory, ExpenseEntry, IncomeItem, Retreat
@@ -30,6 +39,17 @@ def planned_amount_of(
     """예산금액 = 단가 × 명수 × 횟수. 셋 중 하나라도 비면 직접 입력값 (7-3)."""
     if unit_price is not None and headcount is not None and times is not None:
         return unit_price * headcount * times
+    return manual
+
+
+def income_amount_of(unit_price: int | None, headcount: int | None, manual: int) -> int:
+    """수입 금액 = 단가 × 명수. 둘 중 하나라도 비면 직접 입력값 (7-3).
+
+    근거 없는 숫자를 남기지 않는다 — 둘이 있으면 곱이 이긴다. 전에는 이 식이
+    라우터에 있었다(2026-09-14 에 여기로 모음).
+    """
+    if unit_price is not None and headcount is not None:
+        return unit_price * headcount
     return manual
 
 
@@ -79,10 +99,20 @@ class GroupSummary:
 
 @dataclass
 class BudgetSummary:
+    # 산 예산 항목만 — 총액·비율·구분 소계·남은 지출·지출 등록의 선택지가 이것을 쓴다
     categories: list[CategorySummary] = field(default_factory=list)
     groups: list[GroupSummary] = field(default_factory=list)
+    # 취소된 예산 항목 (7-3) — 행은 남아 화면 아래에 흐리게 서고 되살릴 수 있다.
+    # 합계에는 안 든다. 그 항목에 걸린 지출의 집행은 canceled_category_spent 로 간다
+    canceled_categories: list[CategorySummary] = field(default_factory=list)
+    # 수입은 취소된 것까지 전부 — 화면이 흐리게 그린다. 합은 active_incomes 로만
     incomes: list[IncomeItem] = field(default_factory=list)
     uncategorized_spent: int = 0
+    # **취소된 예산 항목에 걸린 지출의 집행 합** (2026-09-14 · 사람이 정한 나-ㄴ).
+    # 항목을 취소해도 쓴 돈은 쓴 돈이라, 그 지출이 합계에서 조용히 사라지면 안 된다.
+    # 「예산 항목 미지정」 과 같은 급의 따로 줄로 total_spent 에 든다 — 그래서
+    # total_spent 는 늘 「취소 안 된 지출 전부의 집행 합」 이다
+    canceled_category_spent: int = 0
 
     @property
     def total_planned(self) -> int:
@@ -90,7 +120,8 @@ class BudgetSummary:
 
     @property
     def total_spent(self) -> int:
-        return sum(row.spent for row in self.categories) + self.uncategorized_spent
+        return (sum(row.spent for row in self.categories)
+                + self.uncategorized_spent + self.canceled_category_spent)
 
     @property
     def total_remaining(self) -> int:
@@ -104,8 +135,13 @@ class BudgetSummary:
 
     # ── 수입 (7-3) — 잔액 계산에만 쓴다. 집행률 분모는 지출예산 총액이다 ──
     @property
+    def active_incomes(self) -> list[IncomeItem]:
+        """취소 안 된 수입 — 합 · 잔액 · 「수입 미입력」 판정 · 엑셀이 이것을 본다."""
+        return [i for i in self.incomes if i.canceled_at is None]
+
+    @property
     def total_income(self) -> int:
-        return sum(i.amount for i in self.incomes)
+        return sum(i.amount for i in self.active_incomes)
 
     @property
     def balance(self) -> int:
@@ -162,14 +198,14 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
                 spent_by_category.get(entry.budget_category_id, 0) + entry.settlement_amount
             )
 
-    rows = [
-        CategorySummary(
-            category=cat,
-            planned=cat.planned_amount,
-            spent=spent_by_category.get(cat.id, 0),
+    def summarize(cat: BudgetCategory) -> CategorySummary:
+        return CategorySummary(
+            category=cat, planned=cat.planned_amount, spent=spent_by_category.get(cat.id, 0)
         )
-        for cat in categories
-    ]
+
+    rows = [summarize(cat) for cat in categories if cat.canceled_at is None]
+    canceled = [summarize(cat) for cat in categories if cat.canceled_at is not None]
+    canceled_spent = sum(row.spent for row in canceled)
 
     total_planned = sum(r.planned for r in rows)
     for row in rows:
@@ -189,7 +225,8 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
         group.rows.append(row)
 
     return BudgetSummary(
-        categories=rows, groups=groups, incomes=incomes, uncategorized_spent=uncategorized
+        categories=rows, groups=groups, canceled_categories=canceled, incomes=incomes,
+        uncategorized_spent=uncategorized, canceled_category_spent=canceled_spent,
     )
 
 
@@ -213,27 +250,101 @@ def is_refund_target(entry: ExpenseEntry) -> bool:
     return name != RETREAT_ACCOUNT
 
 
-def refund_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
+def is_unpaid_refund(entry: ExpenseEntry) -> bool:
     """환급 대상 — 개인이 대신 낸 것 중 아직 안 돌려준 것 (미지급).
 
     취소된 지출은 아니다 — 안 쓴 돈을 돌려줄 일이 없다 (7-4).
     """
-    return [
-        e
-        for e in entries_of(db, retreat)
-        if is_refund_target(e) and not e.paid and e.canceled_at is None
-    ]
+    return is_refund_target(entry) and not entry.paid and entry.canceled_at is None
 
 
-def no_receipt_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
+def has_no_receipt(entry: ExpenseEntry) -> bool:
     """영수증이 한 건도 안 붙은 지출 — 결산 홈의 「영수증 없는 지출」 (4-15).
 
     기준은 ExpenseReceipt 0건이다. 옛 receipt_file_url 이 아니다 — 그 컬럼은
     남기되 읽지 않는다 (7-4). 취소된 지출은 세지 않는다 — 결산에 안 들어갈
     행의 영수증을 챙기라는 경고는 잡음이다.
     """
-    return [e for e in entries_of(db, retreat)
-            if not e.receipts and e.canceled_at is None]
+    return not entry.receipts and entry.canceled_at is None
+
+
+# 칩과 홈 결산이 같은 정의를 쓴다 (4-15) — 홈의 N = 그 필터 화면의 행 수.
+# **조건은 여기 한 벌이다.** 전에는 지출 라우터가 같은 조건을 다시 적고 있었다
+# (2026-09-13 재정 보기 판이 잼 · 2026-09-14 에 모음).
+FILTERS = ("all", "meal", "unpaid", "refund", "noreceipt")
+_필터조건 = {
+    # 「전체」 는 취소된 행도 흐리게 남긴다 (7-4) — 나머지는 챙길 일의 목록이라 뺀다
+    "all": lambda e: True,
+    "meal": lambda e: e.is_meal_expense and e.canceled_at is None,
+    "unpaid": lambda e: not e.paid and e.canceled_at is None,
+    "refund": is_unpaid_refund,
+    "noreceipt": has_no_receipt,
+}
+
+
+def filter_entries(entries: list[ExpenseEntry], name: str) -> list[ExpenseEntry]:
+    """지출 목록의 필터 하나를 건다. 모르는 이름은 「전체」 다."""
+    keep = _필터조건.get(name, _필터조건["all"])
+    return [e for e in entries if keep(e)]
+
+
+def refund_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
+    return filter_entries(entries_of(db, retreat), "refund")
+
+
+def no_receipt_entries(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
+    return filter_entries(entries_of(db, retreat), "noreceipt")
+
+
+@dataclass
+class ListTotals:
+    """지출 화면의 지표 넷 — **지금 필터에 걸린 행** 기준이다.
+
+    summary 의 total_spent(회차 전체의 집행)와 뜻이 달라 같은 함수로 묶지
+    않는다(2026-09-14). 식은 같은 모델 속성(settlement_amount 등)을 쓴다.
+    취소된 행은 「전체」 에 보여도 합에는 안 든다 (7-4).
+    """
+
+    amount: int
+    subsidy: int
+    burden: int
+    settlement: int
+
+
+def list_totals(entries: list[ExpenseEntry]) -> ListTotals:
+    live = live_entries(entries)
+    return ListTotals(
+        amount=sum(e.amount for e in live),
+        subsidy=sum(e.subsidy_amount for e in live if e.is_meal_expense),
+        burden=sum(e.personal_burden_amount for e in live if e.is_meal_expense),
+        settlement=sum(e.settlement_amount for e in live),
+    )
+
+
+def live_entries(entries: list[ExpenseEntry]) -> list[ExpenseEntry]:
+    """취소 안 된 지출 — 결산 파일은 이것만 싣는다 (7-4). 전에는 이 거름이 내려받기
+    라우터에 있었다(2026-09-14 커밋 전 검토 [B] 가 짚어 여기로 옮김)."""
+    return [e for e in entries if e.canceled_at is None]
+
+
+@dataclass
+class RefundSheet:
+    """엑셀 환급 시트 — 개인이 낸 것 전부(지급된 것도)와 미지급 합계·건수."""
+
+    rows: list[ExpenseEntry]
+    unpaid_count: int
+    unpaid_total: int
+
+
+def refund_sheet(entries: list[ExpenseEntry]) -> RefundSheet:
+    """취소된 지출은 **스스로 뺀다** — 부르는 쪽이 미리 걸렀는지에 기대면, 그 한 줄이
+    빠지는 날 「미지급 환급」 이 `is_unpaid_refund` 와 갈리고 아무도 모른다."""
+    rows = [e for e in live_entries(entries) if is_refund_target(e)]
+    unpaid = [e for e in rows if not e.paid]
+    return RefundSheet(
+        rows=rows, unpaid_count=len(unpaid),
+        unpaid_total=sum(e.settlement_amount for e in unpaid),
+    )
 
 
 def next_receipt_number(db: Session, retreat: Retreat) -> int:
@@ -247,6 +358,21 @@ def next_receipt_number(db: Session, retreat: Retreat) -> int:
         .order_by(ExpenseReceipt.number.desc())
     )
     return (current or 0) + 1
+
+
+def expense_stats(db: Session, retreat_id: int) -> tuple[int, int]:
+    """회차 목록·상세의 「지출 완료 N건 · X원」 — 취소된 행은 넣지 않는다 (7-4).
+
+    X 는 **영수증 총액(amount)** 의 합이다 — 집행(settlement)이 아니다. 전에는
+    설정 라우터에 있었고 2026-09-13 재정 보기 판이 못 센 자리였다(2026-09-14 에 모음).
+    summary 는 원천에서 빼는데 이 둘만 품으면 같은 화면의 두 숫자가 갈린다.
+    """
+    live = (ExpenseEntry.retreat_id == retreat_id, ExpenseEntry.canceled_at.is_(None))
+    count = db.scalar(select(func.count()).select_from(ExpenseEntry).where(*live)) or 0
+    total = db.scalar(
+        select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(*live)
+    ) or 0
+    return int(count), int(total)
 
 
 def entries_of(db: Session, retreat: Retreat) -> list[ExpenseEntry]:

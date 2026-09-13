@@ -268,6 +268,8 @@ class BudgetCategory(Base):
     times: Mapped[int | None] = mapped_column(Integer, nullable=True)
     planned_amount: Mapped[int] = mapped_column(Integer, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 지우지 않는다 (0장) — 지출과 같은 취소 표시 (7-3). 걸린 지출은 남는다
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     retreat: Mapped[Retreat] = relationship(back_populates="budget_categories")
     expenses: Mapped[list[ExpenseEntry]] = relationship(back_populates="budget_category")
@@ -387,6 +389,8 @@ class IncomeItem(Base):
     amount: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[str | None] = mapped_column(String(300), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 지우지 않는다 (0장) — 지출과 같은 취소 표시 (7-3)
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ScheduleDay(Base):

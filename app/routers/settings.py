@@ -22,7 +22,7 @@ from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
 from app.domain import board as board_domain
 from app.domain import dweek
-from app.domain.budget import build_budget_summary
+from app.domain.budget import build_budget_summary, expense_stats
 from app.domain.clone import clone_retreat
 from app.domain.period import is_over
 from app.models import (
@@ -126,22 +126,6 @@ def change_my_password(
     return redirect("/settings", message="비밀번호를 바꿨습니다.")
 
 
-def _expense_stats(db: Session, retreat_id: int) -> tuple[int, int]:
-    """회차 상세·목록의 「지출 완료 N건 · X원」 — 취소된 행은 넣지 않는다 (7-4).
-
-    summary 는 원천에서 빼는데 이 둘만 품으면 같은 화면의 두 숫자가 갈린다 —
-    「지출 완료」 라는 이름이라 취소 행을 세면 말 그대로 틀린다.
-    """
-    live = (ExpenseEntry.retreat_id == retreat_id, ExpenseEntry.canceled_at.is_(None))
-    count = db.scalar(
-        select(func.count()).select_from(ExpenseEntry).where(*live)
-    ) or 0
-    total = db.scalar(
-        select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(*live)
-    ) or 0
-    return int(count), int(total)
-
-
 @router.get("/settings/retreats")
 def settings_retreats(
     request: Request,
@@ -158,7 +142,7 @@ def settings_retreats(
             .select_from(TaskRun)
             .where(TaskRun.retreat_id == r.id, TaskRun.included.is_(True))
         ) or 0
-        expense_count, expense_sum = _expense_stats(db, r.id)
+        expense_count, expense_sum = expense_stats(db, r.id)
         rows.append(
             {
                 "retreat": r,
@@ -194,7 +178,7 @@ def settings_retreat_detail(
 
     # 남은 지출은 summary 의 것을 그대로 쓴다 (4-17) — 여기서 다시 세지 않는다
     budget = build_budget_summary(db, retreat=target)
-    expense_count, expense_sum = _expense_stats(db, target.id)
+    expense_count, expense_sum = expense_stats(db, target.id)
 
     program_count = db.scalar(
         select(func.count()).select_from(Program).where(Program.retreat_id == target.id)
