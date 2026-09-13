@@ -323,3 +323,164 @@ def test44_d02_gitignore_된_것은_여전히_안_본다():
     r = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT,
                        input="\n".join(이름들), capture_output=True, text=True, encoding="utf-8")
     assert r.stdout.strip() == "", f"gitignore 된 것을 본다: {r.stdout[:200]}"
+
+
+# ── 앱 밖 알림 자리 · 새벽 푸시 · -p 금지 (2026-09-13 셋째 판) ─────────────────
+
+
+def _백업폴더(tmp_path, *, 빈판=True):
+    out = tmp_path / "backups"
+    for i in range(3):
+        _판(out, _때(i), 회차=2, 행=200)
+    if 빈판:
+        _판(out, _때(9), 회차=0, 행=0)
+    return out
+
+
+def _빈DB(tmp_path):
+    """계정까지 빈 운영 — 스키마만 남은 DB(2026-09-13 사고의 모양)."""
+    from sqlalchemy import create_engine
+
+    from app.db import Base
+
+    경로 = tmp_path / "빈운영" / "app.db"
+    경로.parent.mkdir(parents=True)
+    엔진 = create_engine(f"sqlite:///{경로}")
+    Base.metadata.create_all(엔진)
+    엔진.dispose()
+    return 경로
+
+
+def _밖에서_살핀다(데이터폴더):
+    """앱 밖 자리를 **실제로 앱 밖에서** 부른다 — 되살아나나.ps1 이 부르는 그 명령."""
+    import os
+
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "DCB_DATA_DIR": str(데이터폴더),
+           "DCB_DATABASE_URL": f"sqlite:///{데이터폴더 / 'app.db'}"}
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "backup.py"), "--살핀다"],
+                       capture_output=True, text=True, encoding="utf-8", env=env, timeout=120)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test44_e01_DB가_비어도_앱_밖_자리는_빈_판을_말한다(tmp_path, admin_client):
+    """수용 기준 가) — 빈 DB 에서 앱 안 알림은 못 서는데(알릴 계정이 없다) 앱 밖 자리는
+    말한다. 성한 DB 에서도 같은 말을 한다 — 같은 판에서 둘 다 본다(앱 안 알림이 성한 DB 에서 서는 것까지)."""
+    빈운영 = _빈DB(tmp_path)
+    out = _백업폴더(빈운영.parent)
+    제목 = f"새벽 백업이 비어 있습니다 — app-{_때(9)}.db"
+
+    수, 까닭 = backup.알린다(빈운영, out)
+    assert 수 == 0 and 까닭, "빈 DB 인데 앱 안 알림이 섰다 — 이 시험의 전제가 틀렸다"
+    빈DB_말 = _밖에서_살핀다(빈운영.parent)
+    assert 제목 in 빈DB_말, f"DB 가 비었는데 앱 밖 자리가 말을 안 한다: {빈DB_말}"
+
+    # 성한 DB(conftest 의 시험 DB · 관리자가 있다)에서도 같은 백업 폴더로 같은 말
+    _회차를_연다()
+    성한수, 성한까닭 = backup.알린다(_운영DB(), out)
+    assert 성한수 == 1 and 성한까닭 is None, "성한 DB 인데 앱 안 알림이 안 섰다"
+    성한말 = backup.살핀다(out)
+    assert any(제목 in 줄 for 줄 in 성한말)
+    assert "\n".join(성한말).strip() == 빈DB_말.strip(), "DB 상태에 따라 앱 밖 자리의 말이 달라졌다"
+
+
+def test44_e02_빈_판이_없으면_앱_밖_자리도_말이_없다(tmp_path):
+    데이터 = tmp_path / "data"
+    데이터.mkdir()
+    _백업폴더(데이터, 빈판=False)
+    assert "빈 판 없음" in _밖에서_살핀다(데이터)
+
+
+def test44_e03_앱_밖_자리는_옆_파일을_안_쓴다(tmp_path):
+    """읽기만 한다 — 운영 백업 폴더에 옆 파일이 생기면 「운영 자료는 읽기만」 을 어긴다."""
+    데이터 = tmp_path / "data"
+    데이터.mkdir()
+    out = _백업폴더(데이터)
+    _밖에서_살핀다(데이터)
+    assert not list(out.glob("*.rows.json"))
+
+
+def test44_e04_앱_안과_앱_밖이_같은_말을_한다(admin_client, tmp_path):
+    """수용 기준 나) — 판정과 말이 서는 곳은 `의심말들` 하나다. 앱 안 알림 행의 제목·본문과
+    앱 밖 자리의 줄이 **그 함수의 결과와 글자까지 같은지** 코드에서 끌어내 견준다."""
+    from sqlalchemy import select
+
+    from app.models import Notification
+
+    _회차를_연다()
+    out = _백업폴더(tmp_path)
+    정본 = backup.의심말들(out, 기록=False)
+    assert 정본, "의심 판이 안 잡혔다 — 이 시험이 아무것도 안 본다"
+    backup.알린다(_운영DB(), out)
+    with app_session() as db:
+        안 = {(n.title, n.body) for n in db.scalars(
+            select(Notification).where(Notification.kind == backup.BACKUP_NOTICE_KIND))}
+    assert 안 == {(제목, 본문) for _, 제목, 본문 in 정본}
+    밖 = backup.살핀다(out)
+    assert 밖 == [f"!! {제목}\n     {본문}" for _, 제목, 본문 in 정본]
+
+
+def test44_e05_말을_만드는_글자는_한_곳에만_있다():
+    """두 곳이 저마다 문장을 적으면 한쪽만 고쳐진다 — 그 제목 글자가 코드에 한 번만 있는가.
+    되살아나나.ps1 은 판정하지 않고 `--살핀다` 를 부르는가."""
+    글들 = [p.read_text(encoding="utf-8") for p in (ROOT / "app").rglob("*.py")]
+    글들.append((ROOT / "scripts" / "backup.py").read_text(encoding="utf-8"))
+    assert sum(g.count("새벽 백업이 비어 있습니다") for g in 글들) == 1
+    ps1 = (ROOT / "scripts" / "되살아나나.ps1").read_text(encoding="utf-8-sig")
+    assert "--살핀다" in ps1 and "retreats" not in ps1 and "SUSPECT" not in ps1
+    assert (ROOT / "scripts" / "되살아나나.ps1").read_bytes()[:3] == b"\xef\xbb\xbf", "BOM 이 빠졌다"
+
+
+def test44_f01_백업_알림은_푸시로_안_나가고_다른_알림은_나간다(admin_client, tmp_path, monkeypatch):
+    """수용 기준 다) — 푸시로 가는 길(`app.push.push_notifications`)을 가로채 **같은 판에서**
+    백업 알림과 다른 알림을 둘 다 부른다. 하나만 재면 「전부 껐다」 와 구별이 안 된다."""
+    from app import notifications as notify_service
+    from app import push
+    from app.domain import permissions as perm
+
+    보낸것 = []
+    monkeypatch.setattr(push, "push_notifications",
+                        lambda db, ns: 보낸것.extend(n.kind for n in ns) or len(ns))
+    _회차를_연다()
+    out = _백업폴더(tmp_path)
+    수, 까닭 = backup.알린다(_운영DB(), out)
+    assert 수 == 1 and 까닭 is None
+    assert backup.BACKUP_NOTICE_KIND not in 보낸것, "백업 알림이 웹 푸시로 나갔다"
+
+    with app_session() as db:
+        새것 = notify_service.notify(db, users=perm.admins(db), retreat_id=None, kind="기한 초과",
+                                   title="시험 알림", dedupe_key=f"t-{uuid.uuid4().hex}")
+    assert 새것 and "기한 초과" in 보낸것, "다른 알림까지 푸시가 꺼졌다"
+
+
+def test44_g01_pytest_에_p_를_끼우면_막는다(monkeypatch):
+    """`-p` 는 예외 없이 막는다 — 명령줄과 PYTEST_ADDOPTS 둘 다. **이 시험은 -p 로 pytest 를
+    띄우지 않는다**(그것이 금지다) — conftest 의 훅을 가짜 설정으로 부른다."""
+    from types import SimpleNamespace
+
+    from tests import conftest
+
+    def 설정(*args, addopts=("-q",)):
+        return SimpleNamespace(invocation_params=SimpleNamespace(args=list(args)),
+                               getini=lambda 이름: list(addopts))
+
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    monkeypatch.delenv("PYTEST_PLUGINS", raising=False)
+    for 받은것 in (["-p", "no:cacheprovider"], ["-pno:cacheprovider"], ["tests", "-p", "x"]):
+        with pytest.raises(pytest.exit.Exception) as 멈춤:
+            conftest.pytest_configure(설정(*받은것))
+        assert 멈춤.value.returncode == 4 and "예외 없이" in str(멈춤.value)
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-p no:cacheprovider")
+    with pytest.raises(pytest.exit.Exception):
+        conftest.pytest_configure(설정("tests"))
+    # ini 의 addopts 와 PYTEST_PLUGINS 도 conftest 보다 먼저 플러그인을 읽는 입구다
+    monkeypatch.delenv("PYTEST_ADDOPTS")
+    with pytest.raises(pytest.exit.Exception):
+        conftest.pytest_configure(설정("tests", addopts=("-q", "-p", "no:cacheprovider")))
+    monkeypatch.setenv("PYTEST_PLUGINS", "어떤플러그인")
+    with pytest.raises(pytest.exit.Exception):
+        conftest.pytest_configure(설정("tests"))
+    monkeypatch.delenv("PYTEST_PLUGINS")
+    # 막히면 안 되는 것 — 옵션 없는 실행과 비슷한 이름의 긴 옵션
+    conftest.pytest_configure(설정())
+    conftest.pytest_configure(설정("tests/test_stage44.py", "--pdb", "-q"))
