@@ -107,6 +107,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # **이 규칙 하나에만** 건다.
 산문줄 = re.compile(r"^\s*[>·•\-\*]*\s*[가-힣]")
 
+# **검토자 원문 덩어리 안의 줄바꿈된 산문도 같다.** 원문은 사람이 붙여 넣을 명령이
+# 아니라 검토자가 쓴 글이고, 문장이 줄을 넘기면 `%TEMP%` 가 줄머리에 올 수 있다
+# (2026-09-13 셋째 판에서 실제로 그랬다 — 한 글자도 못 고친다). 두 끝의 글자는
+# `scripts/check_placeholder.py` 가 원문을 안 보려고 쓰는 그것이다. **`%VAR%` 규칙
+# 하나에만** 건다 — 원문 안의 줄 잇기·별칭은 그대로 걸린다.
+원문시작, 원문끝 = "━━━ 검토자 여기부터", "━━━ 검토자 여기까지"
+
 
 def 블록줄(글: str):
     """펜스 안 + 4칸 이상 들여쓴 줄을 (줄번호, 내용) 으로.
@@ -153,6 +160,15 @@ def _잇기인가(줄: str) -> bool:
 def 걸린줄(글: str):
     """(줄번호, 무엇이, 내용). 무엇이 = 잇기 / set / %VAR% / cd /d / 별칭"""
     난것 = []
+    원문줄 = set()
+    안 = False
+    for i, 줄 in enumerate(글.split(chr(10)), 1):
+        if 원문시작 in 줄:
+            안 = True
+        if 안:
+            원문줄.add(i)
+        if 원문끝 in 줄:
+            안 = False
     for i, 줄 in 블록줄(글):
         if 설명줄.search(줄):
             continue
@@ -160,7 +176,7 @@ def 걸린줄(글: str):
             난것.append((i, "줄 잇기", 줄.rstrip()))
         elif 옛변수쓰기.match(줄.lstrip(">")):
             난것.append((i, "set X=", 줄.rstrip()))
-        elif 옛변수읽기.search(줄) and not 산문줄.match(줄.lstrip(">")):
+        elif 옛변수읽기.search(줄) and not 산문줄.match(줄.lstrip(">")) and i not in 원문줄:
             난것.append((i, "%VAR%", 줄.rstrip()))
         elif 옛경로이동.match(줄.lstrip(">")):
             난것.append((i, "cd /d", 줄.rstrip()))
@@ -314,6 +330,16 @@ def test_껍데기_05b_한글_산문_속의_퍼센트는_안_걸린다():
 
     명령 = chr(10).join(["```", "cd %TEMP%", "copy %USERPROFILE% .", "```"])
     assert [x[1] for x in 걸린줄(명령)] == ["%VAR%", "%VAR%"], 걸린줄(명령)
+
+
+def test_껍데기_05c_검토자_원문의_줄바꿈된_퍼센트는_안_걸린다():
+    """원문 안에서 문장이 줄을 넘겨 `%TEMP%` 로 시작해도 명령이 아니다.
+    **같은 줄이 원문 밖이면 걸리고, 원문 안이라도 줄 잇기는 걸린다.**"""
+    줄 = "  %TEMP%" + chr(92) + "dcb-dev · 개발 DB)."
+    원문 = chr(10).join(["```", 원문시작 + " 범위 x", 줄, "    python a.py " + 잇기, 원문끝, "```"])
+    assert [x[1] for x in 걸린줄(원문)] == ["줄 잇기"], 걸린줄(원문)
+    밖 = chr(10).join(["```", 줄, "```"])
+    assert [x[1] for x in 걸린줄(밖)] == ["%VAR%"], 걸린줄(밖)
 
 
 def test_껍데기_06_들여쓴_블록도_본다():
