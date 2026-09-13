@@ -105,8 +105,10 @@ def 넘긴것() -> tuple[set[str], list[tuple[int, str]]]:
 
 
 def 볼파일() -> list[pathlib.Path]:
+    # **추적 전 새 파일도 본다**(`--others --exclude-standard`) — 2026-09-13 에 막 얼린
+    # 보고가 git add 전이라 이 검사 밖이었고, 커밋된 뒤에 빨갰다(보고의 「7/7」 이 틀림).
     출 = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "ls-files"],
+        ["git", "-c", "core.quotepath=false", "ls-files", "--cached", "--others", "--exclude-standard"],
         cwd=ROOT, capture_output=True,
     ).stdout.decode("utf-8")
     넘길것, _ = 넘긴것()

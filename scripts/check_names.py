@@ -367,7 +367,8 @@ def 볼파일(args) -> list[pathlib.Path]:
     # 보는 범위를 넓혀야 한다.
     명령 = (["git", "-c", "core.quotepath=false", "diff", "--cached",
            "--name-only"] if args.staged else
-          ["git", "-c", "core.quotepath=false", "ls-files"])
+          ["git", "-c", "core.quotepath=false", "ls-files", "--cached", "--others",
+           "--exclude-standard"])  # 추적 전 새 파일도 (2026-09-13 · check_stale 과 같은 자리)
     줄들 = subprocess.run(명령, capture_output=True, cwd=ROOT).stdout.decode("utf-8")
     return [ROOT / x for x in (y.strip() for y in 줄들.split("\n")) if x
             and (ROOT / x).exists()]

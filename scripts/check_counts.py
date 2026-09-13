@@ -115,7 +115,9 @@ def 볼파일() -> list[pathlib.Path]:
     if 안되는줄:
         넘김.말한다(넘김목록, 안되는줄)
         raise SystemExit(2)
-    출 = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files"],
+    # **추적 전 새 파일도 본다**(`--others --exclude-standard`) — 2026-09-13 에 막 얼린
+    # 보고가 git add 전이라 이 검사 밖이었고, 커밋된 뒤에 빨갰다(보고의 「7/7」 이 틀림).
+    출 = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files", "--cached", "--others", "--exclude-standard"],
                        cwd=ROOT, capture_output=True).stdout.decode("utf-8")
     나온것 = []
     for 이름 in sorted(x.strip() for x in 출.splitlines() if x.strip()):
