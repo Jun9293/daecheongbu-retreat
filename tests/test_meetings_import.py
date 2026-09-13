@@ -1371,6 +1371,21 @@ def test_y_13e_일판X_의_번호가_성적표와_맞는다():
         f"일판X {사본} · 성적표 {정본}")
 
 
+def 읽기전용엔진(경로):
+    """**운영 파일을 여는 순간 쓸 수 없게** 연다 (2026-09-13 · 봐둘것 AZ-b).
+
+    이 시험은 운영 `data/app.db` 를 직접 연다 — conftest 의 지우는 자리
+    검사(`_시험DB가_아니면_멈춘다`)는 app 의 엔진만 보므로 여기는 원리상 못 본다.
+    사람이 이 시험을 두기로 하면서 **읽기 전용으로 못박으라**고 정했다.
+    SQLite 의 `mode=ro` 는 파일을 읽기로만 열어 쓰기 문장이 `attempt to write a
+    readonly database` 로 막힌다 — 코드가 실수로 커밋을 불러도 운영에 안 닿는다.
+    막히는지는 `tests/test_stage42.py` 가 사본에 대고 잰다.
+    """
+    import sqlalchemy as sa
+
+    return sa.create_engine(f"sqlite:///file:{pathlib.Path(경로).as_posix()}?mode=ro&uri=true")
+
+
 def test_y_13f_정렬이_통과여부를_바꿀_수_없다():
     """**07.05 가 4→3 이 된 이유를 「정렬 탓」 으로 배제한 근거.**
 
@@ -1396,7 +1411,7 @@ def test_y_13f_정렬이_통과여부를_바꿀_수_없다():
     from app import models
     from app.domain import suggest as S
 
-    엔진 = sa.create_engine(f"sqlite:///{운영}")
+    엔진 = 읽기전용엔진(운영)
     # **칸이 아직 안 붙었으면 건너뛴다.** 부팅이 `_catch_up_columns` 로 붙이므로
     # (14장 「스키마 변경」), 칸을 더한 판과 **운영을 다시 켜기 전** 사이에는
     # 모델이 아는 칸이 그 파일에 없다 — 11-2 가 「서버를 켜 둔 채 코드를

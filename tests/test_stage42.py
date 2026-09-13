@@ -95,6 +95,83 @@ def test42_a06_지우는_자리마다_검사가_앞에_선다():
     assert 지우기 >= 1, "drop_all 을 하나도 못 찾았다 — 이 시험이 아무것도 안 본다"
 
 
+def _사본(tmp_path):
+    """운영과 같은 꼴의 사본 — 표 하나에 행 하나. 운영 파일에 대고 재지 않는다."""
+    import sqlite3
+
+    경로 = tmp_path / "data" / "app.db"
+    경로.parent.mkdir()
+    이음 = sqlite3.connect(경로)
+    이음.execute("CREATE TABLE retreats (id INTEGER PRIMARY KEY, name TEXT)")
+    이음.execute("INSERT INTO retreats (name) VALUES ('가')")
+    이음.commit()
+    이음.close()
+    return 경로
+
+
+def test42_b01_읽기전용엔진은_읽고_쓰기는_막힌다(tmp_path):
+    """운영을 직접 여는 표본 시험의 엔진(`읽기전용엔진`) — **읽는 것은 되고
+    쓰는 것은 막힌다**를 같은 판에서 본다. 파일의 바이트도 그대로여야 한다."""
+    import sqlalchemy as sa
+
+    from tests.test_meetings_import import 읽기전용엔진
+
+    경로 = _사본(tmp_path)
+    전 = 경로.read_bytes()
+    엔진 = 읽기전용엔진(경로)
+    try:
+        with 엔진.connect() as c:
+            assert c.execute(sa.text("SELECT count(*) FROM retreats")).scalar() == 1
+        with pytest.raises(sa.exc.OperationalError, match="readonly"):
+            with 엔진.begin() as c:
+                c.execute(sa.text("INSERT INTO retreats (name) VALUES ('나')"))
+        with pytest.raises(sa.exc.OperationalError, match="readonly"):
+            with 엔진.begin() as c:
+                c.execute(sa.text("DROP TABLE retreats"))
+    finally:
+        엔진.dispose()
+    assert 경로.read_bytes() == 전
+
+
+def test42_b02_검사스크립트가_운영을_여는_꼴도_읽기전용이다(tmp_path):
+    """시험이 부르는 `check_names` 도 운영 `data/app.db` 를 연다(`표밖담당자`).
+    그 꼴(`file:…?mode=ro`)이 실제로 쓰기를 막는지 사본에 대고 재고,
+    스크립트가 아직 그 꼴로 여는지 본다."""
+    import pathlib
+    import sqlite3
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "scripts" / "check_names.py").read_text(encoding="utf-8")
+    assert 'sqlite3.connect(f"file:{db}?mode=ro", uri=True)' in src, "check_names 가 운영을 여는 꼴이 바뀌었다"
+
+    경로 = _사본(tmp_path)
+    이음 = sqlite3.connect(f"file:{경로}?mode=ro", uri=True)
+    try:
+        assert 이음.execute("SELECT count(*) FROM retreats").fetchone()[0] == 1
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            이음.execute("INSERT INTO retreats (name) VALUES ('나')")
+    finally:
+        이음.close()
+
+
+def test42_b03_운영을_여는_시험은_읽기전용엔진을_쓴다():
+    """`tests/` 에서 운영 `data/app.db` 를 이름하는 파일은 **그 엔진으로만** 연다.
+    같은 꼴의 쓰기 가능한 엔진이 새로 생기면 빨개진다. 이 파일은 그 말을 설명하려고
+    담으므로 뺀다. 하나라도 봐야 한다(③)."""
+    import pathlib
+
+    본 = 0
+    for f in sorted(pathlib.Path(__file__).resolve().parent.glob("test_*.py")):
+        if f.name == pathlib.Path(__file__).name:
+            continue
+        src = f.read_text(encoding="utf-8")
+        if '"data" / "app.db"' not in src:
+            continue
+        본 += 1
+        assert "읽기전용엔진(" in src, f"{f.name} 이 운영을 읽기 전용 엔진 없이 연다"
+        assert 'create_engine(f"sqlite:///{운영}")' not in src, f"{f.name} 에 쓰기 가능한 운영 엔진이 있다"
+    assert 본 >= 1, "운영을 여는 시험을 하나도 못 찾았다 — 이 시험이 아무것도 안 본다"
+
+
 def test42_a07_세션_첫머리에서도_검사가_돈다():
     """사고의 입구(`-p`)를 실제로 막은 것은 `pytest_sessionstart` 다 — 바깥 재현이
     거기서 exit 3 으로 멈췄다. `SessionLocal` 로 운영에 쓰는 시험을 막는 것도
