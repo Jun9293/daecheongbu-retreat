@@ -119,4 +119,24 @@ if (-not (Test-Path $방)) { "  폴더가 없습니다" } else {
   } else { "    !! 하나도 없습니다 — 하루에 한 번 도는 것이 안 돌고 있습니다" }
   $전부 = Get-ChildItem $방 -Filter 'app-*.db'
   "  손으로 뜬 것까지 합쳐: $($전부.Count)개"
+  # **빈 판이 있나 — 앱 밖 알림 자리입니다** (2026-09-13 에 사람이 정함).
+  # 앱 안 알림은 DB 가 성할 때만 섭니다. 계정까지 빈 사고에서는 알릴 사람이 DB 에
+  # 없어서, **DB 를 안 열고 백업 폴더만 읽는** 이 자리가 그때도 말합니다.
+  # 판정과 말은 `scripts/backup.py` 의 `의심말들` 하나이고 앱 안 알림과 같습니다 —
+  # 여기서 다시 판정하지 않습니다. 옆 파일도 안 씁니다(읽기만).
+  "  [빈 판 — 백업 폴더만 읽음 · DB 와 무관]"
+  $py = Join-Path $뿌리 '.venv\Scripts\python.exe'
+  if (-not (Test-Path $py)) { "  $py 가 없습니다 — 못 쟀습니다" } else {
+    # 파이썬은 UTF-8 로 내고 PowerShell 은 콘솔 인코딩으로 읽는다 — 맞추지 않으면 한글이 깨진다
+    # (backup.py 가 스스로 UTF-8 로 내므로 환경변수는 안 건드린다 — 이 창에 남는다)
+    $옛인코딩 = [Console]::OutputEncoding
+    try {
+      [Console]::OutputEncoding = [Text.Encoding]::UTF8
+      $말 = & $py (Join-Path $뿌리 'scripts\backup.py') --살핀다 2>&1
+      if ($LASTEXITCODE -ne 0) { "  !! 못 쟀습니다 — backup.py --살핀다 가 $LASTEXITCODE 로 끝났습니다" }
+      $말 | ForEach-Object { "  $_" }
+    } finally {
+      [Console]::OutputEncoding = $옛인코딩
+    }
+  }
 }
