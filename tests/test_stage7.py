@@ -131,16 +131,17 @@ def test7_d01_취소는_행을_남기고_합계에서_뺀다(admin_client, money
 def test7_d03_회차_상세의_지출_완료_숫자도_취소를_뺀다(admin_client, money_retreats):
     """settings 의 「지출 완료 N건 · X원」 — summary 는 빼는데 이 둘만 품으면
     같은 화면의 두 숫자가 갈린다 (검토자 고쳐야 함 1)."""
-    from app.routers.settings import _expense_stats
+    # 세는 곳이 domain 으로 옮겨 갔다(2026-09-14 · test_stage45) — 판정은 그대로다
+    from app.domain.budget import expense_stats
 
     rid, eid = money_retreats["retreat"], money_retreats["entry"]
     with app_session() as db:
-        assert _expense_stats(db, rid) == (1, 10_000)
+        assert expense_stats(db, rid) == (1, 10_000)
 
     admin_client.get(f"/board?retreat_id={rid}")
     admin_client.post(f"/expenses/{eid}/cancel", follow_redirects=True)
     with app_session() as db:
-        assert _expense_stats(db, rid) == (0, 0)          # 취소 행이 안 낀다
+        assert expense_stats(db, rid) == (0, 0)          # 취소 행이 안 낀다
 
 
 def test7_d02_삭제_단추가_화면에_없다():
