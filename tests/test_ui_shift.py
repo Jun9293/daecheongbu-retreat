@@ -84,6 +84,34 @@ def test_02b_앱에도_상단_탭_줄이_없고_사이드바로_모든_화면에
     assert 'id="sidenav"' in setup and 'id="sidetoggle"' in setup
 
 
+def test_02d_토글_단추의_보이는_말과_읽어_주는_이름이_같다():
+    """**이름을 박지 않고 둘이 같은지만 잽니다** (11-3 의 「문서의 값을 시험에
+    박지 않는다」). 사람이 이름을 다시 정하면 그때 이 시험이 막아설 이유가
+    없고, 막아야 할 것은 **두 이름이 갈리는 것**입니다 — 갈리면 화면 낭독기를
+    쓰는 사람만 다른 이름을 듣고 화면에는 아무 표시도 안 납니다.
+
+    목업은 시각 스펙이라 여기서 보지 않습니다. 목업에 옛 이름이 남는 것은
+    `check_stale` 이 봅니다(`docs/옛말.md`).
+    """
+    for 이름, 글 in (("retreat_base.html", SHELL),
+                    ("setup.html", (ROOT / "app" / "templates" / "setup.html")
+                     .read_text(encoding="utf-8"))):
+        # **여는 태그가 길어져도 안 놓치게 넉넉히 잡는다.** 태그 안에 까닭을
+        # 적은 주석이 들어 있어서, 좁게 잡으면 주석이 자랄 때 **진짜 까닭과
+        # 다른 말**로 빨개진다(「단추가 없다」). 2026-09-13 검토가 짚었다.
+        단추 = re.search(r"<button[^>]*id=\"sidetoggle\"[\s\S]{0,2000}?>", 글)
+        assert 단추, (f"{이름} 에서 토글 단추의 여는 태그를 못 찾았다 — "
+                     "단추가 없거나, 태그가 여기서 잡는 길이보다 길어졌다")
+        말 = 단추.group(0)
+        보임 = re.search(r'title="([^"]*)"', 말)
+        읽힘 = re.search(r'aria-label="([^"]*)"', 말)
+        assert 보임 and 읽힘, f"{이름} 의 토글에 title 이나 aria-label 이 없다"
+        assert 보임.group(1).strip() == 읽힘.group(1).strip(), (
+            f"{이름} 의 두 이름이 갈렸다 — "
+            f"보이는 말 「{보임.group(1)}」 · 읽어 주는 이름 「{읽힘.group(1)}」")
+        assert 읽힘.group(1).strip(), f"{이름} 의 읽어 주는 이름이 비어 있다"
+
+
 def test_03_사이드바는_접힌_채로_시작하고_토글과_가장자리_호버로_열린다():
     # 기본이 접힘 — .sidenav 는 화면 밖에 있고, 여는 것은 .peek 와 body.sidepin 뿐
     assert re.search(r"\.sidenav\{[^}]*transform:translateX\(-100%\)", CSS)
