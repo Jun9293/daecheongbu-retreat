@@ -35,7 +35,9 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from app.config import DATA_DIR, UPLOAD_DIR                      # noqa: E402
+# **app.config 가 아니라 app.paths 에서 받는다** — config 는 읽히는 순간 폴더를 만들고 서명키를
+# 쓴다. 앱 밖 자리(--살핀다)가 data/ 가 빈 날 불려도 흔적을 남기지 않게(2026-09-13 사람이 정함).
+from app.paths import DATA_DIR, UPLOAD_DIR                       # noqa: E402
 
 KEEP = 30                      # 이만큼만 남기고 오래된 것부터 지운다
 

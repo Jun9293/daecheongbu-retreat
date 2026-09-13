@@ -3,16 +3,16 @@
 import os
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.environ.get("DCB_DATA_DIR", BASE_DIR / "data"))
+# 경로 셈은 app/paths.py 한 곳이다 — 읽기만 하는 자리가 이 모듈(폴더를 만든다)을 안 부르고
+# 경로만 얻게 떼었다.
+from app.paths import BASE_DIR, DATA_DIR, UPLOAD_DIR  # noqa: F401
 
 # ── 올라온 파일은 전부 이 아래에 있다 ───────────────────────────────
 #
 # 경로를 한 군데로 모으는 이유는 백업 때문이다. 파일은 DB 밖에 쌓이므로
 # app.db 만 남기면 첨부가 통째로 빠지는데, **그 실패가 조용하다** —
 # 되돌리고 나서야 목록에 있는 파일이 열리지 않는 것으로 알게 된다.
-# scripts/backup.py 는 UPLOAD_DIR 하나만 보면 되도록 여기서 정한다.
-UPLOAD_DIR = DATA_DIR / "uploads"
+# scripts/backup.py 는 UPLOAD_DIR 하나만 보면 되도록 한 곳(app/paths.py)에서 정한다.
 # 작업 파일(Phase 2) 저장 위치. 영수증과 섞이지 않게 분리한다.
 ASSET_DIR = UPLOAD_DIR / "assets"
 # 업무 상세 패널의 첨부파일 (CLAUDE.md 4-9). 회차별이라 TaskRun 에 붙는다.
