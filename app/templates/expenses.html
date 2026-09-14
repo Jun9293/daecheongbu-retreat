@@ -146,7 +146,8 @@
               {# 원본 번호는 **있을 때만** 붙는다 — 앱에서 새로 만든 영수증은 비어 있다.
                  한 장이 지출 여럿에 걸렸으면 몇 건인지 말한다 — 금액은 지출마다라
                  영수증 금액과 지출 금액이 어긋나 보일 수 있다 #}
-              {% set can_edit = can_edit_dept(user, e.department) %}
+              {# 취소된 지출에는 잇기·떼기·붙이기를 안 그린다 — 걸린 칩은 보인다 (7-4) #}
+              {% set can_edit = can_edit_dept(user, e.department) and not e.canceled_at %}
               {% for r in e.receipts %}
               <span class="rcptwrap">
                 {% set label %}영수증 {{ r.number }}{% if r.original_no %} · 원본 {{ r.original_no }}{% endif %}{% if r.expenses|length > 1 %} · 지출 {{ r.expenses|length }}건{% endif %}{% endset %}

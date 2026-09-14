@@ -370,7 +370,10 @@ class ExpenseEntry(Base):
     )
 
     def attach_receipt(self, receipt: ExpenseReceipt) -> ExpenseReceiptLink:
-        """영수증을 이 지출에 잇는다. 새 영수증이면 이 지출이 처음 붙은 지출이 된다."""
+        """영수증을 이 지출에 잇는다. 새 영수증이면 이 지출이 처음 붙은 지출이 된다.
+        **취소된 지출에는 잇지 않는다** — 라우터가 먼저 409 로 막고, 여기는 마지막 문이다."""
+        if self.canceled_at is not None:
+            raise ValueError("취소된 지출에는 영수증을 잇지 않는다 (7-4)")
         if receipt.expense_id is None and receipt.expense is None:
             receipt.expense = self
         link = ExpenseReceiptLink(receipt=receipt)

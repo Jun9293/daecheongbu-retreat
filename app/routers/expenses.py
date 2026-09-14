@@ -394,11 +394,18 @@ def add_receipt(
 
 
 def _my_entry(db: Session, user: User, retreat: Retreat, entry_id: int) -> ExpenseEntry:
-    """이 회차의 지출이고 내가 고칠 수 있는가 — 영수증을 붙이고 잇고 떼는 문이 같다."""
+    """이 회차의 지출이고 내가 고칠 수 있고 **취소되지 않았는가** — 영수증을 붙이고
+    잇고 떼는 문이 같다 (7-4 · 2026-09-14 사람이 정함).
+
+    취소된 지출에는 새로 걸지도 떼지도 않는다(409). 취소 전에 걸린 영수증은 그대로
+    남는다 — 떼지 않는다. 취소는 되살릴 수 있어 그때 원래 모양이 돌아와야 한다.
+    """
     entry = db.get(ExpenseEntry, entry_id)
     if entry is None or entry.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
     assert_can_edit_department(db, user, entry.department_id)
+    if entry.canceled_at is not None:
+        raise HTTPException(status_code=409, detail="취소된 지출입니다. 영수증을 잇거나 떼려면 먼저 되살리세요.")
     return entry
 
 
@@ -427,6 +434,13 @@ def link_receipt(
     # 영영 안 이어진다 (봐둘것 BB-d)
     if not receipt_has_links(db, receipt):
         raise HTTPException(status_code=409, detail=f"영수증 {number}번은 아직 원래 지출에 이어지지 않았습니다. 총무팀이 옛 영수증을 먼저 잇습니다.")
+    # **남의 부서 영수증은 잇지 않는다** (2026-09-14 사람이 정함) — 받는 지출의 부서만 보면
+    # 부서 리더가 다른 부서 영수증을 번호 하나로 제 지출에 끌어온다. 영수증의 부서는 **지금
+    # 걸린 지출들의 부서**이고, 다 떼어 걸린 곳이 없으면 처음 붙은 지출의 부서다.
+    # 판정은 받는 지출과 같은 문(assert_can_edit_department)이라 총무팀은 통과한다 — 이것은
+    # 사람이 정한 것이 아니라 그 판의 읽기다(봐둘것 BB-f · CLAUDE.md 7-4)
+    for dept_id in {e.department_id for e in receipt.expenses} or {receipt.expense.department_id}:
+        assert_can_edit_department(db, user, dept_id)
     if receipt in entry.receipts:
         return redirect(f"/expenses?retreat_id={retreat.id}",
                         message=f"영수증 {number}번은 이미 이 지출에 이어져 있습니다.")

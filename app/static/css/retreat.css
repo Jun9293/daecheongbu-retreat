@@ -1932,10 +1932,11 @@ button.btn:disabled{opacity:.4;cursor:default}
 /* 계좌 셋 — 은행 · 계좌번호 · 예금주 (7-4) */
 .expform .frow3{display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px}
 /* 좁은 화면에서는 한 줄씩, 입력 글자는 16px — 그보다 작으면 휴대폰 사파리가 칸을 누를 때
-   화면을 확대해 가로가 넘친다 */
+   화면을 확대해 가로가 넘친다. .editform 은 지출 행의 원본 번호·번호로 잇기와 예산 화면의 항목·수입 편집 칸이다 — 지출 행에서 375px 에 13px 로 재어 넣었고, 예산 화면은 넣은 뒤에 재어 입력 전부 16px · 문서 가로 375 로 넘치지 않았다(넣기 전 값은 안 쟀다 · 2026-09-14) */
 @media (max-width:820px){
   .expform .frow2,.expform .frow3{grid-template-columns:1fr}
-  .expform input,.expform select,.expform textarea,.kv input,.kv select{font-size:var(--fz-lg)}
+  .expform input,.expform select,.expform textarea,.kv input,.kv select,
+  .editform input,.editform select{font-size:var(--fz-lg)}
 }
 
 /* ── 로그인 전 화면 (로그인 · 오류 · 회차 없음) — 껍데기는 한 벌, 사이드바만 없다 */

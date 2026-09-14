@@ -256,7 +256,7 @@ def _스크립트():
     return mod
 
 
-def test46_e01_옛_영수증을_잇는_전환(admin_client, 회차):
+def test46_e01_옛_영수증을_잇는_전환(admin_client, 회차, capsys):
     rid = 회차["retreat"]
     ids = [_등록(admin_client, 회차, 1_000 * (i + 1), receipt_memo=f"메모{i}") for i in range(3)]
     ids.append(_등록(admin_client, 회차, 500))                       # 영수증 없는 지출
@@ -287,7 +287,9 @@ def test46_e01_옛_영수증을_잇는_전환(admin_client, 회차):
         assert 후 == {k: [v] for k, v in 전.items()}
         assert mod.센다(db)["이을것"] == 0
         before = mod.센다(db)
+        capsys.readouterr()
         mod.옮기기(db, True, 사본=False)                              # 두 번째는 이을 것이 없다
+        assert "이을 것이 없습니다" in capsys.readouterr().out
         assert mod.센다(db) == before
     assert "아직 지출에 이어지지 않은 영수증" not in admin_client.get(f"/expenses?retreat_id={rid}").text
     # 한 벌 — 창이 닫힌 뒤에는 같은 옛 영수증을 번호로 이을 수 있다
@@ -373,3 +375,132 @@ def test46_g01_예산금액_0_인_항목에서_집행률이_안_터진다(admin_
         assert resp.status_code == 200, (화면, resp.status_code)
         assert 글 in resp.text, 화면
     assert admin_client.get(f"/export/expenses.xlsx?retreat_id={rid}").status_code == 200
+
+
+# ── 2026-09-14 손질 — 취소된 지출 · 남의 부서 영수증 · 미리 채우기 ──
+
+
+def test46_h01_취소된_지출에는_잇기_떼기_붙이기가_409(admin_client, 회차):
+    rid = 회차["retreat"]
+    e1 = _등록(admin_client, 회차, 1_000, receipt_memo="취소 전에 걸린 것")
+    e2 = _등록(admin_client, 회차, 2_000, receipt_memo="다른 영수증")
+    with app_session() as db:
+        [r1] = db.get(models.ExpenseEntry, e1).receipts
+        [r2] = db.get(models.ExpenseEntry, e2).receipts
+        r1_id, r1_no, r2_no = r1.id, r1.number, r2.number
+    admin_client.post(f"/expenses/{e1}/cancel?retreat_id={rid}")
+    with app_session() as db:
+        assert db.get(models.ExpenseEntry, e1).canceled_at is not None
+    # 막히는 쪽 셋 — 새로 잇기 · 떼기 · 새 영수증 붙이기
+    assert admin_client.post(f"/expenses/{e1}/receipts/link?retreat_id={rid}",
+                             data={"number": str(r2_no)}).status_code == 409
+    assert admin_client.post(f"/expenses/{e1}/receipts/{r1_id}/detach?retreat_id={rid}").status_code == 409
+    assert admin_client.post(f"/expenses/{e1}/receipts?retreat_id={rid}",
+                             data={"memo": "또"}).status_code == 409
+    # 같은 판에서 — 취소 전에 걸린 영수증은 그대로 걸려 있고 행도 남는다
+    with app_session() as db:
+        assert _영수증번호(db, e1) == [r1_no]
+        assert db.get(models.ExpenseReceipt, r1_id) is not None
+        assert db.scalar(select(func.count()).select_from(models.ExpenseReceiptLink).where(
+            models.ExpenseReceiptLink.expense_id == e1)) == 1
+        assert db.get(models.ExpenseEntry, e2).receipts[0].number == r2_no, "다른 지출이 흔들렸다"
+        # 모델의 마지막 문
+        with pytest.raises(ValueError):
+            db.get(models.ExpenseEntry, e1).attach_receipt(db.get(models.ExpenseReceipt, r2.id))
+    # 화면 — 칩은 보이고 단추는 없다
+    page = admin_client.get(f"/expenses?retreat_id={rid}").text
+    assert f"영수증 {r1_no} · 취소 전에 걸린 것" in page
+    assert f"/expenses/{e1}/receipts/{r1_id}/detach" not in page
+    assert f"/expenses/{e1}/receipts/link" not in page
+    assert f"/expenses/{e2}/receipts/link" in page, "산 지출에서는 단추가 그려져야 한다"
+    # 되살리면 다시 된다
+    admin_client.post(f"/expenses/{e1}/cancel?retreat_id={rid}")
+    assert admin_client.post(f"/expenses/{e1}/receipts/link?retreat_id={rid}",
+                             data={"number": str(r2_no)}, follow_redirects=True).status_code == 200
+
+
+def test46_h02_남의_부서_영수증은_못_잇고_같은_부서는_된다(client, admin_client, 회차):
+    rid = 회차["retreat"]
+    with app_session() as db:
+        other = models.Department(retreat_id=rid, key="hebron", name="5 헤브론", sort_order=1)
+        db.add(other)
+        db.commit()
+        oid = other.id
+    남 = _등록(admin_client, 회차, 1_000, department_id=str(oid), receipt_memo="헤브론 것")
+    내1 = _등록(admin_client, 회차, 2_000, receipt_memo="총무 것")
+    내2 = _등록(admin_client, 회차, 3_000)
+    with app_session() as db:
+        남번호 = _영수증번호(db, 남)[0]
+        내번호 = _영수증번호(db, 내1)[0]
+    make_user("가명총무리더", "01077770003", "dept_lead", dept=회차["dept"])
+    login_as(client, "01077770003")
+    # 막히는 쪽 — 헤브론 지출에 걸린 영수증을 내 지출에
+    assert client.post(f"/expenses/{내2}/receipts/link?retreat_id={rid}",
+                       data={"number": str(남번호)}).status_code == 403
+    with app_session() as db:
+        assert _영수증번호(db, 내2) == []
+    # 같은 부서 안에서는 된다
+    assert client.post(f"/expenses/{내2}/receipts/link?retreat_id={rid}",
+                       data={"number": str(내번호)}, follow_redirects=True).status_code == 200
+    with app_session() as db:
+        assert _영수증번호(db, 내2) == [내번호]
+    # 다 떼어 걸린 곳이 없는 영수증은 처음 붙은 지출의 부서로 본다
+    with app_session() as db:
+        남영수증 = db.get(models.ExpenseEntry, 남).receipts[0].id
+    admin_client.post(f"/expenses/{남}/receipts/{남영수증}/detach?retreat_id={rid}")
+    assert client.post(f"/expenses/{내2}/receipts/link?retreat_id={rid}",
+                       data={"number": str(남번호)}).status_code == 403
+    # 총무팀은 같은 문을 통과한다 — 두 부서 물건이 섞인 종이 한 장은 총무팀이 잇는다
+    assert admin_client.post(f"/expenses/{내2}/receipts/link?retreat_id={rid}",
+                             data={"number": str(남번호)}, follow_redirects=True).status_code == 200
+
+
+def test46_a03_등록_폼이_남의_계좌_셋을_미리_채우지_않는다(client, admin_client, 회차):
+    """직전 식대 지출의 계좌 셋이 다음 사람의 입력칸으로 새지 않는다(test23_g05 의 셋 판)."""
+    _등록(admin_client, 회차, 16_000, is_meal_expense="1", meal_headcount="2",
+         payer_bank=은행, payer_account_number=번호, payer_account_holder=예금주)
+    make_user("가명폼리더", "01077770004", "dept_lead", dept=회차["dept"])
+    login_as(client, "01077770004")
+    page = client.get(f"/expenses?retreat_id={회차['retreat']}").text
+    assert 'name="payer_account_number"' in page, "폼 자체를 못 찾으면 아래는 뜻이 없다"
+    for 값 in (은행, 번호, 예금주):
+        assert 값 not in page
+    # 총무팀에게는 직전 값을 채운다 — 검사가 볼 것을 실제로 보는가
+    총무 = admin_client.get(f"/expenses?retreat_id={회차['retreat']}").text
+    for 이름, 값 in (("payer_bank", 은행), ("payer_account_number", 번호),
+                   ("payer_account_holder", 예금주)):
+        assert f'name="{이름}" value="{값}"' in 총무, 이름
+
+
+def test46_h03_두_부서에_걸린_영수증과_리더의_취소된_지출(client, admin_client, 회차):
+    """검토 B-4 — 반복문이 둘 이상을 도는 자리와, 총무팀이 아닌 계정의 취소 막기."""
+    rid = 회차["retreat"]
+    with app_session() as db:
+        other = models.Department(retreat_id=rid, key="hebron", name="5 헤브론", sort_order=1)
+        db.add(other)
+        db.commit()
+        oid = other.id
+    내것 = _등록(admin_client, 회차, 1_000, receipt_memo="섞인 종이")
+    헤브론 = _등록(admin_client, 회차, 2_000, department_id=str(oid))
+    내것2 = _등록(admin_client, 회차, 3_000)
+    with app_session() as db:
+        섞인번호 = _영수증번호(db, 내것)[0]
+    # 총무팀이 두 부서에 이어 둔다
+    assert admin_client.post(f"/expenses/{헤브론}/receipts/link?retreat_id={rid}",
+                             data={"number": str(섞인번호)}, follow_redirects=True).status_code == 200
+    with app_session() as db:
+        assert len(db.get(models.ExpenseEntry, 내것).receipts[0].expenses) == 2
+    make_user("가명섞임리더", "01077770005", "dept_lead", dept=회차["dept"])
+    login_as(client, "01077770005")
+    # 내 부서에도 걸려 있지만 헤브론에도 걸려 있으니 리더는 못 잇는다
+    assert client.post(f"/expenses/{내것2}/receipts/link?retreat_id={rid}",
+                       data={"number": str(섞인번호)}).status_code == 403
+    # 리더의 자기 부서 지출을 취소하면 리더에게도 409 이고 단추가 안 그려진다
+    client.post(f"/expenses/{내것}/cancel?retreat_id={rid}")
+    with app_session() as db:
+        assert db.get(models.ExpenseEntry, 내것).canceled_at is not None
+        rcpt_id = db.get(models.ExpenseEntry, 내것).receipts[0].id
+    assert client.post(f"/expenses/{내것}/receipts/{rcpt_id}/detach?retreat_id={rid}").status_code == 409
+    page = client.get(f"/expenses?retreat_id={rid}").text
+    assert f"/expenses/{내것}/receipts/{rcpt_id}/detach" not in page
+    assert f"/expenses/{내것2}/receipts/link" in page, "리더의 산 지출에는 단추가 있어야 한다"
