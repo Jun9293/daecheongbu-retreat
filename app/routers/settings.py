@@ -559,11 +559,16 @@ def set_external_link(
 @router.post("/me/update")
 def update_me(
     name: str = Form(...),
-    bank_account: str = Form(""),
+    bank_name: str = Form(""),
+    account_number: str = Form(""),
+    account_holder: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     user.name = name.strip() or user.name
-    user.bank_account = bank_account.strip() or None
+    # 계좌는 셋 (7-4) — 옛 한 칸은 남기되 안 쓴다(models 의 봉인)
+    user.bank_name = bank_name.strip() or None
+    user.account_number = account_number.strip() or None
+    user.account_holder = account_holder.strip() or None
     db.commit()
     return redirect("/settings", message="내 정보를 저장했습니다.")

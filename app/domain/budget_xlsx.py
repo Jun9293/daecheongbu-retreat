@@ -32,6 +32,21 @@ def _style_header(ws, ncols: int) -> None:
     ws.freeze_panes = "A2"
 
 
+계좌머리 = ["은행", "계좌번호", "예금주"]
+
+
+def _계좌칸(e: ExpenseEntry) -> list:
+    """계좌 셋 (7-4) — 부르는 쪽이 보일지를 이미 정했다."""
+    return [e.payer_bank, e.payer_account_number, e.payer_account_holder]
+
+
+def _영수증칸(e: ExpenseEntry) -> tuple[str | None, str | None]:
+    """(자동 번호들, 원본 번호들). 원본 번호가 하나도 없으면 칸을 비운다."""
+    numbers = ", ".join(str(r.number) for r in e.receipts) or None
+    originals = ", ".join(r.original_no for r in e.receipts if r.original_no) or None
+    return numbers, originals
+
+
 def _widths(ws, widths: list[int]) -> None:
     for i, width in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = width
@@ -63,19 +78,19 @@ def write(
     ws.title = "지출 상세내역"
     headers = [
         "구분", "항목", "세부항목-1", "세부항목-2", "세부항목-3", "부서",
-        "영수증번호", "지출일자", "금액", "지원금액", "개인부담액",
+        "영수증번호", "원본 영수증번호", "지출일자", "금액", "지원금액", "개인부담액",
         "식사인원", "참석자 명단", "비고", "지급여부", "지급일", "지출자",
     ]
     if 계좌를_보인다:
-        headers.append("지출자 계좌")
+        headers += 계좌머리
     ws.append(headers)
     for e in entries:
-        numbers = ", ".join(str(r.number) for r in e.receipts) or None
+        numbers, originals = _영수증칸(e)
         ws.append(
             [
                 e.level1, e.level2, e.level3a, e.level3b, e.level3c,
                 e.department.name if e.department else None,
-                numbers,
+                numbers, originals,
                 e.expense_date,
                 e.amount,
                 # 같은 식을 다시 적지 않는다 — 집행 금액은 모델의 한 곳에서
@@ -88,16 +103,17 @@ def write(
                 e.paid_date,
                 e.payer_name,
             ]
-            + ([e.payer_account] if 계좌를_보인다 else [])
+            + (_계좌칸(e) if 계좌를_보인다 else [])
         )
-    for row in ws.iter_rows(min_row=2, min_col=9, max_col=11):
+    for row in ws.iter_rows(min_row=2, min_col=10, max_col=12):
         for cell in row:
             cell.number_format = MONEY
-    for row in ws.iter_rows(min_row=2, min_col=8, max_col=8):
+    for row in ws.iter_rows(min_row=2, min_col=9, max_col=9):
         for cell in row:
             cell.number_format = "yyyy-mm-dd"
     _style_header(ws, len(headers))
-    _widths(ws, [12, 16, 14, 14, 14, 10, 10, 12, 12, 12, 12, 9, 30, 24, 10, 12, 10, 20])
+    _widths(ws, [12, 16, 14, 14, 14, 10, 10, 12, 12, 12, 12, 12, 9, 30, 24, 10, 12, 10]
+            + ([10, 20, 10] if 계좌를_보인다 else []))
 
     # 2) 예산 대비 집행 — 구분 소계·총계·비율 전부 summary 의 값이다 (7-3)
     ws2 = wb.create_sheet("예산 대비 집행")
@@ -144,37 +160,37 @@ def write(
     ws3 = wb.create_sheet("환급 대상자")
     # 열 이름은 「환급액」 — 비식대 행에는 전액이 들어가므로 「지원금액」 이라
     # 적으면 열 이름과 값의 뜻이 어긋난다
+    # 원본 영수증번호는 지출 상세내역 시트에만 싣는다 — 환급 시트는 사람과 돈을 보는 자리다
     환급열 = ["영수증번호", "항목", "지출일자", "환급액", "지출자"]
     if 계좌를_보인다:
-        환급열.append("계좌")
+        환급열 += 계좌머리
     환급열.append("지급여부")
     ws3.append(환급열)
     refund = refund_sheet(entries)
     for e in refund.rows:
         ws3.append(
             [
-                ", ".join(str(r.number) for r in e.receipts) or None,
+                _영수증칸(e)[0],
                 e.budget_category.display_name if e.budget_category else None,
                 e.expense_date,
                 e.settlement_amount,
                 e.payer_name,
             ]
-            + ([e.payer_account] if 계좌를_보인다 else [])
+            + (_계좌칸(e) if 계좌를_보인다 else [])
             + ["지급완료" if e.paid else "미지급"]
         )
     ws3.append([])
     # 합계·건수는 domain.budget.refund_sheet 가 센다 — 파일은 놓기만 한다
     ws3.append(["미지급 합계", "", "", refund.unpaid_total, ""]
-               + ([""] if 계좌를_보인다 else [])
+               + ([""] * len(계좌머리) if 계좌를_보인다 else [])
                + [f"{refund.unpaid_count}건"])
     for row in ws3.iter_rows(min_row=2, min_col=4, max_col=4):
         for cell in row:
             cell.number_format = MONEY
-    # 계좌 칸을 안 만들면 열이 하나 줄어든다 — 숫자로 박으면 머리줄만 남는다
+    # 계좌 칸을 안 만들면 열이 줄어든다 — 숫자로 박으면 머리줄만 남는다
     _style_header(ws3, len(환급열))
-    # 계좌 칸이 없으면 폭도 하나 빠진다 — 그대로 두면 계좌 폭(26)이
-    # 지급여부에 가고 마지막 폭은 빈 열에 간다
-    _widths(ws3, [12, 26, 12, 14, 12] + ([26] if 계좌를_보인다 else []) + [10])
+    # 계좌 칸이 없으면 폭도 빠진다 — 그대로 두면 계좌 폭이 지급여부에 간다
+    _widths(ws3, [12, 26, 12, 14, 12] +([10, 20, 10] if 계좌를_보인다 else []) + [10])
 
     buffer = io.BytesIO()
     wb.save(buffer)

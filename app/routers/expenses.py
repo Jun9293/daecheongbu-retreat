@@ -27,10 +27,13 @@ from app.domain.budget import (
     filter_entries,
     list_totals,
     next_receipt_number,
+    receipt_has_links,
+    unlinked_receipt_count,
 )
 from app.domain import permissions as perm
 from app.domain.meal import calculate_meal_settlement
 from app.models import (
+    _now,
     BudgetCategory,
     Department,
     ExpenseEntry,
@@ -86,20 +89,22 @@ def _add_receipt(
     *,
     file: UploadFile | None,
     memo: str,
+    original_no: str = "",
 ) -> ExpenseReceipt | None:
-    """영수증 하나를 붙인다 — 파일이든 「결산 파일에 별첨」 같은 메모든 (7-4)."""
+    """새 영수증 한 장을 만들어 잇는다 — 파일이든 「결산 파일에 별첨」 같은 메모든 (7-4).
+    이미 있는 영수증에 잇는 것은 `link_receipt` 다 — 그때는 새 번호를 안 준다."""
     saved = _save_receipt_file(file)
     memo = memo.strip()
     if saved is None and not memo:
         return None
     receipt = ExpenseReceipt(
-        expense_id=entry.id,
         number=next_receipt_number(db, retreat),
+        original_no=original_no.strip() or None,
         stored_name=saved[0] if saved else None,
         original_name=saved[1] if saved else None,
         memo=memo or None,
     )
-    db.add(receipt)
+    entry.attach_receipt(receipt)
     return receipt
 
 
@@ -141,7 +146,7 @@ def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
         return {
             "department_id": my_dept,
             "payer_name": user.name,
-            "payer_account": user.bank_account or "",
+            **_my_account(user),
             "attendees": "",
             "level3b": "",
         }
@@ -153,20 +158,30 @@ def _last_meal_defaults(db: Session, retreat: Retreat, user: User) -> dict:
     #
     # **이름과 계좌는 함께 떨어집니다.** 계좌만 자기 것으로 바꾸면
     # (남의 이름, 내 계좌) 가 뜨는데, 환급은 `payer_name` 으로 사람을
-    # 가르고 돈은 `payer_account` 로 갑니다 — 두 칸이 서로를 부정하는데
+    # 가르고 돈은 계좌 셋으로 갑니다 — 두 칸이 서로를 부정하는데
     # 화면에는 아무 표시도 나지 않습니다.
     # **계좌를 보일지는 `permissions.can_see_account` 하나가 정합니다** —
     # 화면·엑셀·이 폼이 같이 부릅니다. 여기만 다른 함수를 부르면 그 함수가
     # 바뀔 때 이 자리만 따로 움직입니다
     남이낸것 = perm.can_see_account(user)
+    # 계좌 셋은 **한 벌로** 고른다 — 칸마다 따로 물러서면 (남의 은행, 내 번호) 가 섞인다
+    직전 = {"payer_bank": last.payer_bank, "payer_account_number": last.payer_account_number,
+            "payer_account_holder": last.payer_account_holder}
     return {
         "department_id": last.department_id,
         "payer_name": (last.payer_name if 남이낸것 else None) or user.name,
-        "payer_account": (last.payer_account if 남이낸것 else None)
-                         or user.bank_account or "",
+        **({k: v or "" for k, v in 직전.items()}
+           if 남이낸것 and any(직전.values()) else _my_account(user)),
         "attendees": " ".join(last.meal_attendee_names or []),
         "level3b": _next_meal_label(last.level3b),
     }
+
+
+def _my_account(user: User) -> dict:
+    """등록 폼에 미리 채울 내 계좌 셋 — 설정 › 내 정보에서 적은 것."""
+    return {"payer_bank": user.bank_name or "",
+            "payer_account_number": user.account_number or "",
+            "payer_account_holder": user.account_holder or ""}
 
 
 def _next_meal_label(previous: str | None) -> str:
@@ -232,6 +247,7 @@ def expense_list(
             "departments": _departments(db, retreat),
             "meal_defaults": _last_meal_defaults(db, retreat, user),
             "next_receipt_number": next_receipt_number(db, retreat),
+            "unlinked_receipts": unlinked_receipt_count(db, retreat),
             "today": dt.date.today().isoformat(),
             "filter": filter,
             "totals": totals,
@@ -248,7 +264,9 @@ def create_expense(
     amount: int = Form(0),
     department_id: str = Form(""),
     payer_name: str = Form(""),
-    payer_account: str = Form(""),
+    payer_bank: str = Form(""),
+    payer_account_number: str = Form(""),
+    payer_account_holder: str = Form(""),
     note: str = Form(""),
     paid: str = Form(""),
     paid_date: str = Form(""),
@@ -258,6 +276,7 @@ def create_expense(
     level3b: str = Form(""),
     receipt: UploadFile | None = File(None),
     receipt_memo: str = Form(""),
+    receipt_original_no: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
@@ -311,7 +330,9 @@ def create_expense(
         amount=amount,
         department_id=dept_id,
         payer_name=payer_name.strip() or None,
-        payer_account=payer_account.strip() or None,
+        payer_bank=payer_bank.strip() or None,
+        payer_account_number=payer_account_number.strip() or None,
+        payer_account_holder=payer_account_holder.strip() or None,
         paid=bool(paid),
         paid_date=_parse_date(paid_date),
         note=note.strip() or None,
@@ -324,7 +345,8 @@ def create_expense(
     )
     db.add(entry)
     db.flush()
-    added = _add_receipt(db, retreat, entry, file=receipt, memo=receipt_memo)
+    added = _add_receipt(db, retreat, entry, file=receipt, memo=receipt_memo,
+                         original_no=receipt_original_no)
     db.commit()
     log_activity(
         db,
@@ -348,17 +370,14 @@ def add_receipt(
     entry_id: int,
     receipt: UploadFile | None = File(None),
     memo: str = Form(""),
+    original_no: str = Form(""),
     db: Session = Depends(get_db),
     user: User = Depends(require_editor),
     retreat: Retreat = Depends(get_current_retreat),
 ):
-    """영수증을 하나 더 붙인다 — 지출 1건에 N개 (7-4)."""
-    entry = db.get(ExpenseEntry, entry_id)
-    if entry is None or entry.retreat_id != retreat.id:
-        raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
-    assert_can_edit_department(db, user, entry.department_id)
-
-    added = _add_receipt(db, retreat, entry, file=receipt, memo=memo)
+    """새 영수증 한 장을 더 붙인다 — 새 번호를 받는다 (7-4)."""
+    entry = _my_entry(db, user, retreat, entry_id)
+    added = _add_receipt(db, retreat, entry, file=receipt, memo=memo, original_no=original_no)
     if added is None:
         raise HTTPException(status_code=400, detail="파일이나 메모 중 하나는 있어야 합니다.")
     db.commit()
@@ -372,6 +391,78 @@ def add_receipt(
         summary=f"[{added.number}] " + (added.original_name or added.memo or ""),
     )
     return redirect(f"/expenses?retreat_id={retreat.id}", message=f"영수증 {added.number}번을 붙였습니다.")
+
+
+def _my_entry(db: Session, user: User, retreat: Retreat, entry_id: int) -> ExpenseEntry:
+    """이 회차의 지출이고 내가 고칠 수 있는가 — 영수증을 붙이고 잇고 떼는 문이 같다."""
+    entry = db.get(ExpenseEntry, entry_id)
+    if entry is None or entry.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
+    assert_can_edit_department(db, user, entry.department_id)
+    return entry
+
+
+@router.post("/expenses/{entry_id}/receipts/link")
+def link_receipt(
+    entry_id: int,
+    number: int = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """**이미 있는 영수증에 잇는다** — 새 번호를 주지 않는다 (7-4 · 사람이 정한 시트-가 ㄷ).
+
+    종이 한 장에 지출 여럿이 걸리는 자리다. 번호로 고른다 — 행마다 영수증 목록을
+    싣으면 지출 × 영수증만큼 화면이 커진다. 금액은 지출마다 그대로다.
+    """
+    entry = _my_entry(db, user, retreat, entry_id)
+    receipt = db.scalar(
+        select(ExpenseReceipt)
+        .join(ExpenseEntry, ExpenseEntry.id == ExpenseReceipt.expense_id)
+        .where(ExpenseEntry.retreat_id == retreat.id, ExpenseReceipt.number == number))
+    if receipt is None:
+        raise HTTPException(status_code=404, detail=f"이 회차에 영수증 {number}번이 없습니다.")
+    # **한 번도 이어진 적 없는 영수증은 잇지 않는다** — scripts/영수증잇기옮기기.py 가 원래
+    # 지출에 이을 몫이다. 여기서 먼저 이으면 그 스크립트가 줄이 있다고 건너뛰어 원래 지출에
+    # 영영 안 이어진다 (봐둘것 BB-d)
+    if not receipt_has_links(db, receipt):
+        raise HTTPException(status_code=409, detail=f"영수증 {number}번은 아직 원래 지출에 이어지지 않았습니다. 총무팀이 옛 영수증을 먼저 잇습니다.")
+    if receipt in entry.receipts:
+        return redirect(f"/expenses?retreat_id={retreat.id}",
+                        message=f"영수증 {number}번은 이미 이 지출에 이어져 있습니다.")
+    entry.attach_receipt(receipt)
+    db.commit()
+    log_activity(db, retreat_id=retreat.id, actor=user, action="영수증_잇기",
+                 target_type="expense", target_id=entry.id, summary=f"[{number}] 잇기")
+    return redirect(f"/expenses?retreat_id={retreat.id}", message=f"영수증 {number}번을 이었습니다.")
+
+
+@router.post("/expenses/{entry_id}/receipts/{receipt_id}/detach")
+def detach_receipt(
+    entry_id: int,
+    receipt_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """**떼는 것은 지우는 것이 아니다** — 잇기 줄에 detached_at 을 찍고 영수증 행은 남긴다 (0장).
+
+    마지막 한 곳에서 떼어도 된다 — 잘못 붙인 영수증이 그 지출에 영영 남던 자리다.
+    뗀 영수증은 번호로 다시 이을 수 있다.
+    """
+    entry = _my_entry(db, user, retreat, entry_id)
+    link = next((l for l in entry.receipt_links
+                 if l.receipt_id == receipt_id and l.detached_at is None), None)
+    if link is None:
+        raise HTTPException(status_code=404, detail="이 지출에 이어진 영수증이 아닙니다.")
+    # 저장 시각은 UTC — 같은 줄의 attached_at(models._now)과 한 시계로 (4-16)
+    link.detached_at = _now()
+    db.commit()
+    log_activity(db, retreat_id=retreat.id, actor=user, action="영수증_떼기",
+                 target_type="expense", target_id=entry.id,
+                 summary=f"[{link.receipt.number}] 떼기 — 영수증은 남음")
+    return redirect(f"/expenses?retreat_id={retreat.id}",
+                    message=f"영수증 {link.receipt.number}번을 뗐습니다. 영수증은 남아 번호로 다시 이을 수 있습니다.")
 
 
 @router.post("/expenses/{entry_id}/paid")

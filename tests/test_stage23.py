@@ -26,10 +26,12 @@ from tests.conftest import app_session, login_as, make_user
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TODAY = dt.date.today()
 
-# **시험이 쓰는 계좌 문자열은 저장소가 이미 싣고 있는 것이다** —
-# `app/templates/expenses.html` 의 placeholder. 새 문자열을 지어내면
+# **시험이 쓰는 계좌 문자열은 저장소가 이미 싣고 있던 것이다** — 옛
+# `app/templates/expenses.html` placeholder 의 번호 부분. 새 문자열을 지어내면
 # 그것이 또 검사에 걸리고 넘김 목록만 는다 (도막 0 의 8장 C-4).
-계좌 = "국민 000000-00-000000"
+# 계좌가 셋으로 갈린 뒤(7-4 · 2026-09-14)에는 **번호 칸**의 값으로 잰다 —
+# 화면의 placeholder 에는 이 글자가 없어야 `not in` 이 뜻을 갖는다
+계좌 = "000000-00-000000"
 
 
 @pytest.fixture
@@ -52,7 +54,7 @@ def 돈회차(admin_client):
             retreat_id=r.id, department_id=dept.id, expense_date=TODAY,
             amount=10_000, subsidy_amount=10_000, is_meal_expense=True,
             meal_headcount=2, level3b="모임 식사비-1",
-            payer_name="지출한 사람", payer_account=계좌))
+            payer_name="지출한 사람", payer_bank="국민", payer_account_number=계좌))
         db.commit()
         ids = {"retreat": r.id, "dept": dept.id}
     admin_client.get(f"/expenses?retreat_id={ids['retreat']}")
@@ -125,7 +127,7 @@ def test23_g04_엑셀은_편집자가_받되_계좌_칸은_admin_만(client, adm
     assert ok.headers["content-type"].startswith(
         "application/vnd.openxmlformats"), "받아지는 것이 엑셀인지도 본다"
     지출머리, 환급머리 = _엑셀칸(ok)
-    assert "지출자 계좌" in 지출머리 and "계좌" in 환급머리
+    assert "계좌번호" in 지출머리 and "계좌번호" in 환급머리
     assert _값에계좌있나(ok), "총무팀 파일에 계좌 값이 실제로 들어 있어야 한다 (③)"
 
     # ② 편집자는 표를 받는다 — 계좌 칸만 없다
@@ -134,8 +136,8 @@ def test23_g04_엑셀은_편집자가_받되_계좌_칸은_admin_만(client, adm
     리더 = client.get(주소)
     assert 리더.status_code == 200, "편집자가 표를 못 받는다"
     지출머리2, 환급머리2 = _엑셀칸(리더)
-    assert "지출자 계좌" not in 지출머리2, "빈 칸이 아니라 없는 칸이어야 한다"
-    assert "계좌" not in 환급머리2
+    assert not {"은행", "계좌번호", "예금주"} & set(지출머리2), "빈 칸이 아니라 없는 칸이어야 한다"
+    assert not {"은행", "계좌번호", "예금주"} & set(환급머리2)
     assert "지출자" in 지출머리2, "계좌만 빼야 하는데 표까지 줄었다"
     # xlsx 는 zip 이라 바이트를 뒤져서는 못 본다 — 칸을 읽어 본다
     assert not _값에계좌있나(리더)

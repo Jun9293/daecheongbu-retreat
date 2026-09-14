@@ -128,6 +128,18 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 출처를 업무 쪽에 남긴다 — 비면 사람이 보드·마법사에서 만든 것이다.
     ("task_runs", "source_meeting_id", "INTEGER REFERENCES meetings(id)"),
     ("meeting_items", "converted_run_id", "INTEGER REFERENCES task_runs(id)"),
+    # 계좌 셋 · 원본 영수증 번호 (7-4 · 2026-09-14 차례 4). **전부 NULL 로 붙인다** —
+    # 기본값을 달면 붙는 순간 있는 행 전부가 바뀐다(11-2 · 봐둘것 BA-h). 옛 계좌 한 칸은
+    # 그대로 남고 값도 안 옮긴다(사람이 정한 다-ㄷ). 읽는 자리는 빈 값을 받는다.
+    # 잇기 표(expense_receipt_links)는 create_all 이 만들고, 지금 있는 영수증을 잇는
+    # 것은 부팅이 아니라 scripts/영수증잇기옮기기.py 가 한다 — 값을 채우는 전환이다
+    ("users", "bank_name", "VARCHAR(50)"),
+    ("users", "account_number", "VARCHAR(50)"),
+    ("users", "account_holder", "VARCHAR(50)"),
+    ("expense_entries", "payer_bank", "VARCHAR(50)"),
+    ("expense_entries", "payer_account_number", "VARCHAR(50)"),
+    ("expense_entries", "payer_account_holder", "VARCHAR(50)"),
+    ("expense_receipts", "original_no", "VARCHAR(40)"),
 )
 
 
@@ -390,6 +402,10 @@ def _move_receipts() -> None:
     두 번 떠도 두 번 옮기지 않는다 — 이미 영수증 행이 있는 지출은 건너뛴다.
     옛 receipt_file_url 은 '/uploads/<이름>' 꼴이라 파일 이름만 떼어
     stored_name 에 넣는다(내려받기는 기존 /uploads 경로 그대로).
+
+    **잇기 줄은 만들지 않는다** (2026-09-14 차례 4). 여기서 만든 영수증은 한 번도
+    이어진 적 없는 영수증이 되고, scripts/영수증잇기옮기기.py 가 잇는다 — 부팅이
+    값을 채우는 전환을 더 늘리지 않는다(11-2 · 봐둘것 BA-h).
     """
     if not DATABASE_URL.startswith("sqlite"):
         return

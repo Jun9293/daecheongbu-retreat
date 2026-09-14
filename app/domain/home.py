@@ -53,7 +53,7 @@ class HomeView:
 
     # ── 결산 홈 ──────────────────────────────────────────────────────
     unpaid_refund_count: int = 0     # budget.refund_entries — 개인이 냈는데 미지급
-    no_receipt_count: int = 0        # budget.no_receipt_entries — ExpenseReceipt 0건
+    no_receipt_count: int = 0        # budget.no_receipt_entries — 걸린 영수증 0건
     open_task_count: int = 0         # 미완료 업무 (정리 필요)
 
 

@@ -274,7 +274,7 @@ def test_지출을_등록하면_예산_진행률에_바로_반영된다(admin_cl
             "expense_date": dt.date.today().isoformat(),
             "amount": "100000",
             "payer_name": "김총무",
-            "payer_account": "국민 123-456",
+            "payer_bank": "국민", "payer_account_number": "123-456",
         },
         follow_redirects=True,
     )
@@ -304,7 +304,7 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
             "meal_attendees": "이름1 이름2 이름3",
             "level3b": "모임 식사비-1",
             "payer_name": "박민준",
-            "payer_account": "국민 123-456",
+            "payer_bank": "국민", "payer_account_number": "123-456",
         },
         follow_redirects=True,
     )
@@ -373,7 +373,7 @@ def test_환급_필터에_지출자와_계좌와_지원금_합이_보인다(admi
                 "is_meal_expense": "1",
                 "meal_headcount": head,
                 "payer_name": "박민준",
-                "payer_account": "국민 123456-01-123456",
+                "payer_bank": "국민", "payer_account_number": "123456-01-123456",
             },
             follow_redirects=True,
         )
@@ -381,7 +381,7 @@ def test_환급_필터에_지출자와_계좌와_지원금_합이_보인다(admi
     page = admin_client.get("/refunds")   # 301 → /expenses?filter=refund
 
     assert "박민준" in page.text
-    assert "국민 123456-01-123456" in page.text
+    assert "123456-01-123456" in page.text
     assert "164,900" in page.text  # 식대 지원금 지표 = 68,900 + 96,000
 
 

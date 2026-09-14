@@ -68,7 +68,7 @@ def fin(admin_client):
                 expense_date=TODAY, amount=amount, payer_name=payer,
                 paid=paid, subsidy_amount=amount, department_id=dept.id)
             if receipt_no is not None:
-                entry.receipts.append(
+                entry.attach_receipt(
                     models.ExpenseReceipt(number=receipt_no, memo=memo or "결산 파일에 별첨"))
             db.add(entry)
             db.flush()

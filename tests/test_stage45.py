@@ -75,7 +75,7 @@ def 돈(admin_client):
                 e.subsidy_amount = min(amount, meal * 8000)
                 e.personal_burden_amount = amount - e.subsidy_amount
             if receipt:
-                e.receipts.append(models.ExpenseReceipt(number=spend.n, memo="별첨"))
+                e.attach_receipt(models.ExpenseReceipt(number=spend.n, memo="별첨"))
                 spend.n += 1
             if canceled:
                 e.canceled_at = dt.datetime.now()
@@ -228,7 +228,7 @@ def test45_b01_걸린_지출은_취소된_항목_줄로_세어진다(admin_clien
 
 def test45_b01b_걸린_지출이_있는_항목을_취소하면_집행률이_오른다(admin_client, 돈):
     """지금의 모양을 잰다 — 예산(분모)은 빠지고 집행(분자)은 남는다(7-3 에 적음).
-    이 모양을 둘지는 사람이 정한다(보고 사람칸). 바뀌면 이 시험을 고친다."""
+    이 모양을 둔다(2026-09-14 에 사람이 정함 · 봐둘것 BA-f). 바뀌면 이 시험을 고친다."""
     rid, cid = 돈["retreat"], 돈["cats"]["야식"]
     before = _summary(rid)
     row = next(r for r in before.categories if r.category.id == cid)

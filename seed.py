@@ -170,7 +170,7 @@ def seed(demo: bool = False) -> None:
             # 옛 역할(dept_lead·member)은 전체 역할 「일반」 + 소속 줄의 부서 역할로
             # 갈라진다 (도막 4). 부서 없는 옛 member 는 소속 없는 일반이다
             top, dept_role = perm.LEGACY_ROLE_MAP.get(role, (role, perm.MEMBER))
-            user = User(name=name, phone_number=phone, role=top, bank_account=None)
+            user = User(name=name, phone_number=phone, role=top)
             db.add(user)
             db.flush()
             if dept_name:
@@ -299,7 +299,7 @@ def seed(demo: bool = False) -> None:
         # 지출 — 식대. 영수증은 ExpenseReceipt 가 유일한 출처다 (7-4)
         receipt_no = 0
         meal_cat = cats[("그 외", "수련회 준비지원")]
-        for dept_name, payer, account, amount, head, label, date in D.MEAL_EXPENSES:
+        for dept_name, payer, _account, amount, head, label, date in D.MEAL_EXPENSES:
             receipt_no += 1
             settlement = calculate_meal_settlement(
                 amount=amount, headcount=head, per_person_cap=retreat.meal_subsidy_per_person
@@ -315,7 +315,6 @@ def seed(demo: bool = False) -> None:
                 amount=amount,
                 department_id=depts[dept_name].id,
                 payer_name=payer,
-                payer_account=account,
                 paid=False,
                 is_meal_expense=True,
                 meal_headcount=head,
@@ -323,7 +322,7 @@ def seed(demo: bool = False) -> None:
                 subsidy_amount=settlement.subsidy_amount,
                 personal_burden_amount=settlement.personal_burden_amount,
             )
-            entry.receipts.append(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
+            entry.attach_receipt(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
             db.add(entry)
 
         # 지출 — 일반
@@ -344,7 +343,7 @@ def seed(demo: bool = False) -> None:
                 paid_date=date + dt.timedelta(days=2) if paid else None,
                 subsidy_amount=amount,
             )
-            entry.receipts.append(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
+            entry.attach_receipt(ExpenseReceipt(number=receipt_no, memo="결산 파일에 별첨"))
             db.add(entry)
 
         # 작업 파일 (실제로 열리는 파일을 만들어 둔다)

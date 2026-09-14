@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import BudgetCategory, ExpenseEntry, IncomeItem, Retreat
+from app.models import BudgetCategory, ExpenseEntry, ExpenseReceipt, IncomeItem, Retreat
 
 # 시트의 지출자 표기 그대로 — 이 이름이면 수련회 돈으로 바로 나간 것이라
 # 환급할 사람이 없다. 개인 이름이면 그 사람에게 돌려줘야 한다 (7-4).
@@ -261,7 +261,7 @@ def is_unpaid_refund(entry: ExpenseEntry) -> bool:
 def has_no_receipt(entry: ExpenseEntry) -> bool:
     """영수증이 한 건도 안 붙은 지출 — 결산 홈의 「영수증 없는 지출」 (4-15).
 
-    기준은 ExpenseReceipt 0건이다. 옛 receipt_file_url 이 아니다 — 그 컬럼은
+    기준은 **걸린 영수증 0건**(끊기지 않은 잇기 줄 · 2026-09-14)이다. 옛 receipt_file_url 이 아니다 — 그 컬럼은
     남기되 읽지 않는다 (7-4). 취소된 지출은 세지 않는다 — 결산에 안 들어갈
     행의 영수증을 챙기라는 경고는 잡음이다.
     """
@@ -348,9 +348,8 @@ def refund_sheet(entries: list[ExpenseEntry]) -> RefundSheet:
 
 
 def next_receipt_number(db: Session, retreat: Retreat) -> int:
-    """다음 영수증 번호 — 회차 안에서 자동 증가 (7-4)."""
-    from app.models import ExpenseReceipt
-
+    """다음 영수증 번호 — 회차 안에서 자동 증가 (7-4). 뗀 영수증도 센다 —
+    회차는 처음 붙은 지출(expense_id)에서 알고, 번호는 영수증마다 하나다."""
     current = db.scalar(
         select(ExpenseReceipt.number)
         .join(ExpenseEntry, ExpenseEntry.id == ExpenseReceipt.expense_id)
@@ -358,6 +357,31 @@ def next_receipt_number(db: Session, retreat: Retreat) -> int:
         .order_by(ExpenseReceipt.number.desc())
     )
     return (current or 0) + 1
+
+
+def receipt_has_links(db: Session, receipt: ExpenseReceipt) -> bool:
+    """잇기 줄이 하나라도 있었는가(끊긴 것도) — 없으면 잇기 표 전의 영수증이다 (7-4)."""
+    from app.models import ExpenseReceiptLink
+
+    return db.scalar(select(ExpenseReceiptLink.id)
+                     .where(ExpenseReceiptLink.receipt_id == receipt.id).limit(1)) is not None
+
+
+def unlinked_receipt_count(db: Session, retreat: Retreat) -> int:
+    """이 회차에서 **한 번도 이어진 적 없는** 영수증 수 (7-4 · 2026-09-14 차례 4).
+
+    잇기 표가 생기기 전의 영수증이다 — scripts/영수증잇기옮기기.py 를 돌리기 전에는
+    어느 지출에도 안 보인다. 뗀 영수증은 잇기 줄이 남아 있어 여기 안 든다.
+    """
+    from app.models import ExpenseReceiptLink
+
+    return db.scalar(
+        select(func.count()).select_from(ExpenseReceipt)
+        .join(ExpenseEntry, ExpenseEntry.id == ExpenseReceipt.expense_id)
+        .where(ExpenseEntry.retreat_id == retreat.id,
+               ~select(ExpenseReceiptLink.id)
+               .where(ExpenseReceiptLink.receipt_id == ExpenseReceipt.id).exists())
+    ) or 0
 
 
 def expense_stats(db: Session, retreat_id: int) -> tuple[int, int]:
@@ -380,7 +404,7 @@ def entries_of(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
         db.scalars(
             select(ExpenseEntry)
             .where(ExpenseEntry.retreat_id == retreat.id)
-            .options(selectinload(ExpenseEntry.receipts))
+            .options(selectinload(ExpenseEntry.receipts).selectinload(ExpenseReceipt.expenses))
             .order_by(ExpenseEntry.id)
         )
     )

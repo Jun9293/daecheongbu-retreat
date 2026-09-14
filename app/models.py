@@ -140,7 +140,15 @@ class User(Base):
     # 옛 `department_id` 칸은 2026-09-10 에 그 표로 옮기고 지웠다
     # (`scripts/부서옮기기.py`).
     role: Mapped[str] = mapped_column(String(20), default="general")
-    bank_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 옛 계좌 한 칸 — 남기되 **읽지도 쓰지도 않는다** (7-4 · 2026-09-14 차례 4).
+    # 옛 값은 옮기지 않는다(사람이 정한 다-ㄷ · 전부 자리표시자였다). 칸을 언제
+    # 걷을지는 사람이 정한다. 속성 이름을 바꿔 구조로 막는다(_legacy_receipt_number 와 같다)
+    _legacy_bank_account: Mapped[str | None] = mapped_column(
+        "bank_account", String(100), nullable=True)
+    # 계좌 셋 — 부팅이 NULL 로 붙인다(11-2). 비어 있으면 안 받은 것이다
+    bank_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    account_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    account_holder: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
     # 이 계정으로 **처음 화면을 연 때** (4-16). 계정을 만든 때(created_at)와
@@ -298,7 +306,7 @@ class ExpenseEntry(Base):
     level3c: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # 옛 컬럼 — 남기되 **읽지 않는다** (7-4). 영수증은 ExpenseReceipt 가
-    # 유일한 출처다 (지출 1건에 N개). 앱이 뜰 때 한 번 옮긴다(db._move_receipts).
+    # 출처다(걸린 곳은 잇기 표 — 2026-09-14). 앱이 뜰 때 한 번 옮긴다(db._move_receipts).
     # 속성 이름을 바꿔 구조로 막는다 — 옛 이름으로 읽으면 AttributeError 다
     # (단계 3 의 _legacy_run_id 와 같은 방식).
     _legacy_receipt_number: Mapped[int | None] = mapped_column(
@@ -314,7 +322,13 @@ class ExpenseEntry(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     payer_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    payer_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # 옛 계좌 한 칸 — 남기되 **읽지도 쓰지도 않는다** (User._legacy_bank_account 와 같다)
+    _legacy_payer_account: Mapped[str | None] = mapped_column(
+        "payer_account", String(100), nullable=True)
+    # 계좌 셋 (7-4) — 부팅이 NULL 로 붙인다(11-2). 보일지는 permissions.can_see_account 하나
+    payer_bank: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    payer_account_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    payer_account_holder: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     paid: Mapped[bool] = mapped_column(Boolean, default=False)
     paid_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
@@ -340,10 +354,28 @@ class ExpenseEntry(Base):
     retreat: Mapped[Retreat] = relationship(back_populates="expenses")
     budget_category: Mapped[BudgetCategory | None] = relationship(back_populates="expenses")
     department: Mapped[Department | None] = relationship()
-    receipts: Mapped[list[ExpenseReceipt]] = relationship(
+    # 잇기 줄 전부(끊긴 것도) — 쓰는 쪽. 읽는 쪽은 아래 receipts
+    receipt_links: Mapped[list[ExpenseReceiptLink]] = relationship(
         back_populates="expense", cascade="all, delete-orphan",
-        order_by="ExpenseReceipt.number",
     )
+    # **지금 걸린 영수증** — 잇기 표(끊기지 않은 줄)가 유일한 출처다 (7-4).
+    # 읽기만 한다. 붙이는 것은 attach_receipt 로
+    receipts: Mapped[list[ExpenseReceipt]] = relationship(
+        secondary="expense_receipt_links",
+        primaryjoin="and_(ExpenseEntry.id == ExpenseReceiptLink.expense_id,"
+                    " ExpenseReceiptLink.detached_at.is_(None))",
+        secondaryjoin="ExpenseReceipt.id == ExpenseReceiptLink.receipt_id",
+        order_by="ExpenseReceipt.number",
+        viewonly=True,
+    )
+
+    def attach_receipt(self, receipt: ExpenseReceipt) -> ExpenseReceiptLink:
+        """영수증을 이 지출에 잇는다. 새 영수증이면 이 지출이 처음 붙은 지출이 된다."""
+        if receipt.expense_id is None and receipt.expense is None:
+            receipt.expense = self
+        link = ExpenseReceiptLink(receipt=receipt)
+        self.receipt_links.append(link)
+        return link
 
     @property
     def settlement_amount(self) -> int:
@@ -355,21 +387,62 @@ class ExpenseEntry(Base):
 
 
 class ExpenseReceipt(Base):
-    """영수증 — 지출 1건에 N개 (7-4). 파일일 수도, 「결산 파일에 별첨」 같은
-    메모일 수도 있다. 번호는 회차 안에서 자동 증가한다."""
+    """영수증 — 종이 한 장이 한 행이다 (7-4). 파일일 수도, 「결산 파일에 별첨」
+    같은 메모일 수도 있다. 번호는 회차 안에서 자동 증가하고 **영수증마다 하나**다.
+
+    **어느 지출에 걸렸는가는 잇기 표(ExpenseReceiptLink)가 정한다** — 한 장에
+    지출 여럿이 걸릴 수 있다(사람이 정한 시트-가 ㄷ). 금액은 지출마다 있고
+    영수증에 총액을 두지 않는다.
+    """
 
     __tablename__ = "expense_receipts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # **처음 붙은 지출** — 걸린 곳이 아니다(걸린 곳은 잇기 표). 회차를 여기서
+    # 알고(번호가 회차 안에서 매겨진다), 잇기 표로 옮기는 스크립트가 이 값을 읽는다.
+    # 떼어도 안 바뀐다 — 그때 어디서 만들어졌는지는 사실이다
     expense_id: Mapped[int] = mapped_column(
         ForeignKey("expense_entries.id", ondelete="CASCADE")
     )
     number: Mapped[int] = mapped_column(Integer)
+    # 사람이 매긴 원본 번호 (시트의 영수증번호 · 사람이 정한 마-ㄷ). 자동 번호와 따로다.
+    # **회차 안에서 겹칠 수 있다** — 열쇠는 자동 번호다. 글자다(적힌 그대로).
+    # 부팅이 NULL 로 붙인다 — 앱에서 새로 만든 영수증은 비어 있다
+    original_no: Mapped[str | None] = mapped_column(String(40), nullable=True)
     stored_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     original_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     memo: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
-    expense: Mapped[ExpenseEntry] = relationship(back_populates="receipts")
+    expense: Mapped[ExpenseEntry] = relationship(foreign_keys=[expense_id])
+    # 지금 걸린 지출 — 읽기만 한다
+    expenses: Mapped[list[ExpenseEntry]] = relationship(
+        secondary="expense_receipt_links",
+        primaryjoin="and_(ExpenseReceipt.id == ExpenseReceiptLink.receipt_id,"
+                    " ExpenseReceiptLink.detached_at.is_(None))",
+        secondaryjoin="ExpenseEntry.id == ExpenseReceiptLink.expense_id",
+        viewonly=True,
+    )
+
+
+class ExpenseReceiptLink(Base):
+    """영수증 한 장과 지출 하나를 잇는 줄 (7-4 · 2026-09-14 차례 4).
+
+    **떼는 것은 지우는 것이 아니다** — detached_at 을 찍는다. 영수증 행은 남고,
+    잘못 붙였다가 뗀 사실도 남는다 (0장). 다시 이으면 새 줄이 선다.
+    """
+
+    __tablename__ = "expense_receipt_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    receipt_id: Mapped[int] = mapped_column(
+        ForeignKey("expense_receipts.id", ondelete="CASCADE"), index=True)
+    expense_id: Mapped[int] = mapped_column(
+        ForeignKey("expense_entries.id", ondelete="CASCADE"), index=True)
+    attached_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    detached_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    receipt: Mapped[ExpenseReceipt] = relationship()
+    expense: Mapped[ExpenseEntry] = relationship(back_populates="receipt_links")
 
 
 class IncomeItem(Base):

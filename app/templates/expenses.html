@@ -80,7 +80,13 @@
             <input id="e-payer" name="payer_name" value="{{ meal_defaults.payer_name }}" placeholder="이름 또는 수련회계좌">
             <button type="button" class="sbtn" id="payer-fill" data-value="수련회계좌">수련회계좌</button>
           </span></label>
-        <label>지출자 계좌 <input name="payer_account" value="{{ meal_defaults.payer_account }}" placeholder="예: 국민 123456-01-123456"></label>
+      </div>
+      {# 계좌는 셋으로 받는다 (7-4 · 사람이 정한 시트-라 ㄱ). 한 칸에 뭉치면 은행과
+         번호와 예금주를 사람이 매번 다시 가른다 #}
+      <div class="frow3">
+        <label>은행 <input name="payer_bank" value="{{ meal_defaults.payer_bank }}" placeholder="예: 국민"></label>
+        <label>계좌번호 <input name="payer_account_number" value="{{ meal_defaults.payer_account_number }}" inputmode="numeric" placeholder="적힌 그대로"></label>
+        <label>예금주 <input name="payer_account_holder" value="{{ meal_defaults.payer_account_holder }}" placeholder="비우면 비워 둡니다"></label>
       </div>
 
       <label>비고 <input name="note" placeholder="추가 메모 (인원·명단은 위 전용 칸에)"></label>
@@ -89,6 +95,7 @@
         <label>영수증 파일 (이미지·PDF) <input name="receipt" type="file" accept="image/*,.pdf"></label>
         <label>영수증 메모 <input name="receipt_memo" placeholder="예: 결산 파일에 별첨"></label>
       </div>
+      <label>원본 영수증 번호 <input name="receipt_original_no" placeholder="시트에서 쓰던 번호 · 없으면 비움"></label>
       <label class="mealtoggle"><input type="checkbox" name="paid" value="1"> 이미 지급 완료</label>
 
       <div class="formfoot">
@@ -98,6 +105,10 @@
     </form>
   </details>
   {% endif %}
+
+  {# 잇기 표가 생기기 전의 영수증 — 스크립트를 돌리기 전에는 어느 지출에도 안 보인다.
+     0 이면 안 그린다 #}
+  {% if unlinked_receipts %}<p class="mealnote warn">아직 지출에 이어지지 않은 영수증이 {{ unlinked_receipts }}장 있습니다 — 총무팀이 옛 영수증을 원래 지출에 이으면 보입니다. 그 전에는 같은 영수증을 새로 붙이지 마세요.</p>{% endif %}
 
   {# 예산 라인별 그룹 — 헤더의 예산/집행/잔액은 예산 페이지와 같은 summary 값 (7-4) #}
   {% for group in groups %}
@@ -132,16 +143,31 @@
                 {% if e.is_meal_expense %}<span class="mealchip">{{ e.meal_headcount or 0 }}명</span>{% endif %}
                 {% if e.canceled_at %}<span class="cancelchip">취소됨</span>{% endif %}</div>
               {% if e.note %}<div class="dim enote">{{ e.note }}</div>{% endif %}
+              {# 원본 번호는 **있을 때만** 붙는다 — 앱에서 새로 만든 영수증은 비어 있다.
+                 한 장이 지출 여럿에 걸렸으면 몇 건인지 말한다 — 금액은 지출마다라
+                 영수증 금액과 지출 금액이 어긋나 보일 수 있다 #}
+              {% set can_edit = can_edit_dept(user, e.department) %}
               {% for r in e.receipts %}
-                {% if r.stored_name %}<a class="rcpt" href="/uploads/{{ r.stored_name }}" target="_blank">영수증 {{ r.number }}</a>
-                {% elif r.memo %}<span class="rcpt memo">영수증 {{ r.number }} · {{ r.memo }}</span>{% endif %}
+              <span class="rcptwrap">
+                {% set label %}영수증 {{ r.number }}{% if r.original_no %} · 원본 {{ r.original_no }}{% endif %}{% if r.expenses|length > 1 %} · 지출 {{ r.expenses|length }}건{% endif %}{% endset %}
+                {% if r.stored_name %}<a class="rcpt" href="/uploads/{{ r.stored_name }}" target="_blank">{{ label }}</a>
+                {% else %}<span class="rcpt memo">{{ label }}{% if r.memo %} · {{ r.memo }}{% endif %}</span>{% endif %}
+                {% if can_edit %}<form method="post" action="/expenses/{{ e.id }}/receipts/{{ r.id }}/detach" class="rcptdetach"
+                      onsubmit="return confirm('영수증 {{ r.number }}번을 이 지출에서 뗄까요? 영수증은 남습니다.')"><button type="submit" title="이 지출에서 떼기 — 영수증은 남습니다">떼기</button></form>{% endif %}
+              </span>
               {% endfor %}
-              {% if can_edit_dept(user, e.department) %}
+              {% if can_edit %}
               <details class="rowedit"><summary>영수증 붙이기</summary>
                 <form method="post" action="/expenses/{{ e.id }}/receipts" enctype="multipart/form-data" class="editform">
                   <input name="receipt" type="file" accept="image/*,.pdf">
                   <input name="memo" placeholder="또는 메모 (예: 결산 파일에 별첨)">
-                  <button class="sbtn" type="submit">붙이기</button>
+                  <input name="original_no" placeholder="원본 번호 (없으면 비움)">
+                  <button class="sbtn" type="submit">새 영수증 붙이기</button>
+                </form>
+                {# 종이 한 장에 지출이 여럿이면 새 번호를 주지 않고 **이미 있는 번호에 잇는다** #}
+                <form method="post" action="/expenses/{{ e.id }}/receipts/link" class="editform">
+                  <input name="number" type="number" min="1" required placeholder="이미 있는 영수증 번호">
+                  <button class="sbtn" type="submit">번호로 잇기</button>
                 </form>
               </details>
               {% endif %}
@@ -158,7 +184,11 @@
                 **빈 칸을 두지 않고 줄 자체를 안 그립니다**: 자리만 남기면
                 「무엇이 가려져 있다」 가 보이고, 그것도 알 필요 없는 사실입니다.
               #}
-              {% if 계좌를_본다(user) and e.payer_account %}<div class="dim enote">{{ e.payer_account }}</div>{% endif %}</td>
+              {% if 계좌를_본다(user) and (e.payer_bank or e.payer_account_number or e.payer_account_holder) %}<div class="dim enote acct">
+                {%- if e.payer_bank %}<span class="acct-bank">{{ e.payer_bank }}</span> {% endif -%}
+                {%- if e.payer_account_number %}<span class="acct-no">{{ e.payer_account_number }}</span> {% endif -%}
+                {%- if e.payer_account_holder %}<span class="acct-holder">예금주 {{ e.payer_account_holder }}</span>{% endif -%}
+              </div>{% endif %}</td>
             <td>
               {# 취소된 행에는 지급 토글을 내지 않는다 (7-4) — 합계에 안 끼는
                  행의 지급을 누르는 것은 뜻 없는 조작이다. 상태는 배지로만 #}
