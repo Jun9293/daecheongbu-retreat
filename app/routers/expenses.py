@@ -22,6 +22,7 @@ from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
 from app.domain.budget import (
     FILTERS,
+    account_problem,
     build_budget_summary,
     entries_of,
     filter_entries,
@@ -295,6 +296,7 @@ def create_expense(
         raise HTTPException(status_code=400, detail="금액은 0원 이상이어야 합니다.")
 
     category = _category_or_none(db, retreat, budget_category_id)
+    _계좌꼴(payer_bank, payer_account_number, payer_account_holder)
 
     is_meal = bool(is_meal_expense)
     headcount = _headcount(meal_headcount) if is_meal else None
@@ -345,6 +347,13 @@ def create_expense(
     if is_meal:
         message = f"식대 등록 완료 — 지원금액 {subsidy:,}원 / 개인부담 {burden:,}원"
     return redirect(f"/expenses?retreat_id={retreat.id}", message=message)
+
+
+def _계좌꼴(bank: str, number: str, holder: str) -> None:
+    """계좌 셋의 꼴 — 판정은 budget.account_problem 하나(봐둘것 BB-c). 걸리면 400 과 그 까닭."""
+    문제 = account_problem(bank, number, holder)
+    if 문제:
+        raise HTTPException(status_code=400, detail=문제)
 
 
 def _category_or_none(db: Session, retreat: Retreat, raw: str) -> BudgetCategory | None:
@@ -462,6 +471,9 @@ def update_expense(
         # 계좌를 잃고, 그대로 두면 지출자와 계좌가 어긋난 채 그 화면에 안 보이고 남는다. 막는 쪽이 안 잃는다
         if 새값["payer_name"] != ((entry.payer_name or "").strip() or None):
             raise HTTPException(status_code=400, detail="계좌가 적힌 지출의 지출자는 총무팀이 계좌와 함께 고칩니다.")
+    # 계좌를 바꿀 때만 꼴을 본다 — 게이트 전에 들어간 옛 값이 비고 하나 고치는 길을 막지 않게
+    if any(칸 in 새값 and 새값[칸] != getattr(entry, 칸) for 칸 in _계좌칸):
+        _계좌꼴(*(새값[칸] for 칸 in _계좌칸))
     전, 후 = _바뀐것(entry, 새값)
     if not 후:
         return redirect(f"/expenses?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")

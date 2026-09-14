@@ -75,12 +75,12 @@ def _시트(경로: pathlib.Path, *, 둘째판: bool = False) -> None:
     날 = dt.date(2026, 8, 1)
     지출 = [  # 줄, 구분, 항목, 세부1, 세부3, 번호, 금액, 지원(값 또는 식), 비고, 지급, 지출자, 계좌, 초록
         (2, "그 외", "준비지원", "모임 식사비", "헤브론 모임", 1, 130600, f"={상한}*12", "12명 가명들", True, 지어낸이름, 지어낸계좌, False),
-        (3, None, None, "모임 식사비", "코람데오 모임", 1, 50000, 40000, "5명 가명들", False, 지어낸이름, 지어낸계좌, False),
-        (4, None, None, "모임 식사비", "총무팀 모임", "2, 3", 30000, 30000, "3명과 4명", False, "수련회계좌", None, False),
+        (3, None, None, "모임 식사비", "코람데오 모임", 1, 50000, 45000, "5명 가명들", False, 지어낸이름, 지어낸계좌, False),  # 손 셈이 앱 셈과 다름
+        (4, None, None, "모임 식사비", "총무팀 모임", "2, 3, 3", 30000, 30000, "3명과 4명", False, "수련회계좌", None, False),
         (5, None, None, "간식", None, None, 20000, 20000, None, True, "수련회계좌", None, True),
         (6, "홍보", "포스터", "인쇄", None, 4, 10000, 10000, "비고 글", False, 지어낸이름, "빈칸없는번호", False),
         (7, None, None, "없는세부", None, "결산 영수증 파일에 따로 첨부", 5000, 5000, None, False, 지어낸이름, None, False),
-        (8, "교통", "버스대여", None, None, None, 7000, 7000, None, False, 지어낸이름, None, False),
+        (8, "교통", "버스대여", None, None, None, 7000, 7000, None, False, 지어낸이름, "지어낸은행 999-00가-1111", False),  # 꼴에 걸림
     ]
     for r, 구분, 항목, 세부1, 세부3, 번호, 금액, 지원, 비고, 지급, 지출자, 계좌, 초록 in 지출:
         for c, v in ((1, 구분), (2, 항목), (4, 세부1), (6, 세부3), (10, 번호), (11, 날), (12, 금액), (13, 지원),
@@ -172,8 +172,12 @@ def test48_b01_지출과_식대_인원(판):
         assert all(e.note is None for e in 산.values()), "비고는 안 들인다"
         # 지급여부·지급일 그대로
         assert 식.paid and 식.paid_date == dt.date(2026, 8, 1) and not 비고.paid and 비고.paid_date is None
-    # 식만 저장된 파일에서도 곱셈 식의 값을 센다 — 시트와 같으면 「다름」 에 안 든다
-    assert 계획.수["지출 · 식대 · 앱이 다시 센 지원금액이 시트와 다름"] == 0
+    # 식만 저장된 파일에서도 곱셈 식의 값을 센다 — 시트와 같으면(2줄) 「다름」 에 안 들고,
+    # 손 셈이 앱 셈과 다른 줄(3줄)만 세어 짝 표 「식대」 에 줄 번호가 남는다
+    assert 계획.수["지출 · 식대 · 앱이 다시 센 지원금액이 시트와 다름"] == 1
+    assert [r for r, _, _ in 계획.짝["식대"]] == [3]
+    md = (pathlib.Path(config.DATA_DIR) / "재정짝표.real.md").read_text(encoding="utf-8")
+    assert "## 식대 — 1건" in md
 
 
 # ── 다) 계좌 셋 — split_account 를 실제로 부른다 ──
@@ -188,11 +192,30 @@ def test48_c01_계좌는_split_account_로(판, monkeypatch):
     with app_session() as db:
         e = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 130600)).one()
         assert (e.payer_bank, e.payer_account_number, e.payer_account_holder) == ("지어낸은행", "999-0000-1111", 지어낸이름)
-        빈칸없음 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 10000)).one()
-        assert 빈칸없음.payer_bank is None and 빈칸없음.payer_account_number == "빈칸없는번호"
         계좌없음 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 20000)).one()
         assert (계좌없음.payer_bank, 계좌없음.payer_account_number, 계좌없음.payer_account_holder) == (None, None, None)
     assert 계획.수["지출 · 계좌 끝 빈칸 뗌"] >= 1
+
+
+def test48_c03_꼴에_걸린_계좌는_빼고_들이고_짝_표에(판):
+    """게이트(budget.account_problem · 봐둘것 BB-c)에 걸린 줄은 계좌 없이 들어가고 짝 표에 남는다 — 전체는 안 멈춘다."""
+    계획 = _돌린다(판, True)
+    걸린줄 = {r for r, _, _ in 계획.짝["계좌"]}
+    assert 걸린줄 == {6, 8}, "은행 없는 번호(6)와 글자 섞인 번호(8)가 걸려야 한다"
+    assert 계획.수["지출 · 계좌 꼴에 걸려 계좌 없이 들임"] == len(걸린줄)
+    with app_session() as db:
+        산 = {e.amount: e for e in db.scalars(select(models.ExpenseEntry).where(
+            models.ExpenseEntry.retreat_id == 판["retreat"], models.ExpenseEntry.canceled_at.is_(None)))}
+        assert len(산) == 계획.수["지출"], "게이트에 걸렸다고 지출이 빠지면 안 된다"
+        for 금액 in (10000, 7000):
+            e = 산[금액]
+            assert (e.payer_bank, e.payer_account_number, e.payer_account_holder) == (None, None, None)
+        # 게이트를 지난 계좌는 그대로 들어간다
+        assert 산[130600].payer_account_number == "999-0000-1111"
+        계좌든 = sum(1 for e in 산.values() if e.payer_account_number)
+        assert 계좌든 == 계획.수["지출 · 계좌 셋으로 가름"] - len(걸린줄)
+    md = (pathlib.Path(config.DATA_DIR) / "재정짝표.real.md").read_text(encoding="utf-8")
+    assert f"## 계좌 — {len(걸린줄)}건" in md and "999-00가" not in md, "짝 표에 까닭만 — 값은 안 적는다"
 
 
 def test48_c02_스크립트가_계좌를_스스로_가르지_않는다():
@@ -216,7 +239,11 @@ def test48_d01_영수증과_잇기(판):
         assert sorted(e.amount for e in 원본["1"].expenses) == [50000, 130600]
         # 한 칸에 번호 둘 — 영수증 둘이 한 지출에
         e30 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 30000)).one()
-        assert sorted(r.original_no for r in e30.receipts) == ["2", "3"]
+        assert sorted(r.original_no for r in e30.receipts) == ["2", "3"], "한 칸에 같은 번호가 두 번이면 한 번만 잇는다"
+        assert 계획.수["지출 · 번호 둘 이상 적힌 줄"] == 1
+        # 관계(receipts)는 같은 행을 한 번만 돌려주므로 잇기 줄을 직접 센다 — 겹친 번호가 줄 둘을 세우는지
+        assert db.scalar(select(func.count()).select_from(models.ExpenseReceiptLink).where(
+            models.ExpenseReceiptLink.expense_id == e30.id)) == 2
         # 초록 칸(번호 없음)과 번호 대신 글 — 원본 번호 없는 메모 영수증
         for 금액 in (20000, 5000):
             e = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 금액)).one()

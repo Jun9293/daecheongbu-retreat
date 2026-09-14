@@ -22,7 +22,7 @@ from app.push import application_server_key as push_key
 from app.deps import all_retreats, get_current_retreat, log_activity, remember_retreat
 from app.domain import board as board_domain
 from app.domain import dweek
-from app.domain.budget import build_budget_summary, expense_stats
+from app.domain.budget import account_problem, build_budget_summary, expense_stats
 from app.domain.clone import clone_retreat
 from app.domain.period import is_over
 from app.models import (
@@ -570,6 +570,12 @@ def update_me(
             "account_number": account_number.strip() or None,
             "account_holder": account_holder.strip() or None}
     바뀐칸 = [칸 for 칸, 값 in 새값.items() if getattr(user, 칸) != 값]
+    # 계좌를 바꿀 때만 꼴을 본다 — 판정은 budget.account_problem 하나(봐둘것 BB-c)
+    계좌칸 = ("bank_name", "account_number", "account_holder")
+    if any(칸 in 바뀐칸 for 칸 in 계좌칸):
+        문제 = account_problem(*(새값[칸] for 칸 in 계좌칸))
+        if 문제:
+            raise HTTPException(status_code=400, detail=문제)
     for 칸 in 바뀐칸:
         setattr(user, 칸, 새값[칸])
     db.commit()

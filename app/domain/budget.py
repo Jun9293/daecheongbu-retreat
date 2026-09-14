@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app import account_shape
 from app.models import BudgetCategory, ExpenseEntry, ExpenseReceipt, IncomeItem, Retreat
 
 # 시트의 지출자 표기 그대로 — 이 이름이면 수련회 돈으로 바로 나간 것이라
@@ -69,6 +70,30 @@ def split_account(raw: str | None, payer_name: str | None = None) -> tuple[str |
     if not number.strip():
         return None, bank, holder
     return bank, number.strip(), holder
+
+
+def account_problem(bank: str | None, number: str | None, holder: str | None) -> str | None:
+    """계좌 셋이 DB 에 들어가도 되는 꼴인가 — 안 되면 까닭, 되면 None (봐둘것 BB-c · 2026-09-14).
+
+    **계좌 칸에 값을 넣는 자리는 전부 이것을 지난다** — 지출 등록 · 지출 고치기 · 내 정보 ·
+    시트 들여오기. 막는 것: 번호가 있는데 은행이 빈 것 · 번호에 숫자와 하이픈 말고 다른 글자
+    (앞뒤·연속 하이픈 포함) · 숫자가 너무 적거나 많은 것 · 숫자만인 은행 · 지나치게 긴 은행·예금주.
+    **셋 다 빈 것과 은행·예금주만 있는 것은 통과다** — 계좌를 안 적은 것이지 틀린 것이 아니다.
+    꼴의 경계는 `app/account_shape.py` 에 있고, 시트의 계좌 64 줄이 전부 지나는 것에서 정했다.
+    """
+    bank, number, holder = ((v or "").strip() for v in (bank, number, holder))
+    if number:
+        if not bank:
+            return "계좌번호가 있으면 은행도 적어주세요."
+        if not account_shape.칸꼴.fullmatch(number):
+            return "계좌번호는 숫자와 하이픈(-)만 적어주세요."
+        if not account_shape.숫자_최소 <= account_shape.숫자수(number) <= account_shape.숫자_최대:
+            return f"계좌번호의 숫자는 {account_shape.숫자_최소}~{account_shape.숫자_최대}개여야 합니다."
+    if bank and (len(bank) > 20 or not any(ch.isalpha() for ch in bank)):
+        return "은행 이름을 확인해주세요."
+    if len(holder) > 30:
+        return "예금주 이름이 너무 깁니다."
+    return None
 
 
 def account_tail(number: str | None) -> str:

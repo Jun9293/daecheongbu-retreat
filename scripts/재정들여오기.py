@@ -9,7 +9,7 @@
 | 같은 탭의 수입 묶음 | `IncomeItem` | 시트-사 ㄱ(수입 줄만 · 납부내역은 안 들임) |
 | 「지출 상세내역」 의 금액 있는 줄 | `ExpenseEntry` | 취소한 지출은 없다 — 전부 실제로 나간 돈 |
 | 지출 → 예산 항목 | `budget_category_id` | 시트-나 ㄱ(글자로 · 못 이은 줄은 짝 표) |
-| 지출자 계좌 | 계좌 셋 | 시트-라 ㄱ — `budget.split_account` 를 부른다(규칙을 여기 다시 적지 않는다) |
+| 지출자 계좌 | 계좌 셋 | 시트-라 ㄱ — `budget.split_account` 로 가르고 `budget.account_problem` 을 지난 것만 넣는다(규칙을 여기 다시 적지 않는다 · 걸리면 계좌 없이 들이고 짝 표에) |
 | 식대 줄 | 인원 · 지원금액 | 시트-다 ㄴ — 인원은 식에서, 없으면 비고의 「숫자 + 명」 에서. 비고는 **숫자만** 읽는다 |
 | 영수증번호 | `ExpenseReceipt.original_no` + 잇기 표 | 시트-가 ㄷ · 마-ㄷ — 한 칸에 번호 둘이면 영수증 둘, 같은 번호는 한 장에 여러 지출 |
 | 영수증 그림 | 안 들인다 | 시트-아 ㄱ |
@@ -70,7 +70,7 @@ from sqlalchemy.orm import Session                                   # noqa: E40
 
 from app import config                                               # noqa: E402
 from app.db import SessionLocal                                      # noqa: E402
-from app.domain.budget import next_receipt_number, split_account     # noqa: E402
+from app.domain.budget import account_problem, next_receipt_number, split_account  # noqa: E402
 from app.domain.meal import calculate_meal_settlement                # noqa: E402
 from app.models import (                                             # noqa: E402
     ActivityLog, BudgetCategory, Department, ExpenseEntry, ExpenseReceipt, ExpenseReceiptLink, IncomeItem,
@@ -331,7 +331,7 @@ def 고른다(db: Session, retreat: Retreat, 판: 시트, 짝표: dict) -> 계�
         raise 멈춤("이미 들여왔습니다 — 이 회차에는 재정을 들여온 기록이 있습니다. 같은 시트를 두 번 들이지 않습니다.\n"
                   "  다시 들이려면 들여오기 직전 사본으로 되돌린 뒤 돌리세요(docs/배포-안내.md 12장 · CLAUDE.md 11-2).")
     수 = Counter()
-    짝 = {"예산": [], "부서": [], "영수증": [], "식대": []}
+    짝 = {"예산": [], "부서": [], "영수증": [], "식대": [], "계좌": []}
     상한 = retreat.meal_subsidy_per_person
 
     수["seed 예산 항목 취소"] = len(취소할예산 := list(db.scalars(select(BudgetCategory.id).where(
@@ -403,6 +403,12 @@ def 고른다(db: Session, retreat: Retreat, 판: 시트, 짝표: dict) -> 계�
             수["지출 · 계좌 셋으로 가름"] += 1
             수["지출 · 계좌 끝 빈칸 뗌"] += 원 != 원.rstrip()
             수["지출 · 계좌에 빈칸이 없어 은행 비움"] += e["은행"] is None
+            # 꼴 게이트 (봐둘것 BB-c) — 걸린 줄은 멈추지 않고 계좌 없이 들이고 짝 표에 남긴다
+            문제 = account_problem(e["은행"], e["계좌번호"], e["예금주"])
+            if 문제:
+                수["지출 · 계좌 꼴에 걸려 계좌 없이 들임"] += 1
+                짝["계좌"].append((e["줄"], 문제, None))
+                e["은행"] = e["계좌번호"] = e["예금주"] = None
         else:
             e["은행"] = e["계좌번호"] = e["예금주"] = None
 
@@ -571,7 +577,7 @@ def 돌린다(db: Session, 경로: pathlib.Path, 회차id: int | None, 실행: b
     짝표쓰기(pathlib.Path(config.DATA_DIR) / "재정짝표.real.md", 판)
     print("들일 것(건수만):")
     미리보기찍기(판.수)
-    print(f"  짝 표: data/재정짝표.real.md (예산 {len(판.짝['예산'])} · 부서 {len(판.짝['부서'])} · 영수증 {len(판.짝['영수증'])} · 식대 {len(판.짝['식대'])})")
+    print(f"  짝 표: data/재정짝표.real.md (예산 {len(판.짝['예산'])} · 부서 {len(판.짝['부서'])} · 영수증 {len(판.짝['영수증'])} · 식대 {len(판.짝['식대'])} · 계좌 {len(판.짝['계좌'])})")
     if not 실행:
         print("바꾸지 않았습니다. 실제로 들이려면 --실행 을 붙이세요.")
         return 판

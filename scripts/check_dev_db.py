@@ -119,6 +119,17 @@ _스펙.loader.exec_module(_anon)
 
 _글자형 = ("CHAR", "TEXT", "CLOB", "JSON")
 
+# **계좌 꼴도 본다** (봐둘것 BB-c · 2026-09-14) — 대응표에 계좌가 없어 이름·연락처 대조로는 못 잡는다.
+# 꼴은 `app/account_shape.py` 하나(입력 게이트 `budget.account_problem` 과 같은 것). 앱을 읽으면 폴더와
+# 서명키가 생기므로 그 파일만 경로로 읽는다. 휴대폰 꼴과 999 로 시작하는 지어낸 번호는 뺀다
+_꼴스펙 = importlib.util.spec_from_file_location("_account_shape_for_devdb", ROOT / "app" / "account_shape.py")
+_꼴 = importlib.util.module_from_spec(_꼴스펙)
+_꼴스펙.loader.exec_module(_꼴)
+
+
+def 계좌꼴인가(글: str) -> bool:
+    return any(_꼴.계좌로보이나(m.group()) for m in _꼴.글속꼴.finditer(글))
+
 
 def 볼칸들(con: sqlite3.Connection) -> list[tuple[str, str]]:
     """이 DB 의 글자 칸 전부에서 제외칸을 뺀 것."""
@@ -136,15 +147,16 @@ def 볼칸들(con: sqlite3.Connection) -> list[tuple[str, str]]:
 
 def 실명이있나(db_path: pathlib.Path) -> dict:
     """{칸 이름: 걸린 수}. 비면 깨끗한 것이다. 이름은 담지 않는다."""
-    if not _anon.MAP_PATH.exists():
-        return {}          # 대응표가 없는 컴퓨터 — 대조할 실명이 없다
-
-    # 대응표가 깨졌으면(load_map 의 SystemExit) **그대로 멈춘다** —
-    # 삼키면 게이트가 조용히 꺼진 채 통과한다 (fail-open). 빈 목록도
-    # 통과가 아니다 — 센 것이 0이면 성공이 아니라 실패다 (11-3)
-    names, phones, _장소 = _anon.load_map()
-    if not names:
-        raise SystemExit("대응표가 비어 있습니다 — 0개를 보는 검사는 통과가 아닙니다 (11-3)")
+    # 대응표가 없는 컴퓨터는 대조할 실명이 없다 — **그래도 계좌 꼴은 본다**(대응표와 상관없는 검사다)
+    if _anon.MAP_PATH.exists():
+        # 대응표가 깨졌으면(load_map 의 SystemExit) **그대로 멈춘다** —
+        # 삼키면 게이트가 조용히 꺼진 채 통과한다 (fail-open). 빈 목록도
+        # 통과가 아니다 — 센 것이 0이면 성공이 아니라 실패다 (11-3)
+        names, phones, _장소 = _anon.load_map()
+        if not names:
+            raise SystemExit("대응표가 비어 있습니다 — 0개를 보는 검사는 통과가 아닙니다 (11-3)")
+    else:
+        names, phones = [], []
 
     if not db_path.exists():
         return {}
@@ -171,7 +183,7 @@ def 실명이있나(db_path: pathlib.Path) -> dict:
             수 = 0
             for (값,) in con.execute(f'SELECT "{칸}" FROM "{표}" WHERE "{칸}" IS NOT NULL'):
                 글 = str(값)
-                if any(p.search(글) for p in patterns):
+                if any(p.search(글) for p in patterns) or 계좌꼴인가(글):
                     수 += 1
             if 수:
                 걸림[f"{표}.{칸}"] = 수
@@ -190,11 +202,12 @@ def main() -> int:
     if not 걸림:
         return 0
 
-    print("!! 개발 DB 에 실명이 있습니다 — 서버를 띄우지 않습니다.")
+    print("!! 개발 DB 에 실명·연락처·계좌 꼴이 있습니다 — 서버를 띄우지 않습니다.")
     for 자리, 수 in sorted(걸림.items()):
         print(f"   {자리}: {수}칸")
     print()
-    print("   익명화 이전 자료가 남은 것입니다. 지우고 seed 를 다시 만드세요:")
+    print("   익명화 이전 자료나, 계좌 꼴 게이트(2026-09-14) 전의 seed 가 넣은 지어낸 계좌가 남은 것입니다.")
+    print("   어느 쪽이든 지우고 seed 를 다시 만드세요:")
     print(f'     Remove-Item "{db_path}" -Force')
     print("   그 뒤 devserve 를 다시 켜면 seed(가명)로 새로 만들어집니다.")
     return 1

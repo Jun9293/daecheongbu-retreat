@@ -68,6 +68,12 @@ _스펙 = importlib.util.spec_from_file_location(
 _anon = importlib.util.module_from_spec(_스펙)
 _스펙.loader.exec_module(_anon)
 
+# **계좌 꼴도 본다** (봐둘것 BB-c · 2026-09-14) — 꼴은 `app/account_shape.py` 하나이고 입력 게이트
+# (`budget.account_problem`)와 같은 것을 본다. 앱을 읽으면 폴더와 서명키가 생기므로(11-2) 그 파일만 경로로 읽는다
+_꼴스펙 = importlib.util.spec_from_file_location("_account_shape_for_check", ROOT / "app" / "account_shape.py")
+_꼴 = importlib.util.module_from_spec(_꼴스펙)
+_꼴스펙.loader.exec_module(_꼴)
+
 넘긴목록 = ROOT / "docs" / "이름-확인됨.txt"
 남은목록 = ROOT / "docs" / "이름-남은곳.txt"
 이미지확인 = ROOT / "docs" / "review" / "이미지-확인.md"
@@ -323,6 +329,43 @@ def 이미지검사() -> int:
     return 1
 
 
+def 계좌꼴검사(파일들: list[pathlib.Path], 전체: bool = True) -> int:
+    """docs/ 아래 글에 계좌번호 꼴이 있으면 자리만 찍고 1 (값은 안 찍는다 — 찍으면 그 출력이 샌다).
+
+    **docs/ 만 본다** — 보고와 덩어리가 나가는 자리다. 코드·시험·seed 는 지어낸 번호를 담는다.
+    휴대폰 꼴과 999 로 시작하는 지어낸 번호는 `account_shape.계좌로보이나` 가 뺀다.
+    """
+    나온것 = []
+    본수 = 0
+    for p in 파일들:
+        상대 = 상대경로(p)
+        if not 상대.startswith("docs/") or p.suffix.lower() not in 글파일 or p.resolve() in 예외파일():
+            continue
+        본수 += 1
+        try:
+            글 = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for 번호, 줄 in enumerate(글.splitlines(), 1):
+            if any(_꼴.계좌로보이나(m.group()) for m in _꼴.글속꼴.finditer(줄)):
+                나온것.append(f"{상대}:{번호}")
+    # **아무것도 안 보는 것은 통과가 아니다** (11-3) — docs/ 판정이 어긋나 0개를 보면 초록이 되므로 수를 찍는다
+    # 다만 경로를 주거나 --staged 로 돌면 docs/ 파일이 애초에 없을 수 있다 — 그때는 해당 없음이다
+    if not 본수:
+        if not 전체:
+            print("docs/ 글 파일 0개 — 계좌 꼴 검사 해당 없음")
+            return 0
+        print("!! 계좌 꼴 검사가 docs/ 글 파일을 하나도 못 봤습니다 — 통과로 치지 않습니다.")
+        return 1
+    if not 나온것:
+        print(f"docs/ 글 파일 {본수}개에 계좌번호 꼴 없음")
+        return 0
+    print(f"!! docs/ 에 계좌번호 꼴 {len(나온것)}줄 (값은 안 찍습니다):")
+    for 자리 in 나온것:
+        print(f"   {자리}")
+    return 1
+
+
 def 예외파일() -> set:
     """이 셋만 스스로를 담아도 된다 — 자기 코드 · 자기 시험 · 넘길 목록."""
     return {
@@ -510,7 +553,7 @@ def main() -> int:
         print("걸린 것이 없습니다.")
         남은말()
         표밖말()
-        return 이미지검사()
+        return max(이미지검사(), 계좌꼴검사(파일들, 전체=not (args.경로 or args.staged)))
 
     print()
     print(f"!! {len(나온것)}곳에서 실명이 보입니다 (이름은 가려 찍습니다).")
@@ -527,6 +570,7 @@ def main() -> int:
     남은말()
     표밖말()
     이미지검사()
+    계좌꼴검사(파일들, 전체=not (args.경로 or args.staged))
     return 1
 
 

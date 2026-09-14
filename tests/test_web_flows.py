@@ -274,7 +274,7 @@ def test_지출을_등록하면_예산_진행률에_바로_반영된다(admin_cl
             "expense_date": dt.date.today().isoformat(),
             "amount": "100000",
             "payer_name": "김총무",
-            "payer_bank": "국민", "payer_account_number": "123-456",
+            "payer_bank": "국민", "payer_account_number": "999-123-4567",
         },
         follow_redirects=True,
     )
@@ -304,7 +304,7 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
             "meal_attendees": "이름1 이름2 이름3",
             "level3b": "모임 식사비-1",
             "payer_name": "박민준",
-            "payer_bank": "국민", "payer_account_number": "123-456",
+            "payer_bank": "국민", "payer_account_number": "999-123-4567",
         },
         follow_redirects=True,
     )
