@@ -444,9 +444,10 @@ def update_expense(
         "level3b": level3b.strip() or None,
         "meal_headcount": headcount,
     }
-    # **지원금액은 금액이나 식사 인원이 바뀔 때만 다시 센다** — 늘 다시 세면 비고 하나 고친 식대 줄이
-    # 지금 회차의 상한으로 다시 셈해지고(상한을 바꾼 뒤), 인원이 빈 줄은 지원금액이 0 이 된다(시트에서
-    # 손으로 적은 지원금액을 들여온 줄). 셈이 바뀌면 활동 기록에 지원금액 전후가 함께 남는다
+    # **지원금액은 금액이나 식사 인원이 바뀔 때만 다시 센다** (사람이 정함 · 2026-09-14 · CLAUDE.md 7-4) —
+    # 인원이 빈 식대 줄(들여올 때 인원을 못 뽑은 줄 · 손으로 적은 지원금액만 있는 줄)을 늘 다시 세면 처음
+    # 고치는 순간 0 이 된다. 대가는 회차 상한이 바뀌어도 옛 줄이 안 따라가는 것 — 드물고, 그때는 총무팀이
+    # 금액을 직접 고친다(값이 같으면 다시 세지 않는다). 셈이 바뀌면 활동 기록에 지원금액 전후가 함께 남는다
     if amount != entry.amount or headcount != entry.meal_headcount:
         if entry.is_meal_expense and headcount is None:
             raise HTTPException(status_code=400, detail="식대는 식사 인원을 적어야 지원금액을 다시 셉니다.")
@@ -457,7 +458,8 @@ def update_expense(
     if not perm.can_see_account(user) and any(getattr(entry, 칸) for 칸 in _계좌칸):
         for 칸 in _계좌칸:
             새값.pop(칸)
-        # 그 사람이 지출자만 바꾸면 계좌는 옛 사람 것으로 남고 화면에는 안 보인다 — 막는다
+        # 그 사람이 지출자만 바꾸면 막는다 (사람이 정함 · 2026-09-14 · CLAUDE.md 7-4) — 계좌를 비우면 환급
+        # 계좌를 잃고, 그대로 두면 지출자와 계좌가 어긋난 채 그 화면에 안 보이고 남는다. 막는 쪽이 안 잃는다
         if 새값["payer_name"] != ((entry.payer_name or "").strip() or None):
             raise HTTPException(status_code=400, detail="계좌가 적힌 지출의 지출자는 총무팀이 계좌와 함께 고칩니다.")
     전, 후 = _바뀐것(entry, 새값)
