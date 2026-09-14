@@ -86,4 +86,14 @@
     if (el) el.addEventListener('input', updatePreview);
   });
   if (attInput) attInput.addEventListener('input', updateAttCount);
+  // 계좌번호 복사 (재정 차례 5) — 목록에는 뒤 네 자리만 보이고 전체는 이 단추가 준다.
+  // 복사를 못 하는 환경이면 조용히 넘기지 않고 단추 글자로 말한다
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('button.acctcopy');
+    if (!btn) return;
+    var done = function (ok) { btn.textContent = ok ? '복사됨' : '복사 안 됨'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(btn.dataset.copy || '').then(function () { done(true); }, function () { done(false); });
+    } else { done(false); }
+  });
 })();

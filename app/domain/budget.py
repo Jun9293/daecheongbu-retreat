@@ -53,6 +53,30 @@ def income_amount_of(unit_price: int | None, headcount: int | None, manual: int)
     return manual
 
 
+def split_account(raw: str | None, payer_name: str | None = None) -> tuple[str | None, str | None, str | None]:
+    """한 칸에 뭉친 계좌(「은행 번호」)를 (은행, 번호, 예금주) 로 가른다 (7-4 · 사람이 정한 시트-라 ㄱ).
+
+    **가르는 규칙은 여기 하나다.** 첫 빈칸으로 가르고 앞뒤 빈칸을 떼며, 예금주는 칸이 없어
+    지출자 이름을 쓴다. 빈칸이 없으면 은행을 모르는 것이라 번호에만 넣는다.
+    화면은 셋을 따로 받아 가를 일이 없다. **시트 들여오기(차례 6)가 이 함수를 부른다** — 스크립트에
+    같은 규칙을 다시 적지 않는다.
+    """
+    text = (raw or "").strip()
+    holder = (payer_name or "").strip() or None
+    if not text:
+        return None, None, holder
+    bank, _, number = text.partition(" ")
+    if not number.strip():
+        return None, bank, holder
+    return bank, number.strip(), holder
+
+
+def account_tail(number: str | None) -> str:
+    """화면에 보일 계좌번호의 끝 숫자 넷 — 숫자만 세어 자른다(「…1111」). 복사는 전체를 준다."""
+    digits = "".join(ch for ch in (number or "") if ch.isdigit())
+    return f"…{digits[-4:]}" if digits else ""
+
+
 @dataclass
 class CategorySummary:
     category: BudgetCategory

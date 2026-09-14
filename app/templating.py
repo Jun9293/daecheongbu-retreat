@@ -133,6 +133,9 @@ templates.env.filters["num"] = num
 templates.env.filters["kdate"] = kdate
 templates.env.filters["short_date"] = short_date
 templates.env.filters["dday"] = dday
+# 계좌번호의 끝 숫자 넷 (7-4 · 재정 차례 5) — 자르는 규칙은 domain.budget 하나
+from app.domain.budget import account_tail as _account_tail  # noqa: E402
+templates.env.filters["account_tail"] = _account_tail
 
 
 def can_edit_dept(user, department) -> bool:

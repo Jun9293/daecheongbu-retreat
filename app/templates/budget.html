@@ -177,8 +177,22 @@
             <td class="r mono">{{ income.amount|num }}</td>
             <td class="dim">{{ income.note or '' }}</td>
             {% if is_admin(user) %}
-            {# 지우지 않는다 (0장) — 같은 단추로 취소·되살림 (7-3) #}
-            <td class="r"><form method="post" action="/budget/incomes/{{ income.id }}/cancel"
+            {# 지우지 않는다 (0장) — 같은 단추로 취소·되살림 (7-3). 고치기는 예산 항목과 같은 모양이고
+               취소된 수입에는 안 그린다(서버도 409 · 재정 차례 5) #}
+            <td class="r">
+              {% if not income.canceled_at %}
+              <details class="rowedit"><summary>수정</summary>
+                <form method="post" action="/budget/incomes/{{ income.id }}/update" class="editform">
+                  <input name="name" value="{{ income.name }}" placeholder="이름" required>
+                  <input name="unit_price" type="number" min="0" value="{{ income.unit_price if income.unit_price is not none else '' }}" placeholder="단가">
+                  <input name="headcount" type="number" min="0" value="{{ income.headcount if income.headcount is not none else '' }}" placeholder="명수">
+                  <input name="amount" type="number" min="0" value="{{ income.amount }}" placeholder="금액 (단가·명수가 비면 직접)">
+                  <input name="note" value="{{ income.note or '' }}" placeholder="비고">
+                  <button class="sbtn p" type="submit">저장</button>
+                </form>
+              </details>
+              {% endif %}
+              <form method="post" action="/budget/incomes/{{ income.id }}/cancel"
                   {% if not income.canceled_at %}onsubmit="return confirm('이 수입을 취소할까요? 행은 흐리게 남고 합계에서 빠집니다.')"{% endif %}>
               <button class="sbtn" type="submit">{{ '되살리기' if income.canceled_at else '취소' }}</button></form></td>
             {% endif %}

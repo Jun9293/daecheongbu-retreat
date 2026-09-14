@@ -160,6 +160,34 @@
               </span>
               {% endfor %}
               {% if can_edit %}
+              {# 고치기 (재정 차례 5) — 부서와 식대 여부는 여기서 안 바꾼다. 문은 서버의 _my_entry 하나 #}
+              <details class="rowedit"><summary>고치기</summary>
+                <form method="post" action="/expenses/{{ e.id }}/update" class="editform">
+                  <input name="expense_date" type="date" value="{{ e.expense_date.isoformat() if e.expense_date else '' }}" aria-label="지출일자">
+                  <input name="amount" type="number" min="0" step="10" required value="{{ e.amount }}" aria-label="금액">
+                  <select name="budget_category_id" aria-label="예산 항목">
+                    <option value="">미지정</option>
+                    {% if e.budget_category and e.budget_category.canceled_at %}<option value="{{ e.budget_category.id }}" selected>{{ e.budget_category.display_name }} (취소된 항목)</option>{% endif %}
+                    {% for row in summary.categories %}<option value="{{ row.category.id }}"{% if row.category.id == e.budget_category_id %} selected{% endif %}>{{ row.category.display_name }}</option>{% endfor %}
+                  </select>
+                  <input name="level3b" value="{{ e.level3b or '' }}" placeholder="세부 항목명" aria-label="세부 항목명">
+                  {% if e.is_meal_expense %}<input name="meal_headcount" type="number" min="0" value="{{ e.meal_headcount if e.meal_headcount is not none else '' }}" placeholder="식사 인원" aria-label="식사 인원">{% endif %}
+                  <input name="payer_name" value="{{ e.payer_name or '' }}" placeholder="지출자" aria-label="지출자">
+                  {% if 계좌를_본다(user) or not (e.payer_bank or e.payer_account_number or e.payer_account_holder) %}
+                  <input name="payer_bank" value="{{ e.payer_bank or '' }}" placeholder="은행" aria-label="은행">
+                  <input name="payer_account_number" value="{{ e.payer_account_number or '' }}" inputmode="numeric" placeholder="계좌번호" aria-label="계좌번호">
+                  <input name="payer_account_holder" value="{{ e.payer_account_holder or '' }}" placeholder="예금주" aria-label="예금주">
+                  {% endif %}{# 남의 계좌를 볼 수 없는 사람에게는 이미 적힌 계좌를 폼에 싣지 않는다 — 서버도 그 사람이 보낸 계좌 칸을 안 받는다 #}
+                  <input name="note" value="{{ e.note or '' }}" placeholder="비고" aria-label="비고">
+                  <button class="sbtn p" type="submit">저장</button>
+                </form>
+                {% for r in e.receipts %}
+                <form method="post" action="/expenses/{{ e.id }}/receipts/{{ r.id }}/original" class="editform">
+                  <input name="original_no" value="{{ r.original_no or '' }}" placeholder="영수증 {{ r.number }} 원본 번호" aria-label="영수증 {{ r.number }} 원본 번호">
+                  <button class="sbtn" type="submit">원본 번호 저장</button>
+                </form>
+                {% endfor %}
+              </details>
               <details class="rowedit"><summary>영수증 붙이기</summary>
                 <form method="post" action="/expenses/{{ e.id }}/receipts" enctype="multipart/form-data" class="editform">
                   <input name="receipt" type="file" accept="image/*,.pdf">
@@ -187,9 +215,12 @@
                 **빈 칸을 두지 않고 줄 자체를 안 그립니다**: 자리만 남기면
                 「무엇이 가려져 있다」 가 보이고, 그것도 알 필요 없는 사실입니다.
               #}
+              {# 계좌번호는 **뒤 네 자리만** 보이고 복사 단추가 전체를 준다 (재정 차례 5 · 옛 인계 11).
+                 목록을 훑는 눈에 번호 전체가 줄줄이 서지 않게 — 볼 수 있는 사람 판정은 그대로 계좌를_본다 #}
               {% if 계좌를_본다(user) and (e.payer_bank or e.payer_account_number or e.payer_account_holder) %}<div class="dim enote acct">
                 {%- if e.payer_bank %}<span class="acct-bank">{{ e.payer_bank }}</span> {% endif -%}
-                {%- if e.payer_account_number %}<span class="acct-no">{{ e.payer_account_number }}</span> {% endif -%}
+                {%- if e.payer_account_number %}<span class="acct-no">{{ e.payer_account_number|account_tail or e.payer_account_number }}</span>
+                  <button type="button" class="acctcopy" data-copy="{{ e.payer_account_number }}" title="계좌번호 전체를 복사">복사</button> {% endif -%}
                 {%- if e.payer_account_holder %}<span class="acct-holder">예금주 {{ e.payer_account_holder }}</span>{% endif -%}
               </div>{% endif %}</td>
             <td>

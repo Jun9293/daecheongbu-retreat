@@ -1912,6 +1912,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 .rcpt.memo{border-style:dashed}
 /* 떼기 — 영수증 칩 바로 옆. 지우는 것이 아니라 잇기를 끊는다 (7-4) */
 .rcptwrap{display:inline-flex;align-items:center}
+.acctcopy{font:inherit;font-size:var(--fz-sm);color:var(--ink-2);background:none;border:0;cursor:pointer;padding:0 4px;text-decoration:underline}
 .rcptdetach button{font:inherit;font-size:var(--fz-sm);color:var(--ink-2);background:none;border:0;
   cursor:pointer;padding:0 4px;margin:4px 6px 0 -4px;text-decoration:underline}
 /* 지출 등록 폼 */

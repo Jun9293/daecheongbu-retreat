@@ -22,6 +22,12 @@ from app.templating import redirect, render
 router = APIRouter(prefix="/budget")
 
 
+def _바뀐칸만(전: dict, 후: dict) -> tuple[dict, dict]:
+    """활동 기록에 남길 전후 — **바뀐 칸만** (7-3 · 7-4 · 재정 차례 5). 비면 기록을 안 남긴다."""
+    칸들 = [k for k in 후 if 전.get(k) != 후[k]]
+    return {k: 전.get(k) for k in 칸들}, {k: 후[k] for k in 칸들}
+
+
 def _int_or_none(raw: str) -> int | None:
     raw = (raw or "").strip()
     if raw == "":
@@ -136,17 +142,22 @@ def update_category(
     category = db.get(BudgetCategory, category_id)
     if category is None or category.retreat_id != retreat.id:
         raise HTTPException(status_code=404, detail="예산 항목을 찾을 수 없습니다.")
+    # 취소된 항목은 못 고친다 (재정 차례 5) — 취소는 그 시점의 값을 지키는 것이고, 되살린 뒤에 고친다.
+    # 화면은 취소된 행에 「수정」 을 안 그리지만 손으로 보낸 요청이 값을 바꾸던 자리다
+    if category.canceled_at is not None:
+        raise HTTPException(status_code=409, detail="취소된 예산 항목입니다. 되살린 뒤에 고치세요.")
 
-    before = {
-        "name": category.display_name,
-        "planned_amount": category.planned_amount,
-    }
+    before = _category_values(category)
     _apply_fields(
         category,
         level1=level1, level2=level2, level3=level3,
         unit_price=unit_price, headcount=headcount, times=times,
         planned_amount=planned_amount,
     )
+    전, 후 = _바뀐칸만(before, _category_values(category))
+    if not 후:
+        db.rollback()
+        return redirect(f"/budget?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
     db.commit()
     log_activity(
         db,
@@ -156,11 +167,8 @@ def update_category(
         target_type="budget_category",
         target_id=category.id,
         summary=category.display_name,
-        before_value=before,
-        after_value={
-            "name": category.display_name,
-            "planned_amount": category.planned_amount,
-        },
+        before_value=전,
+        after_value=후,
     )
     return redirect(f"/budget?retreat_id={retreat.id}", message="예산 항목을 수정했습니다.")
 
@@ -263,6 +271,56 @@ def create_income(
         summary=f"{income.name} / {income.amount:,}원",
     )
     return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 추가했습니다.")
+
+
+@router.post("/incomes/{income_id}/update")
+def update_income(
+    income_id: int,
+    name: str = Form(...),
+    unit_price: str = Form(""),
+    headcount: str = Form(""),
+    amount: int = Form(0),
+    note: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """수입을 고친다 (7-3 · 재정 차례 5) — 예산 항목 고치기와 같은 모양이다.
+
+    총무팀만 · 취소된 수입은 409 · 금액 식은 등록과 같은 domain 함수 · 활동 기록에 전후 값.
+    """
+    income = db.get(IncomeItem, income_id)
+    if income is None or income.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="수입 항목을 찾을 수 없습니다.")
+    if income.canceled_at is not None:
+        raise HTTPException(status_code=409, detail="취소된 수입입니다. 되살린 뒤에 고치세요.")
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="수입 이름을 적어주세요.")
+    값 = lambda i: {"name": i.name, "amount": i.amount, "unit_price": i.unit_price,  # noqa: E731
+                   "headcount": i.headcount, "note": i.note}
+    before = 값(income)
+    income.name = name.strip()
+    income.unit_price = _int_or_none(unit_price)
+    income.headcount = _int_or_none(headcount)
+    income.amount = max(0, income_amount_of(income.unit_price, income.headcount, amount))
+    income.note = note.strip() or None
+    전, 후 = _바뀐칸만(before, 값(income))
+    if not 후:
+        db.rollback()
+        return redirect(f"/budget?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="수입_수정",
+        target_type="income",
+        target_id=income.id,
+        summary=f"{income.name} / {income.amount:,}원",
+        before_value=전,
+        after_value=후,
+    )
+    return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 고쳤습니다.")
 
 
 @router.post("/incomes/{income_id}/cancel")

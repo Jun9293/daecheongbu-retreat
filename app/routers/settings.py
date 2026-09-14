@@ -565,10 +565,18 @@ def update_me(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    user.name = name.strip() or user.name
     # 계좌는 셋 (7-4) — 옛 한 칸은 남기되 안 쓴다(models 의 봉인)
-    user.bank_name = bank_name.strip() or None
-    user.account_number = account_number.strip() or None
-    user.account_holder = account_holder.strip() or None
+    새값 = {"name": name.strip() or user.name, "bank_name": bank_name.strip() or None,
+            "account_number": account_number.strip() or None,
+            "account_holder": account_holder.strip() or None}
+    바뀐칸 = [칸 for 칸, 값 in 새값.items() if getattr(user, 칸) != 값]
+    for 칸 in 바뀐칸:
+        setattr(user, 칸, 새값[칸])
     db.commit()
+    # **바뀐 칸 이름만** 남기고 값은 안 남긴다 (재정 차례 5 · 옛 인계 11) — 활동 기록은 화면에서
+    # 누구나 읽는 자리라 계좌 값을 적으면 거기서 샌다(4-12). 안 바뀌었으면 줄을 안 남긴다
+    if 바뀐칸:
+        log_activity(db, retreat_id=None, actor=user, action="내정보_수정",
+                     target_type="user", target_id=user.id,
+                     summary="내 정보: " + " · ".join(바뀐칸) + " 바뀜")
     return redirect("/settings", message="내 정보를 저장했습니다.")

@@ -294,30 +294,12 @@ def create_expense(
     if amount < 0:
         raise HTTPException(status_code=400, detail="금액은 0원 이상이어야 합니다.")
 
-    category = None
-    if budget_category_id:
-        category = db.get(BudgetCategory, int(budget_category_id))
-        if category is None or category.retreat_id != retreat.id:
-            raise HTTPException(status_code=404, detail="예산 항목을 찾을 수 없습니다.")
-        # 취소된 항목은 선택지에 없다 — 옛 화면이나 손으로 보낸 요청이 거기 새 지출을
-        # 붙이면 합계에서 「취소된 항목에 걸린 지출」 로만 보여 알아채기 어렵다
-        if category.canceled_at is not None:
-            raise HTTPException(status_code=400, detail="취소된 예산 항목입니다. 되살린 뒤에 붙여주세요.")
+    category = _category_or_none(db, retreat, budget_category_id)
 
     is_meal = bool(is_meal_expense)
-    headcount = int(meal_headcount) if (is_meal and meal_headcount) else None
+    headcount = _headcount(meal_headcount) if is_meal else None
     attendees = parse_attendees(meal_attendees) if is_meal else None
-
-    if is_meal:
-        settlement = calculate_meal_settlement(
-            amount=amount,
-            headcount=headcount or 0,
-            per_person_cap=retreat.meal_subsidy_per_person,
-        )
-        subsidy = settlement.subsidy_amount
-        burden = settlement.personal_burden_amount
-    else:
-        subsidy, burden = amount, 0
+    subsidy, burden = _settle(retreat, is_meal, amount, headcount)
 
     entry = ExpenseEntry(
         retreat_id=retreat.id,
@@ -365,6 +347,166 @@ def create_expense(
     return redirect(f"/expenses?retreat_id={retreat.id}", message=message)
 
 
+def _category_or_none(db: Session, retreat: Retreat, raw: str) -> BudgetCategory | None:
+    """폼의 예산 항목 칸 — 등록과 고치기가 같은 검사를 쓴다."""
+    if not raw:
+        return None
+    category = db.get(BudgetCategory, int(raw))
+    if category is None or category.retreat_id != retreat.id:
+        raise HTTPException(status_code=404, detail="예산 항목을 찾을 수 없습니다.")
+    # 취소된 항목은 선택지에 없다 — 옛 화면이나 손으로 보낸 요청이 거기 새 지출을
+    # 붙이면 합계에서 「취소된 항목에 걸린 지출」 로만 보여 알아채기 어렵다
+    if category.canceled_at is not None:
+        raise HTTPException(status_code=400, detail="취소된 예산 항목입니다. 되살린 뒤에 붙여주세요.")
+    return category
+
+
+def _headcount(raw: str) -> int | None:
+    """식사 인원 칸 — 비면 None, 숫자가 아니거나 음수면 400(전에는 500 이었다)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit():
+        raise HTTPException(status_code=400, detail="식사 인원은 0 이상의 숫자로 적어주세요.")
+    return int(raw)
+
+
+def _settle(retreat: Retreat, is_meal: bool, amount: int, headcount: int | None) -> tuple[int, int]:
+    """(지원금액, 개인부담) — 식대면 domain.meal 의 식, 아니면 전액 (7-2). 등록과 고치기가 같이 쓴다."""
+    if not is_meal:
+        return amount, 0
+    settlement = calculate_meal_settlement(
+        amount=amount, headcount=headcount or 0, per_person_cap=retreat.meal_subsidy_per_person)
+    return settlement.subsidy_amount, settlement.personal_burden_amount
+
+
+# 고치기 기록에 값 대신 「바뀜」 만 남기는 칸 — 활동 기록은 화면에서 누구나 읽는 자리다(4-12)
+_계좌칸 = ("payer_bank", "payer_account_number", "payer_account_holder")
+
+
+def _바뀐것(entry, 새값: dict) -> tuple[dict, dict]:
+    """새값을 entry 에 넣고 (전, 후) 를 돌려준다 — 바뀐 칸만. 계좌 셋은 값 대신 「(바뀜)」."""
+    전, 후 = {}, {}
+    for 칸, 값 in 새값.items():
+        옛 = getattr(entry, 칸)
+        if 옛 == 값:
+            continue
+        숨김 = 칸 in _계좌칸
+        전[칸] = "(바뀜)" if 숨김 else (옛.isoformat() if isinstance(옛, dt.date) else 옛)
+        후[칸] = "(바뀜)" if 숨김 else (값.isoformat() if isinstance(값, dt.date) else 값)
+        setattr(entry, 칸, 값)
+    return 전, 후
+
+
+@router.post("/expenses/{entry_id}/update")
+def update_expense(
+    entry_id: int,
+    expense_date: str = Form(""),
+    amount: int = Form(...),
+    budget_category_id: str = Form(""),
+    payer_name: str = Form(""),
+    payer_bank: str = Form(""),
+    payer_account_number: str = Form(""),
+    payer_account_holder: str = Form(""),
+    note: str = Form(""),
+    level3b: str = Form(""),
+    meal_headcount: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """등록된 지출을 고친다 (7-4 · 재정 차례 5).
+
+    **고칠 수 있는 사람은 등록·취소할 수 있는 사람과 같다**(봐둘것 BA-f 바-ㄱ) — 문은 `_my_entry`
+    하나이고, 취소된 지출은 409 로 막는다(취소는 그 시점의 기록을 지키는 것이다).
+    부서와 식대 여부는 여기서 안 바꾼다 — 부서는 누가 고칠 수 있는지를 정하는 칸이고, 식대 여부는
+    지원금액의 뜻을 바꾼다. 둘 다 잘못 적었으면 취소하고 새로 등록한다(취소된 행이 기록으로 남는다).
+    **바뀐 칸만** 활동 기록에 전후 값으로 남기고, 계좌 셋은 값 없이 「바뀜」 만 남긴다.
+    """
+    entry = _my_entry(db, user, retreat, entry_id)
+    if amount < 0:
+        raise HTTPException(status_code=400, detail="금액은 0원 이상이어야 합니다.")
+    # 취소된 예산 항목에 이미 걸린 지출은 그대로 머물 수 있다 — 새로 옮겨 붙이는 것만 막는다
+    if budget_category_id and entry.budget_category_id == int(budget_category_id):
+        category = entry.budget_category
+    else:
+        category = _category_or_none(db, retreat, budget_category_id)
+    headcount = _headcount(meal_headcount) if entry.is_meal_expense else None
+    새값 = {
+        "expense_date": _parse_date(expense_date) or entry.expense_date,
+        "amount": amount,
+        "budget_category_id": category.id if category else None,
+        "payer_name": payer_name.strip() or None,
+        "payer_bank": payer_bank.strip() or None,
+        "payer_account_number": payer_account_number.strip() or None,
+        "payer_account_holder": payer_account_holder.strip() or None,
+        "note": note.strip() or None,
+        "level3b": level3b.strip() or None,
+        "meal_headcount": headcount,
+    }
+    # **지원금액은 금액이나 식사 인원이 바뀔 때만 다시 센다** — 늘 다시 세면 비고 하나 고친 식대 줄이
+    # 지금 회차의 상한으로 다시 셈해지고(상한을 바꾼 뒤), 인원이 빈 줄은 지원금액이 0 이 된다(시트에서
+    # 손으로 적은 지원금액을 들여온 줄). 셈이 바뀌면 활동 기록에 지원금액 전후가 함께 남는다
+    if amount != entry.amount or headcount != entry.meal_headcount:
+        if entry.is_meal_expense and headcount is None:
+            raise HTTPException(status_code=400, detail="식대는 식사 인원을 적어야 지원금액을 다시 셉니다.")
+        새값["subsidy_amount"], 새값["personal_burden_amount"] = _settle(
+            retreat, entry.is_meal_expense, amount, headcount)
+    # **남의 계좌를 볼 수 없는 사람은 이미 적힌 계좌를 못 바꾼다** — 화면이 그 칸을 안 싣고, 빈 칸으로
+    # 온 것을 그대로 받으면 부서 리더가 비고 하나 고치다 계좌를 지운다. 판정은 permissions.can_see_account 하나
+    if not perm.can_see_account(user) and any(getattr(entry, 칸) for 칸 in _계좌칸):
+        for 칸 in _계좌칸:
+            새값.pop(칸)
+        # 그 사람이 지출자만 바꾸면 계좌는 옛 사람 것으로 남고 화면에는 안 보인다 — 막는다
+        if 새값["payer_name"] != ((entry.payer_name or "").strip() or None):
+            raise HTTPException(status_code=400, detail="계좌가 적힌 지출의 지출자는 총무팀이 계좌와 함께 고칩니다.")
+    전, 후 = _바뀐것(entry, 새값)
+    if not 후:
+        return redirect(f"/expenses?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
+    if "budget_category_id" in 후:
+        # 시트의 구분·항목·세부항목 칸도 새 항목을 따라간다(등록 때 복사하는 그 칸)
+        entry.level1 = category.level1 if category else None
+        entry.level2 = category.level2 if category else None
+        entry.level3a = category.level3 if category else None
+    db.commit()
+    log_activity(db, retreat_id=retreat.id, actor=user, action="지출_수정",
+                 target_type="expense", target_id=entry.id,
+                 summary=f"[지출 {entry.id}] 고친 칸: " + " · ".join(후),
+                 before_value=전, after_value=후)
+    return redirect(f"/expenses?retreat_id={retreat.id}", message="지출을 고쳤습니다.")
+
+
+@router.post("/expenses/{entry_id}/receipts/{receipt_id}/original")
+def update_receipt_original(
+    entry_id: int,
+    receipt_id: int,
+    original_no: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """영수증의 원본 번호를 고친다 (7-4 · 재정 차례 5). 그 지출에 **지금 걸린** 영수증만 —
+    문은 `_my_entry`(부서 · 취소 409)이고, 영수증이 다른 부서 지출에도 걸려 있으면 그 부서도 본다
+    (남의 부서 영수증을 잇지 않는 것과 같은 판정 · 총무팀은 통과)."""
+    entry = _my_entry(db, user, retreat, entry_id)
+    receipt = next((r for r in entry.receipts if r.id == receipt_id), None)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="이 지출에 이어진 영수증이 아닙니다.")
+    for dept_id in {e.department_id for e in receipt.expenses}:
+        assert_can_edit_department(db, user, dept_id)
+    전 = receipt.original_no
+    새 = original_no.strip() or None
+    if 전 == 새:
+        return redirect(f"/expenses?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
+    receipt.original_no = 새
+    db.commit()
+    log_activity(db, retreat_id=retreat.id, actor=user, action="영수증_원본번호_수정",
+                 target_type="expense", target_id=entry.id,
+                 summary=f"[{receipt.number}] 원본 번호", before_value={"original_no": 전},
+                 after_value={"original_no": 새})
+    return redirect(f"/expenses?retreat_id={retreat.id}", message=f"영수증 {receipt.number}번의 원본 번호를 고쳤습니다.")
+
+
 @router.post("/expenses/{entry_id}/receipts")
 def add_receipt(
     entry_id: int,
@@ -395,7 +537,7 @@ def add_receipt(
 
 def _my_entry(db: Session, user: User, retreat: Retreat, entry_id: int) -> ExpenseEntry:
     """이 회차의 지출이고 내가 고칠 수 있고 **취소되지 않았는가** — 영수증을 붙이고
-    잇고 떼는 문이 같다 (7-4 · 2026-09-14 사람이 정함).
+    잇고 떼는 문, 지출과 원본 번호를 고치는 문이 같다 (7-4 · 2026-09-14 사람이 정함).
 
     취소된 지출에는 새로 걸지도 떼지도 않는다(409). 취소 전에 걸린 영수증은 그대로
     남는다 — 떼지 않는다. 취소는 되살릴 수 있어 그때 원래 모양이 돌아와야 한다.
@@ -405,7 +547,7 @@ def _my_entry(db: Session, user: User, retreat: Retreat, entry_id: int) -> Expen
         raise HTTPException(status_code=404, detail="지출 내역을 찾을 수 없습니다.")
     assert_can_edit_department(db, user, entry.department_id)
     if entry.canceled_at is not None:
-        raise HTTPException(status_code=409, detail="취소된 지출입니다. 영수증을 잇거나 떼려면 먼저 되살리세요.")
+        raise HTTPException(status_code=409, detail="취소된 지출입니다. 고치거나 영수증을 잇고 떼려면 먼저 되살리세요.")
     return entry
 
 
