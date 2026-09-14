@@ -437,8 +437,9 @@ def link_receipt(
     # **남의 부서 영수증은 잇지 않는다** (2026-09-14 사람이 정함) — 받는 지출의 부서만 보면
     # 부서 리더가 다른 부서 영수증을 번호 하나로 제 지출에 끌어온다. 영수증의 부서는 **지금
     # 걸린 지출들의 부서**이고, 다 떼어 걸린 곳이 없으면 처음 붙은 지출의 부서다.
-    # 판정은 받는 지출과 같은 문(assert_can_edit_department)이라 총무팀은 통과한다 — 이것은
-    # 사람이 정한 것이 아니라 그 판의 읽기다(봐둘것 BB-f · CLAUDE.md 7-4)
+    # 판정은 받는 지출과 같은 문(assert_can_edit_department)이라 총무팀은 통과한다 — 시트에 한
+    # 번호가 여러 부서 지출에 걸린 자리가 있어 총무팀까지 막으면 이을 사람이 없다 (막는 것도
+    # 총무팀 통과도 사람이 정함 · 2026-09-14 · CLAUDE.md 7-4)
     for dept_id in {e.department_id for e in receipt.expenses} or {receipt.expense.department_id}:
         assert_can_edit_department(db, user, dept_id)
     if receipt in entry.receipts:
