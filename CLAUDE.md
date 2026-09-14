@@ -1378,7 +1378,7 @@ N건 · 미완료 업무 N건(정리 필요)」 을 냅니다. 결산의 두 숫
 적고 있던 것을 2026-09-14 에 모았습니다. 재정 숫자를 세는 곳은 `domain/budget.py` 하나입니다.
 `tests/test_stage45.py` 가 라우터·템플릿·엑셀 쪽에서 **합과 사칙 셈의 모양**을 코드에서 끌어낸
 이름으로 찾습니다 — **필터 조건과 건수는 그 검사가 못 봅니다**(`docs/봐둘것.md` BA-g). 영수증 없음의 기준은
-**ExpenseReceipt 0건**입니다(옛 receiptFileUrl 이 아니라 — 7-4). 수련회 기간(개회~폐회) 중에는 보통
+**걸린 영수증 0건**입니다(끊기지 않은 잇기 줄 · 옛 receiptFileUrl 이 아니라 — 7-4). 수련회 기간(개회~폐회) 중에는 보통
 홈입니다 — 그때는 수련회 진행 을 쓰는 때입니다. 레퍼 홈이 D+15 에 지연 33건을
 띄운 것이 바로 이 분기가 없어서입니다.
 
@@ -2452,8 +2452,42 @@ RetreatDraft (수집중)  ──<  DraftSubmission  >──  부서
   시트의 합계금액 열이 하던 일입니다
 - 행 = 번호 · 항목명 + 비고(2줄) · 일자 · 금액 · 지원금액 · 개인부담 ·
   지출자 · 지급 상태
-- **영수증은 지출 1건에 N개** (`ExpenseReceipt`: number, file). 번호는 회차 안에서
-  자동 증가, 상단에 다음 번호. 「결산 파일에 별첨」 같은 문자 메모도 허용
+- **영수증은 종이 한 장이 한 행이고, 지출과는 잇기 표로 잇습니다** (`ExpenseReceipt` ·
+  `ExpenseReceiptLink` · 2026-09-14 재정 차례 4 · 사람이 정한 시트-가 ㄷ). 지출 하나에 영수증
+  여럿도, **영수증 하나에 지출 여럿도** 됩니다. **금액은 지출마다 있고 영수증에 총액을 두지
+  않습니다.** 어느 지출에 걸렸는가는 **끊기지 않은 잇기 줄이 유일한 출처**이고,
+  `ExpenseReceipt.expenseId` 는 「처음 붙은 지출」 이라 회차를 알 때만 씁니다
+- **자동 번호는 영수증마다 하나**, 회차 안에서 자동 증가, 상단에 다음 번호. 「결산 파일에
+  별첨」 같은 문자 메모도 허용. **이미 있는 영수증에 잇는 것은 번호로 합니다**(행의 「번호로
+  잇기」) — 새 번호를 주지 않습니다. 종이 한 장에 번호가 여럿 붙으면 자동 번호가 열쇠
+  노릇을 못 합니다(BA-f 마 줄의 까닭). 한 장이 지출 여럿에 걸리면 칩에 「지출 N건」 이
+  붙습니다 — **영수증 금액과 지출 금액이 어긋나 보이는 줄은 고장이 아니라 반품일 수
+  있습니다**(봐둘것 BB-b)
+- **떼는 것은 지우는 것이 아닙니다** — 잇기 줄에 `detachedAt` 을 찍고 영수증 행은 남습니다
+  (0장). 마지막 한 곳에서 떼도 됩니다(잘못 붙인 영수증이 영영 남던 자리) — 뗀 영수증은 번호로
+  다시 잇습니다. 뗀 번호를 다시 쓰지 않습니다. 떼기·잇기는 ActivityLog 에 남습니다
+- **원본 영수증 번호**(`originalNo` · 사람이 정한 마-ㄷ) — 사람이 매긴 번호(시트의
+  영수증번호)이고 자동 번호와 따로입니다. **글자이고, 회차 안에서 겹칠 수 있습니다** — 열쇠는
+  자동 번호입니다. 앱에서 새로 만든 영수증은 비어 있고, 비어 있으면 화면의 「· 원본 N」 자리를
+  안 그립니다. 엑셀은 「지출 상세내역」 시트의 「원본 영수증번호」 칸(비면 빈 칸)에 싣습니다.
+  시트에서 한 칸에 번호가 둘인 줄은 들여올 때 영수증 행 둘로 가릅니다(차례 6)
+- **지금 있는 영수증을 잇는 것은 `scripts/영수증잇기옮기기.py`** 입니다 — 값을 채우는 전환이라
+  부팅이 아니라 미리보기 → `--실행` → 다시 세기를 지납니다(11-2). 돌리기 전에는 그 영수증이
+  어느 지출에도 안 보이고, 지출 화면이 「아직 지출에 이어지지 않은 영수증 N장」 을 말합니다.
+  잇기 줄이 **하나도 없는** 영수증만 잇습니다 — 사람이 뗀 것은 다시 붙이지 않습니다.
+  **그래서 잇기 줄이 하나도 없던 영수증은 화면에서 번호로 잇지 못합니다(409)** — 스크립트보다 먼저
+  다른 지출에 이으면 줄이 생겨 스크립트가 건너뛰고, 원래 지출에 영영 안 이어집니다. 판정은
+  `budget.receipt_has_links` 하나입니다. 스크립트가 이은 뒤에는 보통대로 잇습니다
+- **계좌는 셋** — 은행 · 계좌번호 · 예금주 (`payerBank` · `payerAccountNumber` ·
+  `payerAccountHolder`, 사람 쪽은 `bankName` · `accountNumber` · `accountHolder` · 사람이 정한
+  시트-라 ㄱ). 폼도 셋, 목록도 셋, 엑셀도 세 칸입니다. **보일지는 `permissions.can_see_account`
+  하나**입니다. 옛 한 칸(`payerAccount` · `bankAccount`)은 **지우지 않고 읽지도 쓰지도 않습니다**
+  — 모델 속성 이름을 바꿔 구조로 막았고, 값은 옮기지 않습니다(다-ㄷ · 전부 자리표시자였습니다).
+  언제 걷을지는 사람이 정합니다. **시트에서 들여올 때 가르는 규칙**(첫 빈칸으로 가르고 끝 빈칸을
+  떼고, 예금주는 지출자 이름)은 차례 6 의 들여오기 스크립트에 둡니다 — 앱에 계좌를 고치는 길이
+  생기면(차례 5) 같은 규칙을 쓰도록 그때 `domain/budget.py` 로 올립니다. 지금은 가르는 코드가 없습니다
+- **새 칸(계좌 셋 · 원본 번호)은 NULL 로 붙습니다**(11-2) — 옛 행은 빈 값이고 읽는 자리는
+  빈 값을 받습니다(화면은 빈 칸을 안 그리고 엑셀은 빈 칸)
 - **지출자 = 수련회계좌 면 환급 대상이 아닙니다.** 개인이면 자동으로 환급 대상.
   환급 대상자 는 별도 페이지가 아니라 **이 목록의 필터.** 옛 `/refunds` 는 지웁니다.
   견줄 때는 **공백을 지우고** 견주고(「수련회 계좌」 도 같은 것), **빈 지출자는
@@ -2486,6 +2520,8 @@ Retreat {
 Department { id, retreatId, name, color, sortOrder }
 
 User { id, phoneNumber, name, role,   // departmentId 는 없앴다 — 소속은 UserDepartment (4-12)
+       bankName?, accountNumber?, accountHolder?,  // 환급용 계좌 셋 (7-4) — NULL 로 붙었다.
+                                       // 옛 한 칸 bankAccount 는 남기되 읽지도 쓰지도 않는다
        loginId?, passwordHash?,        // **아이디는 이름의 로마자다** — 전화번호를
                                        // 아이디로 쓰지 않는다(화면·기록·DB 에 번호가
                                        // 남고, 번호가 바뀌면 아이디까지 바꿔야 한다).
@@ -2656,7 +2692,9 @@ IncomeItem { id, retreatId, name, unitPrice?, headcount?, amount, note?, sortOrd
 ExpenseEntry {
   id, retreatId, budgetCategoryId,
   receiptNumber, expenseDate, amount,
-  payerId?, payerName, payerAccount,
+  payerId?, payerName,
+  payerBank?, payerAccountNumber?, payerAccountHolder?,  // 계좌 셋 (7-4) — NULL 로 붙었다
+  payerAccount,                         // 옛 한 칸 — 남기되 읽지도 쓰지도 않는다. 값은 안 옮겼다
   paid, paidDate?, note, receiptFileUrl?,
   isMealExpense,
   mealHeadcount?, mealAttendeeNames?[],
@@ -2666,8 +2704,14 @@ ExpenseEntry {
 }
 // receiptNumber · receiptFileUrl 은 남기되 읽지 않는다 — 앱이 뜰 때 한 번
 // ExpenseReceipt 로 옮긴다 (DiscussionEntryRun 의 링크 행과 같은 방식)
-ExpenseReceipt { id, expenseId, number, storedName?, originalName?, memo? }
-// 파일 또는 메모 (7-4)
+ExpenseReceipt { id, expenseId, number, originalNo?, storedName?, originalName?, memo? }
+// 종이 한 장 = 한 행. 파일 또는 메모 (7-4). number 는 영수증마다 하나(회차 안 자동 증가).
+// expenseId 는 「처음 붙은 지출」 — 회차를 알 때만 쓴다. 걸린 곳이 아니다.
+// originalNo 는 사람이 매긴 원본 번호 — 글자 · 겹칠 수 있다 · NULL 로 붙었다
+ExpenseReceiptLink { id, receiptId, expenseId, attachedAt, detachedAt? }
+// 걸린 곳의 유일한 출처 (7-4). 영수증 하나에 지출 여럿 · 지출 하나에 영수증 여럿.
+// 떼면 detachedAt 을 찍고 영수증은 남는다. 금액은 지출에만 있다.
+// 표가 생기기 전의 영수증은 scripts/영수증잇기옮기기.py 가 expenseId 로 잇는다
 
 /* ── 회차 준비 초안 (6-7) ── */
 RetreatDraft {
@@ -2999,9 +3043,10 @@ ActivityLog {
 `app/db.py` 의 `_ADDED_COLUMNS` 가 새 칸을 붙이는 것은 앱을 켜면 늘 일어나는 일이고 **NULL 로 붙는
 칸은 값을 안 건드립니다.** 그래서 지시문의 「운영 자료는 읽기만」 이 재시작을 막지 않습니다.
 **다만 기본값을 달고 붙는 칸(`NOT NULL DEFAULT`)은 붙는 순간 있는 행 전부에 그 값을 채웁니다** —
-그 목록에 이미 그런 칸이 있고(계정 전부의 동작을 바꾼 칸도 있습니다) 어느 쪽으로 볼지는 사람에게
-올렸습니다(봐둘것 BA-h). **정해지기 전에는 새 칸을 NULL 로 붙입니다** — 이 줄은 사람이 정한 것이
-아니라 **이 창이 둔 임시 규칙**이고, 사람이 BA-h 물음에 답하면 끝납니다. 대가는 NULL 로 붙인 칸을
+그 목록에 이미 그런 칸이 있습니다(계정 전부의 동작을 바꾼 칸도 있습니다). **그것은 값 채우기 쪽입니다**
+(2026-09-14 에 사람이 정함 · 봐둘것 BA-h) — 붙는 순간 행 전부가 바뀝니다. 이미 있는 것은 되돌리지 않고
+기록만 남깁니다. **그래서 새 칸은 NULL 로 붙입니다** — 이 창이 임시로 두었던 규칙을 사람이 그대로
+두기로 했습니다. 기본값이 필요한 칸은 NULL 로 붙이고 채우는 것을 이 절의 순서로 따로 합니다. 대가는 NULL 로 붙인 칸을
 읽는 자리가 빈 값을 받아야 한다는 것입니다(8장 `ProgramItem.scope` 를 `scope_key` 로 읽는 꼴) —
 모델에서 NOT NULL 로 선언하면 옛 행과 어긋납니다.
 **그러나 칸을 붙이는 것과 값을 채우는 것은 다릅니다 — 값을 채우는 것은 여전히 안입니다.**
@@ -3950,7 +3995,7 @@ entry point · 다른 conftest 는 못 봅니다** — conftest 가 읽히기 �
 - ~~재정~~ — 완료 (UI 개편 단계 5 · 2026-09). 규칙은 7장. 화면은 `/budget` ·
   `/expenses`. **숫자는 전부 `domain/budget.py` 의 summary 에서** — 홈 ·
   회차 상세 · 예산 · 지출 그룹 헤더 · 엑셀(`budget_xlsx`)이 같은 함수를 쓴다.
-  영수증은 지출 1건에 N개(`ExpenseReceipt`), 환급 대상자는 지출 목록의 필터다
+  영수증은 잇기 표로 지출과 N:M(`ExpenseReceiptLink` · 차례 4), 환급 대상자는 지출 목록의 필터다
 - 회의록 + 액션아이템 → 업무 전환 — 화면과 옮기기는 만들었고(`/meetings` ·
   `scripts/import_meetings.py`), **제안이 남았습니다.**
 
@@ -4307,6 +4352,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 배지 판정 (4-3) | `app/domain/board.py` 의 `paint_of` 가 내는 `badge` — **여기 하나다.** 홈·목록·보드·드로어 칩이 받아 쓰기만 한다 |
 | 비품 (4-18) | `app/routers/equipment.py` · `templates/equipment.html` · `scripts/비품옮기기.py`(체크리스트 → 비품) · `scripts/비품묶음옮기기.py`(도막 1 의 표 모양 → 묶음이 회차에) · `scripts/비품들여오기.py`(시트 TSV → 비품 · 사람 이름과 전화는 기본이 거부) · `scripts/비품비고옮기기.py`(비고가 품목 → 회차 · 도막 4) · `scripts/비품묶음합치기.py`(이미 갈린 약 묶음을 의약품 하나로 · 도막 5) — 품목은 `EquipmentItem`(라이브러리), 수량·체크·위치·묶음·비고는 `EquipmentRun`(회차별). 권한은 `permissions` 의 키 비교 하나. 회차를 고르고 보관 경고를 찍는 것은 `비품들여오기.회차머리` 하나이고 합치기가 그것을 부른다. **순서는 4-18 에 한 번만 적는다** |
 | 재정 (7장) | `app/domain/budget.py` · `routers/budget.py` · `routers/expenses.py` — **재정 숫자를 세는 곳은 `domain/budget.py` 하나다**(summary · `list_totals` · `filter_entries` · `live_entries` · `refund_sheet` · `income_amount_of` · `expense_stats`). 밖에서 합·사칙 셈으로 다시 세는지는 `tests/test_stage45.py` 가 모델·묶음에서 끌어낸 이름으로 잰다 — 필터 조건과 건수는 못 본다 |
+| 영수증 잇기 · 떼기 · 원본 번호 (7-4) | `app/models.py` 의 `ExpenseReceiptLink` · `ExpenseEntry.attach_receipt`(붙이는 곳은 여기 하나) · `routers/expenses.py` 의 `link_receipt` · `detach_receipt` · 지금 있는 영수증을 잇는 것은 `scripts/영수증잇기옮기기.py`(미리보기 기본 · `--실행`) · 아직 안 이어진 수는 `budget.unlinked_receipt_count` · 옛 영수증을 번호로 잇는 것을 막는 판정은 `budget.receipt_has_links` |
 | 재정 엑셀 | `app/domain/budget_xlsx.py` — **화면과 같은 함수** |
 
 **날짜의 저장 방식** — 라이브러리는 절대 날짜를 갖지 않습니다.
