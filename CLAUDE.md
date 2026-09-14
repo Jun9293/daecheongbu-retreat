@@ -2507,6 +2507,14 @@ RetreatDraft (수집중)  ──<  DraftSubmission  >──  부서
   떼고, 예금주는 지출자 이름)은 `domain/budget.py` 의 `split_account` **하나**입니다(재정 차례 5).
   화면은 셋을 따로 받아 가를 일이 없고, 차례 6 의 들여오기 스크립트가 그 함수를 부릅니다 — 스크립트에
   다시 적지 않습니다
+- **계좌 셋이 DB 에 들어가도 되는 꼴인가는 `budget.account_problem` 하나가 정합니다**(계좌 꼴 게이트 ·
+  2026-09-14 · 봐둘것 BB-c). 지출 등록 · 지출 고치기 · 설정 › 내 정보 · 시트 들여오기가 전부 지납니다. 막는 것은
+  번호가 있는데 은행이 빈 것 · 번호에 숫자와 하이픈 말고 다른 글자 · 숫자가 너무 적거나 많은 것 · 숫자만인 은행 ·
+  지나치게 긴 은행·예금주이고, **셋 다 빈 것과 은행·예금주만 있는 것은 통과**입니다(계좌를 안 적은 것). 경계는 시트의
+  계좌 줄이 **전부 지나는 것**을 먼저 재고 그보다 넓게 정했습니다 — 빡빡하면 실제 계좌가 막힙니다. 폼은 걸리면 400 과
+  그 까닭이고, **고치기와 내 정보는 계좌를 바꿀 때만** 봅니다(게이트 전에 들어간 값이 비고 하나 고치는 길을 막지 않게).
+  꼴의 수(숫자 개수)는 `app/account_shape.py` 에 있고 두 검사(`check_dev_db` · `check_names`)가 같은 꼴로
+  계좌번호를 찾습니다 — 그 파일은 아무것도 import 하지 않아 검사가 앱을 안 읽고 씁니다(11-2)
 - **목록의 계좌번호는 뒤 네 자리만 보이고 「복사」 단추가 전체를 줍니다**(재정 차례 5 · 옛 인계 11) —
   볼 수 있는 사람 판정은 그대로 `can_see_account` 하나이고, 자르는 규칙은 `budget.account_tail`
   하나입니다. 엑셀은 전체를 싣습니다
@@ -2576,7 +2584,8 @@ BA-f · BB-a 입니다** — 여기는 그 결정이 코드에서 어떤 규칙�
 - **부서** — 세부항목 칸들을 이어 붙인 글에 앱 부서 이름(앞 번호·빈칸을 뗀 것)이 **하나만** 들어 있으면 그 키.
   한 이름이 다른 이름 안에 들면 긴 쪽만 봅니다. 둘 이상이면 비우고 짝 표에, 안 적혔으면 비웁니다(총무팀 소관)
 - **계좌** — `budget.split_account` 를 부릅니다(7-4 · 가르는 규칙을 스크립트에 다시 적지 않습니다). 계좌 칸이 빈
-  줄(「수련회계좌」 줄)은 셋 다 비웁니다
+  줄(「수련회계좌」 줄)은 셋 다 비웁니다. 가른 셋은 **`budget.account_problem` 을 지난 것만** 넣습니다 — 걸리면
+  **멈추지 않고** 그 지출을 계좌 없이 들이고 짝 표 「계좌」 에 줄 번호와 까닭을 남기며, 미리보기가 그 수를 셉니다
 - **식대** — 지원금액이 곱셈 식이면 식대이고 인원은 **식에서 상한이 아닌 인수**, 식이 아니면 비고의 「숫자 + 명」
   이 하나일 때 그 숫자(사람이 정함 · 2026-09-14). 비고는 숫자만 읽습니다. 인원을 뽑으면 앱이 지원금액을 다시
   세고, **못 뽑으면 인원을 비우고 시트의 손 셈을 그대로 둡니다** — 그 줄은 고칠 때도 다시 세지 않습니다(7-4).
@@ -3375,7 +3384,8 @@ zip 도 함께 바뀝니다. 들여다보는 것은 괜찮고, 고쳐 저장하�
 **사람 이름만 보는 검사는 장소·계좌·전화에 대해 아무 말도 하지 않습니다.**
 실제 카페 이름이 공개 스크린샷 직전까지 갔습니다 — 대응표에 **장소 칸
 (`places`)** 을 두고 이름과 같은 방식으로 가명으로 바꾸며, check_names 와
-개발 DB 게이트가 같은 목록으로 봅니다. 게이트는 연락처(숫자·3-4-4 표기)도
+개발 DB 게이트가 같은 목록으로 봅니다. **계좌는 대응표에 없어 꼴로 봅니다**(`app/account_shape.py` · 7-4 ·
+2026-09-14 — 게이트는 볼 칸 전부, `check_names` 는 `docs/`). 게이트는 연락처(숫자·3-4-4 표기)도
 봅니다. **글자 수 유지 규칙은 사람 이름에만 적용합니다** — 그 규칙의 이유
 (화면 폭·`M` 접미)가 둘 다 사람 이름의 사정이라, 장소 가명은 길이가 달라도
 됩니다(test_대응표_04b).
@@ -4456,7 +4466,8 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 배지 판정 (4-3) | `app/domain/board.py` 의 `paint_of` 가 내는 `badge` — **여기 하나다.** 홈·목록·보드·드로어 칩이 받아 쓰기만 한다 |
 | 비품 (4-18) | `app/routers/equipment.py` · `templates/equipment.html` · `scripts/비품옮기기.py`(체크리스트 → 비품) · `scripts/비품묶음옮기기.py`(도막 1 의 표 모양 → 묶음이 회차에) · `scripts/비품들여오기.py`(시트 TSV → 비품 · 사람 이름과 전화는 기본이 거부) · `scripts/비품비고옮기기.py`(비고가 품목 → 회차 · 도막 4) · `scripts/비품묶음합치기.py`(이미 갈린 약 묶음을 의약품 하나로 · 도막 5) — 품목은 `EquipmentItem`(라이브러리), 수량·체크·위치·묶음·비고는 `EquipmentRun`(회차별). 권한은 `permissions` 의 키 비교 하나. 회차를 고르고 보관 경고를 찍는 것은 `비품들여오기.회차머리` 하나이고 합치기가 그것을 부른다. **순서는 4-18 에 한 번만 적는다** |
 | 재정 (7장) | `app/domain/budget.py` · `routers/budget.py` · `routers/expenses.py` — **재정 숫자를 세는 곳은 `domain/budget.py` 하나다**(summary · `list_totals` · `filter_entries` · `live_entries` · `refund_sheet` · `income_amount_of` · `expense_stats`). 밖에서 합·사칙 셈으로 다시 세는지는 `tests/test_stage45.py` 가 모델·묶음에서 끌어낸 이름으로 잰다 — 필터 조건과 건수는 못 본다 |
-| 재정 시트 들여오기 (7-5 · 차례 6) | `scripts/재정들여오기.py` — `읽는다`(시트만) · `고른다`(계획 · 아무것도 안 바꿈 · 미리보기와 실행이 같이 씀) · `넣는다`(넣기만 · commit 안 함) · `돌린다`(사본 → 넣기 → `센다` 로 DB 를 다시 세어 계획과 견주고 맞을 때만 commit · 다르면 되돌림) · 계좌는 `budget.split_account` · 회차는 `scripts/비품들여오기.py` 의 `회차머리` |
+| 재정 시트 들여오기 (7-5 · 차례 6) | `scripts/재정들여오기.py` — `읽는다`(시트만) · `고른다`(계획 · 아무것도 안 바꿈 · 미리보기와 실행이 같이 씀) · `넣는다`(넣기만 · commit 안 함) · `돌린다`(사본 → 넣기 → `센다` 로 DB 를 다시 세어 계획과 견주고 맞을 때만 commit · 다르면 되돌림) · 계좌는 `budget.split_account` 로 가르고 `budget.account_problem` 을 지난 것만 · 회차는 `scripts/비품들여오기.py` 의 `회차머리` |
+| 계좌 꼴 게이트 (7-4 · 봐둘것 BB-c) | `app/domain/budget.py` 의 `account_problem` — **판정은 여기 하나다**(지출 등록·고치기는 `routers/expenses.py` 의 `_계좌꼴` · 내 정보는 `routers/settings.py` 의 `update_me` · 들여오기). 꼴의 수는 `app/account_shape.py`(아무것도 import 안 함) — `check_dev_db` 는 개발 DB 의 볼 칸(제외칸을 뺀 글자 칸 · 대응표가 없어도)에서, `check_names` 는 `docs/` 아래 글에서 같은 꼴을 찾고 값은 안 찍는다(본 파일 수를 찍고 0 이면 실패). 날짜로 시작하는 조각 · 휴대폰 꼴 · 지어낸 번호(999 머리 · 한 숫자 되풀이 · 이어 오름)는 뺀다 |
 | 재정 고치기 (7-3 · 7-4 · 차례 5) | `routers/expenses.py` 의 `update_expense` · `update_receipt_original`(문은 `_my_entry`) · `routers/budget.py` 의 `update_category` · `update_income` · 계좌 가르기 `budget.split_account` · 뒤 네 자리 `budget.account_tail` · 내 정보 기록 `routers/settings.py` 의 `update_me` |
 | 영수증 잇기 · 떼기 · 원본 번호 (7-4) | `app/models.py` 의 `ExpenseReceiptLink` · `ExpenseEntry.attach_receipt`(붙이는 곳은 여기 하나) · `routers/expenses.py` 의 `link_receipt` · `detach_receipt` · 지금 있는 영수증을 잇는 것은 `scripts/영수증잇기옮기기.py`(미리보기 기본 · `--실행`) · 아직 안 이어진 수는 `budget.unlinked_receipt_count` · 옛 영수증을 번호로 잇는 것을 막는 판정은 `budget.receipt_has_links` |
 | 재정 엑셀 | `app/domain/budget_xlsx.py` — **화면과 같은 함수** |
