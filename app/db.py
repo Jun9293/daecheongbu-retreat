@@ -106,6 +106,9 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("meetings", "origin", "VARCHAR(20)"),
     ("meetings", "source_ref", "VARCHAR(200)"),
     ("meetings", "import_batch", "VARCHAR(40)"),
+    # 노션 페이지 id (노션 대조 2판). NULL 로 붙고 부팅은 값을 안 채운다 —
+    # 채우는 것은 scripts/회의록id달기.py (11-2 의 미리보기 → 실행 → 다시 세기).
+    ("meetings", "notion_page_id", "VARCHAR(36)"),
     # 논의의 출처 (4-9). 기존 행은 NULL — 사람이 직접 적은 것으로 본다.
     ("discussion_entries", "source_meeting_id", "INTEGER"),
     # 회차 안에서 고정되는 업무 번호 (4-14). 기존 행은 앱이 뜰 때 한 번 매긴다.

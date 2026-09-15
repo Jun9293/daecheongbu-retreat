@@ -933,6 +933,10 @@ class Meeting(Base):
     # 옮기기 한 번에 붙는 이름. **이것으로 통째로 되돌린다** —
     # 26년은 끝난 실제 회차라, 개발 중 넣은 것을 나중에 골라 낼 수 있어야 한다.
     import_batch: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # 노션 페이지 id — 파일 이름(source_ref)이 아니라 원본을 가리키는 열쇠.
+    # 한 페이지가 회의 여럿으로 잘리므로 여러 행이 같은 값을 가진다(유니크 아님).
+    # 채우는 곳은 scripts/회의록id달기.py 하나다.
+    notion_page_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # ── 문장으로 읽은 결과 (회의록 5단계) ─────────────────────────────
     # **본문이 안 바뀌면 다시 부르지 않는다.** 저장할 때마다 자동으로 부르는데
