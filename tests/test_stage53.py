@@ -41,7 +41,7 @@ def 세션쿠키_자리(글: str) -> list[str]:
 
 
 def test53_a03_세션_쿠키는_한_이름만_쓴다():
-    """로그인 · 로그아웃 · 읽기가 같은 이름을 쓰도록 (1c) — 세 자리 첫 인자가 SESSION_COOKIE 다."""
+    """로그인 · 로그아웃 · 읽기가 같은 이름을 쓰도록 (1c) — 그 자리들의 첫 인자가 SESSION_COOKIE 다."""
     security = (ROOT / "app" / "security.py").read_text(encoding="utf-8")
     자리 = 세션쿠키_자리(security)
     assert len(자리) >= 3, "security.py 에서 쿠키를 다루는 자리를 못 찾았다 — 아무것도 안 보는 검사다"
