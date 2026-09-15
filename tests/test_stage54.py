@@ -30,9 +30,9 @@ def _달기():
 
 
 페이지 = [
-    {"id": "p-aaa", "title": "총무팀 선교사 회의록"},
-    {"id": "p-bbb", "title": "총무팀 회의록"},
-    {"id": "p-ccc", "title": "무엇무엇 각 팀에 요청/확인할 것 (메모) 회의록"},
+    {"id": "p-aaa", "title": "가람팀 나눔 회의록"},
+    {"id": "p-bbb", "title": "가람팀 회의록"},
+    {"id": "p-ccc", "title": "무엇무엇 모임에 부탁/살필 것 (메모) 회의록"},
 ]
 
 
@@ -50,10 +50,10 @@ def _회의(db, title, origin="노션", source=None, pid=None):
 
 
 def _심는다(db):
-    a1 = _회의(db, "26.05.01", source="01-총무팀선교사")
-    a2 = _회의(db, "26.05.08", source="01-총무팀선교사")          # 한 파일이 둘로 잘림
-    b = _회의(db, "총무팀 회의록", source="02-총무팀")               # 제목이 페이지와 글자 같음
-    c = _회의(db, "26.06.01", source="03-요청확인")
+    a1 = _회의(db, "26.05.01", source="01-가람팀나눔")
+    a2 = _회의(db, "26.05.08", source="01-가람팀나눔")          # 한 파일이 둘로 잘림
+    b = _회의(db, "가람팀 회의록", source="02-가람팀")               # 제목이 페이지와 글자 같음
+    c = _회의(db, "26.06.01", source="03-부탁살필")
     사람 = _회의(db, "사람이 적은 회의", origin="사람")
     db.commit()
     return a1, a2, b, c, 사람
@@ -76,8 +76,8 @@ def test54_a01_칸은_NULL_로_붙고_부팅은_값을_안_채운다():
 
 def test54_b01_짝은_같은_글자_먼저_남은_것은_순서대로_든_것_하나():
     m = _달기()
-    짝 = m.짝짓는다(["01-총무팀선교사", "02-총무팀", "03-요청확인"], 페이지)
-    assert {k: v["id"] for k, v in 짝.items()} == {"01-총무팀선교사": "p-aaa", "02-총무팀": "p-bbb", "03-요청확인": "p-ccc"}
+    짝 = m.짝짓는다(["01-가람팀나눔", "02-가람팀", "03-부탁살필"], 페이지)
+    assert {k: v["id"] for k, v in 짝.items()} == {"01-가람팀나눔": "p-aaa", "02-가람팀": "p-bbb", "03-부탁살필": "p-ccc"}
 
 
 def test54_b02_하나로_못_정하면_멈춘다():
@@ -88,16 +88,18 @@ def test54_b02_하나로_못_정하면_멈춘다():
     with pytest.raises(m.멈춤):                       # 순서대로 든 것이 둘
         m.짝짓는다(["01-가다"], 둘)
     with pytest.raises(m.멈춤):                       # 번호를 떼면 이름이 같은 출처 둘
-        m.짝짓는다(["01-총무팀", "02-총무팀"], 페이지)
+        m.짝짓는다(["01-가람팀", "02-가람팀"], 페이지)
     with pytest.raises(m.멈춤):                       # 이미 글자로 짝지은 페이지까지 세면 후보가 둘
         m.짝짓는다(["01-가나다", "02-가다"], 둘)
+    with pytest.raises(m.멈춤, match="출처 파일 둘 이상과"):   # 한 페이지가 출처 둘과 짝
+        m.짝짓는다(["01-가나다", "02-가다"], 둘[:1])
 
 
 def test54_b03_막히면_안_되는_것은_통과한다():
     m = _달기()
     # 순서대로 든 페이지가 전체에서 하나면 짝 — 글자 같은 짝과 섞여도
-    짝 = m.짝짓는다(["01-총무팀", "02-요청확인"], 페이지[1:])
-    assert {k: v["id"] for k, v in 짝.items()} == {"01-총무팀": "p-bbb", "02-요청확인": "p-ccc"}
+    짝 = m.짝짓는다(["01-가람팀", "02-부탁살필"], 페이지[1:])
+    assert {k: v["id"] for k, v in 짝.items()} == {"01-가람팀": "p-bbb", "02-부탁살필": "p-ccc"}
 
 
 def test54_c01_미리보기는_안_바꾸고_실행은_파일의_회의_전부에_단다(db, tmp_path, capsys):
@@ -123,8 +125,8 @@ def test54_c01_미리보기는_안_바꾸고_실행은_파일의_회의_전부�
 
 def test54_c02_다른_id_가_이미_있으면_덮지_않고_멈춘다(db, tmp_path):
     m = _달기()
-    _회의(db, "26.05.01", source="01-총무팀선교사", pid="p-다른것")
-    _회의(db, "26.05.08", source="02-총무팀")
+    _회의(db, "26.05.01", source="01-가람팀나눔", pid="p-다른것")
+    _회의(db, "26.05.08", source="02-가람팀")
     db.commit()
     with pytest.raises(m.멈춤):
         m.돌린다(db, _목록(tmp_path), 실행=True, 사본=False)
@@ -149,11 +151,19 @@ def test54_c04_다시_센_수가_어긋나면_되돌린다(db, tmp_path, monkeyp
     assert db.scalars(select(models.Meeting.notion_page_id)).all().count(None) == 5
 
 
-def test54_c05_사본을_뜰_수_없으면_쓰기_전에_멈춘다(db, tmp_path):
+def test54_c05_사본을_뜰_수_없으면_쓰기_전에_멈춘다(db, tmp_path, monkeypatch):
     m = _달기()
     _심는다(db)
-    with pytest.raises(m.멈춤):              # 시험 DB 는 data/app.db 가 아니다
+    진짜 = m.사본을_뜬다
+    본수 = []
+
+    def 지켜본다():
+        본수.append(db.execute(select(models.Meeting.id).where(models.Meeting.notion_page_id.is_not(None))).all())
+        return 진짜()
+    monkeypatch.setattr(m, "사본을_뜬다", 지켜본다)
+    with pytest.raises(m.멈춤, match="사본을 뜰 파일이 다릅니다"):   # 시험 DB 는 data/app.db 가 아니다
         m.돌린다(db, _목록(tmp_path), 실행=True, 사본=True)
+    assert 본수 == [[]], "사본을 뜨기 전에 이미 값을 썼다"
     db.expire_all()
     assert db.scalars(select(models.Meeting.notion_page_id)).all().count(None) == 5
 
