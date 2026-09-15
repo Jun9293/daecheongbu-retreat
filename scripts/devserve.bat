@@ -4,6 +4,8 @@ cd /d "%~dp0.."
 set DCB_DATA_DIR=%TEMP%\dcb-dev
 set DCB_SECRET_KEY=dev-only-secret
 set DCB_DEV=1
+REM session cookie name differs from production (same host shares cookies across ports) - CLAUDE.md 11-2
+set DCB_SESSION_COOKIE=dcb_dev_session
 REM real-name gate (11-2): block serving if the dev DB holds real names.
 REM see scripts/check_dev_db.py - it prints what to do, without the names.
 if exist "%DCB_DATA_DIR%\app.db" (

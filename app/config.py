@@ -119,7 +119,10 @@ def secret_key_fingerprint(key: str | None = None) -> str:
 
 SECRET_KEY_FINGERPRINT = secret_key_fingerprint()
 
-SESSION_COOKIE = "dcb_session"
+# 개발 서버는 다른 이름을 건다(scripts/devserve.bat) — 쿠키는 포트가 아니라 호스트에 붙어서,
+# 같은 이름이면 같은 브라우저에서 한쪽에 로그인하는 순간 다른 쪽 세션이 풀린다(CLAUDE.md 11-2).
+# 운영은 기본값 그대로라 이미 로그인된 세션이 안 끊긴다.
+SESSION_COOKIE = os.environ.get("DCB_SESSION_COOKIE", "dcb_session")
 # **며칠인지는 여기 한 곳에만 적는다** (CLAUDE.md 4-12). 한 번 들어오면 그
 # 기기에서 그동안 로그인된 채로 둔다 — 휴대폰 홈 화면에 붙여 쓰는 앱이라
 # 짧게 두면 현장에서 다시 물어보게 된다. 로그인 화면이 이 값을 받아 찍으므로
