@@ -17,9 +17,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 사본꼴 = re.compile(r"app-(\d{8}-\d{6})\.db")
 
 
-def 볼글() -> dict[pathlib.Path, str]:
-    파일 = [ROOT / "CLAUDE.md"] + [p for p in sorted((ROOT / "docs").rglob("*.md"))
-                                   if "review" not in p.relative_to(ROOT / "docs").parts]
+def 볼글(root: pathlib.Path = ROOT) -> dict[pathlib.Path, str]:
+    파일 = [root / "CLAUDE.md"] + [p for p in sorted((root / "docs").rglob("*.md"))
+                                   if "review" not in p.relative_to(root / "docs").parts]
     return {p: p.read_text(encoding="utf-8") for p in 파일}
 
 
@@ -50,18 +50,26 @@ def test52_a01_문서가_가리키는_사본은_전부_지키는판이나_넘김
                       f"되돌리는 자리면 지키는판에, 기록이면 넘김에 이유와 함께(CLAUDE.md 11-2): {빠진}")
 
 
-def test52_a02_2026_09_15_의_두_사고를_심으면_잡는다():
-    """들여오기 직전 사본과 짝잇기 직전 사본을 지키는판에서 빼면 둘 다 걸린다."""
-    지키는 = set(backup.지키는판) - {"20260915-002352", "20260915-144929"}
-    빠진 = 빠진사본(볼글(), 지키는, _넘김())
-    assert set(빠진) == {"app-20260915-002352.db", "app-20260915-144929.db"}
+_지어낸글 = {
+    pathlib.Path("가.md"): "되돌리는 자리는 `app-20990101-000001.db` 다",
+    pathlib.Path("나.md"): "직전 사본 app-20990101-000002.db 로 돌았다 · 사본 app-20990101-000001.db",
+}
 
 
-def test52_a03_넘김에만_적어도_통과하고_얼린_보고는_안_본다():
-    지키는 = set(backup.지키는판) - {"20260915-002352", "20260915-144929"}
-    넘길 = _넘김() | {"app-20260915-002352.db", "app-20260915-144929.db"}
-    assert 빠진사본(볼글(), 지키는, 넘길) == {}, "넘김에 적은 이름이 걸렸다"
-    assert all("review" not in p.parts for p in 볼글()), "얼린 보고까지 보고 있다"
+def test52_a02_지키는판에서_빼면_잡는다():
+    """2026-09-15 의 두 사고 모양 — 문서가 이름을 적었는데 지키는판에 없다. 실제 문서와 떨어져 잰다."""
+    빠진 = 빠진사본(_지어낸글, {"20990101-000001"}, set())
+    assert 빠진 == {"app-20990101-000002.db": ["나.md"]}
+    assert set(빠진사본(_지어낸글, set(), set())) == {"app-20990101-000001.db", "app-20990101-000002.db"}
+
+
+def test52_a03_지키는판이나_넘김에_있으면_통과하고_얼린_보고는_안_본다(tmp_path):
+    assert 빠진사본(_지어낸글, {"20990101-000001"}, {"app-20990101-000002.db"}) == {}
+    (tmp_path / "docs" / "review").mkdir(parents=True)
+    (tmp_path / "CLAUDE.md").write_text("없음", encoding="utf-8")
+    (tmp_path / "docs" / "review" / "얼린판.md").write_text("app-20990101-000003.db", encoding="utf-8")
+    (tmp_path / "docs" / "인계.md").write_text("app-20990101-000004.db", encoding="utf-8")
+    assert set(빠진사본(볼글(tmp_path), set(), set())) == {"app-20990101-000004.db"}, "얼린 보고를 보거나 살아 있는 글을 놓쳤다"
 
 
 def test52_a04_넘김에_이유가_없으면_넘기지_않는다(tmp_path):
