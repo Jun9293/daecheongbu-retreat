@@ -8,7 +8,8 @@
 - 페이지 목록은 `data/노션회의록.real.json` 에서 읽습니다(노션에서 조회해 옮겨 적은 것 · 저장소 밖)
 - **파일 이름 → 페이지 짝은 이 파일의 `짝짓는다` 하나가 정합니다.** 파일 이름 앞의 번호(「01-」)를 떼고,
   페이지 제목에서 빈칸과 끝의 「회의록」 을 뗀 것과 ① 글자가 같으면 짝, ② 남은 것끼리는 파일 이름 글자가
-  제목 안에 **순서대로 다 들어 있고 그런 페이지가 하나일 때만** 짝입니다. 둘 이상이거나 없으면 멈춥니다
+  제목 안에 **순서대로 다 들어 있고 그런 페이지가 전체 페이지 중 하나일 때만** 짝입니다. 둘 이상이거나 없으면,
+  번호를 뗀 출처 이름이 겹치거나 한 페이지가 출처 둘과 짝지어지면 멈춥니다
 - **대상은 origin 이 노션이고 출처가 그 파일인 회의 전부**입니다 — 한 파일이 회의 여럿으로 잘렸으면 그 여럿에
   같은 id 를 답니다. 앱에서 만든 회의(origin 이 노션이 아닌 것)는 안 건드립니다
 - 이미 id 가 있으면 건너뜁니다. **다른 id 가 이미 있으면 덮지 않고 멈춥니다**
@@ -72,24 +73,27 @@ def _순서대로든다(짧은: str, 긴: str) -> bool:
 
 def 짝짓는다(출처들: list[str], 페이지: list[dict]) -> dict[str, dict]:
     """source_ref → 페이지. 글자가 같은 것 먼저, 남은 것은 순서대로 든 것이 하나일 때만."""
+    줄기들 = [파일줄기(s) for s in 출처들]
+    if len(set(줄기들)) != len(줄기들):
+        raise 멈춤("번호를 떼면 이름이 같은 출처 파일이 둘 이상입니다 — 아무것도 안 했습니다.")
     짝: dict[str, dict] = {}
-    남은페이지 = list(페이지)
     남은출처 = []
     for s in 출처들:
-        같은 = [p for p in 남은페이지 if 제목줄기(p["title"]) == 파일줄기(s)]
+        같은 = [p for p in 페이지 if 제목줄기(p["title"]) == 파일줄기(s)]
         if len(같은) > 1:
             raise 멈춤("제목이 같은 페이지가 둘 이상인 파일이 있습니다 — 아무것도 안 했습니다.")
         if 같은:
             짝[s] = 같은[0]
-            남은페이지.remove(같은[0])
         else:
             남은출처.append(s)
     for s in 남은출처:
-        든 = [p for p in 남은페이지 if _순서대로든다(파일줄기(s), 제목줄기(p["title"]))]
+        # 후보는 **전체 페이지**에서 센다 — 이미 짝지은 페이지를 빼고 세면 여럿에 걸리는 짧은 이름도 하나로 보인다
+        든 = [p for p in 페이지 if _순서대로든다(파일줄기(s), 제목줄기(p["title"]))]
         if len(든) != 1:
             raise 멈춤(f"파일 이름으로 페이지를 하나로 못 정한 출처가 있습니다(후보 {len(든)}) — 아무것도 안 했습니다.")
         짝[s] = 든[0]
-        남은페이지.remove(든[0])
+    if len({p["id"] for p in 짝.values()}) != len(짝):
+        raise 멈춤("한 페이지가 출처 파일 둘 이상과 짝지어졌습니다 — 아무것도 안 했습니다.")
     return 짝
 
 
@@ -142,6 +146,12 @@ def 단수(db: Session) -> int:
     return db.scalar(select(func.count(Meeting.id)).where(Meeting.notion_page_id.is_not(None)))
 
 
+def 남의칸(db: Session) -> list[tuple[int, str | None]]:
+    """노션이 아닌 회의의 (id, 페이지 id) — DB 에서 읽는다."""
+    return sorted(db.execute(select(Meeting.id, Meeting.notion_page_id)
+                             .where((Meeting.origin != 노션) | (Meeting.origin.is_(None)))).all())
+
+
 def 돌린다(db: Session, 목록: pathlib.Path, 실행: bool, *, 사본: bool = True) -> 계획:
     판 = 고른다(db, 페이지읽기(목록))
     print("회의록에 노션 페이지 id 달기(건수만):")
@@ -154,20 +164,21 @@ def 돌린다(db: Session, 목록: pathlib.Path, 실행: bool, *, 사본: bool =
         print("바꾸지 않았습니다. 실제로 채우려면 --실행 을 붙이세요.")
         return 판
     전 = 단수(db)
-    건드리지않을 = {m.id: m.notion_page_id for m in db.scalars(
-        select(Meeting).where((Meeting.origin != 노션) | (Meeting.origin.is_(None)))).all()}
+    전남 = 남의칸(db)
     if 사본:
         사본을_뜬다()
     try:
         for mid, pid in 판.채울:
             db.get(Meeting, mid).notion_page_id = pid
         db.flush()
-        # 계획에서 되짚지 않고 DB 에서 다시 센다
+        # 계획에서 되짚지 않고 DB 에서 다시 센다 — 칸만 고른 select 는 세션이 든 객체가 아니라 DB 의 값을 읽는다
         if 단수(db) != 전 + len(판.채울):
             raise 멈춤("채운 뒤 id 가 달린 회의 수가 계획과 다릅니다 — 되돌렸습니다.")
-        if any(db.get(Meeting, mid).notion_page_id != pid for mid, pid in 판.채울):
+        지금 = dict(db.execute(select(Meeting.id, Meeting.notion_page_id)
+                               .where(Meeting.id.in_([mid for mid, _ in 판.채울]))).all())
+        if any(지금.get(mid) != pid for mid, pid in 판.채울):
             raise 멈춤("채운 회의의 id 가 계획과 다릅니다 — 되돌렸습니다.")
-        if any(db.get(Meeting, mid).notion_page_id != v for mid, v in 건드리지않을.items()):
+        if 남의칸(db) != 전남:
             raise 멈춤("노션이 아닌 회의가 바뀌었습니다 — 되돌렸습니다.")
         db.commit()
     except Exception:

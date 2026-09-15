@@ -64,9 +64,11 @@ def test54_a01_칸은_NULL_로_붙고_부팅은_값을_안_채운다():
     assert 붙는 == [("meetings", "notion_page_id", "VARCHAR(36)")]
     assert "NOT NULL" not in 붙는[0][2] and "DEFAULT" not in 붙는[0][2]
     # 값을 쓰는 곳이 app/ 에 없다 — 모델 선언과 칸 목록만
-    쓰는곳 = [p for p in (ROOT / "app").rglob("*.py")
-            if p.name not in ("models.py", "db.py") and "notion_page_id" in p.read_text(encoding="utf-8")]
+    본것 = [p for p in (ROOT / "app").rglob("*.py") if p.name not in ("models.py", "db.py")]
+    assert len(본것) > 10, "app/ 에서 훑은 파일이 없다 — 아무것도 안 보는 검사다"
+    쓰는곳 = [p for p in 본것 if "notion_page_id" in p.read_text(encoding="utf-8")]
     assert 쓰는곳 == []
+    assert (ROOT / "app" / "models.py").read_text(encoding="utf-8").count("notion_page_id") == 1, "models.py 가 선언 말고 그 칸을 만진다"
     db글 = (ROOT / "app" / "db.py").read_text(encoding="utf-8")
     assert len(re.findall(r"notion_page_id", db글)) == 1, "db.py 가 칸 목록 말고 그 칸을 만진다"
     assert models.Meeting.__table__.c.notion_page_id.nullable
@@ -85,6 +87,17 @@ def test54_b02_하나로_못_정하면_멈춘다():
     둘 = [{"id": "x", "title": "가나다 회의록"}, {"id": "y", "title": "가X나X다 회의록"}]
     with pytest.raises(m.멈춤):                       # 순서대로 든 것이 둘
         m.짝짓는다(["01-가다"], 둘)
+    with pytest.raises(m.멈춤):                       # 번호를 떼면 이름이 같은 출처 둘
+        m.짝짓는다(["01-총무팀", "02-총무팀"], 페이지)
+    with pytest.raises(m.멈춤):                       # 이미 글자로 짝지은 페이지까지 세면 후보가 둘
+        m.짝짓는다(["01-가나다", "02-가다"], 둘)
+
+
+def test54_b03_막히면_안_되는_것은_통과한다():
+    m = _달기()
+    # 순서대로 든 페이지가 전체에서 하나면 짝 — 글자 같은 짝과 섞여도
+    짝 = m.짝짓는다(["01-총무팀", "02-요청확인"], 페이지[1:])
+    assert {k: v["id"] for k, v in 짝.items()} == {"01-총무팀": "p-bbb", "02-요청확인": "p-ccc"}
 
 
 def test54_c01_미리보기는_안_바꾸고_실행은_파일의_회의_전부에_단다(db, tmp_path, capsys):
@@ -117,6 +130,32 @@ def test54_c02_다른_id_가_이미_있으면_덮지_않고_멈춘다(db, tmp_pa
         m.돌린다(db, _목록(tmp_path), 실행=True, 사본=False)
     db.expire_all()
     assert db.scalars(select(models.Meeting.notion_page_id)).all() == ["p-다른것", None]
+
+
+def test54_c04_다시_센_수가_어긋나면_되돌린다(db, tmp_path, monkeypatch):
+    m = _달기()
+    _심는다(db)
+    진짜 = m.단수
+    불림 = []
+
+    def 어긋난(세션):
+        불림.append(1)
+        return 진짜(세션) + (1 if len(불림) > 1 else 0)   # 채운 뒤에 센 것만 하나 틀리게
+    monkeypatch.setattr(m, "단수", 어긋난)
+    with pytest.raises(m.멈춤):
+        m.돌린다(db, _목록(tmp_path), 실행=True, 사본=False)
+    assert len(불림) == 2
+    db.expire_all()
+    assert db.scalars(select(models.Meeting.notion_page_id)).all().count(None) == 5
+
+
+def test54_c05_사본을_뜰_수_없으면_쓰기_전에_멈춘다(db, tmp_path):
+    m = _달기()
+    _심는다(db)
+    with pytest.raises(m.멈춤):              # 시험 DB 는 data/app.db 가 아니다
+        m.돌린다(db, _목록(tmp_path), 실행=True, 사본=True)
+    db.expire_all()
+    assert db.scalars(select(models.Meeting.notion_page_id)).all().count(None) == 5
 
 
 def test54_c03_목록_파일이_없거나_비면_멈춘다(db, tmp_path):
