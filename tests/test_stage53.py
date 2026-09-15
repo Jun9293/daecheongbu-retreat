@@ -35,9 +35,19 @@ def test53_a02_환경변수가_있으면_그_이름_없으면_기본값(tmp_path
     assert 이름({"DCB_SESSION_COOKIE": "other_cookie"}) == "other_cookie"
 
 
-def test53_a03_쿠키_이름은_한_곳에서만_정한다():
-    """set · delete · get 이 같은 이름을 쓰도록 — 글자로 적힌 쿠키 이름이 config 밖에 없다."""
-    걸린 = [p for p in (ROOT / "app").rglob("*.py")
-            if p.name != "config.py" and "dcb_session" in p.read_text(encoding="utf-8")]
-    assert not 걸린, 걸린
+def 세션쿠키_자리(글: str) -> list[str]:
+    """set_cookie · delete_cookie · cookies.get 의 첫 인자 — 세션 쿠키를 다루는 자리."""
+    return re.findall(r"(?:set_cookie|delete_cookie|cookies\.get)\(\s*([^,)\s]+)", 글)
+
+
+def test53_a03_세션_쿠키는_한_이름만_쓴다():
+    """로그인 · 로그아웃 · 읽기가 같은 이름을 쓰도록 (1c) — 세 자리 첫 인자가 SESSION_COOKIE 다."""
+    security = (ROOT / "app" / "security.py").read_text(encoding="utf-8")
+    자리 = 세션쿠키_자리(security)
+    assert len(자리) >= 3, "security.py 에서 쿠키를 다루는 자리를 못 찾았다 — 아무것도 안 보는 검사다"
+    assert set(자리) == {"SESSION_COOKIE"}, 자리
+    # 막는 쪽: 글자로 적은 이름이면 걸린다
+    assert set(세션쿠키_자리('response.set_cookie("sess", token)')) != {"SESSION_COOKIE"}
+    본것 = [p for p in (ROOT / "app").rglob("*.py")]
+    assert 본것 and not [p for p in 본것 if p.name != "config.py" and "dcb_session" in p.read_text(encoding="utf-8")]
     assert config.SESSION_COOKIE
