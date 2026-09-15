@@ -89,6 +89,7 @@ def _시트(경로: pathlib.Path, *, 둘째판: bool = False) -> None:
         e.cell(r, 7, f"=M{r}")
         if 초록:
             e.cell(r, 10).fill = PatternFill("solid", fgColor="FFB6D7A8")
+    e.cell(2, 8, "=SUM(G2:G4)")  # 합계금액 = 그 묶음 줄들의 예산 사용액 합(7-1) — 결산 식이 이 칸을 가리킨다
     e.merge_cells("A2:A5"); e.merge_cells("B2:C5"); e.merge_cells("A6:A7"); e.merge_cells("B6:C7")
     e.cell(9, 1, "합계 줄")      # 금액 없는 줄은 안 들인다
 
@@ -263,13 +264,24 @@ def test48_d01_영수증과_잇기(판):
 # ── 마) 짝 표 ──
 
 
+def _결산(경로: pathlib.Path, 줄: int, 식: str) -> None:
+    from openpyxl import load_workbook
+    wb = load_workbook(경로)
+    wb["예산(실시간)"].cell(줄, 11, 식)
+    wb.save(경로)
+
+
 def test48_e01_짝_표가_남고_짝_표로_고친다(판):
+    _결산(판["경로"], 6, "=SUMIF('지출 상세내역'!C:C,1,'지출 상세내역'!H:H)")   # 모르는 꼴 — 지출 7행이 안 잡힌다
     계획 = _돌린다(판, False)
     md = (pathlib.Path(config.DATA_DIR) / "재정짝표.real.md").read_text(encoding="utf-8")
     for 이름, 목록 in 계획.짝.items():
         assert f"## {이름} — {len(목록)}건" in md
-    못이은 = {r for r, _, _ in 계획.짝["예산"]}
-    assert {6, 7} <= 못이은, "같은 글자 둘인 줄과 글자 없는 줄이 짝 표에 있어야 한다"
+    못이은 = {r: 사유 for r, 사유, _ in 계획.짝["예산"]}
+    assert 못이은 == {7: "결산 식이 가리키는 예산 줄이 0개"}
+    # 같은 글자 둘인 6행은 글자로는 못 잇지만 결산 식이 하나를 가리켜 이어진다
+    assert 계획.수["지출 · 결산 식으로 이음 · 글자로는 못 잇는 줄"] == 1
+    assert 계획.수["지출 · 결산 식으로 이음 · 글자로는 다른 예산 줄"] == 0
     assert any(사유 == "영수증 번호 없음" for _, 사유, _ in 계획.짝["영수증"])
     # 부서 — 이름 있는 줄은 붙고, 없는 줄은 없음으로 센다
     붙음 = {e["줄"]: e["부서키"] for e in 계획.지출}
@@ -289,6 +301,7 @@ def test48_e01_짝_표가_남고_짝_표로_고친다(판):
 
 
 def test48_e02_이은_줄은_예산_항목_글자_못_이은_줄은_시트_글자(판):
+    _결산(판["경로"], 6, "=SUMIF('지출 상세내역'!C:C,1,'지출 상세내역'!H:H)")
     _돌린다(판, True)
     with app_session() as db:
         이은 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 130600)).one()
@@ -296,6 +309,21 @@ def test48_e02_이은_줄은_예산_항목_글자_못_이은_줄은_시트_글�
         assert (이은.level1, 이은.level2, 이은.level3a) == (c.level1, c.level2, c.level3)
         못 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 5000)).one()
         assert 못.budget_category_id is None and 못.level3a == "없는세부"
+
+
+def test48_e03_글자와_결산_식이_어긋나면_결산_식을_따르고_센다(판):
+    """사람이 정함(2026-09-15 · 봐둘것 BB-i) — 결산 식이 기본이고 글자 비교는 확인용이다."""
+    _결산(판["경로"], 4, "='지출 상세내역'!H8")    # 간식 예산 줄이 버스 지출을 받는다
+    _결산(판["경로"], 7, "='지출 상세내역'!H5")    # 버스 예산 줄이 간식 지출을 받는다
+    계획 = _돌린다(판, True)
+    assert 계획.수["지출 · 결산 식으로 이음 · 글자로는 다른 예산 줄"] == 2
+    assert {r: 글줄 for r, _, 글줄 in 계획.짝["글자와 식"]} == {5: 4, 8: 7}
+    with app_session() as db:
+        간식 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 20000)).one()
+        버스 = db.scalars(select(models.ExpenseEntry).where(models.ExpenseEntry.amount == 7000)).one()
+        assert 간식.budget_category.level2 == "버스대여" and 버스.budget_category.level3 == "간식"
+    md = (pathlib.Path(config.DATA_DIR) / "재정짝표.real.md").read_text(encoding="utf-8")
+    assert "## 글자와 식 — 2건" in md
 
 
 # ── 바) 두 번 들이지 않는다 · 아) 미리보기 수 = 실행 뒤 수 ──

@@ -49,6 +49,18 @@ def 짝판(판):
     return 판
 
 
+def _옛들여오기(판):
+    """2026 여름 시트를 들인 때의 모양 — 그때는 글자로 이어 글자가 겹치거나 없는 줄(지출 6 · 7행)이 못 이은 채 들어갔다.
+    지금 들여오기는 결산 식으로 이으므로(BB-i) 들인 뒤 그 둘을 비워 그 모양을 만든다."""
+    _돌린다(판, True)
+    with app_session() as db:
+        for x in db.scalars(select(models.ExpenseEntry).where(
+                models.ExpenseEntry.retreat_id == 판["retreat"], models.ExpenseEntry.canceled_at.is_(None),
+                models.ExpenseEntry.amount.in_((10000, 5000)))):
+            x.budget_category_id = None
+        db.commit()
+
+
 def _미지정(판):
     with app_session() as db:
         return {e.id: e for e in db.scalars(select(models.ExpenseEntry).where(
@@ -63,24 +75,24 @@ def test51_a01_결산식을_따라가_지출_줄마다_예산_줄(짝판):
     식 = 짝판["mod"].결산식으로(짝판["경로"])
     # 예산 3행 → H2(=SUM(G2:G4)) → 지출 2·3·4 · 예산 4행 → H5 · 5행 → H6 · 6행 → H7 · 7행 → H8
     assert {r: 식[r] for r in (2, 3, 4, 5, 6, 7, 8)} == {2: {3}, 3: {3}, 4: {3}, 5: {4}, 6: {5}, 7: {6}, 8: {7}}
-    # 글자로 이은 줄은 식도 같은 예산 줄을 가리킨다 — 두 길이 어긋나지 않는지
+    # 들여오기가 이 식으로 잇는다 — 지출 줄마다 식이 가리키는 그 예산 줄
     계획 = _돌린다(짝판, False)
-    글줄 = {e["줄"]: e["예산줄"] for e in 계획.지출 if e["예산줄"] is not None}
-    assert 글줄 and all(식[r] == {b} for r, b in 글줄.items())
+    이은 = {e["줄"]: e["예산줄"] for e in 계획.지출}
+    assert 이은 and all(식[r] == {b} for r, b in 이은.items())
 
 
-def test51_a02_글자_비교_함수는_그대로다():
-    """글자로 이은 67 건이 그 함수로 맞게 이어졌다 — 새 함수가 그 자리를 대신하지 않는다."""
+def test51_a02_들여오기는_결산_식으로_잇고_글자는_확인용():
+    """사람이 정함(2026-09-15 · 봐둘것 BB-i) — 2027 시트부터 처음부터 결산 식으로 잇는다."""
     글 = (ROOT / "scripts" / "재정들여오기.py").read_text(encoding="utf-8")
     고른다 = 글[글.index("def 고른다("):글.index("def _이름(")]
-    assert "결산식으로" not in 고른다 and "열쇠.get(key) == 1" in 고른다
+    assert "판.결산식" in 고른다 and "열쇠.get(key) == 1" in 고른다
 
 
 # ── 다) 미리보기 · 라) 실행 · 마) 두 번째 ──
 
 
 def test51_b01_미지정만_채우고_이미_이은_것은_안_건드린다(짝판, capsys):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     전미지정 = _미지정(짝판)
     with app_session() as db:
         이은것 = {e.id: e.budget_category_id for e in db.scalars(select(models.ExpenseEntry).where(
@@ -109,7 +121,7 @@ def test51_b01_미지정만_채우고_이미_이은_것은_안_건드린다(짝�
 
 
 def test51_b02_취소된_예산_항목을_가리키면_안_채우고_짝_표에(짝판):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     미리 = _잇기돌림(짝판, False)
     with app_session() as db:
         하나 = db.get(models.BudgetCategory, 미리.채울[0][1])
@@ -132,7 +144,7 @@ def test51_b03_들여온_기록이_없으면_멈춘다(짝판):
 
 
 def test51_b04_사본을_못_뜨면_아무것도_안_바꾼다(짝판):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     전 = _미지정(짝판).keys()
     with pytest.raises(짝판["mod"].멈춤, match="다릅니다"):
         _잇기돌림(짝판, True, 사본=True)
@@ -140,7 +152,7 @@ def test51_b04_사본을_못_뜨면_아무것도_안_바꾼다(짝판):
 
 
 def test51_b05_들인_뒤_지출이_바뀌어_순서가_안_맞으면_멈춘다(짝판):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     with app_session() as db:
         x = next(iter(db.scalars(select(models.ExpenseEntry).where(
             models.ExpenseEntry.retreat_id == 짝판["retreat"], models.ExpenseEntry.canceled_at.is_(None)))))
@@ -157,6 +169,11 @@ def test51_c01_아는_꼴의_식만_줄로_푼다(짝판):
     풀기 = 짝판["mod"]._식의줄들
     탭 = 짝판["mod"].지출탭
     assert 풀기(f"='{탭}'!$H$5", 탭) == {5}
+    # Excel 기본 범위 꼴 — 탭 이름이 범위 앞에 한 번(사람이 정함 · 2026-09-15) · 두 끝에 다 붙인 꼴도
+    assert 풀기(f"='{탭}'!G2:G4", 탭) == {2, 3, 4} and 풀기(f"=SUM('{탭}'!$G$4:$G$2)", 탭) == {2, 3, 4}
+    assert 풀기(f"='{탭}'!G2:'{탭}'!G4", 탭) == {2, 3, 4}
+    assert 풀기(f"=G2:'{탭}'!G4", 탭) == set(), "뒤 끝에만 붙은 꼴은 모른다"
+    assert 풀기(f"='{탭}'!G2:G4") == set(), "합계 식(탭 없음)에 탭 이름이 섞이면 모른다"
     assert 풀기("=sum(G2:G4)") == {2, 3, 4} and 풀기("=SUM(G4:G2)") == {2, 3, 4} and 풀기("=G2+G3") == {2, 3}
     # 모르는 꼴은 빈 것 — 틀린 한 줄로 조용히 채우지 않는다
     for 모름 in ("=LOG10(G2)", "=SUMIF(C:C,C5,G:G)", '=H5&"A1"', "=G2-G3", "=G2*2", "G2", ""):
@@ -172,7 +189,7 @@ def test51_c02_창이_두_곳에서_맞으면_빈_것(짝판):
 
 
 def test51_c03_들인_뒤_예산_항목_이름을_고치면_멈춘다(짝판):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     with app_session() as db:
         c = db.scalars(select(models.BudgetCategory).where(
             models.BudgetCategory.retreat_id == 짝판["retreat"], models.BudgetCategory.canceled_at.is_(None))).first()
@@ -189,7 +206,7 @@ def _결산식(판, 줄, 식):
 
 
 def test51_c04_식이_예산_줄_둘을_가리키거나_모르는_꼴이면_짝_표에(짝판):
-    _돌린다(짝판, True)                          # 들인 뒤 시트의 식만 바꾼다 — 글자와 순서는 그대로
+    _옛들여오기(짝판)                          # 들인 뒤 시트의 식만 바꾼다 — 글자와 순서는 그대로
     미리 = _잇기돌림(짝판, False)
     assert len(미리.채울) == 2, "합성 시트의 못 이은 줄은 둘(6 · 7행)"
     _결산식(짝판, 5, "='지출 상세내역'!H6+'지출 상세내역'!H7")   # 7행이 예산 5·6행 둘에 잡힌다
@@ -201,7 +218,7 @@ def test51_c04_식이_예산_줄_둘을_가리키거나_모르는_꼴이면_짝_
 
 
 def test51_c05_식이_들여온_예산_줄이_아닌_줄을_가리키면_짝_표에(짝판, monkeypatch):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     monkeypatch.setattr(짝판["짝"], "결산식으로", lambda 경로: {6: {99}, 7: {99}})
     판2 = _잇기돌림(짝판, False)
     assert 판2.채울 == [] and len(판2.짝) == 2
@@ -209,7 +226,7 @@ def test51_c05_식이_들여온_예산_줄이_아닌_줄을_가리키면_짝_표
 
 
 def test51_c06_이미_이은_것이_식과_다르면_센다(짝판):
-    _돌린다(짝판, True)
+    _옛들여오기(짝판)
     assert _잇기돌림(짝판, False).수["이미 이은 것 중 결산 식이 가리키는 항목과 다른 것"] == 0
     with app_session() as db:
         이은 = db.scalars(select(models.ExpenseEntry).where(
