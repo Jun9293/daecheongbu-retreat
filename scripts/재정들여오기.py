@@ -245,6 +245,67 @@ def 읽는다(경로: pathlib.Path) -> 시트:
     return out
 
 
+_주소 = r"\$?[A-Z]{1,3}\$?(\d+)"
+
+
+def _식의줄들(식: str, 탭: str | None = None) -> set[int]:
+    """**아는 꼴의 식만** 줄 번호로 푼다 — 모르는 꼴이면 빈 집합(→ 짝 표로 간다).
+
+    아는 꼴: `=주소` · `=주소:주소` · `=SUM(범위, …)`(시트에 소문자 sum 도 있다) 과 그것들을 `+` 로 이은 것.
+    **탭을 주면 범위의 두 끝에 모두 탭 이름이 있어야 한다** — Excel 기본 꼴 `'탭'!H2:H4` 는 모르는 꼴로 짝 표에 간다(2026 시트의
+    결산 식은 전부 한 칸이라 안 걸린다 · 다음 시트에서 그 꼴이 나오면 더할지 봐둘것 BB-i). `탭` 을 주면 주소마다 그 탭 이름이
+    붙어 있어야 하고(결산 식 → 지출 탭), 안 주면 탭 이름이 없어야 한다(합계 식 → 같은 탭). 범위는 펼치고 거꾸로 쓴
+    범위도 받는다. **칸 주소 모양만 모으면** 숫자가 붙은 함수 이름 · 따옴표 안 글자 · 조건 칸(SUMIF)까지 줄로 잡혀
+    틀린 한 줄로 조용히 채울 수 있다(2026-09-15 커밋 전 검토) — 그래서 꼴을 먼저 본다.
+    """
+    머리 = "" if 탭 is None else rf"(?:'{re.escape(탭)}'|{re.escape(탭)})!"
+    칸 = rf"{머리}\$?[A-Z]{{1,3}}\$?\d+"
+    범위 = rf"{칸}(?:\s*:\s*{칸})?"
+    항 = rf"(?:(?i:SUM)\(\s*{범위}(?:\s*,\s*{범위})*\s*\)|{범위})"
+    본문 = 식.strip()
+    if not 본문.startswith("=") or not re.fullmatch(rf"{항}(?:\s*\+\s*{항})*", 본문[1:].strip()):
+        return set()
+    줄 = set()
+    for m in re.finditer(rf"{머리}{_주소}(?:\s*:\s*{머리}{_주소})?", 본문):
+        a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+        줄 |= set(range(min(a, b), max(a, b) + 1))
+    return 줄
+
+
+def 결산식으로(경로: pathlib.Path) -> dict[int, set[int]]:
+    """시트 **자신의 연결** — 지출 시트 줄 → 그 줄을 합계로 받는 예산 시트 줄들 (2026-09-15 · 봐둘것 BB-h).
+
+    예산 탭의 결산금액 식은 지출 탭의 합계금액 칸을 주소로 가리키고(7-1), 그 합계금액 칸은 지출 줄 범위를
+    더하는 식이다. 그 두 식을 따라가 지출 줄마다 어느 예산 줄이 받는지 구한다. **글자 비교(`고른다`)와 따로다** —
+    두 탭의 이름이 달라도(한 예산 줄이 여러 품목을 묶은 이름) 시트가 적어 둔 답이다. 합계금액 칸이 식이 아니면
+    그 줄 하나다. 값을 찍지 않는다.
+    """
+    from openpyxl import load_workbook
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        wf = load_workbook(경로, data_only=False)
+    bf, ef = wf[예산탭], wf[지출탭]
+    머리줄 = next((r for r in range(1, 6) if _글(bf.cell(r, 2).value) == "구분"
+                 or any(_글(bf.cell(r, c).value) == "예산금액" for c in range(1, 20))), None)
+    if 머리줄 is None:
+        raise 멈춤(f"「{예산탭}」 의 머리글 줄을 못 찾았습니다.")
+    bk = _머리칸(bf, 머리줄, ["구분", "결산금액"])
+    ek = _머리칸(ef, 1, ["합계금액"])
+    끝 = next((r for r in range(머리줄 + 1, bf.max_row + 1)
+              if all(낱말 in (_글(bf.cell(r, bk["구분"]).value) or "") for 낱말 in 지출끝.split())), bf.max_row + 1)
+    out: dict[int, set[int]] = {}
+    for r in range(머리줄 + 1, 끝):
+        결산 = str(bf.cell(r, bk["결산금액"]).value or "")
+        if not (결산.startswith("=") and "!" in 결산):     # 읽는다 의 「예산 줄」 과 같은 판정
+            continue
+        for 합계줄 in _식의줄들(결산, 지출탭):
+            합계 = str(ef.cell(합계줄, ek["합계금액"]).value or "")
+            for 지출줄 in (_식의줄들(합계) if 합계.startswith("=") else {합계줄}):
+                out.setdefault(지출줄, set()).add(r)
+    return out
+
+
 def _곱식(v) -> int | None:
     """계산된 값이 안 딸려 온 파일(식만 저장된 사본)에서 「=숫자*숫자」 식의 값을 센다. 그 밖의 식은 None."""
     if isinstance(v, str) and re.fullmatch(r"=\s*\d+(\s*\*\s*\d+)+\s*", v):
