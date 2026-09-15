@@ -2588,6 +2588,14 @@ BA-f · BB-a 입니다** — 여기는 그 결정이 코드에서 어떤 규칙�
   예산 줄이 하나일 때만** 잇습니다. 항목 칸 옆의 병합 안 된 칸에 글이 있으면 항목에 붙입니다(양쪽 탭이 같은 꼴).
   **이은 지출은 예산 항목의 글자를 복사하고, 못 이은 지출은 시트 글자를 둡니다** — 앱의 등록과 같은 자리입니다
   (봐둘것 BB-g 의 「복사된 시트 칸」 은 들일 때 이렇게 정했고, 이름을 고친 뒤 안 따라가는 것은 그대로)
+- **글자로 못 이은 지출은 시트 자신의 결산 식으로 잇습니다**(2026-09-15 · 사람이 정함 · 봐둘것 BB-h · BB-i).
+  예산 탭의 결산금액 식이 가리키는 지출 탭 합계금액 칸을 따라가 그 합계가 더하는 지출 줄을 구하는 것이
+  `재정들여오기.결산식으로` 이고(**아는 꼴의 식만** 푼다 — `=주소` · `SUM(범위)` · `+` 로 이은 것 · 모르는 꼴은 짝 표로), 들인 뒤 예산 항목이 없는 지출에만 그것으로 채우는 전환이 `scripts/재정짝잇기.py`
+  (미리보기 기본 · `--실행` · 사본 · DB 다시 세기) 입니다. 식이 가리키는 예산 줄이 하나가 아니거나 그 항목이 취소
+  표시면 안 채우고 짝 표(`data/재정짝잇기.real.md`)에 남깁니다. 채우면 사람이 고치기에서 고른 것과 같습니다(구분 ·
+  항목 · 세부항목-1 글자가 항목을 따르고 부서 · 금액은 그대로). 시트 줄과 앱 행은 들여온 순서로 맞추고, 들인 뒤
+  바뀌어 안 맞으면 멈춥니다. **글자 비교(`고른다`)는 그대로 둡니다** — 글자로 이은 줄은 결산 식과 전부 같았습니다.
+  다음 시트를 들일 때 처음부터 결산 식으로 이을지는 사람이 정합니다(봐둘것 BB-i)
 - **부서** — 세부항목 칸들을 이어 붙인 글에 앱 부서 이름(앞 번호·빈칸을 뗀 것)이 **하나만** 들어 있으면 그 키.
   한 이름이 다른 이름 안에 들면 긴 쪽만 봅니다. 둘 이상이면 비우고 짝 표에, 안 적혔으면 비웁니다(총무팀 소관)
 - **계좌** — `budget.split_account` 를 부릅니다(7-4 · 가르는 규칙을 스크립트에 다시 적지 않습니다). 계좌 칸이 빈
@@ -4480,7 +4488,8 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 배지 판정 (4-3) | `app/domain/board.py` 의 `paint_of` 가 내는 `badge` — **여기 하나다.** 홈·목록·보드·드로어 칩이 받아 쓰기만 한다 |
 | 비품 (4-18) | `app/routers/equipment.py` · `templates/equipment.html` · `scripts/비품옮기기.py`(체크리스트 → 비품) · `scripts/비품묶음옮기기.py`(도막 1 의 표 모양 → 묶음이 회차에) · `scripts/비품들여오기.py`(시트 TSV → 비품 · 사람 이름과 전화는 기본이 거부) · `scripts/비품비고옮기기.py`(비고가 품목 → 회차 · 도막 4) · `scripts/비품묶음합치기.py`(이미 갈린 약 묶음을 의약품 하나로 · 도막 5) — 품목은 `EquipmentItem`(라이브러리), 수량·체크·위치·묶음·비고는 `EquipmentRun`(회차별). 권한은 `permissions` 의 키 비교 하나. 회차를 고르고 보관 경고를 찍는 것은 `비품들여오기.회차머리` 하나이고 합치기가 그것을 부른다. **순서는 4-18 에 한 번만 적는다** |
 | 재정 (7장) | `app/domain/budget.py` · `routers/budget.py` · `routers/expenses.py` — **재정 숫자를 세는 곳은 `domain/budget.py` 하나다**(summary · `list_totals` · `filter_entries` · `live_entries` · `refund_sheet` · `income_amount_of` · `expense_stats`). 밖에서 합·사칙 셈으로 다시 세는지는 `tests/test_stage45.py` 가 모델·묶음에서 끌어낸 이름으로 잰다 — 필터 조건과 건수는 못 본다 |
-| 재정 시트 들여오기 (7-5 · 차례 6) | `scripts/재정들여오기.py` — `읽는다`(시트만) · `고른다`(계획 · 아무것도 안 바꿈 · 미리보기와 실행이 같이 씀) · `넣는다`(넣기만 · commit 안 함) · `돌린다`(사본 → 넣기 → `센다` 로 DB 를 다시 세어 계획과 견주고 맞을 때만 commit · 다르면 되돌림) · 계좌는 `budget.split_account` 로 가르고 `budget.account_problem` 을 지난 것만 · 회차는 `scripts/비품들여오기.py` 의 `회차머리` |
+| 재정 시트 들여오기 (7-5 · 차례 6) | `scripts/재정들여오기.py` — `읽는다`(시트만) · `고른다`(계획 · 아무것도 안 바꿈 · 미리보기와 실행이 같이 씀) · `넣는다`(넣기만 · commit 안 함) · `돌린다`(사본 → 넣기 → `센다` 로 DB 를 다시 세어 계획과 견주고 맞을 때만 commit · 다르면 되돌림) · 계좌는 `budget.split_account` 로 가르고 `budget.account_problem` 을 지난 것만 · 회차는 `scripts/비품들여오기.py` 의 `회차머리` · 시트 자신의 결산 식 연결은 `결산식으로` |
+| 못 이은 지출을 결산 식으로 잇기 (7-5 · 봐둘것 BB-h · BB-i) | `scripts/재정짝잇기.py` — `고른다`(들여온 지출 중 예산 항목 없는 것만 · 시트 줄과 앱 행은 들여온 순서로 맞춤 · 취소된 항목을 가리키면 짝 표) · `넣는다` · `돌린다`(채울 것이 있을 때만 사본 · 미지정 수와 채운 행을 DB 에서 다시 셈) |
 | 계좌 꼴 게이트 (7-4 · 봐둘것 BB-c) | `app/domain/budget.py` 의 `account_problem` — **판정은 여기 하나다**(지출 등록·고치기는 `routers/expenses.py` 의 `_계좌꼴` · 내 정보는 `routers/settings.py` 의 `update_me` · 들여오기). 꼴의 수는 `app/account_shape.py`(아무것도 import 안 함) — `check_dev_db` 는 개발 DB 의 볼 칸(제외칸을 뺀 글자 칸 · 대응표가 없어도)에서, `check_names` 는 `docs/` 아래 글에서 같은 꼴을 찾고 값은 안 찍는다(본 파일 수를 찍고 0 이면 실패). 날짜로 시작하는 조각 · 휴대폰 꼴 · 지어낸 번호(999 머리 · 한 숫자 되풀이 · 이어 오름)는 뺀다 |
 | 재정 고치기 (7-3 · 7-4 · 차례 5) | `routers/expenses.py` 의 `update_expense` · `update_receipt_original`(문은 `_my_entry`) · `routers/budget.py` 의 `update_category` · `update_income` · 계좌 가르기 `budget.split_account` · 뒤 네 자리 `budget.account_tail` · 내 정보 기록 `routers/settings.py` 의 `update_me` |
 | 영수증 잇기 · 떼기 · 원본 번호 (7-4) | `app/models.py` 의 `ExpenseReceiptLink` · `ExpenseEntry.attach_receipt`(붙이는 곳은 여기 하나) · `routers/expenses.py` 의 `link_receipt` · `detach_receipt` · 지금 있는 영수증을 잇는 것은 `scripts/영수증잇기옮기기.py`(미리보기 기본 · `--실행`) · 아직 안 이어진 수는 `budget.unlinked_receipt_count` · 옛 영수증을 번호로 잇는 것을 막는 판정은 `budget.receipt_has_links` |
