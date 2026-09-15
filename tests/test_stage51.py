@@ -51,13 +51,16 @@ def 짝판(판):
 
 def _옛들여오기(판):
     """2026 여름 시트를 들인 때의 모양 — 그때는 글자로 이어 글자가 겹치거나 없는 줄(지출 6 · 7행)이 못 이은 채 들어갔다.
-    지금 들여오기는 결산 식으로 이으므로(BB-i) 들인 뒤 그 둘을 비워 그 모양을 만든다."""
+    지금 들여오기는 결산 식으로 이으므로(BB-i) 들인 뒤 그 둘을 비워 그 모양을 만든다. **글자도 시트 글자로 되돌린다** —
+    못 이은 줄은 시트 글자를 두었으므로, 안 되돌리면 짝잇기가 글자를 덮는지를 아무 시험도 못 잰다(커밋 전 검토 M1)."""
     _돌린다(판, True)
     with app_session() as db:
         for x in db.scalars(select(models.ExpenseEntry).where(
                 models.ExpenseEntry.retreat_id == 판["retreat"], models.ExpenseEntry.canceled_at.is_(None),
                 models.ExpenseEntry.amount.in_((10000, 5000)))):
             x.budget_category_id = None
+            if x.amount == 5000:
+                x.level3a = "없는세부"
         db.commit()
 
 
