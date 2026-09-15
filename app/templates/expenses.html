@@ -164,7 +164,8 @@
               <details class="rowedit"><summary>고치기</summary>
                 <form method="post" action="/expenses/{{ e.id }}/update" class="editform">
                   <input name="expense_date" type="date" value="{{ e.expense_date.isoformat() if e.expense_date else '' }}" aria-label="지출일자">
-                  <input name="amount" type="number" min="0" step="10" required value="{{ e.amount }}" aria-label="금액">
+                  {# 고치기는 step="1" — 시트에서 들여온 금액에 10원 단위가 아닌 것이 있어 step="10" 이면 브라우저가 저장을 막았다(2026-09-15) #}
+                  <input name="amount" type="number" min="0" step="1" required value="{{ e.amount }}" aria-label="금액">
                   <select name="budget_category_id" aria-label="예산 항목">
                     <option value="">미지정</option>
                     {% if e.budget_category and e.budget_category.canceled_at %}<option value="{{ e.budget_category.id }}" selected>{{ e.budget_category.display_name }} (취소된 항목)</option>{% endif %}
