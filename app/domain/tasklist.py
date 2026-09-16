@@ -25,6 +25,12 @@ STATE_ORDER = ("wait", "prog", "done", "late")
 class ListView:
     rows: list = field(default_factory=list)        # 미완료 — 정렬 순
     done_rows: list = field(default_factory=list)   # 완료 — 기본 접힘 (4-14)
+    # **이번 회차에서 뺀 업무** (`included=false`). 보드·목록·달력·홈이 전부
+    # `included` 로 거르므로 이 줄들은 **어느 화면에도 안 뜬다** — 그런데 거기
+    # 걸린 논의와 첨부는 그대로 살아 있다. 가는 길이 없으면 0장이 「다음
+    # 담당자에게 전달되는 유일한 경로」 라고 한 그 기록이 사라진 것과 같다.
+    # 달력이 「날짜 없는 업무」 를 따로 모아 두는 것과 같은 자리다 (4-13).
+    excluded_rows: list = field(default_factory=list)
     state_counts: dict = field(default_factory=dict)
     dept_counts: list = field(default_factory=list)
     state: str = ""
@@ -44,6 +50,25 @@ class ListView:
         """칩 순서대로 (값, 이름). 이름을 화면에 직접 적으면 상태 분기가
         템플릿으로 새어 들어간다 (4-3) — 여기 한 곳에서 나간다."""
         return [(s, STATE_LABELS[s]) for s in STATE_ORDER]
+
+
+def _excluded_row(run: TaskRun, *, dim_keys: set[str] | None) -> dict:
+    """뺀 업무 한 줄. **배지를 안 붙인다** — 안 하기로 한 업무에 「지연」 은 재촉이고,
+    그 배지는 이 자리에서 아무 뜻도 없다(4-3 의 배지는 하는 업무의 표현이다).
+
+    **소속 외 흐림은 보통 행과 같다**(1장 · 4-14) — 바로 위 목록의 남의 부서
+    행은 흐린데 여기만 선명하면 한 화면이 두 규칙을 쓴다."""
+    dept = run.department
+    return {
+        "dim": bool(dim_keys and (dept.key if dept else None) not in dim_keys),
+        "run_id": run.id,
+        "no": run.run_no,
+        "title": run.library.title,
+        "kind_label": run.library.kind_label,
+        "dept_name": dept.name if dept else None,
+        "dept_color": dept.color if dept else None,
+        "start": run.start_date or run.end_date,
+    }
 
 
 def _sort_key(run: TaskRun):
@@ -130,6 +155,13 @@ def build(
     def key_of(run: TaskRun) -> str | None:
         return run.department.key if run.department else None
 
+    def in_scope(run: TaskRun) -> bool:
+        """부서 드롭다운이 곧 범위다 (4-14) — 뺀 목록도 같은 범위를 따른다.
+        두 목록이 다른 범위를 쓰면 화면이 무엇을 보여 주고 있는지 말해 주지 못한다."""
+        if dept == "depts":
+            return key_of(run) in (my_keys or set())
+        return dept in ("", "all") or key_of(run) == dept
+
     badge_of = {r.id: board.paint_of(r, today)["badge"]["cls"] for r in runs}
 
     # **부서 건수는 부서를 고르기 전 전체에서 센다** — 한 부서를 보는
@@ -144,12 +176,9 @@ def build(
 
     # 부서가 곧 범위다. **상태 건수는 그 안에서 센다** — 「홍보팀 · 대기 3」
     # 처럼 지금 보고 있는 것을 말해야 한다
-    if dept == "depts":
-        scoped = [r for r in runs if key_of(r) in (my_keys or set())]
-    else:
-        # `all` 은 「부서 전체」 — 기본이 내 부서가 되면서(④) 전체를 고른 것과
-        # 안 고른 것을 갈라야 해서 값이 생겼다. 걸러내지 않는다
-        scoped = [r for r in runs if dept in ("", "all") or key_of(r) == dept]
+    # `all` 은 「부서 전체」 — 기본이 내 부서가 되면서(④) 전체를 고른 것과
+    # 안 고른 것을 갈라야 해서 값이 생겼다. 걸러내지 않는다
+    scoped = [r for r in runs if in_scope(r)]
     state_counts = {s: sum(1 for r in scoped if badge_of[r.id] == s) for s in STATE_ORDER}
 
     picked = scoped
@@ -158,9 +187,22 @@ def build(
 
     rows = [_row(r, today, dim_keys=(my_keys or set()) if dim else None, can_edit=can_edit)
             for r in picked]
+    # **뺀 업무는 상태 칩과 무관하다** — 상태 칩은 하는 업무를 가르는 축이고(4-3),
+    # 안 하기로 한 것은 그 축 밖이다. 그래서 `state` 를 안 걸고 부서 범위만 따른다
+    # 정렬은 보통 목록과 같이 따른다 — 이름순을 골랐는데 여기만 날짜순이면
+    # 그 단추가 화면의 절반에만 걸린다
+    excluded = sorted(
+        (r for r in db.scalars(select(TaskRun).where(
+            TaskRun.retreat_id == retreat.id, TaskRun.included.is_(False)))
+         if in_scope(r)),
+        key=key,
+        reverse=(dir == "desc"),
+    )
     return ListView(
         rows=[r for r in rows if r["badge"]["cls"] != "done"],
         done_rows=[r for r in rows if r["badge"]["cls"] == "done"],
+        excluded_rows=[_excluded_row(r, dim_keys=(my_keys or set()) if dim else None)
+                       for r in excluded],
         state_counts=state_counts,
         dept_counts=dept_counts,
         state=state,

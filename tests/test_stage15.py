@@ -239,16 +239,26 @@ def _뺀업무를만든다(admin_client, 제목="빼 둘 업무"):
     return meeting, run
 
 
+def _보통목록과_뺀목록(html: str) -> tuple[str, str]:
+    """목록 화면을 둘로 가른다 — 뺀 업무는 맨 아래 접힌 상자에 선다
+    (4-14 · 2026-09-16). 전에는 「화면 어디에도 없다」 로 쟀는데, 그 상자가
+    생기면서 그 말은 더 이상 참이 아니다."""
+    at = html.find('class="lexcl"')
+    return (html, "") if at < 0 else (html[:at], html[at:])
+
+
 def test15_r01_뺀_업무를_되살리면_목록에_다시_선다(admin_client):
     meeting, run = _뺀업무를만든다(admin_client)
-    assert "빼 둘 업무" not in admin_client.get("/tasks").text
+    보통, 뺀것 = _보통목록과_뺀목록(admin_client.get("/tasks").text)
+    assert "빼 둘 업무" not in 보통 and "빼 둘 업무" in 뺀것
 
     res = admin_client.post(f"/meetings/{meeting.id}/suggestions/restore",
                             json={"run_id": run.id})
     assert res.status_code == 200 and res.json()["run_id"] == run.id
     with app_session() as db:
         assert db.get(models.TaskRun, run.id).included is True
-    assert "빼 둘 업무" in admin_client.get("/tasks").text
+    보통, 뺀것 = _보통목록과_뺀목록(admin_client.get("/tasks").text)
+    assert "빼 둘 업무" in 보통 and "빼 둘 업무" not in 뺀것
 
 
 def test15_r02_뺐다_되살려도_라이브러리가_하나다(admin_client):

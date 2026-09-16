@@ -55,6 +55,30 @@ class HomeView:
     unpaid_refund_count: int = 0     # budget.refund_entries — 개인이 냈는데 미지급
     no_receipt_count: int = 0        # budget.no_receipt_entries — 걸린 영수증 0건
     open_task_count: int = 0         # 미완료 업무 (정리 필요)
+    carried_only: bool = False       # 업무만 옮겨 왔고 완료가 0건인가 (5-6 의 그 판단)
+
+
+def carried_only(runs: list[TaskRun], *, over: bool) -> bool:
+    """업무만 옮겨 왔고 완료가 하나도 없는 **종료된** 회차인가.
+
+    `over` 는 부르는 쪽이 `period.is_over` 로 잰 값이다 — 이 함수가 종료를
+    다시 재지 않는다(`build` 의 결산 갈래 한 곳에서만 부른다).
+
+    5-6 이 프로그램표에서 한 판단을 업무 쪽에 그대로 옮긴 것이다
+    (`live.carried_only` — 같은 갈래, 같은 근거 둘). 끝난 회차에 업무가
+    있는데 완료가 0 이면 화면이 「미완료 233건 · 정리 필요」 라고 말하는데,
+    실제로는 안 한 것이 아니라 **누른 적이 없는** 것이다 — 없는 기록을
+    지어내지도 않고(6-9) 안 한 것처럼 보이게 두지도 않는다.
+
+    근거는 **종료된 회차 + 완료 0건** 뿐이다. 회차에 표시를 따로 달지
+    않는다 — 달면 누군가 켜고 꺼야 하고, 안 켜면 또 조용히 틀린다.
+    완료가 하나라도 생기면 그때부터 보통의 「미완료 N건」 으로 돌아온다.
+    """
+    if not runs:
+        return False
+    if not over:
+        return False
+    return not any(r.status == "완료" for r in runs)
 
 
 TOP_CATEGORY_COUNT = 6
@@ -95,6 +119,8 @@ def build(db: Session, retreat: Retreat, user: User, *, today: dt.date) -> HomeV
         view.budget = build_budget_summary(db, retreat=retreat)
         view.done = len(runs) - len(open_runs)
         view.total = len(runs)
+        # 완료가 0 이면 「미완료 N건 · 정리 필요」 대신 사정을 한 줄로 낸다 (5-6)
+        view.carried_only = carried_only(runs, over=True)
         return view
 
     view.remaining = len(open_runs)
