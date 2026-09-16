@@ -60,7 +60,9 @@ def _심는다(db):
 
 
 def test54_a01_칸은_NULL_로_붙고_부팅은_값을_안_채운다():
-    붙는 = [(t, c, d) for t, c, d in app_db._ADDED_COLUMNS if c == "notion_page_id"]
+    # **표까지 짚는다** — 업무 쪽에도 같은 이름의 칸이 생겼다(`task_library` · 2026-09-16).
+    # 칸 이름만으로 고르면 저쪽이 늘 때마다 이 시험이 빨개지는데, 여기가 재는 것은 회의록 쪽이다
+    붙는 = [(t, c, d) for t, c, d in app_db._ADDED_COLUMNS if (t, c) == ("meetings", "notion_page_id")]
     assert 붙는 == [("meetings", "notion_page_id", "VARCHAR(36)")]
     assert "NOT NULL" not in 붙는[0][2] and "DEFAULT" not in 붙는[0][2]
     # 값을 쓰는 곳이 app/ 에 없다 — 모델 선언과 칸 목록만
@@ -68,9 +70,13 @@ def test54_a01_칸은_NULL_로_붙고_부팅은_값을_안_채운다():
     assert len(본것) > 10, "app/ 에서 훑은 파일이 없다 — 아무것도 안 보는 검사다"
     쓰는곳 = [p for p in 본것 if "notion_page_id" in p.read_text(encoding="utf-8")]
     assert 쓰는곳 == []
-    assert (ROOT / "app" / "models.py").read_text(encoding="utf-8").count("notion_page_id") == 1, "models.py 가 선언 말고 그 칸을 만진다"
+    # 두 모델이 같은 이름의 칸을 갖게 됐으므로 **선언 줄만 세어 견준다** — 선언 말고 만지는 줄이 있으면 는다
+    models글 = (ROOT / "app" / "models.py").read_text(encoding="utf-8")
+    assert models글.count("notion_page_id") == len(
+        re.findall(r"^\s*notion_page_id: Mapped", models글, re.M)), "models.py 가 선언 말고 그 칸을 만진다"
     db글 = (ROOT / "app" / "db.py").read_text(encoding="utf-8")
-    assert len(re.findall(r"notion_page_id", db글)) == 1, "db.py 가 칸 목록 말고 그 칸을 만진다"
+    assert len(re.findall(r"notion_page_id", db글)) == len(
+        re.findall(r'"notion_page_id"', db글)), "db.py 가 칸 목록 말고 그 칸을 만진다"
     assert models.Meeting.__table__.c.notion_page_id.nullable
 
 
