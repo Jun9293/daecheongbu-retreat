@@ -95,6 +95,21 @@ def 읽는다() -> list[tuple[str, str]]:
     return 쌍
 
 
+def 머리들() -> list[str]:
+    """목록에 선 낡은 말의 제목 전부 — **표기가 하나도 안 읽힌 항목을 찾으려고** 따로 센다.
+
+    표기가 0개인 항목은 통째로 죽은 것인데, 전체 합만 보면 다른 항목들이 수를 채워 줘서
+    **검사를 했다는 기록이 남고 검사는 아무것도 안 본다**(11-3 3단계 · 커밋 전 검토가 잡았다).
+    """
+    난것, 항목시작 = [], False
+    for 줄 in 옛말목록.read_text(encoding="utf-8").splitlines():
+        if 줄.strip() == "---":
+            항목시작 = True
+        elif 항목시작 and 줄.startswith("## "):
+            난것.append(줄[3:].strip())
+    return 난것
+
+
 def 넘긴것() -> tuple[set[str], list[tuple[int, str]]]:
     """그 말을 **설명하려고** 담는 자리 — 파일 단위로 넘긴다.
 
@@ -158,6 +173,14 @@ def main() -> int:
     if not 쌍:
         print("!! 옛말 목록에서 읽은 표기가 0개입니다.")
         print(f"   검사가 아무것도 안 보고 있습니다 — {옛말목록.name} 의 모양을 확인해 주세요.")
+        return 2
+    # **항목마다 본다** — 합만 보면 한 항목이 통째로 죽어도 나머지가 수를 채워 준다
+    죽은항목 = [머리 for 머리 in 머리들() if 머리 not in {a for a, _ in 쌍}]
+    if 죽은항목:
+        print(f"!! 표기를 하나도 못 읽은 항목이 {len(죽은항목)}개입니다 — 그 항목은 아무것도 안 봅니다.")
+        for 머리 in 죽은항목:
+            print(f"   {머리}")
+        print(f"   {옛말목록.name} 에서 그 항목의 「낡은 표기:」 줄과 백틱을 확인해 주세요.")
         return 2
 
     if args.목록:

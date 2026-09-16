@@ -97,6 +97,27 @@ def test14_s03_옛말_목록이_비면_실패한다(tmp_path, monkeypatch):
     assert stale.main() == 2
 
 
+def test14_s03b_표기를_하나도_못_읽은_항목이_있으면_실패한다(tmp_path, monkeypatch):
+    """**합만 보면 한 항목이 통째로 죽어도 다른 항목이 수를 채워 준다** — 실제로 그렇게 새어
+    「옛말이 없습니다」 가 그 항목에 대해 아무것도 안 본 결과였다(2026-09-16 커밋 전 검토)."""
+    stale = _load("check_stale")
+    산것 = "## 산 항목\n- 낡은 표기: `살아 있는 말`\n"
+    죽은것 = "## 죽은 항목\n- 옛 표기: `못 읽히는 말`\n"          # 라벨이 어긋나 표기가 안 읽힌다
+    목록 = tmp_path / "옛말.md"
+    monkeypatch.setattr(stale, "옛말목록", 목록)
+    monkeypatch.setattr("sys.argv", ["check_stale.py"])
+
+    목록.write_text(f"# 옛말\n\n---\n\n{산것}\n{죽은것}", encoding="utf-8")
+    assert stale.main() == 2, "표기가 0개인 항목을 안 잡는다"
+    assert "죽은 항목" in stale.머리들() and "죽은 항목" not in {a for a, _ in stale.읽는다()}
+
+    # **막히면 안 되는 쪽** — 라벨이 맞으면 그대로 지난다(이 검사가 늘 빨간 것이 아니다)
+    목록.write_text(f"# 옛말\n\n---\n\n{산것}\n{죽은것.replace('옛 표기:', '낡은 표기:')}",
+                    encoding="utf-8")
+    assert {a for a, _ in stale.읽는다()} == {"산 항목", "죽은 항목"}
+    assert [머리 for 머리 in stale.머리들() if 머리 not in {a for a, _ in stale.읽는다()}] == []
+
+
 def test14_s04_지난_판이_놓친_넷을_이_도구가_찾는다(tmp_path):
     """1-e — 그때 그 네 줄을 그대로 심어 본다. 사람이 고른 낱말
     (「업무 이름을 누르면」)로는 하나도 안 걸렸던 것들이다."""
