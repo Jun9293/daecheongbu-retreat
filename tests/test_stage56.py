@@ -54,8 +54,10 @@ def test56_b01_엑셀에_고르기가_붙고_열쇠_칸은_숨는다(tmp_path):
         assert len(dv) == 1, dv
         글자 = get_column_letter(머리.index(머리이름) + 1)
         assert str(dv[0].sqref) == f"{글자}2:{글자}3", (str(dv[0].sqref), 글자)
-        노랑 = [c for c in ws[f"{글자}2"].fill.fgColor.rgb or ""]
-        assert 노랑, "고르는 칸에 색이 없다"
+        칠 = ws[f"{글자}2"].fill
+        빈칸 = ws["A2"].fill                                  # 아무 색도 안 준 칸
+        assert 칠.fill_type == "solid" and 칠.fgColor.rgb != 빈칸.fgColor.rgb, \
+            "고르는 칸에 색이 없다 — openpyxl 은 색 없는 칸도 rgb 를 돌려주므로 칠 여부까지 본다"
         return dv[0]
 
     # **고르는 칸은 「결정 칸」 이어야 한다** — 끝 칸으로 짚으면 노션만 표에서 메모 칸에 걸린다
@@ -137,9 +139,9 @@ def test56_b05_엑셀에만_적은_표시도_가드가_본다(tmp_path):
     wb.save(경로)
     assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 1
     wb = load_workbook(경로)
-    wb["2. 노션에만"]["F2"] = "준비물에 묶임"          # 메모만 적은 것도 손댄 것이다
+    wb["2. 노션에만"]["F3"] = "준비물에 묶임"          # **다른 줄에** 메모만 적은 것도 손댄 것이다
     wb.save(경로)
-    assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 1
+    assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 2, "메모만 적힌 줄을 안 세면 그 줄을 덮는다"
 
 
 def test56_c01_표에_세로줄이_든_제목이_들어와도_칸이_안_쪼개진다():

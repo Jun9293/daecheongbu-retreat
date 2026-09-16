@@ -34,7 +34,7 @@ A머리 = ["번호", "노션 줄", "노션 쪽", "run id", "앱 쪽"]
 숨길칸 = {"짝": ("노션 줄", "run id"), "노션만": ("노션 줄",), "자동확정": ("노션 줄", "run id")}
 # **고르는 칸은 이름으로 짚는다** — 「맨 끝 칸」 으로 짚으면 노션만 표의 끝이 메모 칸이라
 # 총무님이 결정을 메모 칸에 넣게 된다(커밋 전 검토 [H] 1).
-고를칸 = {"짝": 짝머리[7], "노션만": 노션만머리[4]}
+고를칸 = {"짝": 짝머리[7], "노션만": 노션만머리[4], "자동확정": None}   # 참고용 장은 고를 것이 없다
 
 
 @dataclass
@@ -115,7 +115,7 @@ def 엑셀로(경로, 그표: 표) -> None:
             ws.column_dimensions[글자].width = 14 if 칸이름 in ("번호", "노션 줄", "run id", "등급", "어긋난 칸") else 46
             if 칸이름 in 숨길칸[갈래]:
                 ws.column_dimensions[글자].hidden = True        # 총무님이 건드릴 칸이 아니다
-        if 고르기 is not None and 줄들:
+        if 고르기 is not None and 줄들 and 고를칸.get(갈래):
             ws.add_data_validation(고르기)
             고름 = get_column_letter(머리.index(고를칸[갈래]) + 1)
             고르기.add(f"{고름}2:{고름}{len(줄들) + 1}")
