@@ -31,9 +31,12 @@ _표지 = re.compile(r"\(?D-\d+주차\)?$")
         "4 스케치": "sketch", "5 헤브론": "hebron", "6 코람데오": "koram", "7 재정": "jaejeong",
         "8 개기자": "gaegija", "9 새친구팀": "saechingu"}
 
+# **문턱과 덤은 잰 값이 아니라 고른 값이다** — 2026 여름 자료 몇 건을 눈으로 보고 정했다.
+# 다음 판이 다시 고를 수 있게 한 곳에 모아 둔다(값을 바꾸면 등급과 짝이 함께 움직인다).
 닮음문턱 = 0.50      # 이보다 덜 닮으면 후보로 치지 않는다
-등급A = 0.93         # 제목이 사실상 같고 나머지도 어긋나지 않는다
+등급A = 0.93         # 제목이 사실상 같다
 등급B = 0.70         # 사람이 보면 곧 판단할 수 있는 자리
+가까운날 = 7         # 시작일이 이만큼 안이면 「어긋나지 않았다」 로 본다
 
 
 def 줄기(제목: str) -> str:
@@ -75,8 +78,21 @@ def 덤(노션: dict, 앱: dict) -> float:
     ㄴ, ㅇ = 날짜(노션.get("start")), 날짜(앱.get("start"))
     if ㄴ and ㅇ:
         차 = abs((ㄴ - ㅇ).days)
-        더 += 0.06 if 차 == 0 else (0.03 if 차 <= 7 else 0.0)
+        더 += 0.06 if 차 == 0 else (0.03 if 차 <= 가까운날 else 0.0)
     return 더
+
+
+def 어긋남(노션: dict, 앱: dict) -> list[str]:
+    """구분 · 담당 · 시작일 중 **양쪽에 값이 있는데 다른** 것. 한쪽이 비면 어긋남이 아니다."""
+    난것 = []
+    if 노션.get("kind") and 앱.get("kind") and 구분표.get(노션["kind"]) != 앱["kind"]:
+        난것.append("구분")
+    if 노션.get("team") and 앱.get("team") and 담당표.get(노션["team"]) != 앱["team"]:
+        난것.append("담당")
+    ㄴ, ㅇ = 날짜(노션.get("start")), 날짜(앱.get("start"))
+    if ㄴ and ㅇ and abs((ㄴ - ㅇ).days) > 가까운날:
+        난것.append("시작일")
+    return 난것
 
 
 def 점수(노션: dict, 앱: dict) -> tuple[float, float]:
@@ -93,10 +109,16 @@ class 짝:
     총점: float
     제목: float
     등급: str
+    어긋난칸: tuple[str, ...] = ()
 
 
-def 등급매김(총점: float, 제목: float) -> str:
-    if 제목 >= 등급A and 총점 >= 등급A:
+def 등급매김(총점: float, 제목: float, 어긋난칸: list[str] | tuple[str, ...] = ()) -> str:
+    """**A 는 제목만으로 나지 않는다** — 구분 · 담당 · 시작일이 하나라도 어긋나면 사람이 봐야 한다.
+
+    앞 판은 「제목 >= 등급A 이고 총점 >= 등급A」 였는데 총점은 늘 제목보다 크거나 같아
+    뒤 조건이 아무것도 안 막았다(커밋 전 검토 [H] 1). 그 자리에 어긋남을 넣는다.
+    """
+    if 제목 >= 등급A and not 어긋난칸:
         return "A"
     if 총점 >= 등급B:
         return "B"
@@ -104,9 +126,11 @@ def 등급매김(총점: float, 제목: float) -> str:
 
 
 def 짝짓는다(노션들: list[dict], 앱들: list[dict], *, 문턱: float = 닮음문턱) -> list[짝]:
-    """**점수를 다 매긴 뒤 높은 것부터 확정한다** — 입력 순서가 결과를 안 바꾼다.
+    """**점수를 다 매긴 뒤 높은 것부터 확정한다** — 앞에서 먹은 짝이 뒤의 더 맞는 짝을 안 밀어낸다.
 
-    같은 점수면 제목점수 · 줄 번호 순으로 갈라 **같은 자료면 늘 같은 답**이 나온다.
+    같은 자료면 늘 같은 답이 나온다(되풀이 가능). **다만 점수가 정확히 같으면 줄 번호가 이기므로
+    그 자리에서는 입력 순서가 답을 가른다** — 「순서가 답을 전혀 안 바꾼다」 고 적지 않는다
+    (커밋 전 검토 [M] 4). 2026 여름 자료에서는 입력을 뒤집어도 짝이 하나도 안 달라졌다.
     """
     후보 = []
     for i, n in enumerate(노션들):
@@ -125,7 +149,8 @@ def 짝짓는다(노션들: list[dict], 앱들: list[dict], *, 문턱: float = �
             continue
         쓴노션.add(i)
         쓴앱.add(j)
-        나온것.append(짝(i, j, round(총, 4), round(바탕, 4), 등급매김(총, 바탕)))
+        난것 = tuple(어긋남(노션들[i], 앱들[j]))
+        나온것.append(짝(i, j, round(총, 4), round(바탕, 4), 등급매김(총, 바탕, 난것), 난것))
     나온것.sort(key=lambda p: (-p.총점, p.노션, p.앱))
     return 나온것
 
@@ -147,3 +172,11 @@ def 네갈래(노션들: list[dict], 앱들: list[dict], 짝들: list[짝]) -> d
 
 def 등급수(짝들: list[짝]) -> dict[str, int]:
     return {g: sum(1 for p in 짝들 if p.등급 == g) for g in ("A", "B", "C")}
+
+
+def 어긋난수(짝들: list[짝]) -> dict[str, int]:
+    """어느 칸이 어긋난 짝이 몇인가 — 등급과 따로 센다(사람이 볼 수)."""
+    수 = {"어긋난 짝": sum(1 for p in 짝들 if p.어긋난칸)}
+    for 칸 in ("구분", "담당", "시작일"):
+        수[칸] = sum(1 for p in 짝들 if 칸 in p.어긋난칸)
+    return 수
