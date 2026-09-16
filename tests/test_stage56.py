@@ -46,11 +46,24 @@ def test56_b01_엑셀에_고르기가_붙고_열쇠_칸은_숨는다(tmp_path):
     wb = load_workbook(경로)
     assert wb.sheetnames == ["1. 짝 확인", "2. 노션에만", "3. 자동 확정(참고)"]
     짝장 = wb["1. 짝 확인"]
-    고르기 = list(짝장.data_validations.dataValidation)
-    assert 고르기 and all(말 in 고르기[0].formula1 for 말 in 확인표.짝표시)
-    assert "H2:H3" in str(고르기[0].sqref)
+    from openpyxl.utils import get_column_letter
+
+    def 고르는칸(ws, 머리이름):
+        머리 = [c.value for c in ws[1]]
+        dv = list(ws.data_validations.dataValidation)
+        assert len(dv) == 1, dv
+        글자 = get_column_letter(머리.index(머리이름) + 1)
+        assert str(dv[0].sqref) == f"{글자}2:{글자}3", (str(dv[0].sqref), 글자)
+        노랑 = [c for c in ws[f"{글자}2"].fill.fgColor.rgb or ""]
+        assert 노랑, "고르는 칸에 색이 없다"
+        return dv[0]
+
+    # **고르는 칸은 「결정 칸」 이어야 한다** — 끝 칸으로 짚으면 노션만 표에서 메모 칸에 걸린다
+    assert all(말 in 고르는칸(짝장, 확인표.짝머리[7]).formula1 for 말 in 확인표.짝표시)
     노션만장 = wb["2. 노션에만"]
-    assert all(말 in list(노션만장.data_validations.dataValidation)[0].formula1 for 말 in 확인표.노션만표시)
+    assert all(말 in 고르는칸(노션만장, 확인표.노션만머리[4]).formula1 for 말 in 확인표.노션만표시)
+    메모칸 = get_column_letter([c.value for c in 노션만장[1]].index(확인표.노션만머리[5]) + 1)
+    assert str(list(노션만장.data_validations.dataValidation)[0].sqref) != f"{메모칸}2:{메모칸}3"
     assert not list(wb["3. 자동 확정(참고)"].data_validations.dataValidation), "참고용 장에는 고를 것이 없다"
     # 열쇠 칸은 숨긴다 — 총무님이 건드릴 자리가 아니다
     머리 = [c.value for c in 짝장[1]]
@@ -90,7 +103,10 @@ def test56_b03_한쪽만_적혀_있으면_견준다가_말한다(tmp_path):
 
 
 def test56_b04_읽는_칸이_한_칸_밀리면_빨개진다(tmp_path, monkeypatch):
-    """심는 고장 = 엑셀에서 표시 칸을 이름이 아니라 자리로 집기."""
+    """엑셀에서 읽은 표시가 비면 `견준다` 가 말하는가 — 읽는 칸이 밀린 꼴을 함수째 심어 잰다.
+
+    칸이 실제로 밀렸을 때 빨개지는 것은 `b02` 가 잰다(이 시험은 `견준다` 의 반응만 본다).
+    """
     그표, 경로 = 만든표(), tmp_path / "확인용.xlsx"
     확인표.엑셀로(경로, 그표)
     wb = load_workbook(경로)
@@ -108,6 +124,22 @@ def test56_b04_읽는_칸이_한_칸_밀리면_빨개진다(tmp_path, monkeypatc
         return 답
     monkeypatch.setattr(확인표, "엑셀읽기", 한칸밀림)
     assert 확인표.견준다(md글, 경로), "고장을 심었는데 견준다가 아무 말도 안 한다"
+
+
+def test56_b05_엑셀에만_적은_표시도_가드가_본다(tmp_path):
+    """총무님이 적는 자리가 엑셀이라, `.md` 만 보던 가드는 그 표시를 못 보고 덮었다(검토 [H] 2)."""
+    그표, 경로 = 만든표(), tmp_path / "확인용.xlsx"
+    확인표.엑셀로(경로, 그표)
+    assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 0
+    assert 확인표.표시있나(확인표.md읽기(확인표.md로(그표))) == 0
+    wb = load_workbook(경로)
+    wb["2. 노션에만"]["E2"] = "넣음"                 # 결정 칸에 고른 것
+    wb.save(경로)
+    assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 1
+    wb = load_workbook(경로)
+    wb["2. 노션에만"]["F2"] = "준비물에 묶임"          # 메모만 적은 것도 손댄 것이다
+    wb.save(경로)
+    assert 확인표.표시있나(확인표.엑셀읽기(경로)) == 1
 
 
 def test56_c01_표에_세로줄이_든_제목이_들어와도_칸이_안_쪼개진다():
