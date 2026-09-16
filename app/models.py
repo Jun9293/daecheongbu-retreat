@@ -1057,6 +1057,10 @@ class TaskLibrary(Base):
     # 이 업무를 어떻게 진행하는지 — 회차가 바뀌어도 그대로 가는 규칙.
     # 논의는 그 회차의 사정이고, 규칙은 매번 같은 방식으로 하기 위한 것이다.
     rules: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 노션 페이지 id — **제목이 아니라 원본을 가리키는 열쇠**. 회의록에서 파일
+    # 이름을 열쇠로 쓰다 같은 자리를 한 번 겪었고, 그쪽에도 같은 칸이 있다.
+    # 채우는 곳은 scripts/노션업무들이기.py 하나이고, 앱에서 만든 업무는 비어 있다.
+    notion_page_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
     # **채우는 길이 아직 없다.** 읽는 곳은 여럿인데(대개 `is_(None)`
