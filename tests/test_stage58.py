@@ -334,3 +334,57 @@ def test58_b05_판정이_도메인에_있고_화면이_다시_안_가른다():
     assert "def carried_only(" in src
     자리 = _결산홈()
     assert "== 0" not in 자리 and "home.done" not in 자리, "화면이 다시 센다"
+
+
+# ════════════════════════════════════════════════════════════════════
+# 3. 뺀 업무 드로어의 한 줄 (2026-09-16 마무리 판)
+# ════════════════════════════════════════════════════════════════════
+
+
+def test58_c01_드로어_응답이_뺀_것과_산_것을_가른다(admin_client):
+    """**같은 판에서 둘 다 연다** — 뺀 업무는 `included` 가 거짓, 산 업무는 참.
+    열리는 것 자체도 본다 — 뺀 업무라고 드로어가 막히면 목록 아래 상자가 갈 곳이 없다.
+    고치는 것도 막지 않는다(사람이 정함): 뺀 업무의 상태를 바꿀 수 있다."""
+    with app_session() as db:
+        retreat = models.Retreat(
+            name="2026 여름수련회", start_date=dt.date.today() - dt.timedelta(days=3),
+            end_date=dt.date.today() + dt.timedelta(days=3))
+        db.add(retreat)
+        db.flush()
+        db.add(models.Department(retreat_id=retreat.id, key="chongmu",
+                                 name="총무팀", sort_order=0))
+        db.flush()
+        뺀id = _업무(db, retreat, "뺀 업무", included=False).id
+        산id = _업무(db, retreat, "산 업무").id
+        db.commit()
+
+    뺀 = admin_client.get(f"/board/task/{뺀id}")
+    산 = admin_client.get(f"/board/task/{산id}")
+    assert 뺀.status_code == 200 and 산.status_code == 200
+    assert 뺀.json()["included"] is False
+    assert 산.json()["included"] is True
+    # 고치는 길은 열려 있다
+    res = admin_client.post(f"/board/task/{뺀id}/status", json={"status": "완료"})
+    assert res.status_code == 200, res.text
+
+
+def test58_c02_드로어가_그_값으로만_그_줄을_켠다():
+    """줄은 **처음에 숨어 있고**(산 업무를 열었을 때 안 뜬다), JS 는 서버의
+    `included` 하나로 켠다 — 화면이 다시 가르지 않는다(4-3 과 같은 자리).
+    주석을 걷어내고 본다(10장 — 이 판에서 한 번 밟았다)."""
+    html = _민낯진자((ROOT / "app" / "templates" / "partials" / "drawer.html")
+                   .read_text(encoding="utf-8"))
+    m = re.search(r'<div[^>]*id="dexcl"[^>]*>([^<]*)</div>', html)
+    assert m, "드로어에 그 줄이 없다"
+    assert " hidden" in m.group(0), "처음부터 보인다 — 산 업무에도 뜬다"
+    assert m.group(1).strip() == "이번 회차에서 뺀 업무입니다"
+    # 칩 아래 · 제목 위 — 아래쪽 진단 패널·옮긴 자리 줄과 안 겹치는 자리
+    assert html.index('id="dkick"') < html.index('id="dexcl"') < html.index('id="dtitle"')
+
+    from tests.test_stage15 import _코드
+    js = _코드(ROOT / "app" / "static" / "js" / "drawer.js")
+    assert re.search(r"\$\('dexcl'\)", js), "JS 가 그 줄을 안 만진다"
+    assert "d.included !== false" in js, "서버 값으로 가르지 않는다"
+    css = _민낯(CSS)
+    m = re.search(r"\.dexcl\{([^{}]*)\}", css)
+    assert m and "font-size:var(--fz-md)" in m.group(1).replace(" ", ""), "14px 하한이 아니다"

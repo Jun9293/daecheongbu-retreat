@@ -222,6 +222,8 @@ def task_detail(
     return {
         "run_id": run.id,
         "run_no": run.run_no,   # 회차 안에서 고정되는 번호 (4-14)
+        # 뺀 업무인가 — 드로어가 한 줄로 말한다(4-14). 고치는 것은 막지 않는다
+        "included": bool(run.included),
         "title": lib.title,
         "kind": lib.kind,
         "kind_label": lib.kind_label,

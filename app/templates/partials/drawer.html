@@ -20,6 +20,11 @@
   <button class="dclose" id="dclose" aria-label="닫기">×</button>
   <div class="dhead">
     <div class="dkick" id="dkick"></div>
+    {# **이번 회차에서 뺀 업무** (`included=false`)를 열었을 때만 뜹니다 — 목록 맨
+       아래 「뺀 업무」 상자에서 들어온 길입니다(4-14). 칩 바로 아래 두어 아래쪽의
+       진단 패널(4-10)·옮긴 자리 줄과 겹치지 않습니다. **고치는 것은 막지 않습니다**
+       — 총무팀이 정리할 때 필요합니다(2026-09-16 사람이 정함). #}
+    <div class="dexcl" id="dexcl" hidden>이번 회차에서 뺀 업무입니다</div>
     <div class="dtitle" id="dtitle"></div>
     <dl class="dmeta" id="dmeta"></dl>
     {# **어느 자리를 따르고 있나** (6-4). 손으로 옮긴 적이 있는 업무에만 뜹니다 —

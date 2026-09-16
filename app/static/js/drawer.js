@@ -195,6 +195,9 @@ function renderDrawer() {
     // 칩만 다른 길이면, 같은 메뉴를 여는 두 자리의 규약이 갈린다
     $('statchip').onclick = e => statMenu(e.currentTarget);
   }
+  /* 뺀 업무 표시 (4-14) — 판정은 서버의 `included` 하나. 옛 응답(칸 없음)은 산 것으로 본다 */
+  const 뺀줄 = $('dexcl');
+  if (뺀줄) 뺀줄.hidden = d.included !== false;
   /* 제목 — 번호(회차 안 고정, 4-14)를 앞에 작게. 누르면 그 자리에서 고친다 (4-9). */
   $('dtitle').innerHTML =
     `${d.run_no ? `<span class="runno">${Number(d.run_no)}</span>` : ''}` +

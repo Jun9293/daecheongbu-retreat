@@ -1999,6 +1999,11 @@ input[type=password]{font:inherit;font-size:var(--fz-lg);
    셋째 색이 두 뜻을 지게 된다 (2026-09-12 검토가 짚었다).
    **단추는 목록 단(14px)이다** — `.btn.sm` 이 「누르는 자리라 목록 급」
    으로 그렇게 두었고, 여기만 한 급 내릴 근거가 없다. */
+/* 뺀 업무 한 줄 (4-14) — 혼자 뜻을 지는 글자라 14px 하한. 옮긴 자리 줄의
+   「안 따르는 쪽」(.dmoved.off)과 같은 옅은 면이다 — 새 색을 만들지 않는다 */
+.dexcl{font-size:var(--fz-md);color:var(--ink-2);line-height:1.5;
+  margin:0 0 10px;padding:6px 10px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--hover)}
 .dmoved{font-size:var(--fz-md);color:var(--ink-2);line-height:1.5;
   margin:10px 0 0;padding:8px 10px;border:1px solid var(--rule);border-radius:6px}
 .dmoved.off{background:var(--hover)}
