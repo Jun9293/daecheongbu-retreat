@@ -1349,7 +1349,11 @@ no-store`** 를 붙입니다: 늘 붙이면 무엇이 특별한지 아무도 모
   자리입니다. **새 화면을 만들지 않습니다** — 누르면 `?task=` 로 그 드로어가
   열립니다. 부서 드롭다운의 범위를 따르고 상태 칩은 안 탑니다(상태 칩은 하는
   업무의 축입니다). 정렬 단추와 소속 외 흐림은 보통 행과 같이 따릅니다. 배지를 안 붙입니다 — 안 하기로 한 업무에 「지연」 은
-  재촉입니다. 구조는 `tasklist.excluded_rows`
+  재촉입니다. 구조는 `tasklist.excluded_rows`.
+  **그 줄로 드로어를 열면 칩 바로 아래에 「이번 회차에서 뺀 업무입니다」 가
+  뜹니다**(`.dexcl` · 14px) — 판정은 `/board/task/{run_id}` 의 `included` 하나이고
+  화면이 다시 가르지 않습니다. **고치는 것(상태·담당자)은 막지 않습니다** —
+  총무팀이 정리할 때 필요합니다(2026-09-16 사람이 정함)
 
 ### 4-15. 홈
 
@@ -4417,7 +4421,10 @@ entry point · 다른 conftest 는 못 봅니다** — conftest 가 읽히기 �
   짝짓기·등급·확인용 파일 길은 안 쓰고 `scripts/노션업무들이기.py` 가 노션 줄(표지를 뺀 233)을 그대로 새로 세웠습니다.
   열쇠는 `TaskLibrary.notion_page_id` 이고 **제목이 아닙니다**. 그전의 업무 102 는 지우지 않고 **이번 회차 미실행**으로 내려갔고
   (사람이 「뺌」 으로 정함 · 0장), 되돌리는 사본은 `data/backups/app-20260916-151047.db` 입니다(백업 정리가 안 지우는 판).
-  **그래서 이 회차의 업무 정본은 이제 앱이고**, 같은 회차에 다시 들이는 길은 막혀 있습니다(같은 페이지 id 가 있으면 멈춥니다)
+  **그래서 이 회차의 업무 정본은 이제 앱이고**, 같은 회차에 다시 들이는 길은 막혀 있습니다(같은 페이지 id 가 있으면 멈춥니다).
+  **이 줄기는 2026-09-16 에 완전히 마무리됐습니다** — 뺀 업무로 가는 길(4-14) · 그 드로어의 한 줄 · 결산 홈의
+  한 줄(4-15)까지 들어갔습니다. 남은 것은 둘입니다 — `docs/봐둘것.md` BC-c 에 적어만 둔 것과,
+  **이 줄기 전체에서 한 번도 못 돈 화면 점검**(`docs/checks/drawer.js` · `phone.js` · 로그인이 필요해서 · `docs/인계.md` 맨 위)
 - 식대 상한 근거 — 소그룹지원비 결재 문서
 
 ---
@@ -4535,7 +4542,7 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | 라이브러리 초기값 (2026 여름수련회) | `seed_library_data.py` · `seed_library.py` |
 | 종료 판정 (4-10·5-6·4-15·4-17 공용) | `app/domain/period.py` 의 `is_over` — **여기 하나다** |
 | 홈 (4-15) | `app/domain/home.py` · `routers/home.py` · `templates/home.html` — 결산 홈의 「옮겨온 회차」 한 줄은 `home.carried_only`(5-6 의 `live.carried_only` 와 같은 판단) |
-| 목록 보기 (4-14) | `app/domain/tasklist.py` · `routers/tasks.py` · `templates/tasks.html` · `static/js/tasks.js` — 드로어는 `partials/drawer.html` 그대로. 뺀 업무 줄은 `tasklist.excluded_rows`(부서 범위는 보통 목록과 같은 `in_scope`) |
+| 목록 보기 (4-14) | `app/domain/tasklist.py` · `routers/tasks.py` · `templates/tasks.html` · `static/js/tasks.js` — 드로어는 `partials/drawer.html` 그대로. 뺀 업무 줄은 `tasklist.excluded_rows`(부서 범위는 보통 목록과 같은 `in_scope`) · 그 드로어의 한 줄은 `partials/drawer.html` 의 `.dexcl` 을 서버의 `included` 로 켠다 |
 | 업무 번호 (4-14) | `TaskRun.run_no` — 새 run 은 `library.next_run_no`, 새 회차는 `create_retreat` 가 1부터, 옛 행은 `app/db.py` 가 앱이 뜰 때 한 번 매긴다 |
 | 알림 (4-16) | `routers/notifications.py` · `templates/notifications.html` — Review·Notification 저장은 안 합치고 화면에서 한 목록. 답하는 것은 `routers/reviews.py` 의 `/reviews/{id}/respond` 그대로 |
 | 확인 요청 보내기 (4-9) | `routers/board.py` 의 `/board/task/{run_id}/review-request` — `reviews.create_review_requests` 를 부르고 run_id 로 남긴다 |
