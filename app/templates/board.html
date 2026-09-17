@@ -3,6 +3,9 @@
 {% block title %}보드 · {{ retreat.name }}{% endblock %}
 
 {% block body %}
+{# 본문 자리 — 도구줄 · 간트 · 좁은 폭의 목록을 감싼다(접근성의 주 영역 · 봐둘것 BE-a).
+   목록만 main 으로 바꾸면 넓은 화면에서 주 영역이 숨은 것이 된다. 드로어는 밖이다. #}
+<main class="pgmain">
 <div class="toolbar">
   {{ deptpick(board.departments, my_department_key or 'all', depts=my_department_keys) }}
   <label class="tog"><input type="checkbox" id="opT"> 미완료만</label>
@@ -105,6 +108,7 @@
   {% endfor %}
   <div class="mempty" id="mempty" hidden>조건에 맞는 업무가 없습니다.</div>
 </div>
+</main>
 
 {% include "partials/drawer.html" %}
 {% endblock %}

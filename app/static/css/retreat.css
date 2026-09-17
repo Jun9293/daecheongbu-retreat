@@ -283,6 +283,9 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 .lg .k-lit{width:20px;height:0;border-top:2px dashed var(--link)}
 
 /* ── 보드 ───────────────────────────────────────────────────────────── */
+/* 보드·달력의 본문 자리(<main>) — body 가 하던 세로 flex 를 그대로 물려받아
+   안의 칸들이 전과 같이 늘고 줄게 한다 (봐둘것 BE-a) */
+.pgmain{flex:1;min-height:0;display:flex;flex-direction:column}
 .board{flex:1;overflow:auto;position:relative}
 .sheet{min-width:max-content;position:relative}
 .room-below{width:1px;pointer-events:none}   /* 선택한 부서를 맨 위로 올리기 위한 여백 */

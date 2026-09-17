@@ -19,6 +19,8 @@
 {# 달을 넘겨도 칩이 유지되도록 **링크마다 지금 값을 달고 다닌다.**
    쿠키에도 남기지만, 주소에 없으면 링크를 복사해 준 사람이 다른 화면을 본다. #}
 {% set keep = "scope=" ~ cal.scope ~ "&only_open=" ~ (1 if cal.only_open else 0) %}
+{# 본문 자리 — 보드와 같은 까닭으로 감싼다(봐둘것 BE-a). 드로어는 밖이다. #}
+<main class="pgmain">
 <div class="calbar" data-only-open="{{ 1 if cal.only_open else 0 }}"
      data-scope="{{ cal.scope }}" data-month="{{ cal.month }}"
      data-per-day="{{ cal.per_day }}">
@@ -66,6 +68,7 @@
   </div>
 </details>
 {% endif %}
+</main>
 {# 상세 패널 — **보드와 같은 조각입니다** (4-13).
    여기서 한 벌 더 만들면 논의·상태·첨부가 두 곳에서 갈립니다. #}
 {% include "partials/drawer.html" %}
