@@ -237,7 +237,7 @@ def test59_a09_스크립트에는_id_만_있고_제목이_없다():
     assert set(m.확정) <= set(m.대상) and set(m.출처불명) <= set(m.대상)
     import seed_library_data as L
     글 = (ROOT / "scripts" / "테스트시드삭제.py").read_text(encoding="utf-8")
-    제목들 = [t for t, *_ in L.LIBRARY] + [t for t, *_ in L.LIBRARY_ONLY]
+    제목들 = [t for t, *_ in L.LIBRARY]
     assert len(제목들) > 50, "견줄 제목이 없다 — 아무것도 안 보는 검사다"
     assert [t for t in 제목들 if t in 글] == []
 
@@ -280,3 +280,22 @@ def test59_c01_목업_예시_규칙과_0장_예외가_기준_문서에_있다():
     assert "scripts/테스트시드삭제.py" in 영 and "d18a0c1" in 영
     육구 = 글[글.index("### 6-9. 첫 세팅"):글.index("### 6-10.")]
     assert re.search(r"목업.*시드", 육구)
+
+
+def test59_c02_시드에_목업_예시_목록이_없고_시드_업무는_모두_실행_기록이_된다(db):
+    """6-9 — 목업 예시를 시드에 안 넣는다. 걷은 목록이 되살아나면 빨개진다."""
+    import seed_library
+    import seed_library_data as L
+    assert not hasattr(L, "LIBRARY_ONLY")
+    본문 = (ROOT / "seed_library.py").read_text(encoding="utf-8")
+    assert "LIBRARY_ONLY" not in 본문
+    r = models.Retreat(name="시드 회차", start_date=dt.date(2026, 8, 21), end_date=dt.date(2026, 8, 23))
+    db.add(r)
+    db.flush()
+    for i, (key, name, color) in enumerate(L.DEPARTMENTS):
+        db.add(models.Department(retreat_id=r.id, key=key, name=name, color_tag=color, sort_order=i))
+    db.flush()
+    seed_library.seed_all(db, r)
+    assert _수(db, models.TaskLibrary) == len(L.LIBRARY) > 50
+    뺀 = db.scalar(select(func.count()).select_from(models.TaskRun).where(models.TaskRun.included.is_(False)))
+    assert 뺀 == 0, "시드가 「그 회차 미실행」 줄을 다시 세운다"

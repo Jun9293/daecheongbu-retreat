@@ -116,24 +116,6 @@ def build_library(db: Session) -> dict[str, TaskLibrary]:
         db.flush()
         by_title[title] = lib
 
-    # 라이브러리에는 있지만 2026 여름에는 실행하지 않은 업무
-    for title, dept_key, d_week in L.LIBRARY_ONLY:
-        lib = TaskLibrary(
-            title=title,
-            kind="main",
-            default_department_key=dept_key,
-            related_department_keys=[],
-            related_library_ids=[],
-            date_anchor="week",
-            default_d_week=d_week,
-            default_offset_days=0,
-            default_span_days=0,
-            origin="history",
-        )
-        db.add(lib)
-        db.flush()
-        by_title[title] = lib
-
     # 업무 간 연결 — 양방향으로 저장한다
     for a, b in L.RELATIONS:
         if a not in by_title or b not in by_title:

@@ -184,7 +184,7 @@ def seed(demo: bool = False) -> None:
             db.commit()
             print(f"'{D.RETREAT_NAME}' 을(를) 만들었습니다. (실제 이력만)")
             print(f"  부서 {len(L.DEPARTMENTS)}개 · 업무 라이브러리 "
-                  f"{len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 (실행 이력 1회차)")
+                  f"{len(L.LIBRARY)}건 (실행 이력 1회차)")
             print("  계정은 만들지 않았습니다 — 첫 관리자는 아래로 만드세요:")
             print("    .venv\\Scripts\\python.exe scripts/계정문열기.py --첫관리자 \"이름\" 아이디")
             return
@@ -463,7 +463,7 @@ def seed(demo: bool = False) -> None:
 
     print(f"'{D.RETREAT_NAME}' 데이터를 만들었습니다.")
     print(f"  부서 {len(L.DEPARTMENTS)}개 · 사용자 {len(D.USERS) + len(seed_library.EXTRA_USERS)}명")
-    print(f"  업무 라이브러리 {len(L.LIBRARY) + len(L.LIBRARY_ONLY)}건 (실행 이력 1회차)")
+    print(f"  업무 라이브러리 {len(L.LIBRARY)}건 (실행 이력 1회차)")
     print(f"  일정 {len(D.SCHEDULE_DAYS)}일차 / 총 {sum(len(d['items']) for d in D.SCHEDULE_DAYS)}건")
     print(f"  할 일 {len(D.TASKS)}건 · 체크리스트 {len(D.CHECKLISTS)}개 · 회의록 {len(D.MEETINGS)}건")
     print(f"  지출 {len(D.MEAL_EXPENSES) + len(D.GENERAL_EXPENSES)}건")
