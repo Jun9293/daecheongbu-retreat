@@ -278,6 +278,17 @@ def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
     return " · ".join(x for x in 조각 if x)
 
 
+def is_child(run: TaskRun, depth: int = 0) -> bool:
+    """하위 모양으로 그리는가 (봐둘것 BF-a · 사람이 정함 2026-09-17).
+
+    트리 아래 줄 · 분류가 하위인 줄 · **상위가 있는 줄**이다. 부서가 다른 하위는 자기 부서의
+    머리 줄에 서는데, 굵은 Main 모양이면 최상위 업무로 읽힌다. 분류만 보면 노션 속성이 빈
+    채 앱에 main 으로 들어간 하위가 굵게 남으므로 상위가 있는지도 본다. 보드 넓은 화면과
+    좁은 폭 행이 이 하나를 받아 쓴다.
+    """
+    return bool(depth) or run.library.kind == "sub" or run.library.parent_library_id is not None
+
+
 def parent_of(run: TaskRun, by_library: dict[int, TaskRun]) -> dict | None:
     """상위 표시 한 벌 (2장 상위-하위 · 봐둘것 BF-a) — **보드 · 목록 · 드로어가 같이 쓴다.**
 
@@ -491,6 +502,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "status": paint["badge"]["label"],
             "depth": depth,
             "ghost": ghost,
+            # 하위 모양(얇은 바 · 한 급 아래 줄)으로 그리는가 — is_child 하나가 정한다
+            "child": is_child(run, depth),
             "col_start": axis.column_of(start),
             "col_end": axis.column_of(end) + 1,
             "background": background,
@@ -598,6 +611,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                         "end": (r.end_date or r.start_date or open_date).isoformat(),
                         "border": paint_of(r, today)["bar_border"],
                         "parent": parent_of(r, by_library),
+                        "child": is_child(r),
                     }
                     for r in group
                 ],

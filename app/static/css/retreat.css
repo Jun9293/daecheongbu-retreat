@@ -346,6 +346,9 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 .row.main .lc{height:var(--h-main);padding-left:30px;font-weight:400}
 .row.sub  .lc{height:var(--h-sub);padding-left:48px;font-size:var(--fz-md);color:var(--ink-2)}
 .row.main .lane{height:var(--h-main)} .row.sub .lane{height:var(--h-sub)}
+/* 머리 줄로 선 하위(부서가 다른 하위 등)는 하위 급이되 트리 들여쓰기는 안 한다 — 들여쓰면 바로 위
+   Main 의 하위로 읽힌다(봐둘것 BF-a · 커밋 전 검토). 무엇의 하위인지는 「↑ 상위」 가 말한다 */
+.row.sub.headsub .lc{padding-left:30px}
 /* 가로 격자선을 넣지 않는다. 넣어봤으나 화면이 답답해져 뺐다. */
 .lane{position:relative;grid-column:2/-1;display:grid;grid-template-columns:subgrid}
 .gl{border-right:1px solid var(--rule);pointer-events:none}
@@ -372,7 +375,9 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 .trow.lrow .pup,.mrow .meta .pup{max-width:100%}
 .pup .pdept i{width:6px;height:6px;border-radius:50%;flex:none;display:block}
 /* 목록의 상위는 누르면 그 부모의 상세가 열린다(행은 안 열림 · 4-14 의 안 여는 자리) */
-.trow.lrow button.pup{background:none;border:0;padding:0;cursor:pointer}
+/* 누르는 칸은 24px 위로 — 흔히 쓰는 최소 누름 크기(사람이 정함 2026-09-17 · test_typescale 누름자리).
+   글자는 보조 급 그대로 두고 위아래 여백으로 키운다 */
+.trow.lrow button.pup{background:none;border:0;padding:2px 0;min-height:24px;cursor:pointer}
 .trow.lrow button.pup:hover{color:var(--ink);text-decoration:underline}
 .mrow .meta .who{font-family:var(--font)}
 

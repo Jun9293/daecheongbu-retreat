@@ -26,8 +26,10 @@
   </div>
 </div>
 
+{# 얇은 바(하위 모양)인지는 서버의 row.child 하나가 정한다(board.is_child · 봐둘것 BF-a) —
+   부서가 다른 하위가 머리 줄에 서도 Main 으로 읽히지 않게. 좁은 폭 행도 같은 값을 쓴다 #}
 {% macro bar(row) -%}
-<div class="bar {{ 'sch' if row.kind == 'schedule' else ('s' if row.depth else 'm') }}
+<div class="bar {{ 'sch' if row.kind == 'schedule' else ('s' if row.child else 'm') }}
             {{ 'ghost' if row.ghost else row.status }}"
      style="grid-column:{{ row.col_start }}/{{ row.col_end }};background:{{ row.background }};border-color:{{ row.border }};--team:{{ row.owner_color }}"
      tabindex="0" data-run="{{ row.run_id }}"{% if row.ghost %} data-ghost="1"{% endif %}>
@@ -45,7 +47,7 @@
 {%- endmacro %}
 
 {% macro task_row(row, dept) -%}
-<div class="row {{ 'sub' if row.depth or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}"
+<div class="row {{ 'sub' if row.child or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}{{ ' headsub' if row.child and not row.depth and not row.ghost }}"
      data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
      data-status="{{ row.status }}">
   <div class="lc" data-go="{{ row.run_id }}">
@@ -97,7 +99,7 @@
   <section class="mgroup" data-week="{{ group.key }}">
     <h3>{{ group.label }}<span class="n">{{ group.rows|length }}건</span></h3>
     {% for row in group.rows %}
-    <button type="button" class="mrow{{ ' sub' if row.kind == 'sub' }}{{ ' done' if row.status == '완료' }}"
+    <button type="button" class="mrow{{ ' sub' if row.child }}{{ ' done' if row.status == '완료' }}"
             data-run="{{ row.run_id }}" data-go="{{ row.run_id }}" data-of="{{ row.department_key }}"
             data-s="{{ row.start }}" data-e="{{ row.end }}" data-status="{{ row.status }}">
       <span class="st" style="background:{{ row.border }}"></span>

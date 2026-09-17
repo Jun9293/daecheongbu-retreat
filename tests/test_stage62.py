@@ -292,3 +292,57 @@ def test62_c06_마법사_줄에_상위가_보인다(계층, admin_client):
     import pathlib
     draft = (pathlib.Path(__file__).resolve().parent.parent / "app" / "templates" / "draft.html").read_text(encoding="utf-8")
     assert "'↑ ' ~ item.parent_title" in draft
+
+
+def _바(page: str, run_id: int) -> str:
+    m = re.search(r'<div class="bar ([^"]*)"[^>]*data-run="%d"' % run_id, page, re.S)
+    assert m, f"run {run_id} 의 바가 없다"
+    return " ".join(m.group(1).split())
+
+
+def _줄급(page: str, run_id: int) -> str:
+    m = re.search(r'<div class="row ([^"]*)"\s+data-of="[^"]*" data-run="%d"' % run_id, page)
+    assert m, f"run {run_id} 의 줄이 없다"
+    return m.group(1).split()[0]
+
+
+def _줄클래스(page: str, run_id: int) -> str:
+    m = re.search(r'<div class="row ([^"]*)"\s+data-of="[^"]*" data-run="%d"' % run_id, page)
+    assert m, f"run {run_id} 의 줄이 없다"
+    return m.group(1)
+
+
+def test62_a08_머리_줄로_선_하위는_얇은_바로_그린다(계층, admin_client):
+    """굵은 Main 모양이면 최상위 업무로 읽힌다(사람이 정함 2026-09-17) — 분류로도 가른다."""
+    x = 계층()
+    # 노션 속성이 빈 채 앱에 main 으로 들어간 하위 — 분류만 보면 굵게 남는다
+    with app_session() as db:
+        총무 = db.scalar(select(models.Department).where(
+            models.Department.retreat_id == x["retreat"], models.Department.key == "chongmuM"))
+        k1 = _lib(db, "속성 빈 하위", "main", "chongmuM", db.get(models.TaskLibrary, x["lib"]["m1"]))
+        run = models.TaskRun(library_id=k1.id, retreat_id=x["retreat"], included=True, department_id=총무.id,
+                             d_week=6, start_date=OPEN - dt.timedelta(days=30),
+                             end_date=OPEN - dt.timedelta(days=28), status="대기", run_no=99)
+        db.add(run)
+        db.commit()
+        x["run"]["k1"] = run.id
+    page = admin_client.get("/board").text
+    # 부서가 다른 하위(x1 · k1) · 상위가 부서 없는 하위(y1)는 머리 줄이지만 하위 모양
+    for 이름 in ("x1", "y1", "k1"):
+        assert _바(page, x["run"][이름]).startswith("s "), 이름
+        assert _줄급(page, x["run"][이름]) == "sub", 이름
+        # 트리 들여쓰기는 안 한다 — 바로 위 Main 의 하위로 읽히지 않게
+        assert "headsub" in _줄클래스(page, x["run"][이름]), 이름
+    assert "headsub" not in _줄클래스(page, x["run"]["s1"])
+    import pathlib
+    css = (pathlib.Path(__file__).resolve().parent.parent / "app" / "static" / "css" / "retreat.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    assert re.search(r"\.row\.sub\.headsub \.lc\{padding-left:30px\}", css), "머리 줄 하위의 들여쓰기 규칙이 없다"
+    # 진짜 Main 은 굵은 바 · 트리 아래 하위는 전처럼 얇은 바 · 일정은 칩 그대로
+    assert _바(page, x["run"]["m1"]).startswith("m ") and _줄급(page, x["run"]["m1"]) == "main"
+    assert _바(page, x["run"]["s1"]).startswith("s ")
+    assert _바(page, x["run"]["n1"]).startswith("sch ")
+    # 좁은 폭 행도 같은 값(row.child)을 쓴다 — 진짜 Main 만 sub 가 안 붙는다
+    좁은 = {rid: cls for cls, rid in re.findall(r'class="mrow([^"]*)"[^>]*data-run="(\d+)"', page)}
+    assert " sub" in 좁은[str(x["run"]["k1"])] and " sub" in 좁은[str(x["run"]["x1"])]
+    assert " sub" not in 좁은[str(x["run"]["m1"])]
