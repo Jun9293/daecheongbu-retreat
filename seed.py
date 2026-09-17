@@ -12,6 +12,7 @@ import datetime as dt
 import struct
 import sys
 import zlib
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -19,6 +20,7 @@ import seed_data as D
 import seed_library
 import seed_library_data as L
 from app.config import ASSET_DIR, DATA_DIR, DATABASE_URL
+from app.paths import BASE_DIR
 from app.db import Base, SessionLocal, engine, init_db
 from app.domain.meal import calculate_meal_settlement
 from app.domain import permissions as perm
@@ -111,6 +113,28 @@ def make_demo_xlsx(path, *, title: str, header: list, rows: list) -> int:
 # ---------------------------------------------------------------- 시드
 
 
+
+def 운영경로인가(data_dir=DATA_DIR, database_url: str = DATABASE_URL) -> bool:
+    """이 시드가 운영 데이터 폴더(`data/`)를 가리키는가.
+
+    2026-08-29 에 이 시드가 그때 하나뿐인 DB 에 들어갔고 그 DB 가 그대로 운영이 됐다(봐둘것 BD-a).
+    그 길은 이것으로 못 막지만(그때는 그 경로가 아직 운영이 아니었다), **운영이 된 뒤 다시 시드를 돌리는
+    것** — 특히 `--reset` 이 운영 DB 파일을 지우는 것 — 은 막는다. 개발은 `DCB_DATA_DIR` 을 다른 곳에 둔다
+    (`scripts/devserve.bat`)."""
+    운영 = (BASE_DIR / "data").resolve()
+    if Path(data_dir).resolve() == 운영:
+        return True
+    if database_url.startswith("sqlite:///"):
+        return Path(database_url[len("sqlite:///"):]).resolve().parent == 운영
+    return False
+
+
+def _운영이면_멈춘다() -> None:
+    if 운영경로인가():
+        print("!! 운영 데이터 폴더(data/)를 가리키고 있어 시드를 돌리지 않습니다 — 아무것도 안 했습니다.")
+        print("   개발 DB 는 DCB_DATA_DIR 을 다른 곳에 두고 만듭니다(scripts/devserve.bat).")
+        raise SystemExit(1)
+
 def seed(demo: bool = False) -> None:
     """기본값은 **실제 이력만** — 회차·부서·업무 라이브러리·지난 회차 실행 기록.
 
@@ -121,6 +145,7 @@ def seed(demo: bool = False) -> None:
     `demo=True` 는 이전 설계 화면(할 일·회의록·지출·파일)을 눌러보기 위한 것이다.
     그 화면들이 작성자·담당자를 요구하므로 자리표시자 계정이 함께 만들어진다.
     """
+    _운영이면_멈춘다()
     init_db()
 
     with SessionLocal() as db:
@@ -447,6 +472,7 @@ def seed(demo: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    _운영이면_멈춘다()          # --reset 이 파일을 지우기 **전에** 본다
     if "--reset" in sys.argv:
         # 서버가 켜진 채로는 drop_all 이 파일을 완전히 비우지 못한다.
         # SQLite 는 파일째 지우는 것이 확실하다.
