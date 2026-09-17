@@ -65,6 +65,9 @@ def _render_item_rows(items: list[dict], db: Session, round_count: int) -> None:
             tags.append({"cls": "must", "label": "필수 지정"})
         if item["sub_count"]:
             tags.append({"cls": "sub", "label": f"하위 {item['sub_count']}"})
+        if item.get("parent_title"):
+            # 부서가 다른 하위로 스스로 선 줄 — 무엇의 하위인지 (봐둘것 BF-a)
+            tags.append({"cls": "sub", "label": f"↑ {item['parent_title']}"})
         if item["history"]:
             hist = "".join(
                 f'<i{"" if h["executed"] else " class=\"no\""}><b></b></i>'
@@ -170,8 +173,8 @@ def preview(
     catalog = lib_domain.catalog(db, open_date=open_date)
     proposals = suggest_domain.generate(db, open_date=open_date, base_retreat=base)
 
-    # 선행 관계는 하위 업무에도 붙지만 마법사가 고르는 단위는 상위다.
-    # "이 선행이 이번 회차에 들어오는가"를 물으려면 최상위로 올려야 한다.
+    # 선행 관계는 하위 업무에도 붙지만 마법사가 고르는 단위는 상위를 따라가지 않는 줄이다.
+    # "이 선행이 이번 회차에 들어오는가"를 물으려면 그 단위로 올려야 한다(top_owner).
     owner = lib_domain.top_owner(db)
     prereq_by_top: dict[int, list[dict]] = {}
     for row in lib_domain.flat_catalog(db, open_date=open_date):
@@ -190,7 +193,11 @@ def preview(
             {
                 "id": str(row["library_id"]),
                 "kind": "library",
-                "task_kind": row["kind"],          # main | schedule
+                "task_kind": row["kind"],          # main | schedule | sub(부서가 다른 하위 · BF-a)
+                # 부서가 다른 하위를 고칠 때 상위 고르기가 **지금 상위**로 서야 한다 —
+                # 비면 첫 줄이 골려 저장하는 순간 상위가 바뀐다
+                "parent_id": str(row["parent_library_id"]) if row.get("parent_library_id") else None,
+                "parent_title": row.get("parent_title"),
                 "title": row["title"],
                 "department_key": row["department_key"],
                 "d_week": row["d_week"],

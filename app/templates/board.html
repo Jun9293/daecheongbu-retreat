@@ -36,12 +36,21 @@
 </div>
 {%- endmacro %}
 
+{# 상위 표시 — 머리 줄로 선 하위에 붙는다(봐둘것 BF-a). 상위 부서가 다르면 그 색 점과
+   이름, 상위에 부서가 없으면 「담당 없음」. 보조 급(13px · 4-0). 목록·모바일이 같은 모양이다 #}
+{% macro pup(p) -%}
+{%- if p %}<span class="pup" title="상위: {{ p.title }}">↑ {{ p.title }}
+  {%- if p.other_dept and (p.dept_name or p.no_dept) %} <span class="pdept">{% if p.dept_name %}<i style="background:{{ p.dept_color }}"></i>{{ p.dept_name }}{% else %}담당 없음{% endif %}</span>{% endif -%}
+</span>{% endif -%}
+{%- endmacro %}
+
 {% macro task_row(row, dept) -%}
 <div class="row {{ 'sub' if row.depth or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}"
      data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
      data-status="{{ row.status }}">
   <div class="lc" data-go="{{ row.run_id }}">
     <span class="nm">{{ '↳ ' if row.ghost }}{% if row.no and not row.ghost %}<span class="runno">{{ row.no }}</span>{% endif %}{{ row.title }}</span>
+    {{- pup(row.parent) }}
     <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
     {%- if row.ghost %}
     <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>
@@ -99,6 +108,7 @@
           <span class="dept">{{ row.department_name }}</span>
           <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
           <span>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
+          {{- pup(row.parent) }}
         </span>
       </span>
       {%- if row.status == '지연' %}<span class="flag">지연</span>{% endif %}

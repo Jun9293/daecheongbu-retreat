@@ -266,6 +266,9 @@ def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
     start = run.start_date or run.end_date
     end = run.end_date or run.start_date
     조각 = [run.department.name if run.department else "담당 없음", status]
+    # 상위가 있으면 한 줄 (봐둘것 BF-a) — 달력 점에서도 무엇의 하위인지 보인다
+    if run.library.parent_library_id and run.library.parent is not None:
+        조각.append(f"상위: {run.library.parent.title}")
     if run.assignee:
         조각.append(run.assignee.name)
     if start:
@@ -273,6 +276,37 @@ def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
     if overdue and overdue_days:
         조각.append(f"마감에서 {overdue_days}일 경과")
     return " · ".join(x for x in 조각 if x)
+
+
+def parent_of(run: TaskRun, by_library: dict[int, TaskRun]) -> dict | None:
+    """상위 표시 한 벌 (2장 상위-하위 · 봐둘것 BF-a) — **보드 · 목록 · 드로어가 같이 쓴다.**
+
+    `by_library` 는 이번 회차의 산 run 을 라이브러리 id 로 찾는 표다. 상위의 run 이
+    이번 회차에 없으면 `run_id` 가 비고(열 수 없음) 제목만 보인다. 부서는 **run 의**
+    부서로 견준다 — 화면이 그리는 부서 블록이 run 의 것이다. 상위 run 에 부서가 없으면
+    `no_dept` 가 서고 화면은 「담당 없음」 을 쓴다. **상위 run 이 없으면 부서 꼬리를 안
+    단다** — 그 회차의 부서를 모르는데 「담당 없음」 이라고 하면 사실이 아니다(커밋 전 검토).
+    그때 「다른가」 는 라이브러리의 부서 키로 견준다.
+    """
+    lib = run.library
+    if lib.parent_library_id is None:
+        return None
+    prun = by_library.get(lib.parent_library_id)
+    plib = prun.library if prun else lib.parent
+    pdept = prun.department if prun else None
+    mine = run.department.key if run.department else None
+    if prun:
+        pkey = pdept.key if pdept else None
+    else:
+        pkey = (plib.default_department_key or None) if plib else None
+    return {
+        "run_id": prun.id if prun else None,
+        "title": plib.title if plib else "(라이브러리에 없음)",
+        "dept_name": short_name(pdept.name) if pdept else None,
+        "dept_color": pdept.color if pdept else None,
+        "no_dept": prun is not None and pdept is None,
+        "other_dept": pkey != mine,
+    }
 
 
 def overdue_days_of(run: TaskRun, today: dt.date) -> int:
@@ -413,6 +447,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "parent_title": by_library[lib.parent_library_id].library.title
             if lib.parent_library_id in by_library
             else None,
+            "parent": parent_of(run, by_library),
             "related_run_ids": [by_library[i].id for i in related_ids],
             # 선후행은 관련(방향 없음)과 별개 키로 둔다 — 섞으면 판정이 흐려진다
             "blocked_by_run_ids": [i for i in (run.blocked_by_run_ids or []) if i in run_ids],
@@ -435,7 +470,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "can_edit": True if can_edit is None else bool(can_edit(run)),
         }
 
-    def make_row(run: TaskRun, *, depth: int, ghost: bool, owner_color: str) -> dict:
+    def make_row(run: TaskRun, *, depth: int, ghost: bool, owner_color: str,
+                 head_parent: bool = False) -> dict:
         lib = run.library
         start = run.start_date or open_date
         end = run.end_date or start
@@ -464,15 +500,23 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "owner_color": owner_color,
             "start": start.isoformat(),
             "end": end.isoformat(),
+            # 머리 줄로 선 하위만 상위를 붙인다 — 트리 아래 줄은 들여쓰기가 이미 말한다
+            "parent": parent_of(run, by_library) if head_parent and not ghost else None,
         }
 
     dept_blocks = []
     for dept in departments:
         own = [r for r in runs if r.department_id == dept.id]
-        mains = [r for r in own if r.library.parent_library_id is None]
+        # **머리 줄 = 상위가 없거나, 상위가 이 부서 블록에 없는 줄** (봐둘것 BF-a).
+        # 「상위가 없는 줄」 만 머리로 두면 상위가 다른 부서(또는 이번 회차에 없음)인
+        # 하위가 어느 블록에도 안 서서 보드에서 사라진다. 그 줄은 자기 부서의 머리로
+        # 그리고 상위를 옆에 붙인다 — 부서를 옮기지 않는다(사람이 정함 · 2026-09-17)
+        own_libs = {r.library_id for r in own}
+        mains = [r for r in own if r.library.parent_library_id not in own_libs]
         rows: list[dict] = []
         for main in mains:
-            rows.append(make_row(main, depth=0, ghost=False, owner_color=dept.color))
+            rows.append(make_row(main, depth=0, ghost=False, owner_color=dept.color,
+                                 head_parent=True))
             for sub in own:
                 if sub.library.parent_library_id == main.library_id:
                     rows.append(make_row(sub, depth=1, ghost=False, owner_color=dept.color))
@@ -511,7 +555,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
 
     unassigned = [r for r in runs if r.department_id is None]
     if unassigned:
-        rows = [make_row(r, depth=0, ghost=False, owner_color=NO_DEPARTMENT_COLOR) for r in unassigned]
+        rows = [make_row(r, depth=0, ghost=False, owner_color=NO_DEPARTMENT_COLOR, head_parent=True)
+                for r in unassigned]
         dept_blocks.append(
             {
                 "key": "__none__",
@@ -552,6 +597,7 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                         "start": (r.start_date or open_date).isoformat(),
                         "end": (r.end_date or r.start_date or open_date).isoformat(),
                         "border": paint_of(r, today)["bar_border"],
+                        "parent": parent_of(r, by_library),
                     }
                     for r in group
                 ],

@@ -359,6 +359,21 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 .lc .who{flex:none;padding-left:8px;font-size:var(--fz-sm);color:var(--ink-2);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:76px}
 .row.team .lc .who{display:none}
+/* 상위 표시 (봐둘것 BF-a) — 머리 줄로 선 하위에 붙는다. 그 줄이 없으면 무엇의 하위인지
+   화면 어디에도 안 보이므로 흐림이 아니라 **보조 급**(13px · 4-0 · test_typescale 보조급자리).
+   보드 왼쪽 칸 · 좁은 폭 목록 · 목록 행이 같은 모양이다 */
+.lc .pup,.mrow .meta .pup,.trow.lrow .pup{font-size:var(--fz-sm);color:var(--ink-2);font-family:var(--font);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:4px;
+  min-width:0;line-height:1.65}
+.lc .pup{flex:0 1 auto;padding-left:8px;max-width:45%}
+.pup .pdept{display:inline-flex;align-items:center;gap:4px}
+/* 좁은 폭에서 긴 상위 제목이 행 밖으로 나가지 않게 — 줄 폭까지만 서고 말줄임 (375px 에서 잼) */
+.trow.lrow .pupw{display:inline-flex;min-width:0;max-width:100%}
+.trow.lrow .pup,.mrow .meta .pup{max-width:100%}
+.pup .pdept i{width:6px;height:6px;border-radius:50%;flex:none;display:block}
+/* 목록의 상위는 누르면 그 부모의 상세가 열린다(행은 안 열림 · 4-14 의 안 여는 자리) */
+.trow.lrow button.pup{background:none;border:0;padding:0;cursor:pointer}
+.trow.lrow button.pup:hover{color:var(--ink);text-decoration:underline}
 .mrow .meta .who{font-family:var(--font)}
 
 /* ── 바 ─────────────────────────────────────────────────────────────
@@ -608,6 +623,11 @@ body.dragging-bar .bar{transition:none}
 .relitem>button.rb:hover{background:var(--hover)}
 .relitem .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .relitem .rl{font-family:var(--mono);font-size:var(--fz-sm);color:var(--ink-2);margin-left:auto;flex:none}
+/* 드로어 머리의 「상위」 — 연결 카드의 한 줄을 그대로 쓰되 머리 표의 줄 높이에 맞춘다 (봐둘것 BF-a) */
+.dparent .relrow{display:inline-block;max-width:100%}
+.dparent .relitem>button.rb{width:auto;padding:2px 6px;margin-left:-6px}  /* 100% 면 머리 표 줄에서 제목이 두 줄로 접힌다 */
+/* 머리 표에서는 분류·부서 꼬리를 뺀다 — 400px 드로어에서 제목이 세 줄로 접혔다. 부서는 점 색이 말한다 */
+.dparent .relitem .rl{display:none}
 .menu{position:absolute;right:8px;top:calc(100% - 4px);background:var(--paper);border:1px solid var(--rule-2);
   border-radius:5px;box-shadow:0 8px 22px -10px rgba(55,53,47,.35);z-index:5;display:none;min-width:146px;overflow:hidden}
 .menu.on{display:block}

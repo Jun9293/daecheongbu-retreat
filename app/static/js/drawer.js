@@ -233,7 +233,9 @@ function renderDrawer() {
      <dt>담당자</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
         ? `<span class="vsel"><select id="dassignee"><option value="">지정 안 함</option>${people}</select><i class="mark">∨</i></span>`
         : esc(d.assignee || '지정 안 함')}</dd>
-     <dt>상위</dt><dd>${d.parent_title ? esc(d.parent_title) : '—'}<small class="fromlib">라이브러리에서</small></dd>
+     <dt>상위</dt><dd class="dparent">${d.parent
+        ? `<div class="relrow">${relItem(d.parent)}</div>`
+        : (d.parent_title ? esc(d.parent_title) : '—')}<small class="fromlib">라이브러리에서</small></dd>
      <dt>관련팀</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
         ? `<button type="button" class="vbtn" id="dreledit">${
              d.related_departments.map(esc).join(', ') || '—'}<i class="mark">✎</i></button>`
@@ -462,7 +464,7 @@ function relItem(r) {
   const move = host.canGoTo
     ? '<button data-act="move">이동<span class="mi">보드</span></button>' : '';
   return `<div class="relitem">
-    <button class="rb" data-rel="${r.run_id}">
+    <button class="rb" data-rel="${r.run_id}" title="${r.kind_label} · ${esc(r.department)}">
       <span class="dot" style="background:${esc(r.color)}"></span>${esc(r.title)}
       <span class="rl">${r.kind_label} · ${esc(r.department)}</span></button>
     <div class="menu">
@@ -1138,8 +1140,9 @@ addEventListener('resize', () => {
   if ($('statmenu').classList.contains('on')) closeMenus();
 });
 
-$('drel').onclick = e => {
-  const act = e.target.closest('[data-act]');
+/* 연결 카드와 머리 표의 「상위」 가 같은 메뉴를 쓴다(열기 / 이동) — 두 벌이면 한쪽만 고쳐진다 */
+function 연결누름(e) {
+  const act = e.target.closest('.relitem [data-act]');
   if (act) {
     const id = act.closest('.relitem').querySelector('.rb').dataset.rel;
     closeMenus();
@@ -1147,13 +1150,15 @@ $('drel').onclick = e => {
     else call('goTo', id);
     return;
   }
-  const rb = e.target.closest('.rb');
+  const rb = e.target.closest('.relitem .rb');
   if (rb) {
     const menu = rb.nextElementSibling, was = menu.classList.contains('on');
     closeMenus();
     menu.classList.toggle('on', !was);
   }
-};
+}
+$('drel').onclick = 연결누름;
+$('dmeta').addEventListener('click', 연결누름);
 
 /* ── 상태 변경 ── */
 /* **어느 업무의 상태든 이 메뉴 하나로 고른다** (4-14). 목록의 행 배지도

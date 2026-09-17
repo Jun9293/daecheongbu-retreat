@@ -246,7 +246,10 @@ def task_detail(
             for d in sorted(retreat.departments, key=lambda d: d.sort_order)
         ],
         "parent_run_id": parent.id if parent else None,
-        "parent_title": parent.library.title if parent else None,
+        # 상위의 run 이 이번 회차에 없어도 제목은 보인다(라이브러리의 상위)
+        "parent_title": parent.library.title if parent else (lib.parent.title if lib.parent else None),
+        # 상위를 연결 카드와 같은 모양으로 누를 수 있게(열기 메뉴 · 봐둘것 BF-a)
+        "parent": brief(parent) if parent else None,
         "related_departments": [
             dept_by_key[k].name
             for k in (lib.related_department_keys or [])
@@ -721,12 +724,13 @@ def add_task_page(
         for run in db.scalars(select(TaskRun).where(TaskRun.retreat_id == retreat.id, TaskRun.included))
     }
     rows = []
-    for lib in db.scalars(
-        select(TaskLibrary)
-        .where(TaskLibrary.archived_at.is_(None), TaskLibrary.parent_library_id.is_(None))
-        .order_by(TaskLibrary.title)
-    ):
-        if lib.id in existing:
+    살아있는 = list(db.scalars(
+        select(TaskLibrary).where(TaskLibrary.archived_at.is_(None)).order_by(TaskLibrary.title)))
+    by_id = {lib.id: lib for lib in 살아있는}
+    for lib in 살아있는:
+        # 후보는 고르는 단위 — 최상위와 **부서가 다른 하위**(부모를 넣어도 안 딸려 오므로
+        # 자기 부서 사람이 여기서 직접 넣는다 · 봐둘것 BF-a)
+        if lib.id in existing or lib_domain.follows_parent(lib, by_id):
             continue
         start, _ = dweek_mod.resolve_dates(
             retreat.start_date,
@@ -812,9 +816,10 @@ def add_existing(
         dept = dept_by_key.get(lib.default_department_key or "")
         if not perm.can_edit_department_key(user, lib.default_department_key):
             raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
-        for target in [lib] + list(
-            db.scalars(select(TaskLibrary).where(TaskLibrary.parent_library_id == lib.id))
-        ):
+        # 같은 부서의 하위만 함께 넣는다 — 부서가 다른 하위는 자기 팀이 따로 넣는다(BF-a).
+        # 권한은 넣는 업무의 부서로 봤으므로, 함께 넣는 것도 같은 부서여야 그 문을 지난다
+        자식들 = list(db.scalars(select(TaskLibrary).where(TaskLibrary.parent_library_id == lib.id)))
+        for target in [lib] + [c for c in 자식들 if lib_domain.follows_parent(c, {lib.id: lib})]:
             start, end = dweek_mod.resolve_dates(
                 retreat.start_date,
                 anchor=target.date_anchor,

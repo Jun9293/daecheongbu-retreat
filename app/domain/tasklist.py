@@ -78,7 +78,7 @@ def _sort_key(run: TaskRun):
 
 
 def _row(run: TaskRun, today: dt.date, *, dim_keys: set[str] | None,
-         can_edit=None) -> dict:
+         can_edit=None, by_library: dict[int, TaskRun] | None = None) -> dict:
     paint = board.paint_of(run, today)
     end = run.end_date or run.start_date
     done = run.status == "완료"
@@ -106,6 +106,8 @@ def _row(run: TaskRun, today: dt.date, *, dim_keys: set[str] | None,
         # 행 배지에서 상태를 바로 바꿀 수 있는가 (4-14) — **보드·드로어와
         # 같은 문**이다. 못 바꾸는 사람에게는 누를 것처럼 보이지 않는다
         "can_edit": True if can_edit is None else bool(can_edit(run)),
+        # 상위 (봐둘것 BF-a) — 보드와 같은 한 벌(`board.parent_of`). 누르면 상위의 상세가 열린다
+        "parent": board.parent_of(run, by_library or {}),
     }
 
 
@@ -185,7 +187,9 @@ def build(
     if state:
         picked = [r for r in picked if badge_of[r.id] == state]
 
-    rows = [_row(r, today, dim_keys=(my_keys or set()) if dim else None, can_edit=can_edit)
+    by_library = {r.library_id: r for r in runs}
+    rows = [_row(r, today, dim_keys=(my_keys or set()) if dim else None, can_edit=can_edit,
+                 by_library=by_library)
             for r in picked]
     # **뺀 업무는 상태 칩과 무관하다** — 상태 칩은 하는 업무를 가르는 축이고(4-3),
     # 안 하기로 한 것은 그 축 밖이다. 그래서 `state` 를 안 걸고 부서 범위만 따른다

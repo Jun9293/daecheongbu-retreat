@@ -123,8 +123,9 @@ function renderLib() {
   // 성격이 다른 셋으로 나눈다 — 섞어 놓으면 무엇을 고르는지가 흐려진다
   const sections = [
     {key: 'main', title: 'Main 업무',
-     hint: '산출물이 남는 단위. 아래 하위 업무가 함께 딸려 옵니다',
-     rows: shown.filter(i => i.kind === 'library' && i.task_kind === 'main')},
+     hint: '산출물이 남는 단위. 아래 하위 업무가 함께 딸려 옵니다 — 「↑」 가 붙은 줄은 다른 부서 업무의 하위라 따로 고릅니다',
+     // 부서가 다른 하위는 부모를 안 따라가 스스로 고르는 줄이 된다(봐둘것 BF-a) — Main 묶음에 선다
+     rows: shown.filter(i => i.kind === 'library' && (i.task_kind === 'main' || i.task_kind === 'sub'))},
     {key: 'schedule', title: '일정',
      hint: '논의 없이 날짜만 지키면 되는 별도 업무',
      rows: shown.filter(i => i.kind === 'library' && i.task_kind === 'schedule')},
@@ -324,6 +325,7 @@ function startEdit(item) {
   const startSlot = (data.slots || []).find(s => s.start <= item.start && item.start <= s.end);
   if (startSlot) { $('tStart').value = startSlot.start; $('tEnd').value = startSlot.end; }
   $('tParentField').hidden = $('tKind').value !== 'sub';
+  if (item.parent_id) { paintParentPicker(); $('tParent').value = item.parent_id; }
   $('tSave').textContent = '수정 저장';
   $('tCancel').hidden = false;
   $('taskEditor').scrollIntoView({block: 'nearest'});

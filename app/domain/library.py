@@ -151,7 +151,8 @@ def catalog(
 ) -> list[dict]:
     """세팅 마법사 3단계에 뿌릴 라이브러리 목록.
 
-    고르는 단위는 상위 업무(Main·일정)다. 하위 업무는 상위를 따라가지만,
+    고르는 단위는 상위를 따라가지 않는 줄이다 — 최상위 업무(Main·일정)와 **부서가 다른
+    하위**(`follows_parent` · 봐둘것 BF-a). 같은 부서 하위는 상위를 따라가지만,
     무엇이 딸려 오는지 보이지 않으면 고를 수가 없으므로 함께 실어 보낸다.
     진행 순서로 읽히도록 시작일 순으로 정렬한다.
     """
@@ -167,10 +168,12 @@ def catalog(
             .order_by(TaskLibrary.id)
         )
     )
-    libraries = [lib for lib in every if lib.parent_library_id is None]
+    # 고르는 단위 = 상위를 따라가지 않는 것(최상위 + 부서가 다른 하위 · follows_parent)
+    by_id = {row.id: row for row in every}
+    libraries = [lib for lib in every if not follows_parent(lib, by_id)]
     children: dict[int, list[TaskLibrary]] = {}
     for row in every:
-        if row.parent_library_id is not None:
+        if follows_parent(row, by_id):
             children.setdefault(row.parent_library_id, []).append(row)
 
     def dates_of(lib: TaskLibrary) -> tuple[dt.date, dt.date]:
@@ -217,6 +220,10 @@ def catalog(
                 ],
                 "origin": lib.origin,
                 "rationale": lib.suggestion_rationale,
+                # 부서가 다른 하위로 스스로 선 줄이면 그 상위 제목 — 무엇의 하위인지 보인다
+                "parent_library_id": lib.parent_library_id,
+                "parent_title": by_id[lib.parent_library_id].title
+                if lib.parent_library_id in by_id else None,
                 "sub_count": len(subs),
                 "children": [
                     {
@@ -256,6 +263,20 @@ def round_labels(db: Session, *, exclude_retreat_id: int | None = None) -> list[
 # 적지만, 선행은 방향이 있고 **가진 쪽에만** 적는다. 후속("나를 기다리는 업무")은
 # 저장하지 않고 여기서 계산한다 — 양쪽에 적으면 한쪽만 지워졌을 때 어느 쪽이
 # 맞는지 알 수 없기 때문이다. (CLAUDE.md 2장)
+
+
+def follows_parent(lib: TaskLibrary, by_id: dict[int, TaskLibrary]) -> bool:
+    """하위가 상위를 **따라 들고 나는가** (봐둘것 BF-a · 2026-09-17 사람이 정함).
+
+    상위가 있고 **담당 부서 키가 상위와 같을 때만** 따라간다. 부서가 다른 하위는
+    부모를 넣어도 자동으로 안 딸려 오고, 자기 팀이 따로 고르는 단위가 된다 —
+    마법사 · 팀별 초안 · 보드 「+ 업무 추가」 가 이 한 곳을 부른다(두 벌이면 한쪽만
+    고쳐진다). 상위가 `by_id` 에 없으면(보관 등) 따라갈 곳이 없어 스스로 선다.
+    """
+    if lib.parent_library_id is None:
+        return False
+    parent = by_id.get(lib.parent_library_id)
+    return parent is not None and (parent.default_department_key or "") == (lib.default_department_key or "")
 
 
 def prerequisites_of(lib: TaskLibrary) -> list[int]:
@@ -356,20 +377,18 @@ def dependents_map(db: Session) -> dict[int, list[int]]:
 
 
 def top_owner(db: Session) -> dict[int, int]:
-    """library_id → 그것을 품은 최상위 업무의 id.
+    """library_id → 그것이 속한 **고르는 단위**의 id (`follows_parent` 가 끊는 데까지).
 
-    마법사가 고르는 단위는 상위 업무인데 선행은 하위에도 붙으므로,
-    "이 선행이 이번 회차에 들어오는가"를 물으려면 최상위로 올려야 한다.
+    마법사가 고르는 단위는 상위를 따라가지 않는 줄인데 선행은 하위에도 붙으므로,
+    "이 선행이 이번 회차에 들어오는가"를 물으려면 그 단위로 올려야 한다.
     """
     every = {row.id: row for row in db.scalars(select(TaskLibrary))}
     out: dict[int, int] = {}
     for library_id, row in every.items():
         node, guard = row, 0
-        while node.parent_library_id is not None and guard < 20:
-            parent = every.get(node.parent_library_id)
-            if parent is None:
-                break
-            node, guard = parent, guard + 1
+        # 고르는 단위까지만 오른다 — 부서가 다른 하위는 그 자신이 단위다 (follows_parent)
+        while follows_parent(node, every) and guard < 20:
+            node, guard = every[node.parent_library_id], guard + 1
         out[library_id] = node.id
     return out
 
@@ -604,13 +623,14 @@ def create_retreat(
             select(TaskLibrary).where(TaskLibrary.archived_at.is_(None)).order_by(TaskLibrary.id)
         )
     )
+    lib_by_id = {lib.id: lib for lib in libraries}
     included_ids: set[int] = set()
     for lib in libraries:
-        if lib.parent_library_id is None:
-            if lib.id in selected:
-                included_ids.add(lib.id)
-    for lib in libraries:  # 하위 업무는 상위를 따라간다
-        if lib.parent_library_id is not None and lib.parent_library_id in included_ids:
+        # 고르는 단위(최상위 · 부서가 다른 하위)는 골렸을 때만 든다
+        if not follows_parent(lib, lib_by_id) and lib.id in selected:
+            included_ids.add(lib.id)
+    for lib in libraries:  # 같은 부서의 하위는 상위를 따라간다 (부서가 다르면 안 따라감 · BF-a)
+        if follows_parent(lib, lib_by_id) and lib.parent_library_id in included_ids:
             included_ids.add(lib.id)
 
     base_runs = (

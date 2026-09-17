@@ -53,12 +53,17 @@ function writeUrl(runId) {
 /* 패널을 눌린 행 아래로 옮긴다 — "그 자리에서 펼쳐진다" (4-14).
    행이 화면에 없으면(필터에 걸렸거나 다른 회차) 옮기지 않고 오른쪽
    패널 그대로 연다 — 알림으로 들어온 업무를 못 여는 것보다 낫다. */
+/* 목록의 「↑ 상위」 를 눌러 연 것은 **그 행으로 옮기지 않는다**(사람이 정함 ·
+   2026-09-17) — 보던 자리를 두고 오른쪽 패널로 연다. 한 번만 쓰고 지운다 */
+let 옆에열기 = false;
+
 function place(runId) {
   document.querySelectorAll('.lslot').forEach(s => {
     if (s.dataset.slot !== String(runId)) s.hidden = true;
   });
   carets(runId);
-  const slot = slotOf(runId);
+  const slot = 옆에열기 ? null : slotOf(runId);
+  옆에열기 = false;
   if (!slot) { dw.classList.remove('inline'); document.body.appendChild(dw); return; }
   const done = slot.closest('details.ldone');
   if (done) done.open = true;            // 완료 접힘 안이면 먼저 편다
@@ -185,6 +190,16 @@ list.addEventListener('click', e => {
   const row = 칸.closest('.trow.lrow');
   if (!row) return;
   Drawer.assigneeMenu(칸, row.dataset.run);
+});
+
+/* 행 메타의 「↑ 상위」 — 누르면 **상위의 상세**가 열린다(행은 안 열림). 단추라
+   `안여는곳` 이 이미 예외로 둔다. 전파를 막지 않는다(상태 칸 · 담당자 칸과 같은 규약) */
+list.addEventListener('click', e => {
+  const 상위 = e.target.closest('button.pup[data-parent]');
+  if (!상위) return;
+  옆에열기 = true;
+  Drawer.open(상위.dataset.parent);
+  Drawer.selectTab('rules');
 });
 
 list.addEventListener('click', e => {

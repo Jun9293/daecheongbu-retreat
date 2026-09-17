@@ -186,8 +186,12 @@ def set_required_bulk(
     """체크된 것만 필수로 남긴다. 화면 전체를 한 번에 저장하는 경로."""
     chosen = set(library_ids)
     changed = 0
-    for lib in db.scalars(select(TaskLibrary).where(TaskLibrary.archived_at.is_(None))):
-        if lib.parent_library_id is not None:
+    살아있는 = list(db.scalars(select(TaskLibrary).where(TaskLibrary.archived_at.is_(None))))
+    by_id = {lib.id: lib for lib in 살아있는}
+    for lib in 살아있는:
+        # 상위를 따라가는 하위만 건너뛴다 — 부서가 다른 하위는 이 화면에 제 칸이 선다(catalog ·
+        # 봐둘것 BF-a · BF-b). 부서와 무관하게 건너뛰면 그 칸을 켜고 저장해도 조용히 무시된다
+        if lib_domain.follows_parent(lib, by_id):
             continue
         want = lib.id in chosen
         if bool(lib.always_required) != want:

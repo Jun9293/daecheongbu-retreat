@@ -20,6 +20,17 @@
    완료에는 D±N 이 안 실려 온다(도메인이 뺀다). due 의 b-* 는 배지 이름을
    기계적으로 이어 붙인 것. 배지 html 은 `~` 로 잇지 않는다 — Markup 이
    섞이면 나머지 글자까지 이스케이프돼 태그가 글자 그대로 찍힌다. #}
+{# 상위 표시 (봐둘것 BF-a) — 보드의 것과 같은 모양이고, 상위의 run 이 이번 회차에
+   있으면 **단추**라 누르면 그 상세가 열린다(tasks.js · 행은 안 열림). 글자는 |e 로 넣는다 #}
+{% macro pup(p) -%}
+{%- set 부서 = (' <span class="pdept">' ~ (('<i style="background:%s"></i>%s'|format(p.dept_color|e, p.dept_name|e)) if p.dept_name else '담당 없음') ~ '</span>') if p.other_dept and (p.dept_name or p.no_dept) else '' -%}
+{%- if p.run_id -%}
+<button type="button" class="pup" data-parent="{{ p.run_id }}" title="상위 열기">↑ {{ p.title }}{{ 부서|safe }}</button>
+{%- else -%}
+<span class="pup" title="상위">↑ {{ p.title }}{{ 부서|safe }}</span>
+{%- endif -%}
+{%- endmacro %}
+
 {% macro lrow(row) %}
 {{ taskrow({
   'title': row.title,
@@ -33,7 +44,7 @@
      'html': row.assignee|e if row.assignee else '담당자 없음'},
     {'cls': 'deptchip due b-' ~ row.badge.cls,
      'html': (row.end|short_date ~ (' · ' ~ row.dday if row.dday else '')) if row.end else '날짜 없음'},
-  ],
+  ] + ([{'cls': 'pupw', 'html': pup(row.parent)}] if row.parent else []),
   'cells': [
     {'cls': 'cell st' ~ (' pick' if row.can_edit else ''),
      'html': '<span class="stbadge %s">%s</span>'|format(row.badge.cls, row.badge.label)},

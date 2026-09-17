@@ -53,7 +53,8 @@
     <div class="tgroup">
       {% set tags = [{'cls': item.verdict.tone, 'label': item.verdict.label}]
            + ([{'cls': 'must', 'label': '필수 지정'}] if item.always_required else [])
-           + ([{'cls': 'sub', 'label': '하위 ' ~ item.sub_count}] if item.sub_count else []) %}
+           + ([{'cls': 'sub', 'label': '하위 ' ~ item.sub_count}] if item.sub_count else [])
+           + ([{'cls': 'sub', 'label': '↑ ' ~ item.parent_title}] if item.parent_title else []) %}
       {{ taskrow({
         'title': item.title,
         'cls': 'on' if item.selected else 'off',
