@@ -168,22 +168,28 @@ def test_04b_목업에도_가로_격자선이_없다(name):
 # ---------------------------------------------------------------- 5. 부서 색
 
 
-def test_05_부서_색이_면을_채우지_않고_점과_테두리에만_쓰인다():
+def test_05_부서_색이_면에도_오되_아주_옅게만_온다():
+    """**2026-09-21 에 사람이 규칙을 뒤집었다** (4-0).
+
+    그전에는 「면을 안 채운다」 였고 이 시험이 그것을 지켰다. 팀색이 7~8px
+    점과 3px 마개에만 갇혀 화면이 통째로 회색으로 읽혀서, **채우되 선택
+    테두리와 지연 배지를 묻지 않을 만큼만** 으로 옮겼다. 그래서 이 시험이
+    재는 것도 「안 채우는가」 가 아니라 **「너무 진하지 않은가」** 다.
+    """
     from app.domain import board as board_view
 
-    # 어떤 상태에서도 배경이 팀 색에서 파생되지 않는다
-    for status in ("대기", "진행중", "완료", "지연"):
+    # 미완료는 팀 색에서 나온 옅은 면이다
+    for status in ("대기", "진행중"):
         bg, border = board_view.bar_style(status, "#B95A83", kind="main", ghost=False)
-        assert not bg.startswith("rgb("), f"{status} 배경이 팀 색 틴트다"
-        assert "B95A83" not in bg.upper(), f"{status} 배경에 팀 색이 들어갔다"
-    # 테두리에는 쓴다 — 대기·진행중은 팀 색이 온다
-    assert board_view.bar_style("대기", "#B95A83", kind="main", ghost=False)[1] == "#B95A83"
-    assert board_view.bar_style("진행중", "#B95A83", kind="main", ghost=False)[1] == "#B95A83"
+        assert bg.startswith("rgb("), f"{status} 배경이 팀 색에서 안 나왔다"
+        assert border == "#B95A83", f"{status} 테두리가 팀 색이 아니다"
+    # **완료와 고스트는 그대로다** — 완료를 눈에 띄게 하지 않는 것이 4-3 의 핵심
+    assert board_view.bar_style("완료", "#B95A83", kind="main", ghost=False) == board_view.BAR_DONE
+    assert board_view.bar_style("대기", "#B95A83", kind="main", ghost=True)[0] == "none"
+    # 비율은 한 곳에만 있고 낮다
+    assert 0 < board_view.TINT_TODO < board_view.TINT_WIP <= 0.14
 
-    # 화면 쪽도 팀 색 틴트로 면을 채우지 않는다
-    assert "--teamt" not in BOARD and "--rowt" not in BOARD and "--lct" not in BOARD
-    assert "var(--teamt" not in CSS and "var(--rowt" not in CSS and "var(--lct" not in CSS
-    # 왼쪽 점 · 진행중 마개 · 부서 칩의 점 — 팀 색이 오는 자리들
+    # 왼쪽 점 · 진행중 마개 · 부서 칩의 점 — 팀 색이 오던 자리는 **그대로 남는다**
     assert re.search(r"\.row\.team \.lc \.sw\{[^}]*border-radius:50%", CSS)
     assert ".bar.진행중::after" in CSS and "background:var(--team" in CSS
     assert ".chip.solid::before" in CSS

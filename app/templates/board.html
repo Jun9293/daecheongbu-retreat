@@ -79,7 +79,7 @@
     </div>
 
     {% for dept in board.departments %}
-    <div class="row team" data-team="{{ dept.key }}">
+    <div class="row team" data-team="{{ dept.key }}" style="--team:{{ dept.color }}">
       <div class="lc">
         <span class="caret">▼</span>
         <span class="sw" style="background:{{ dept.color }}"></span>

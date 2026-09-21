@@ -956,7 +956,7 @@ def _serialize_reviews(db: Session, run: TaskRun) -> list[dict]:
         {
             "id": r.id,
             "department": r.department.name if r.department else "",
-            "department_color": r.department.color if r.department else "#83827F",
+            "department_color": r.department.color if r.department else board.NO_DEPARTMENT_COLOR,
             "status": r.status,
             "requester": r.requester_name,
             "message": r.message,

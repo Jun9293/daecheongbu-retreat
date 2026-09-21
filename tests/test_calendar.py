@@ -218,7 +218,13 @@ def test_05_부서_색과_상태가_보드와_같게_나온다(cal_data):
     # 상태 4종이 보드의 bar_style 에서 그대로 나온다
     assert by_title["끝낸 업무"]["background"] == board_domain.BAR_DONE[0]
     assert by_title["지각한 업무"]["border"] == board_domain.BAR_LATE[1]
-    assert by_title["오늘 업무"]["background"] == board_domain.BAR_TODO_BG
+    # 대기·진행중은 **팀색 tint** 다 (4-0 · 2026-09-21). 값을 여기 박지 않고
+    # bar_style 을 그대로 불러 견준다 — 박아 두면 알파를 고칠 때 이 시험이
+    # 「달력이 보드와 다르다」 가 아니라 「값이 다르다」 로 빨개진다
+    색 = by_title["오늘 업무"]["color"]
+    assert by_title["오늘 업무"]["background"] \
+        == board_domain.bar_style("대기", 색, kind="main", ghost=False)[0]
+    assert by_title["오늘 업무"]["background"] != board_domain.BAR_TODO_BG, "대기 바탕이 흰색 그대로다"
     with app_session() as db:
         run = db.get(models.TaskRun, cal_data["runs"]["오늘 업무"])
         run.status = "진행중"
@@ -227,7 +233,7 @@ def test_05_부서_색과_상태가_보드와_같게_나온다(cal_data):
     assert next(d for week in wip["weeks"] for cell in week
                 for d in cell["dots"] + cell["more"]
                 if d["title"] == "오늘 업무")["background"] \
-        == board_domain.BAR_WIP_BG
+        == board_domain.bar_style("진행중", 색, kind="main", ghost=False)[0]
 
 
 def test_06_기한_초과가_날짜에서_계산된다(cal_data):

@@ -21,7 +21,7 @@
     {%- if r.why %}<span class="why">{{ r.why }}</span>{% endif -%}
     {%- if r.basis %}<span class="basis">{{ r.basis }}</span>{% endif -%}
     {%- if r.meta %}<span class="metaline">
-      {%- for c in r.meta %}<span class="{{ c.cls }}">{{ c.html|safe }}</span>{% endfor -%}
+      {%- for c in r.meta %}<span class="{{ c.cls }}"{% if c.style %} style="{{ c.style }}"{% endif %}>{{ c.html|safe }}</span>{% endfor -%}
     </span>{% endif -%}
   </span>
   {%- if 'dept' in r -%}

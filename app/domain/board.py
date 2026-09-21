@@ -35,28 +35,37 @@ def tint(hex_color: str, ratio: float) -> str:
     if len(raw) == 3:                        # #888 → #888888
         raw = "".join(ch * 2 for ch in raw)
     if len(raw) != 6:
-        return "rgb(250,251,250)"            # 못 읽으면 종이색
+        return "rgb(250,250,252)"            # 못 읽으면 종이색
     try:
         r, g, b = (int(raw[i : i + 2], 16) for i in (0, 2, 4))
     except ValueError:
-        return "rgb(250,251,250)"
+        return "rgb(250,250,252)"
     mix = lambda v, paper: round(v * ratio + paper * (1 - ratio))  # noqa: E731
-    return f"rgb({mix(r, 250)},{mix(g, 251)},{mix(b, 250)})"
+    return f"rgb({mix(r, 250)},{mix(g, 250)},{mix(b, 252)})"
 
 
-# 무채색 기조 (CLAUDE.md 4장 UI 방향).
-# **부서 색으로 면을 채우지 않는다** — 왼쪽 점과 바 테두리에만 쓴다.
-# 진행중을 팀 색 20% 로 채우던 것을 없앴으므로, 진행중은 화면 쪽에서
-# 왼쪽 3px 팀색 마개(.bar.진행중::after)로 구분한다. 상태 4종은 그대로다.
-BAR_DONE = ("#F1F0EE", "#E6E5E2")        # 회색 채움 — 눈에 띄지 않게
+# 차가운 무채색 기조 (CLAUDE.md 4장 UI 방향).
+# **부서 색이 면에도 온다 — 다만 아주 옅게** (2026-09-21 에 사람이 정함).
+# 전에는 「면을 안 채운다」 였고 팀색이 7~8px 점과 3px 마개에만 갇혀 있어서,
+# 색이 아홉 가지나 있는데 화면이 통째로 회색으로 읽혔다. 채우되 **선택
+# 테두리와 지연 배지를 묻지 않을 만큼만** 넣는다 — 그래서 알파를 여기 한 곳에
+# 두고 값도 8%·14% 로 낮게 잡는다. 왼쪽 3px 마개는 그대로 남는다.
+BAR_DONE = ("#F0F1F4", "#E3E4E9")        # 회색 채움 — 눈에 띄지 않게
 # 부서가 없는 업무의 색. 여기저기 흩어져 있던 것을 한 곳으로 모은다.
 # (`Department.color` 도 색을 안 정한 부서에 같은 값을 넣어 준다)
-NO_DEPARTMENT_COLOR = "#69726D"
+NO_DEPARTMENT_COLOR = "#71727D"
 
 BAR_LATE = ("#FBF1F0", "#C4554D")        # 옅은 붉은색 + 빨간 테두리
-BAR_GHOST_BORDER = "#C9C8C5"
-BAR_WIP_BG = "#FAFAF9"                   # 아주 옅은 중립 — 팀 색이 아니다
+BAR_GHOST_BORDER = "#C7C8CE"
+# `bar_style` 은 이제 이 값을 안 돌려준다 — 못 읽는 색은 `tint` 가 종이색으로
+# 물러선다. 남긴 것은 **「팀색이 안 온 바탕」 이 무엇인지** 를 시험이 가리킬
+# 이름이 필요해서다(`test_calendar` 가 「이 값이 아니다」 를 잰다)
 BAR_TODO_BG = "#FFFFFF"
+
+# 면을 채우는 비율. **여기 한 곳에 둔다** — 여러 자리에 흩어 두면 한쪽만
+# 진해진다. 값이 낮은 것은 선택 테두리와 지연 배지를 묻지 않기 위해서다.
+TINT_TODO = 0.08                         # 대기
+TINT_WIP = 0.14                           # 진행중
 
 
 def bar_style(status: str, color: str, *, kind: str, ghost: bool) -> tuple[str, str]:
@@ -69,8 +78,9 @@ def bar_style(status: str, color: str, *, kind: str, ghost: bool) -> tuple[str, 
     if status == "지연":
         return BAR_LATE
     if kind == "schedule" or status == "대기":
-        return BAR_TODO_BG, color
-    return BAR_WIP_BG, color
+        return tint(color, TINT_TODO), color
+    return tint(color, TINT_WIP), color
+
 
 
 class Axis:

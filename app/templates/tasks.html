@@ -39,7 +39,8 @@
   'attrs': {'data-run': row.run_id},
   'meta': [
     {'cls': 'deptchip depthue' if row.dept else 'deptchip',
-     'html': ('<i style="--c:%s"></i>%s'|format(row.dept.color, row.dept.name|e)) if row.dept else '담당 없음'},
+     'style': ('--c:' ~ row.dept.color) if row.dept else '',
+     'html': ('<i></i>%s'|format(row.dept.name|e)) if row.dept else '담당 없음'},
     {'cls': 'deptchip asg' ~ ('' if row.assignee else ' none') ~ (' pick' if row.can_edit else ''),
      'html': row.assignee|e if row.assignee else '담당자 없음'},
     {'cls': 'deptchip due b-' ~ row.badge.cls,
@@ -142,7 +143,7 @@
       <a class="lexrow{{ ' dim' if row.dim }}" href="/tasks?task={{ row.run_id }}">
         <span class="nm">{% if row.no %}<span class="runno">{{ row.no }}</span>{% endif %}{{ row.title }}</span>
         <span class="metaline">
-          {% if row.dept_name %}<span class="deptchip"><i style="--c:{{ row.dept_color }}"></i>{{ row.dept_name }}</span>{% endif %}
+          {% if row.dept_name %}<span class="deptchip depthue" style="--c:{{ row.dept_color }}"><i></i>{{ row.dept_name }}</span>{% endif %}
           <span class="deptchip">{{ row.kind_label }}</span>
           {% if row.start %}<span class="deptchip">{{ row.start|short_date }}</span>{% endif %}
         </span>
