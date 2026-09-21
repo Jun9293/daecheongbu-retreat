@@ -61,3 +61,4 @@ docs/mockups/retreat-live.html | 〃
 docs/mockups/retreat-setup.html | 〃
 docs/mockups/retreat-shell.html | 〃
 docs/mockups/drawer-attachment-link.html | 〃
+docs/review/2026-09-21-UI톤개선.md | 얼린 판이라 한 글자도 못 고친다. 검토자 원문이 그 판에서 걷어낸 옛 이름을 짚느라 그대로 담는다
