@@ -128,6 +128,9 @@
 {% block scripts %}
 <script id="board-meta" type="application/json">{{ board.meta|tojson }}</script>
 <script src="{{ static('js/listinput.js') }}" defer></script>
+{# 기간을 고르는 달력 팝업 — 드로어가 쓰고 업무 추가 팝업도 **같은 부품**을
+   씁니다 (4-9 · 6-7). drawer.js 보다 먼저 와야 `window.DatePick` 이 준비됩니다 #}
+<script src="{{ static('js/datepick.js') }}" defer></script>
 <script src="{{ static('js/drawer.js') }}" defer></script>
 <script src="{{ static('js/board.js') }}" defer></script>
 {% endblock %}

@@ -114,7 +114,9 @@ def test18_w05_열렸다는_다_그려진_것이다():
     것이라, 관리자로 돌면서 「권한과 어긋남」 이 났다(실제로 그랬다)."""
     코드 = _코드()
     자리 = 코드[코드.index("const 열렸다"):][:300]
-    assert "statchip" in 자리 and "불러오는 중" in 자리
+    # 2026-09-23 에 헤더의 상태 칩이 **세 칸 버튼**이 됐다 (4-9) — 보는
+    # 자리가 옮겨졌을 뿐 재는 것은 같다: 「머리가 실제로 그려졌나」
+    assert "statseg" in 자리 and "불러오는 중" in 자리
     앱 = (ROOT / "app" / "static" / "js" / "drawer.js").read_text(encoding="utf-8")
     at = 앱.index("dw.classList.add('open')")
     assert "await fetch" in 앱[at:at + 500], "앱이 먼저 열고 나중에 불러오는 그 모양이 맞다"
@@ -169,25 +171,67 @@ def test18_d03_앱이_죽여_두는_것을_다_안다():
     `if not p.exists(): continue` 로 넘겼는데, **board.html·
     calendar.html 이 빠져 있었고** 경로가 바뀌면 아무것도 안 보면서
     초록이었다.
+
+    **낱말만 잰다** — 동작은 `docs/checks/drawer.js` 가 브라우저에서 잰다.
+    여기서 보는 것은 「죽여 두는 자리가 늘었는지」 뿐이다.
+
+    **수로 재지 않는다** (10장). 2026-09-23 에 상태가 세 칸 버튼이
+    되면서 둘이던 자리가 늘었는데, 수로 재 두면 「몇 개인가」 만 고치게
+    되고 **새로 죽는 자리가 왜 죽는지는 아무도 안 적습니다.** 그래서
+    자리마다 **까닭을 적고**, 목록에 없는 모양이 하나라도 나오면
+    빨개진다.
     """
     파일들 = []
     for 무늬 in ("app/static/js/drawer.js", "app/static/js/board.js",
                 "app/static/js/calendar.js", "app/static/js/tasks.js",
+                "app/static/js/datepick.js",
                 "app/templates/board.html", "app/templates/calendar.html",
                 "app/templates/tasks.html", "app/templates/partials/drawer*.html"):
         파일들 += sorted(ROOT.glob(무늬))
     # ③ **본 것이 0 이면 실패다** — 경로가 바뀌면 조용히 초록이 된다
-    assert len(파일들) >= 7, f"훑을 파일을 못 찾았다 — 경로가 바뀌었나: {파일들}"
+    assert len(파일들) >= 8, f"훑을 파일을 못 찾았다 — 경로가 바뀌었나: {파일들}"
 
-    자리 = []
+    # 무늬 → 왜 거기서 죽이는가. **목록에 없는 모양이 나오면 빨개진다**
+    죽여두는곳 = {
+        "d.can_edit ? '' : 'disabled'":
+            "상태 세 칸 — 못 고치는 계정에는 셋 다 죽여 둔다 (4-9). "
+            "점검의 `살아있나` 가 이것을 건너뜀으로 센다",
+        "!b.disabled":
+            "그 죽은 칸을 눌러도 아무 일이 없게 하는 문 — 죽이는 자리가 "
+            "아니라 죽었는지 읽는 자리다",
+        "go.disabled = true":
+            "「어느 팀에 알릴까요?」 의 보내기 — 두 번 눌러 두 번 가지 않게 (4-9)",
+        "b.disabled = true":
+            "상태를 저장하는 동안 세 칸을 잠근다 — 실패하면 되돌린다 (4-9)",
+        "b.disabled = false":
+            "그 잠금을 푼다",
+        "btn.disabled = true":
+            "기간 달력 팝업의 저장 — 저장하는 동안 다시 못 누른다 (4-9)",
+        ".dpsave').disabled = !start":
+            "시작일을 아직 안 골랐으면 저장이 흐리다 (목업 B)",
+        "btn.disabled = false":
+            "저장이 실패했을 때 다시 누를 수 있게 — 팝업은 안 닫는다 (5-0)",
+        'button disabled title="Phase 2':
+            "하단 「하위 업무 추가」 — Phase 2 라 사유를 툴팁에 (4-9)",
+    }
+
+    모름 = []
+    본무늬 = set()
     for p in 파일들:
         rel = p.relative_to(ROOT).as_posix()
         for 번호, 줄 in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
-            if "disabled" in 줄 and not 줄.strip().startswith(("*", "//", "#", "{#")):
-                자리.append(f"{rel}:{번호}")
-    # 지금 둘뿐이다 — 권한 칩(statchip)과 Phase 2 의 하단 단추.
-    # **바닥도 둔다**: 0 이 되면 훑는 방법이 망가진 것이지 좋아진 것이 아니다
-    assert 2 <= len(자리) <= 2, f"죽여 두는 자리가 달라졌다 — 점검도 함께 보라: {자리}"
+            if "disabled" not in 줄 or 줄.strip().startswith(("*", "//", "#", "{#")):
+                continue
+            맞은것 = [무늬 for 무늬 in 죽여두는곳 if 무늬 in 줄]
+            if 맞은것:
+                본무늬.update(맞은것)
+            else:
+                모름.append(f"{rel}:{번호}")
+    assert not 모름, f"까닭을 안 적은 자리가 있다 — 점검의 `살아있나` 도 함께 보라: {모름}"
+    # **바닥도 둔다**: 목록에만 있고 코드에 없으면 훑는 방법이 망가진 것이거나
+    # 그 자리가 없어진 것이다. 둘 다 사람이 봐야 한다
+    안보인것 = sorted(set(죽여두는곳) - 본무늬)
+    assert not 안보인것, f"목록에 있는데 코드에 없다 — 없어졌으면 목록에서 빼라: {안보인것}"
 
 
 def test18_d04_상한을_항목마다_늘리는_손잡이가_없다():

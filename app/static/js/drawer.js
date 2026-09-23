@@ -53,6 +53,14 @@ const STATUS = {
    STATUS 에 '지연' 이 남은 것은 **보여주기** 위해서다 — 기한이 지난 업무의
    칩은 서버가 계산한 '지연' 으로 뜬다. */
 const PICKABLE = ['대기', '진행중', '완료'];
+/* 드로어 폭 (4-9 · 목업 B · 2026-09-23) — **범위를 정하는 곳은 여기 하나다.**
+   CSS 에도 적으면 끌 때와 되돌릴 때가 갈리고, 갈린 쪽을 아무도 눈치채지
+   못한다. `--dw` 의 기본값은 이 `기본` 과 같아야 한다(시험이 잰다). */
+const 폭한계 = {최소: 360, 최대: 760, 기본: 460};
+/* 본문이 이만큼은 남는다 — 창이 좁아 드로어가 본문을 다 먹으면
+   「밀고 들어온다」 가 「덮는다」 와 같아진다 */
+const 본문최소 = 360;
+const 폭키 = 'dcb.drawerWidth';
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
 const $ = id => document.getElementById(id);
@@ -101,6 +109,9 @@ function closeDrawer() {
   cur = null; detail = null;
   cancelUpload({quiet: true});
   call('onClose');
+  // **닫을 때도 다시 잰다** — 밀고 들어오는 패널이라 닫히면 본문이 넓어지는데,
+  // 열 때만 재면 보드의 격자 좌표와 드래그 계산이 좁았던 폭으로 남는다 (9장)
+  setTimeout(() => call('afterLayout'), 240);
 }
 
 function selectTab(name) {
@@ -170,11 +181,10 @@ async function followDates(hand) {
   detail.start = saved.start;
   detail.end = saved.end;
   detail.moved = saved.moved;
-  renderMoved();
-  const s = $('dstart'), e = $('dend'), sp = $('dspan');
-  if (s) s.value = saved.start;
-  if (e) e.value = saved.end;
-  if (sp) sp.textContent = spanLabel(saved.start, saved.end);
+  // **머리를 통째로 다시 그린다** — 날짜 칸이 두 개이던 시절에는 값만
+  // 꽂으면 됐는데, 이제 기간 줄이 「기간/날짜」·「n일간/하루」·늦음까지
+  // 함께 말하므로 한 자리만 고치면 나머지가 옛 값으로 남는다 (4-9)
+  renderDrawer();
   call('onDates', detail.run_id, saved);
 }
 
@@ -183,18 +193,35 @@ function renderDrawer() {
   const d = detail;
   // 칩은 계산된 배지로 뜬다 (board.paint_of · 4-3) — 기한이 지났으면 '지연'.
   // 서버가 배지를 안 실은 옛 응답이면 저장 상태로 물러선다.
-  const st = STATUS[(d.badge && d.badge.label) || d.status] || STATUS['대기'];
+  /* **상태는 세 칸이 붙은 버튼이다** (4-9 · 목업 B · 2026-09-23).
+     고를 것이 셋뿐이라(4-3) 메뉴를 펼칠 이유가 없다. 고를 수 있는 상태와
+     라벨은 여전히 `PICKABLE`·`STATUS` 한 곳에서 나온다 — 목록의 상태 칸은
+     그 메뉴를 그대로 쓰고(4-14), 갈린 것은 **펼치는 모양**뿐이다.
+
+     **저장된 '지연' 은 셋 중 아무것도 안 켠다.** 4-3 이 저장값에서 걷어냈지만
+     어딘가에 남아 있으면 세 칸이 전부 꺼진 채로 뜨고 아래 한 줄이 그 사실을
+     말한다 — 말없이 '대기' 를 켜면 **화면이 저장된 값을 고쳐 보여주는 것**이
+     된다. 판정은 **저장값(`d.status`)** 으로 한다: 배지(`d.badge`)는 기한이
+     지나면 '지연' 이 되므로 그것으로 가르면 멀쩡한 업무가 이 줄을 단다. */
+  const 저장된 = d.status;
+  const 켤칸 = PICKABLE.includes(저장된) ? 저장된 : null;
   $('dkick').innerHTML =
     `<span class="chip solid" style="--team:${esc(d.department_color)}">${esc(d.department)}</span>
      <span class="chip">${d.kind_label}</span>
-     <button class="chip stat" id="statchip" ${d.can_edit ? '' : 'disabled'}>
-       <span class="cv" style="background:${esc(st.color)}"></span>${esc(st.label)}${d.can_edit ? ' ▾' : ''}</button>`;
-  if (d.can_edit) {
-    // **전파를 막지 않는다** — 바깥 클릭 판정이 이 자리를 안다
-    // (`originOf` 의 pickcell). 목록의 상태 칸이 그 길을 쓰는데 드로어의
-    // 칩만 다른 길이면, 같은 메뉴를 여는 두 자리의 규약이 갈린다
-    $('statchip').onclick = e => statMenu(e.currentTarget);
+     <span class="statseg" id="statseg" role="group" aria-label="상태">${PICKABLE.map(key =>
+       `<button type="button" data-v="${esc(key)}" class="${key === 켤칸 ? 'on' : ''}"
+          aria-pressed="${key === 켤칸}" ${d.can_edit ? '' : 'disabled'}>
+          <span class="cv" style="--dot:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join('')}</span>`;
+  const 지연줄 = $('dstale');
+  if (지연줄) {
+    지연줄.hidden = 켤칸 !== null;
+    if (켤칸 === null) 지연줄.textContent =
+      `저장된 상태가 「${저장된}」 이라 셋 중 아무것도 켜지 않았습니다 — 눌러서 정해 주세요.`;
   }
+  if (d.can_edit) $('statseg').onclick = e => {
+    const b = e.target.closest('button[data-v]');
+    if (b && !b.disabled) 칸을누른다(d.run_id, b.dataset.v, 켤칸);
+  };
   /* 뺀 업무 표시 (4-14) — 판정은 서버의 `included` 하나. 옛 응답(칸 없음)은 산 것으로 본다 */
   const 뺀줄 = $('dexcl');
   if (뺀줄) 뺀줄.hidden = d.included !== false;
@@ -218,14 +245,15 @@ function renderDrawer() {
     return `${s.replaceAll('-', '.')}${한날 ? '' : ' – ' + (e.slice(0, 4) === s.slice(0, 4) ? e.slice(5).replace('-', '.') : e.replaceAll('-', '.'))}`
       + ` · ${spanLabel(s, e)}`;
   };
+  /* 기간 줄 (목업 B) — 「기간」(같은 날이면 「날짜」) + 날짜 + n일간/하루.
+     기한이 지났으면 앞에 「마감 n일 지남 ·」 을 지연색으로 붙인다 —
+     **계산값이고 서버가 준다**(`d.badge` · 4-3). 화면이 다시 세지 않는다. */
+  const 늦음 = Number(d.overdue_days || 0);
+  const 기간라벨 = (!d.end || d.end === d.start) ? '날짜' : '기간';
   $('dmeta').innerHTML =
-    `<dt>기간</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
-        ? `<span class="dates">
-             <input type="date" id="dstart" value="${d.start || ''}" aria-label="시작일">
-             <i class="sep">–</i>
-             <input type="date" id="dend" value="${d.end || d.start || ''}" aria-label="마감일">
-             <b class="span" id="dspan">· ${spanLabel(d.start, d.end)}</b></span>`
-        : `<span class="mono">${기간줄(d.start, d.end)}</span>`}</dd>
+    `<dt>${기간라벨}</dt><dd>
+        <span class="dates">${늦음 > 0 ? `<b class="dlate">마감 ${늦음}일 지남 ·</b> ` : ''}<span class="mono" id="dspan">${기간줄(d.start, d.end)}</span>${d.can_edit
+          ? ` <button type="button" class="calbtn" id="dcalbtn" aria-label="기간 고치기">달력</button>` : ''}</span></dd>
      <dt>담당팀</dt><dd class="${d.can_edit ? 'edit' : ''}">${d.can_edit
         ? `<span class="vsel">${dot(d.department_color).replace('class="dot"', 'class="dot" id="ddeptdot"')}
              <select id="ddept"><option value="">담당 없음</option>${teams}</select><i class="mark">∨</i></span>`
@@ -244,31 +272,40 @@ function renderDrawer() {
   renderMoved();
 
   if (d.can_edit) {
-    const start = $('dstart'), end = $('dend');
-    const saveDates = async () => {
-      if (!start.value) return;
-      if (end.value && end.value < start.value) { end.value = start.value; }
-      const res = await fetch(`/board/task/${d.run_id}/dates`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({start: start.value, end: end.value || start.value}),
+    /* 날짜는 **달력 팝업에서 둘을 함께 고르고 「저장」 을 눌러야 반영된다**
+       (4-9 · 목업 B). 전에는 칸 하나씩 고르는 즉시 저장해서, 기간을 줄이는
+       동안 마감이 시작보다 앞서는 순간이 생기고 그 사이에 닫으면 그대로
+       남았다. 팝업은 드로어 밖에서도 쓰는 한 부품이다(`DatePick`). */
+    const calbtn = $('dcalbtn');
+    if (calbtn) calbtn.onclick = () => {
+      if (!window.DatePick) return;
+      calbtn.classList.add('on');
+      window.DatePick.open(calbtn, {
+        start: d.start || '', end: d.end || d.start || '',
+        onSave: async (start, end) => {
+          const res = await fetch(`/board/task/${d.run_id}/dates`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({start, end}),
+          });
+          if (!res.ok) {
+            // 되돌릴 것이 없다 — 아직 아무것도 안 바뀌었다. 팝업이 안 닫히고 말한다
+            alert((await res.json().catch(() => ({}))).detail || '기간을 바꾸지 못했습니다.');
+            return false;
+          }
+          const saved = await res.json();
+          detail.start = saved.start;
+          detail.end = saved.end;
+          detail.moved = saved.moved;
+          renderDrawer();
+          call('onDates', d.run_id, saved);
+          return true;
+        },
       });
-      if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '기간을 바꾸지 못했습니다.'); return; }
-      const saved = await res.json();
-      const span = $('dspan');
-      if (span) span.textContent = spanLabel(saved.start, saved.end);
-      detail.start = saved.start;
-      detail.end = saved.end;
-      detail.moved = saved.moved;
-      renderMoved();
-      call('onDates', d.run_id, saved);
+      // 팝업이 닫히면 단추의 켜짐도 내린다 — 켜진 채로 남으면 열려 있는 줄 안다
+      const 지켜본다 = setInterval(() => {
+        if (!window.DatePick.isOpen()) { calbtn.classList.remove('on'); clearInterval(지켜본다); }
+      }, 200);
     };
-    start.onchange = saveDates;
-    end.onchange = saveDates;
-
-    // 날짜 칸을 누르면 달력이 열린다 (아이콘 없이)
-    [start, end].forEach(input => {
-      input.onclick = () => { try { input.showPicker(); } catch (err) { /* 지원 안 하면 기본 동작 */ } };
-    });
 
     $('ddept').onchange = async e => {
       const key = e.target.value;
@@ -393,13 +430,99 @@ function openRelatedPicker(d) {
       return;
     }
     box.hidden = true;
+    const 전 = new Set(detail.related_department_keys || []);
     detail.related_departments = data.related_departments;
     detail.related_department_keys = data.related_department_keys;
     renderDrawer();
+    // **저장이 끝났고, 알림은 그다음이다** (4-9 · 목업 B · 2026-09-23).
+    // 하나도 안 골라도 되고, 안 고르면 아무 데도 안 간다.
+    await 알릴팀을고른다(cur, data.related_department_keys || [], 전);
     // 고스트 바는 이 값에서 나온다 — 직접 고쳐 그렸다고 true 를 돌려준
     // 화면만 새로고침을 건너뛴다 (담당팀 이동과 같은 규칙)
     if (call('onRelatedTeams', cur) !== true) location.reload();
   };
+}
+
+/* 「어느 팀에 알릴까요?」 (목업 B) — **저장은 이미 끝났다.**
+
+   그래서 설명 줄이 그렇게 말한다: 관련팀은 알림과 상관없이 지정되고, 알림은
+   알리기만 한다. 기본은 아무것도 안 켜져 있다 — 보내지 않는 쪽으로 기울여
+   만든다(4-11).
+
+   `전` 은 저장 전의 키 집합이다. 꼬리표를 「새로 추가」/「기존」 으로 가르는 데만
+   쓴다 — 무엇이 바뀌었는지를 글로 또 적지는 않는다(결과 세 줄이 이미 말한다). */
+function 알릴팀을고른다(runId, keys, 전) {
+  return new Promise(resolve => {
+    if (!keys.length) { resolve(); return; }
+    const 이름 = new Map((detail.departments || []).map(t => [t.key, t]));
+    const box = $('prepick');
+    box.innerHTML = `<div class="sheetbox narrow">
+      <div class="sh"><b>어느 팀에 알릴까요?</b></div>
+      <p class="sechint">관련팀은 알림과 상관없이 저장하는 즉시 지정되어 그 팀의
+        업무 목록에 들어갑니다. 알림은 알리기만 합니다.</p>
+      <div class="plist notify">${keys.map(k => {
+        const t = 이름.get(k) || {name: k, color: '#69726D'};
+        return `<label><input type="checkbox" value="${esc(k)}">
+          <span><i class="dot" style="background:${esc(t.color)}"></i>${esc(t.name)}</span>
+          <em class="tag ${전.has(k) ? '' : 'new'}">${전.has(k) ? '기존' : '새로 추가'}</em></label>`;
+      }).join('')}</div>
+      <div class="sh end">
+        <button type="button" class="btn" id="relnotifyback">돌아가기</button>
+        <button type="button" class="btn pri" id="relnotifygo">알림 없이 저장</button></div></div>`;
+    box.hidden = false;
+    const go = $('relnotifygo');
+    const 센다 = () => {
+      const n = box.querySelectorAll('.plist.notify input:checked').length;
+      go.textContent = n ? `${n}팀에 알리고 저장` : '알림 없이 저장';
+    };
+    box.querySelector('.plist.notify').onchange = 센다;
+    $('relnotifyback').onclick = () => { box.hidden = true; resolve(); };
+    go.onclick = async () => {
+      const 고른것 = [...box.querySelectorAll('.plist.notify input:checked')].map(i => i.value);
+      go.disabled = true;
+      let 결과 = {sent_names: [], failed: []};
+      if (고른것.length) {
+        try {
+          const res = await fetch(`/board/task/${runId}/related-departments/notify`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keys: 고른것}),
+          });
+          결과 = res.ok ? await res.json()
+            // **통째로 실패해도 삼키지 않는다** — 고른 것을 전부 못 간 쪽에 적는다
+            : {sent_names: [], failed: 고른것.map(k => ({name: (이름.get(k) || {}).name || k, why: '보내지 못했습니다'}))};
+        } catch (err) {
+          결과 = {sent_names: [], failed: 고른것.map(k => ({name: (이름.get(k) || {}).name || k, why: '보내지 못했습니다'}))};
+        }
+      }
+      결과를보인다(box, keys.map(k => (이름.get(k) || {}).name || k), 결과, resolve);
+    };
+  });
+}
+
+/* 결과 세 줄 (목업 B) — 관련팀 / 알림 / 업무 목록.
+   **`+`/`−` 도, 「무엇이 바뀌었다」 도, 초록 안내도 두지 않는다** — 이 세 줄이
+   이미 그것을 말한다. 같은 사실을 두 곳에 적으면 갈린다. */
+function 결과를보인다(box, 팀들, 결과, resolve) {
+  const 간것 = 결과.sent_names || [];
+  const 이미 = 결과.already_names || [];
+  const 못간것 = 결과.failed || [];
+  // **안 간 것을 「보냄」 이라고 적지 않는다** (4-11). 같은 (업무, 팀)으로 두
+  // 번째 저장하면 알림은 안 가는데, 그것을 보냄으로 적으면 화면이 없는 일을
+  // 말한다 — 세 갈래를 그대로 낸다
+  const 조각 = [];
+  if (간것.length) 조각.push(`${간것.join(', ')} — 보냄`);
+  if (이미.length) 조각.push(`${이미.join(', ')} — 이미 알림`);
+  if (못간것.length) 조각.push(`${못간것.map(f => esc(f.name)).join(', ')} — 못 보냄`);
+  const 알림줄 = 조각.length ? 조각.join(' · ') : '보내지 않음';
+  box.innerHTML = `<div class="sheetbox narrow res">
+    <div class="sh"><b>✓ 관련팀을 저장했습니다</b></div>
+    <dl class="relres">
+      <dt>관련팀</dt><dd>${팀들.length ? esc(팀들.join(', ')) : '없음'}</dd>
+      <dt>알림</dt><dd class="${못간것.length ? 'bad' : ''}">${알림줄}</dd>
+      <dt>업무 목록</dt><dd>${팀들.length ? '위 팀들의 업무 목록에 추가됨' : '—'}</dd>
+    </dl>
+    <div class="sh end"><button type="button" class="btn pri" id="relresok">확인</button></div></div>`;
+  $('relresok').onclick = () => { box.hidden = true; resolve(); };
 }
 
 /* ── 확인 요청 (4-9 · 4-16) — 옛 task_detail 의 폼이 있던 자리 ──────── */
@@ -926,6 +1049,13 @@ function renderDiag(d) {
   if (!g) { dg.className = 'diag'; return; }
   dg.className = 'diag g-' + g.tone;
   $('dgTtl').textContent = g.verdict;
+  /* 접힌 한 줄에는 **첫 근거만** 싣는다 (목업 B) — 넘치면 CSS 가 … 로 줄인다.
+     근거가 없으면 요약을 쓴다. **여기서 문장을 새로 짓지 않는다** (4-10) */
+  const 첫근거 = (g.reasons || [])[0];
+  const one = $('dgOne');
+  if (one) one.textContent = 첫근거 ? 첫근거.text : (g.summary || '');
+  const 다시 = $('dgR');
+  if (다시) 다시.hidden = !$('dgB') || $('dgB').hidden;
   const rows = (g.reasons || []).map(r =>
     `<li><span class="ic">${esc(r.kind)}</span><span>${esc(r.text)}</span></li>`).join('');
   $('dgB').innerHTML =
@@ -938,6 +1068,17 @@ function renderDiag(d) {
 // '다시 분석' 과 상태 변경은 같은 일을 한다 — 판정을 다시 받아 온다.
 // 두 벌로 두면 한쪽만 고쳐진다.
 $('dgR').onclick = () => { if (cur !== null) refreshDiag(cur); };
+
+/* 한 줄을 누르면 펼친다 (4-9 · 목업 B) — 접힘이 기본이다.
+   **판정과 근거는 그대로이고 보이는 만큼만 바뀐다.** */
+$('dgH').onclick = () => {
+  const body = $('dgB'), head = $('dgH');
+  const 펼침 = body.hidden;
+  body.hidden = !펼침;
+  head.setAttribute('aria-expanded', String(펼침));
+  head.querySelector('.caret').textContent = 펼침 ? '▲' : '▼';
+  $('dgR').hidden = !펼침;
+};
 
 /* ── 업무 규칙 ── */
 function renderRules() {
@@ -1169,7 +1310,10 @@ function statMenu(btn, runId) {
   const 대상 = runId == null ? cur : runId;
   메뉴를띄운다(btn, 대상, 'status', PICKABLE.map(key =>
     `<button data-v="${esc(key)}"><span class="cv" style="background:${esc(STATUS[key].color)}"></span>${esc(STATUS[key].label)}</button>`).join(''),
-    v => setStatus(대상, v));
+    // `setStatus` 는 실패를 **던진다**(세 칸 버튼이 되돌려야 해서) — 메뉴 쪽은
+    // 되돌릴 칸이 없고 말은 이미 나갔으므로 여기서 받아 둔다. 안 받으면
+    // 처리 안 된 거절이 콘솔에만 남는다
+    v => { setStatus(대상, v).catch(() => {}); });
 }
 
 /* 담당자 메뉴 — 목록의 담당자 칸이 부른다 (4-14).
@@ -1274,7 +1418,12 @@ async function setStatus(runId, status) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({status}),
   });
-  if (!res.ok) { alert((await res.json().catch(() => ({}))).detail || '상태를 바꾸지 못했습니다.'); return; }
+  if (!res.ok) {
+    alert((await res.json().catch(() => ({}))).detail || '상태를 바꾸지 못했습니다.');
+    // **던진다** — 부른 쪽(세 칸 버튼)이 이전 칸으로 되돌려야 한다.
+    // 말은 여기서 이미 했으므로 두 번 말하지 말라고 표시를 달아 보낸다
+    throw Object.assign(new Error('status'), {조용히: true});
+  }
   const view = await res.json();
   // 자기 화면을 어떻게 고쳐 그릴지는 화면이 안다 — 보드는 바를, 달력은 점을.
   // **다시 불러오지 않는다.** 달력은 보던 달과 칩을 잃으면 안 된다.
@@ -1295,6 +1444,45 @@ async function setStatus(runId, status) {
     // 열린 업무의 선행이면 「진행 불가 — 선행 미완료」 가 그대로 남는다
     // (4-10). 판정은 상태에서 나오므로 열린 쪽을 다시 받는다
     refreshDiag(detail.run_id);
+  }
+}
+
+/* 세 칸 버튼을 누른 것 (4-9) — **저장 중에는 다시 못 누른다.**
+   두 번 누르면 두 번 저장되고, 늦게 온 답이 이겨 화면과 DB 가 갈린다.
+   실패하면 **이전 칸으로 되돌리고 화면에 말한다** — 조용히 삼키면 바꾼 줄
+   알고 넘어간다(5-0 과 같은 자리). */
+let 상태저장중 = false;
+async function 칸을누른다(runId, 고른값, 이전) {
+  if (상태저장중 || 고른값 === 이전) return;
+  const seg = $('statseg');
+  상태저장중 = true;
+  if (seg) {
+    seg.classList.add('saving');
+    seg.querySelectorAll('button').forEach(b => {
+      b.disabled = true;
+      const 켬 = b.dataset.v === 고른값;
+      b.classList.toggle('on', 켬);
+      b.setAttribute('aria-pressed', String(켬));
+    });
+  }
+  try {
+    await setStatus(runId, 고른값);
+  } catch (err) {
+    // 되돌린다 — `setStatus` 가 이미 말했으면 두 번 말하지 않는다
+    if (seg && seg.isConnected) {
+      seg.querySelectorAll('button').forEach(b => {
+        const 켬 = b.dataset.v === 이전;
+        b.classList.toggle('on', 켬);
+        b.setAttribute('aria-pressed', String(켬));
+      });
+    }
+    if (err && err.조용히 !== true) alert('상태를 바꾸지 못했습니다.');
+  } finally {
+    상태저장중 = false;
+    if (seg && seg.isConnected) {
+      seg.classList.remove('saving');
+      seg.querySelectorAll('button').forEach(b => { b.disabled = false; });
+    }
   }
 }
 
@@ -1366,18 +1554,49 @@ function calendar(d) {
   el.innerHTML = out;
 }
 
-/* ── 폭 조절 ── */
+/* ── 폭 조절 (4-9 · 목업 B) ──────────────────────────────────────────
+
+   **범위 안으로 되돌리는 것이 규칙이다.** 기기에 남은 값이 숫자가 아니거나
+   범위 밖이면 조용히 무시하지 않고 **범위 안의 값으로 고쳐 씁니다** — 옛 폭이
+   남아 있는 사람만 화면이 다르게 뜨면 왜인지 알 수 없습니다.
+
+   창이 좁아 본문이 `본문최소` 아래로 내려가면 드로어를 줄입니다. 안 줄이면
+   「밀고 들어온다」 가 「본문을 다 먹는다」 와 같아집니다. */
+function 폭을민다(w) {
+  const 창 = innerWidth || 폭한계.최대;
+  const 위 = Math.max(폭한계.최소, Math.min(폭한계.최대, 창 - 본문최소));
+  return Math.round(Math.max(폭한계.최소, Math.min(위, w)));
+}
+function 폭을쓴다(w, {남길까 = true} = {}) {
+  const v = 폭을민다(w);
+  document.documentElement.style.setProperty('--dw', v + 'px');
+  if (남길까) { try { localStorage.setItem(폭키, String(v)); } catch (err) { /* 못 남겨도 화면은 돈다 */ } }
+  return v;
+}
+function 남은폭() {
+  let v = NaN;
+  try { v = Number(localStorage.getItem(폭키)); } catch (err) { /* 못 읽으면 기본 */ }
+  return Number.isFinite(v) && v > 0 ? v : 폭한계.기본;
+}
+// **기기에 남은 값이 범위 밖이면 범위 안으로 고쳐 쓴다** (4-9). 화면만 밀고
+// 남긴 값을 그대로 두면 뜰 때마다 다시 밀게 되고, 「되돌립니다」 라고 적어 둔
+// 것과 실제가 다르다(검토가 잡음). 창이 좁아 줄이는 것은 아래의 다른 일이다
+{
+  const 남긴값 = 남은폭();
+  폭을쓴다(남긴값, {남길까: 폭을민다(남긴값) !== 남긴값});
+}
+// 창이 줄면 본문이 남을 만큼만 — 남긴 값은 건드리지 않는다(창만 좁아진 것이다)
+addEventListener('resize', () => { 폭을쓴다(남은폭(), {남길까: false}); call('afterLayout'); });
+
 const grip = $('grip');
 grip.addEventListener('mousedown', e => {
   e.preventDefault();
   const sx = e.clientX, sw = dw.offsetWidth;
   dw.classList.add('sizing');
   document.body.classList.add('sizing');
-  const move = ev => {
-    const w = Math.min(Math.min(900, innerWidth * .7), Math.max(320, sw + (sx - ev.clientX)));
-    document.documentElement.style.setProperty('--dw', w + 'px');
-  };
+  const move = ev => 폭을쓴다(sw + (sx - ev.clientX), {남길까: false});
   const up = () => {
+    폭을쓴다(dw.offsetWidth);   // 끝난 자리만 남긴다 — 끄는 동안 쓰면 수십 번 쓴다
     dw.classList.remove('sizing');
     document.body.classList.remove('sizing');
     // **여기서 `dragEnd` 를 찍어 두던 것(과 그것만 쓰던 `moved`)을 걷었다.**
@@ -1418,8 +1637,10 @@ function originOf(target) {
     // **메뉴를 여는 자리** — 드로어의 상태 칩과 목록 행의 상태 칸·담당자
     // 칸(4-14). 여기를 모르면 메뉴가 뜨자마자 「바깥 클릭」 으로 닫힌다.
     // 이름이 `statchip` 이던 시절에는 상태 칸 하나였다 — 담당자 칸이
-    // 같은 메뉴를 쓰게 되면서 이름이 거짓이 되어 바꿨다
-    pickcell: at('#statchip') || at('.cell.st.pick') || at('.asg.pick'),
+    // 같은 메뉴를 쓰게 되면서 이름이 거짓이 되어 바꿨다.
+    // **드로어의 상태 칩은 2026-09-23 에 세 칸 버튼이 되어 메뉴를 안 연다**(4-9) —
+    // 그 자리는 `#drawer` 안이라 위의 `drawer` 가 이미 안다
+    pickcell: at('.cell.st.pick') || at('.asg.pick'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.

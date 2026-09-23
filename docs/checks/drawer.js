@@ -261,7 +261,7 @@ const 점검 = async () => {
   };
 
   /* **없는 것을 누르지 않는다.** 고칠 수 없는 업무를 연 계정에서는
-     담당자·담당팀·시작일 칸이 아예 안 그려진다 — 그냥 누르면 검사가
+     담당자·담당팀 칸이 아예 안 그려진다 — 그냥 누르면 검사가
      `null.click()` 으로 **죽고**, 그러면 그 계정에서는 아무것도 안
      재진다(2026-09-08 판에서 부서 리더로 돌리자 보드가 그렇게 멈췄다).
      안 재는 것은 안 재는 것으로 적는다 — 건너뜀 수에 들어간다. */
@@ -273,7 +273,7 @@ const 점검 = async () => {
   /* **죽었는지 보는 곳은 여기 하나다.** 없는 것(`null`) · 안 그려진 것
      (`offsetParent` 가 없다) · 죽어 있는 것(`disabled`) 셋을 한 자리에서
      본다. 저장소를 훑어 보니 앱이 실제로 `disabled` 로 두는 것은
-     `#statchip`(권한)과 하단의 「하위 업무 추가」(Phase 2)뿐이고 뒤엣것은
+     상태 세 칸 버튼(권한)과 하단의 「하위 업무 추가」(Phase 2)뿐이고 뒤엣것은
      이 점검이 안 누른다 — 그래도 판정을 한 곳에 두는 이유는, 다음에
      죽는 단추가 생겨도 그 자리만 고치면 되기 때문이다. */
   const 살아있나 = el => !!(el && shown(el) && !el.disabled);
@@ -285,7 +285,7 @@ const 점검 = async () => {
      「권한과 어긋남」 이 다섯 줄** 났다(고쳐 놓고 바로 잡혔다).
      그래서 **불러오기가 끝난 것**을 본다 — 상태 칩이 그려지고
      「불러오는 중…」 이 사라진 때다. */
-  const 열렸다 = () => dw.classList.contains('open') && !!$('statchip')
+  const 열렸다 = () => dw.classList.contains('open') && !!$('statseg')
     && !($('dlog') || {}).textContent?.includes('불러오는 중');
 
   const 누른다 = async (라벨, el, opts = {}) => {
@@ -295,7 +295,7 @@ const 점검 = async () => {
 
   const 눌러본다 = async (라벨, id) => {
     const el = $(id);
-    /* **죽어 있는 것도 안 누른다.** `statchip` 은 고칠 수 없는 계정에서도
+    /* **죽어 있는 것도 안 누른다.** 상태 칸은 고칠 수 없는 계정에서도
        지워지지 않고 `disabled` 로 남는다 — 있고 보이기까지 하므로
        `shown` 만으로는 안 갈린다. 그냥 누르면 아무 이벤트도 안 나고
        「드로어가 안 닫혔다」 가 언제나 참이라 **✓ 가 그냥 붙는다**
@@ -394,7 +394,7 @@ const 점검 = async () => {
 
     // 제목 편집 (4-9) — Esc 는 **편집만** 취소한다. 전파가 새면 문서의 Escape
     // 핸들러가 드로어까지 닫는다 — 패널 안의 조작은 패널을 닫지 않는다 (10장)
-    if (!document.querySelector('#statchip[disabled]') && $('dtitletext')) {
+    if (!document.querySelector('.statseg button[disabled]') && $('dtitletext')) {
       const beforeTitle = $('dtitletext').textContent;
       await 누른다('제목 편집 열기', $('dtitletext'),
         {until: () => document.querySelector('#dtitletext input.titleedit')});
@@ -419,7 +419,7 @@ const 점검 = async () => {
        상태 칸에서 배운 그 자리다(4-14). 못 고치는 쪽은 **안 보이는 것이
        맞다**로 뒤집어 잰다. */
     {
-      const canEdit = !document.querySelector('#statchip[disabled]');
+      const canEdit = !document.querySelector('.statseg button[disabled]');
       const 보임 = shown($('daddlog'));
       const 맞나 = canEdit ? 보임 : !보임;
       잰다(맞나, ` 논의 입력칸이 ${보임 ? '보임' : '안 보임'} (고칠 수 ${canEdit ? '있음' : '없음'})`,
@@ -441,22 +441,26 @@ const 점검 = async () => {
         잰다(줄.textContent.trim().length > 0, ' 옮긴 자리 줄에 글이 있음',
              '옮긴 자리 줄이 비어 있음');
         const 단추 = 줄.querySelector('button');
-        const canEdit = !document.querySelector('#statchip[disabled]');
+        // 드로어의 상태는 2026-09-23 부터 세 칸 버튼이다 (4-9) — 못 고치는
+        // 사람에게는 그 칸들이 `disabled` 다
+        const canEdit = !document.querySelector('.statseg button[disabled]');
         잰다(canEdit ? !!단추 : !단추,
              ` 되돌리기 단추가 ${단추 ? '있음' : '없음'} (고칠 수 ${canEdit ? '있음' : '없음'})`,
              '되돌리기 단추가 권한과 어긋남');
         if (단추) {
           const 앞글 = 줄.textContent.trim();
-          const 앞시작 = $('dstart') ? $('dstart').value : null;
+          // 날짜 칸 두 개가 달력 팝업 하나로 바뀌었다 (4-9 · 목업 B) —
+          // 기간은 이제 `#dspan` 한 줄이 말한다
+          const 앞시작 = $('dspan') ? $('dspan').textContent.trim() : null;
           await 누른다('자리 되돌리기', 단추,
             {until: () => $('dmoved') && $('dmoved').textContent.trim() !== 앞글});
-          잰다($('dstart') ? $('dstart').value !== 앞시작 : true,
-               ' 되돌리니 기간 칸도 함께 바뀜', '줄만 바뀌고 기간 칸이 옛 값 그대로');
+          잰다($('dspan') ? $('dspan').textContent.trim() !== 앞시작 : true,
+               ' 되돌리니 기간 줄도 함께 바뀜', '줄만 바뀌고 기간이 옛 값 그대로');
           const 되돌린다 = $('dmoved') && $('dmoved').querySelector('button');
           if (되돌린다) {
             await 누른다('자리 다시 되돌리기', 되돌린다,
               {until: () => $('dmoved') && $('dmoved').textContent.trim() === 앞글});
-            잰다($('dstart') ? $('dstart').value === 앞시작 : true,
+            잰다($('dspan') ? $('dspan').textContent.trim() === 앞시작 : true,
                  ' 왕복하면 원래 자리로', '왕복했는데 원래 자리가 아님');
           }
         }
@@ -489,7 +493,7 @@ const 점검 = async () => {
     await check('탭 — 확인 요청', () => $('dtabs').querySelector('[data-p="review"]').click(),
       {until: () => shown($('p-review'))});
     {
-      const canEdit = !document.querySelector('#statchip[disabled]');
+      const canEdit = !document.querySelector('.statseg button[disabled]');
       const formOk = canEdit ? shown($('drevform')) : !shown($('drevform'));
       잰다(formOk, ` 확인 요청 폼 (편집 ${canEdit ? '가능' : '불가'})`, '확인 요청 폼이 권한과 어긋남');
       const firstDept = $('drevdepts') && $('drevdepts').querySelector('input');
@@ -535,7 +539,7 @@ const 점검 = async () => {
       }
 
       // 올리는 자리는 탭 안에 있다. 고칠 수 없는 업무라면 없는 것이 맞다.
-      const canEdit = !document.querySelector('#statchip[disabled]');
+      const canEdit = !document.querySelector('.statseg button[disabled]');
       const drop = shown($('ddrop'));
       const ok = canEdit ? drop : !drop;
       잰다(ok, ` 끌어다 놓는 자리 (편집 ${canEdit ? '가능' : '불가'})`, '올리는 자리가 권한과 어긋남');
@@ -573,13 +577,80 @@ const 점검 = async () => {
       잰다(닫힘, ' 취소하면 폼이 닫힘', '링크 붙이기 폼이 취소해도 안 닫힘');
     } else results.push('· 고칠 수 없는 업무라 링크 붙이기는 건너뜀');
 
+    /* ── 목업 확정분 1단계 (2026-09-23 · 4-9 · 목업 B) ────────────────
+       상태 세 칸 버튼 · 진단 한 줄 · 기간 달력 단추. 셋 다 **누른 뒤에도
+       주변이 그대로인가**를 함께 잰다 (10장의 두 번째 규칙). */
+    {
+      const seg = $('statseg');
+      if (!seg) {
+        results.push('· 상태 세 칸 버튼 — 이 화면에 없어 건너뜀');
+      } else {
+        const 칸들 = [...seg.querySelectorAll('button')];
+        잰다(칸들.length === 3, ` 상태가 세 칸이다 (${칸들.length}칸)`,
+             `상태 칸이 ${칸들.length}개다 — 셋이어야 한다`);
+        const 켜진수 = 칸들.filter(b => b.classList.contains('on')).length;
+        잰다(켜진수 <= 1, ` 켜진 칸 ${켜진수}개`, `켜진 칸이 ${켜진수}개다 — 하나뿐이어야 한다`);
+        // 저장된 '지연' 이면 아무것도 안 켜고 그 사실을 한 줄로 말한다
+        const 지연줄 = $('dstale');
+        잰다(켜진수 === 1 || (지연줄 && shown(지연줄)),
+             켜진수 === 1 ? ' 켜진 칸이 상태를 말함' : ' 아무것도 안 켠 채로 그 사실을 한 줄로 말함',
+             '셋 다 꺼져 있는데 왜인지 아무 데도 안 적혀 있음');
+        /* **꺼진 칸을 누르지 않는다.** 상태를 한 번 바꾸면 `started_at` 이
+           찍히고 그것은 되돌려도 안 지워진다(8장) — 판정(4-10)과 「방치」
+           알림(4-11)이 영구히 달라진다. 이 점검은 세 화면 · 두 계정 · 자가시험
+           까지 하면 한 번에 스무 번 넘게 눌린다. **지금 켜진 칸을 다시 눌러**
+           같은 자리를 재되 자국을 안 남긴다 — 재는 것은 「눌러도 드로어가
+           그대로인가」 와 「켜진 칸이 안 흔들리나」 이고, 그 둘이 이 점검의
+           물음이다(10장의 표). 실제로 상태가 바뀌는지는 pytest 가 잰다 */
+        const 켠칸 = 칸들.find(b => b.classList.contains('on') && !b.disabled);
+        if (켠칸) {
+          const 앞 = 켠칸.dataset.v;
+          await 누른다('상태 칸 누르기(켜진 칸 · 값은 안 바꾼다)', 켠칸,
+            {until: () => 켠칸.classList.contains('on')});
+          잰다(켠칸.classList.contains('on') && 켠칸.dataset.v === 앞,
+               ` 눌러도 켜진 칸 그대로 (${앞})`,
+               '켜진 칸을 눌렀는데 상태가 흔들림');
+        } else results.push('· 상태 칸 누르기 — 못 고치거나 켜진 칸이 없어 건너뜀');
+      }
+    }
+    {
+      const 머리 = $('dgH'), 몸 = $('dgB');
+      if (!머리 || !몸) {
+        results.push('· 진단 한 줄 — 이 화면에 없어 건너뜀');
+      } else {
+        잰다(몸.hidden, ' 진단이 접힌 채로 시작', '진단이 처음부터 펼쳐져 있음');
+        await 누른다('진단 펼치기', 머리, {until: () => !$('dgB').hidden});
+        잰다(!$('dgB').hidden, ' 누르면 근거가 펼쳐짐', '눌러도 근거가 안 펼쳐짐');
+        잰다($('dgB').textContent.trim().length > 0, ' 펼친 근거에 글이 있음',
+             '펼쳤는데 근거가 비어 있음');
+        await 누른다('진단 접기', $('dgH'), {until: () => $('dgB').hidden});
+        잰다($('dgB').hidden, ' 다시 누르면 접힘', '다시 눌러도 안 접힘');
+      }
+    }
+    {
+      const 단추 = $('dcalbtn');
+      if (!단추) {
+        results.push('· 기간 달력 단추 — 못 고치는 계정이거나 이 화면에 없어 건너뜀');
+      } else {
+        await 누른다('기간 달력 열기', 단추,
+          {until: () => document.querySelector('.datepick')});
+        const 팝업 = document.querySelector('.datepick');
+        잰다(!!팝업, ' 달력 팝업이 뜸', '달력 단추를 눌러도 팝업이 안 뜸');
+        if (팝업) {
+          잰다(!!팝업.querySelector('.dphint').textContent.trim(),
+               ' 안내 줄에 글이 있음', '안내 줄이 비어 있음');
+          const 취소 = 팝업.querySelector('.dpcancel');
+          await 누른다('달력 취소', 취소, {until: () => !document.querySelector('.datepick')});
+          잰다(!document.querySelector('.datepick'), ' 취소하면 닫힘',
+               '취소해도 달력 팝업이 안 닫힘');
+        }
+      }
+    }
+
     await check('탭 — 논의 (되돌아오기)', () => $('dtabs').querySelector('[data-p="log"]').click(),
       {until: () => shown($('p-log'))});
-    await 눌러본다('상태 배지 열기', 'statchip');
-    await 눌러본다('상태 배지 다시 눌러 닫기', 'statchip');
     await 눌러본다('담당자 드롭다운', 'dassignee');
     await 눌러본다('담당팀 드롭다운', 'ddept');
-    await 눌러본다('시작일 칸', 'dstart');
     await 눌러본다('논의 입력칸', 'dbody');
     await 눌러본다('대체 체크박스', 'dsuper');
     await 눌러본다('대체 체크박스 해제', 'dsuper');
@@ -1203,7 +1274,7 @@ const 점검 = async () => {
        카드가 없으면 그때만 어림으로 물러선다. */
     const 역할 = (document.querySelector('.sidefoot .who small') || {}).textContent || '';
     const 관리자 = 역할.includes('관리자') || (!역할 &&
-      !document.querySelector('#statchip[disabled]'));
+      !document.querySelector('.statseg button[disabled]'));
     results.push(`· 이 계정에서 안 재진 항목 ${건너뜀}개 — `
       + (관리자 ? '**부서 리더** 계정으로 한 번 더 돌려 보세요'
                : '**관리자** 계정으로 한 번 더 돌려 보세요')
@@ -1271,7 +1342,7 @@ const 줄을지켜본다 = 손본다 => {
   return () => ob.disconnect();
 };
 
-/* **시작일 칸의 값을 붙든다.** 값(`value`)이 바뀌는 것은 DOM 변경이 아니라
+/* **기간 줄의 글자를 붙든다.** 글자가 바뀌는 것은 DOM 변경이 아니라
    지켜보기로는 못 잡습니다. 처음 본 값을 기억해 그것으로 되돌리므로,
    **드로어가 뜨기 전에 심어도** 뜨는 순간의 값을 잡습니다.
 
@@ -1285,25 +1356,29 @@ const 줄을지켜본다 = 손본다 => {
    읽든 붙든 값이 나옵니다. 되풀이는 **새로 그려진 칸에 다시 거는 일**만
    합니다(패널이 다시 그려지면 요소가 갈립니다). */
 const 값을붙든다 = (언제, 값 = null) => {
+  /* **2026-09-23 에 붙드는 자리가 바뀌었다** (4-9 · 목업 B) — 날짜 칸 두 개가
+     달력 팝업 하나로 바뀌어서, 이제 기간을 말하는 것은 `#dspan` 한 줄이다.
+     붙드는 방식은 그대로다: 읽는 쪽(`textContent` 게터)을 갈아 끼워 **언제 읽든**
+     붙든 값이 나오게 한다. 되풀이는 새로 그려진 줄에 다시 거는 일만 한다. */
   let 첫값 = null, 걸린것 = null;
-  const 바탕 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  const 바탕 = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
   const 건다 = el => {
     if (걸린것 === el) return;
-    if (걸린것) delete 걸린것.value;
+    if (걸린것) delete 걸린것.textContent;
     걸린것 = el;
-    Object.defineProperty(el, 'value', {
+    Object.defineProperty(el, 'textContent', {
       configurable: true,
       get() { return 언제() ? (값 === null ? 첫값 : 값) : 바탕.get.call(this); },
       set(v) { 바탕.set.call(this, v); },
     });
   };
   const t = setInterval(() => {
-    const s = document.getElementById('dstart');
+    const s = document.getElementById('dspan');
     if (!s) return;
     if (첫값 === null) 첫값 = 바탕.get.call(s);
     건다(s);
   }, 5);
-  return () => { clearInterval(t); if (걸린것) delete 걸린것.value; };
+  return () => { clearInterval(t); if (걸린것) delete 걸린것.textContent; };
 };
 
 const 고장들 = [
@@ -1405,7 +1480,7 @@ const 고장들 = [
 
         **넷으로 여섯을 덮는다.** 「되돌리기」 와 「다시 되돌리기」 는
         `누른다` 라 단추가 죽으면 **✗ 가 아니라 「못 쟀음」** 이 된다 —
-        그 둘은 ⑮ 가 **바로 뒤의 잰다**로 잡는다(눌렸는데 기간 칸이
+        그 둘은 ⑮ 가 **바로 뒤의 잰다**로 잡는다(눌렸는데 기간이
         안 따라왔다). 세우려면 누르는 자리마다 잰다를 하나씩 더해야 하고,
         그러면 같은 것을 두 번 재게 된다.
 
@@ -1437,9 +1512,9 @@ const 고장들 = [
        if (b) b.remove();
      };
    }},
-  {갈래: '⑮ 끈 자리 — 눌러도 기간 칸이 안 따라옴',
-   고장: '되돌려도 기간 칸이 옛 값 그대로다',
-   나와야: '줄만 바뀌고 기간 칸이 옛 값 그대로',
+  {갈래: '⑮ 끈 자리 — 눌러도 기간이 안 따라옴',
+   고장: '되돌려도 기간 줄이 옛 값 그대로다',
+   나와야: '줄만 바뀌고 기간이 옛 값 그대로',
    못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')
      || String(r).includes('되돌리기 단추가 없음')),
    심는다: () => 값을붙든다(() => true)},
@@ -1456,8 +1531,49 @@ const 고장들 = [
        if (e.target instanceof Element && e.target.closest('#dmoved button')) 눌린수++;
      };
      document.addEventListener('click', 센다, true);
-     const 걷는다 = 값을붙든다(() => 눌린수 >= 2, '1999-01-01');
+     const 걷는다 = 값을붙든다(() => 눌린수 >= 2, '1999.01.01 · 하루');
      return () => { document.removeEventListener('click', 센다, true); 걷는다(); };
+   }},
+  /* 목업 확정분 1단계가 새로 세운 자리들 (2026-09-23 · 4-9 · 목업 B).
+     **그 화면에 그 자리가 없으면 「못 심음」 이 정답이다** — 못 고치는 계정에는
+     달력 단추가 아예 없고, 그때 ✗ 를 바라면 시험이 거짓말을 한다 (11-3). */
+  {갈래: '⑰ 상태가 세 칸이 아님', 고장: '칸 하나를 지운다',
+   나와야: '상태 칸이',
+   못심음: () => !document.getElementById('statseg'),
+   심는다: () => {
+     const seg = document.getElementById('statseg');
+     const 뗀것 = seg.lastElementChild;
+     seg.removeChild(뗀것);
+     return () => { if (seg.isConnected) seg.appendChild(뗀것); };
+   }},
+  {갈래: '⑱ 켠 칸이 둘', 고장: '두 칸을 한꺼번에 켠다',
+   나와야: '켜진 칸이',
+   못심음: () => !document.getElementById('statseg'),
+   심는다: () => {
+     const 칸들 = [...document.querySelectorAll('#statseg button')];
+     const 더켠것 = 칸들.filter(b => !b.classList.contains('on'));
+     더켠것.forEach(b => b.classList.add('on'));
+     return () => 더켠것.forEach(b => b.classList.remove('on'));
+   }},
+  {갈래: '⑲ 진단이 처음부터 펼쳐져 있음', 고장: '접힌 채로 안 시작한다',
+   나와야: '진단이 처음부터 펼쳐져 있음',
+   못심음: () => !document.getElementById('dgB'),
+   심는다: () => {
+     const 몸 = document.getElementById('dgB');
+     const t = setInterval(() => { 몸.hidden = false; }, 5);
+     return () => clearInterval(t);
+   }},
+  {갈래: '⑳ 달력 팝업이 취소해도 안 닫힘', 고장: '취소를 먹는다',
+   나와야: '취소해도 달력 팝업이 안 닫힘',
+   못심음: () => !document.getElementById('dcalbtn'),
+   심는다: () => {
+     const 막는다 = e => {
+       if (e.target instanceof Element && e.target.closest('.dpcancel')) {
+         e.stopImmediatePropagation();
+       }
+     };
+     document.addEventListener('click', 막는다, true);
+     return () => document.removeEventListener('click', 막는다, true);
    }},
   {갈래: '⑫ 점검이 중간에 죽음', 고장: '한복판에서 예외를 던진다',
    나와야: '점검이 중간에 죽었다', 완주못함: true,

@@ -1424,7 +1424,12 @@ def test_t_02_그룹_제목이_하위와_급이_갈린다(admin_client, cal_data
     # 하위 — 보조색, 들여쓰기와 가이드선은 .subs 가 진다
     assert "var(--ink-2)" in sub
     subs = decl(".sidenav .subs")
-    assert "margin-left:16px" in subs and "border-left" in subs
+    # **들여쓰기 px 을 박지 않는다** (11-3 — 재는 것은 박고 잰 것은 박지 않는다).
+    # 값은 목업이 정하고 2026-09-23 에 16 → 18 로 바뀌었다. 여기서 재는 것은
+    # 「들여쓰고 가이드선이 있는가」 — 그것이 급을 가르는 것이다
+    들여 = _r.search(r"margin-left:(\d+)px", subs)
+    assert 들여 and int(들여.group(1)) > 0, "하위가 안 들여써졌다"
+    assert "border-left" in subs, "가이드선이 없다"
 
 
 def test_t_03_보고_있는_화면에_표시가_붙는다(admin_client, cal_data):

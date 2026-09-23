@@ -161,7 +161,7 @@ def test_s13_배지_글자가_채움_위에서_4_5를_넘긴다():
 
 
 def test_s14_사용자_카드_세_줄이_꺾이지_않는다():
-    """1-h — 이름 · 역할 · 부서 각 한 줄. 240px 에서 nowrap + 말줄임."""
+    """1-h — 이름 · 역할 · 부서 각 한 줄. 좁은 사이드바에서 nowrap + 말줄임."""
     foot = SHELL[SHELL.index('class="sidefoot"') : SHELL.index("</aside>")]
     # 세 줄: 이름(b) + 역할(small) + 부서(small)
     assert foot.count("<small") == 2 and "<b>{{ user.name }}</b>" in foot
@@ -177,8 +177,15 @@ def test_s14_사용자_카드_세_줄이_꺾이지_않는다():
     depts = re.search(r"\.sidefoot \.who \.depts\{([^}]*)\}", CSS).group(1)
     assert "white-space:normal" in depts and "-webkit-line-clamp:2" in depts
     assert re.search(r"\.sidefoot \.who\{[^}]*min-width:0", CSS)
-    # 사이드바 폭이 목업과 같은 240px 이다 (9장)
-    assert "--sw:240px" in CSS
+    # **폭은 목업에서 읽는다 — 여기 숫자로 박지 않는다** (9장 · 11-3).
+    # 240px 을 박아 두었다가 2026-09-23 에 목업이 176px 로 정하면서
+    # 빨개졌다. 값을 옮겨 적으면 정본이 둘이 되고, 그때 갈린 쪽을
+    # 아무도 안 본다 — 정본(`docs/mockups/목업확정-2026-09-23.md`)에서
+    # 읽어 CSS 와 맞는지만 잰다
+    목업 = (ROOT / "docs" / "mockups" / "목업확정-2026-09-23.md").read_text(encoding="utf-8")
+    폭 = re.search(r"폭 (\d+)px · 안쪽 여백", 목업)
+    assert 폭, "목업에서 사이드바 폭을 못 읽었다 — 그 줄이 바뀌었나"
+    assert f"--sw:{폭.group(1)}px" in CSS
 
 
 def test_s09b_배지가_0건이면_없고_생기면_수가_보인다(admin_client):

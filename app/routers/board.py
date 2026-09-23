@@ -219,6 +219,9 @@ def task_detail(
 
     parent = by_library.get(lib.parent_library_id) if lib.parent_library_id else None
 
+    # 생김새·배지·며칠 늦었나는 **한 번 세어** 함께 쓴다 (board.paint_of · 4-3)
+    paint = board_view.paint_of(run, dt.date.today())
+
     return {
         "run_id": run.id,
         "run_no": run.run_no,   # 회차 안에서 고정되는 번호 (4-14)
@@ -228,8 +231,13 @@ def task_detail(
         "kind": lib.kind,
         "kind_label": lib.kind_label,
         "status": run.status,
-        # 배지는 한 곳에서 만든다 (board.paint_of · 4-3) — 기한이 지났으면 '지연'
-        "badge": board_view.paint_of(run, dt.date.today())["badge"],
+        # 배지는 한 곳에서 만든다 (board.paint_of · 4-3) — 기한이 지났으면 '지연'.
+        "badge": paint["badge"],
+        # **며칠 지났는지도 같은 계산에서 온다** — 드로어의 기간 줄이 「마감 n일
+        # 지남」 을 앞에 붙이는데(4-9 · 목업 B), 화면이 날짜를 다시 세면 두 벌이
+        # 되고 갈린 쪽을 아무도 눈치채지 못한다. **배지 안에 넣지 않는다** —
+        # 넣으면 같은 값이 두 자리에 있고, 배지를 통째로 견주는 시험이 빨개진다
+        "overdue_days": paint["overdue_days"],
         "start": run.start_date.isoformat() if run.start_date else None,
         "end": (run.end_date or run.start_date).isoformat() if run.start_date else None,
         "d_week": run.d_week,
@@ -1059,6 +1067,92 @@ def set_related_departments(
     return {
         "related_department_keys": after,
         "related_departments": [dept_by_key[k].name for k in after if k in dept_by_key],
+    }
+
+
+class NotifyRelatedIn(BaseModel):
+    keys: list[str]
+
+
+@router.post("/board/task/{run_id}/related-departments/notify")
+def notify_related_departments(
+    run_id: int,
+    payload: NotifyRelatedIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """관련팀에 **알리기만** 한다 (4-9 · 목업 B · 2026-09-23).
+
+    **저장이 먼저이고 이것은 그다음이다.** 관련팀은 「이 결과물을 받아야 다음
+    일을 할 수 있는 팀」 을 적는 자리이지(2장) 허락을 구하는 자리가 아니라서,
+    저장과 알림을 한 단추에 묶으면 **알리기 싫어서 저장을 안 하게** 된다.
+    그러면 관련팀이 비고 4-4 의 고스트 바와 4-10 의 근거가 함께 빈다.
+
+    **일부만 실패해도 조용히 삼키지 않는다** — 간 팀과 못 간 팀을 나눠 돌려주고
+    화면의 결과 팝업이 못 간 팀을 적는다. 다 됐다고 말해 놓고 절반만 가면
+    보낸 사람은 갔다고 믿는다 (5-1 의 그 판단과 같은 자리).
+
+    **같은 구성으로 다시 저장해도 두 번 가지 않는다** — `dedupe_key` 가
+    (업무, 그 팀) 하나라 같은 사람에게 두 번 서지 않는다. 알림은 앱 알림함으로만
+    가고 푸시는 안 나간다(11-2 의 기준 — 그 순간 사람이 움직일 일이 아니다).
+    """
+    run = _load_run(db, retreat, run_id)
+    if not _can_edit(db, user, run):
+        raise HTTPException(status_code=403, detail="내 부서의 업무만 편집할 수 있습니다.")
+    dept_by_key = {d.key: d for d in retreat.departments if d.key}
+    unknown = [k for k in payload.keys if k not in dept_by_key]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"모르는 부서 키입니다: {', '.join(unknown)}")
+
+    from app.notifications import notify
+
+    sent: list[str] = []
+    already: list[str] = []
+    failed: list[dict] = []
+    for key in payload.keys:
+        dept = dept_by_key[key]
+        try:
+            people = perm.members_of(db, key)
+            if not people:
+                # **못 간 것은 못 갔다고 말한다** — 받을 사람이 없는 팀에
+                # 「보냄」 이라고 적으면 아무도 안 봤다는 사실이 사라진다
+                failed.append({"key": key, "name": dept.name, "why": "그 팀에 사람이 없습니다"})
+                continue
+            만든것 = notify(
+                db,
+                users=people,
+                retreat_id=retreat.id,
+                kind="관련팀",
+                title=f"관련팀으로 지정됐습니다 — {run.library.title}",
+                body=f"{short_name(dept.name)} 팀이 이 업무의 관련팀입니다.",
+                dedupe_key=f"related:{run.id}:{key}",
+                link=f"/tasks?task={run.id}",
+                target_type="task_run",
+                target_id=run.id,
+                exclude_user_id=user.id,
+                push=False,
+            )
+            # **안 간 것을 「보냄」 이라고 적지 않는다** (4-11 — 「보냈는가」 를
+            # 부풀리지 않는다). `notify()` 는 같은 dedupe_key 가 이미 있으면
+            # 아무것도 안 만들고 빈 목록을 돌려주는데, 그것까지 보냄으로 세면
+            # 두 번째 저장에서 화면이 「보냄」 이라 말하고 실제로는 아무 일도
+            # 안 일어난다(검토가 잡음). 두 번 안 가는 것은 뜻한 바이고, 그
+            # 사실을 그대로 말하는 것이 이 갈래다
+            (sent if 만든것 else already).append(key)
+        except Exception as exc:   # noqa: BLE001 — 한 팀이 막혀도 나머지는 간다
+            failed.append({"key": key, "name": dept.name, "why": str(exc) or "보내지 못했습니다"})
+    db.commit()
+    # 서버 로그에 한 줄 — 무엇이 갔고 무엇이 못 갔는지가 앱 밖에도 남는다
+    print(f"[관련팀 알림] run={run.id} 보냄={sent} 이미={already} "
+          f"못감={[f['key'] for f in failed]}", flush=True)
+    return {
+        "sent": sent,
+        "sent_names": [dept_by_key[k].name for k in sent],
+        # 이미 알린 팀 — 「보냄」 과 갈라 적는다(위의 까닭)
+        "already": already,
+        "already_names": [dept_by_key[k].name for k in already],
+        "failed": failed,
     }
 
 

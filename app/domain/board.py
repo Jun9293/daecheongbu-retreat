@@ -248,6 +248,9 @@ def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
         "overdue_days": days,
         # 상태 배지 — **홈·목록·보드가 전부 이것을 쓴다** (4-3). 화면이 상태를
         # 다시 분기하면 두 벌이 된다.
+        # **배지에 칸을 늘리지 않는다.** 며칠 늦었는지는 바로 위 `overdue_days`
+        # 이고, 그것을 배지 안에도 넣으면 같은 값이 두 자리에 있게 된다 —
+        # 배지를 통째로 견주는 시험이 곧바로 빨개졌다(2026-09-23 · 검토가 잡음)
         "badge": {"label": shown, "cls": BADGE_CLASSES[shown]},
         "bar_background": bar_bg,
         "bar_border": bar_border,

@@ -8,7 +8,7 @@
   달력 보기 (CLAUDE.md 4-13).
   **마감일에 점 하나**입니다 — 기간 띠가 아닙니다.
   점을 누르면 **그 자리에서** 상세 패널이 열립니다 — 달력은 그대로 있고
-  오른쪽에 겹쳐 뜹니다. 보드로 넘겨 보내지 않습니다(그러면 보던 달을 잃습니다).
+  오른쪽에서 밀고 들어옵니다(4-9). 보드로 넘겨 보내지 않습니다(그러면 보던 달을 잃습니다).
   그래도 패널은 **한 벌**입니다 — 화면은 `partials/drawer.html`,
   코드는 `static/js/drawer.js` 하나입니다 (4-13).
 
@@ -77,6 +77,9 @@
 {% block scripts %}
 <script id="cal-data" type="application/json">{{ cal|tojson }}</script>
 <script src="{{ static('js/listinput.js') }}" defer></script>
+{# 기간을 고르는 달력 팝업 — 드로어가 쓰고 업무 추가 팝업도 **같은 부품**을
+   씁니다 (4-9 · 6-7). drawer.js 보다 먼저 와야 `window.DatePick` 이 준비됩니다 #}
+<script src="{{ static('js/datepick.js') }}" defer></script>
 <script src="{{ static('js/drawer.js') }}" defer></script>
 <script src="{{ static('js/calendar.js') }}" defer></script>
 {% endblock %}

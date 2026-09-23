@@ -163,16 +163,25 @@ def test15_d01_4_0_이_하한_셋을_말한다():
     assert ("장식이어도" + "_되는곳") not in 자리
 
 
-def test15_m01_드로어_칩도_목록과_같은_길이다():
-    """같은 메뉴를 여는 두 자리의 규약이 갈린 채로 두지 않는다 (W-4).
+def test15_m01_메뉴를_여는_자리가_전파를_안_막는다():
+    """같은 메뉴를 여는 자리들의 규약이 갈린 채로 두지 않는다 (W-4).
     전파를 막으면 「여기가 바깥인가」 를 아는 곳이 둘이 된다.
+
+    **2026-09-23 에 드로어가 세 칸 버튼이 되어 칩이 없어졌다** (4-9) —
+    그래서 이 메뉴를 여는 자리는 **목록의 상태 칸과 담당자 칸**뿐이다.
+    이름만 바뀐 것이 아니라 재는 자리가 옮겨졌으므로 시험 이름도 옮겼다.
 
     **낱말만 잰다** — 실제로 안 닫히는지는 `docs/checks/drawer.js` 가
     브라우저에서 잰다."""
     코드 = _코드(JS / "drawer.js")
-    칩줄 = [줄 for 줄 in 코드.split("\n") if "statchip').onclick" in 줄]
-    assert 칩줄 and "stopPropagation" not in 칩줄[0]
     assert "at('.cell.st.pick')" in 코드          # originOf 가 안다
+    assert "at('.asg.pick')" in 코드              # 담당자 칸도 같은 자리다
+
+    목록 = _코드(JS / "tasks.js")
+    for 무늬 in ("Drawer.statusMenu(", "Drawer.assigneeMenu("):
+        at = 목록.index(무늬)
+        열린자리 = 목록[max(0, at - 400):at]
+        assert "stopPropagation" not in 열린자리, f"{무늬} 를 여는 자리가 전파를 막는다"
 
 
 def test15_m02_메뉴가_화면_안에_묶인다():

@@ -25,6 +25,10 @@
        진단 패널(4-10)·옮긴 자리 줄과 겹치지 않습니다. **고치는 것은 막지 않습니다**
        — 총무팀이 정리할 때 필요합니다(2026-09-16 사람이 정함). #}
     <div class="dexcl" id="dexcl" hidden>이번 회차에서 뺀 업무입니다</div>
+    {# **저장된 '지연'** 은 세 칸 중 아무것도 안 켜고 이 줄이 그 사실을 말합니다
+       (4-9 · 4-3). 저장값에서 걷어낸 상태라 지금은 안 뜨지만, 남아 있는 행이
+       있으면 말없이 「대기」 를 켜는 대신 **저장된 값을 그대로** 보입니다. #}
+    <div class="dstale" id="dstale" hidden></div>
     <div class="dtitle" id="dtitle"></div>
     <dl class="dmeta" id="dmeta"></dl>
     {# **어느 자리를 따르고 있나** (6-4). 손으로 옮긴 적이 있는 업무에만 뜹니다 —
@@ -32,7 +36,7 @@
        **혼자 뜻을 지는 글자라 하한인 14px 입니다**(4-0) — 이 줄이 없으면 개회일이
        바뀔 때 자리가 왜 그대로인지(또는 왜 돌아갔는지) 알 길이 없습니다. #}
     <div class="dmoved" id="dmoved" hidden></div>
-    {# 드로어 폭(440px)에서 탭이 넘치면 안 됩니다 — **첨부파일이 맨 끝이라
+    {# 드로어 기본 폭(`drawer.js` 의 `폭한계`)에서 탭이 넘치면 안 됩니다 — **첨부파일이 맨 끝이라
        잘리면 안 되므로** 줄일 곳은 가운데입니다 (`논의 내역`→`논의` 등).
        확인 요청 탭은 옛 task_detail 의 그 폼이 있던 자리입니다 (4-9 · 4-14). #}
     <div class="dtabs" id="dtabs">
@@ -140,10 +144,16 @@
     <div class="modal" id="prepick" hidden></div>
   </div>
   <!-- 진단 패널 — 하단 고정. 패널 이름이 판정 결과다 (CLAUDE.md 4-10) -->
+  {# **평소에는 한 줄이고 누르면 펼칩니다** (4-9 · 목업 B · 2026-09-23) —
+     색 점 + 판정 이름 + 첫 근거 한 줄(넘치면 줄임) + 캐럿. 근거가 대여섯 줄이라
+     늘 펼쳐 두면 그 아래 「+ 하위 업무 추가」 가 화면 밖으로 밀립니다.
+     **판정과 근거는 4-10 그대로이고 화면만 접습니다** — 문구를 새로 짓지 않습니다. #}
   <div class="diag" id="diag">
-    <div class="dg-h"><span class="dot"></span><span class="ttl" id="dgTtl">판정 중…</span>
-      <button id="dgR" type="button">다시 분석</button></div>
-    <div class="dg-b" id="dgB"></div>
+    <button class="dg-h" id="dgH" type="button" aria-expanded="false" aria-controls="dgB">
+      <span class="dot"></span><span class="ttl" id="dgTtl">판정 중…</span>
+      <span class="one" id="dgOne"></span><span class="caret">▼</span></button>
+    <div class="dg-b" id="dgB" hidden></div>
+    <button id="dgR" type="button" class="dgre" hidden>다시 분석</button>
   </div>
   <!-- '파일 첨부' 버튼은 없앴다 — 첨부파일 탭 안에 올리는 자리가 생겼으므로
        같은 기능이 두 군데 있게 된다 (논의 입력칸과 같은 이유, CLAUDE.md 4-9) -->

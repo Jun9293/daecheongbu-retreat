@@ -34,6 +34,10 @@
 
   /* 선 — 전부 헤어라인 */
   --rule:rgba(38,40,58,.12); --rule-2:rgba(38,40,58,.16);
+  /* 보드 행의 가로선 (4-0 · 목업 D · 2026-09-23). 선 토큰과 **따로** 둔다 —
+     왼쪽 고정 칸과 내용 칸이 같은 값을 써야 가로로 훑을 때 안 끊긴다.
+     업무 팝업에서 항목 사이를 가르는 선도 이 값이다 (목업 F). */
+  --row-line:#ECEDF1;
 
   /* 뜻이 있는 색 */
   /* accent (4-0) — 선택 테두리 · 활성 메뉴 · 진행중 표시 · 기본 버튼.
@@ -124,8 +128,14 @@
      길어지지만, 보드는 원래 한 화면에 안 들어오고 **부서를 접어 보는 화면**
      이라 (4-1) 이 정도는 스크롤이 받는다. 재 본 값은 검토용 보고에 있다. */
   --h-team:44px; --h-main:40px; --h-sub:35px;
-  --dw:400px;                           /* 상세 패널 폭 */
-  --sw:240px;                           /* 사이드바 폭 (9장 · 목업과 같다) */
+  /* 상세 패널 폭 — 기본 460, 핸들로 360~760 (4-9 · 목업 B · 2026-09-23).
+     **범위는 `drawer.js` 의 `폭한계` 한 곳**이고 여기 숫자로 다시 적지 않는다 —
+     두 곳에 적으면 끌 때와 되돌릴 때가 갈린다. */
+  --dw:460px;
+  /* 사이드바 폭 (9장 · 목업 A · 2026-09-23 에 240 → 176).
+     **9장이 이 토큰을 가리키고 숫자를 안 적는다** — 박으면 그 순간 낡는다 */
+  --sw:176px;
+  --side-head:52px;                     /* 사이드바 머리줄 (목업 A) */
   --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,
     "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   /* **숫자를 줄 세우려고 고정폭을 쓰지 않는다** (4-0) — 그건
@@ -167,7 +177,7 @@ a{color:inherit;text-decoration:none}
    '잠깐 들춰 본다' 이고, 호버가 없는 기기에는 그 길이 아예 없다. */
 .sidenav{position:fixed;left:0;top:0;bottom:0;width:var(--sw);z-index:38;
   background:var(--side);border-right:1px solid var(--rule);
-  display:flex;flex-direction:column;padding:10px 8px 8px;
+  display:flex;flex-direction:column;padding:14px 8px 8px;
   transform:translateX(-100%);transition:transform .18s cubic-bezier(.4,0,.2,1);
   box-shadow:none}
 .sidenav.peek{transform:none;box-shadow:2px 0 16px -8px rgba(38,40,58,.35)}
@@ -177,7 +187,9 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
 /* 값은 목업(docs/mockups/retreat-shell.html)의 CSS 에서 그대로 옮겼다 —
    눈대중으로 맞추지 않는다. 로고 26×26 r7 accent · 드롭다운 r8 rule-2
    padding 7×10 · 항목 7×8 r6 · 그룹 간격 6px · 하위 16px+가이드선. */
-.sidenav .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 10px;
+/* 머리줄 높이는 목업 A 의 52px 이다 — 여백으로 어림하지 않고 값을 준다 */
+.sidenav .brand{display:flex;align-items:center;gap:9px;padding:0 8px;
+  height:var(--side-head);flex:none;
   font-size:var(--fz-base);font-weight:700;color:var(--ink);letter-spacing:-.01em}
 .sidenav .brand .mark{width:26px;height:26px;border-radius:var(--r-lg);background:var(--accent);
   color:#fff;font-size:var(--fz-xs);display:flex;align-items:center;justify-content:center;flex:none}
@@ -195,14 +207,20 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
    하위 = 한 급 아래 (16px 들여쓰기 + 헤어라인 세로 가이드선 안쪽, 보조색).
    선택 = accent 옅은 채움 + 가이드선 위 2px accent 마커. **하위에만** 붙는다 —
    그룹은 호버만 있고 활성 상태가 없다. 둘 다 칠하면 어디 있는지 두 번 말한다.
-   그룹 제목은 링크다 — 누르면 그 그룹의 첫 하위로 간다 (3장). */
+   그룹 제목은 링크다 — 누르면 그 그룹의 첫 하위로 간다 (3장).
+
+   **글자 크기는 목업 A(항목 13 · 묶음 제목 12)를 안 따르고 눈금의 목록 단에
+   둔다.** 사이드바 항목은 혼자 뜻을 지는 글자라 4-0 의 하한이 걸리고,
+   `tests/test_typescale.py` 의 `ts_02`·`ts_09` 가 그 자리를 이름으로 잡고
+   있다 — 2026-09-03 에 69곳을 올린 그 규칙이다. 폭·여백·들여쓰기·현재 항목은
+   목업대로 맞췄다. 어느 쪽으로 할지는 사람이 정한다(그 판 보고). */
 .sidenav nav .g,.sidenav nav .single{display:flex;align-items:center;gap:9px;
-  padding:7px 8px;border-radius:var(--r-lg);margin-top:6px;
+  padding:5px 8px;border-radius:var(--r-lg);margin-top:6px;
   font-size:var(--fz-md);font-weight:600;color:var(--ink);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidenav nav .g:hover,.sidenav nav .single:hover{background:var(--hover)}
 .sidenav nav .single[aria-current=page]{background:var(--accent-soft);color:var(--accent)}
-.sidenav .subs{margin-left:16px;border-left:1px solid var(--rule-2);padding-left:6px;
+.sidenav .subs{margin-left:18px;border-left:1px solid var(--rule-2);padding-left:6px;
   display:flex;flex-direction:column;gap:1px;margin-bottom:2px}
 .sidenav .subs .n{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:var(--r-lg);
   font-size:var(--fz-md);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -218,7 +236,8 @@ body.sidepin .sidenav{transform:none;box-shadow:none}
 .sidenav .wip.live{border-color:var(--now);color:var(--now-ink);font-weight:600}
 /* 하단 사용자 카드 — 이름 · 역할 · 부서 **각 한 줄** (부서는 키로, 2장).
    로그아웃은 여기 없다 — 설정 › 내 정보에만 둔다 (4-17).
-   240px 에서 꺾이지 않는다 — nowrap + 넘치면 말줄임. */
+   **좁아진 폭(`--sw`)에서도 꺾이지 않는다** — nowrap + 넘치면 말줄임.
+   여기 px 을 적지 않는다: 폭은 그 토큰 하나가 정한다. */
 .sidefoot{border-top:1px solid var(--rule);margin-top:auto;padding:10px 8px 2px;
   font-size:var(--fz-md);color:var(--ink-2);display:flex;gap:9px;align-items:center}
 .sidefoot .avatar{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);
@@ -499,7 +518,9 @@ body.dragging-bar .bar{transition:none}
 .mempty{padding:26px 14px;text-align:center;font-size:var(--fz-base);color:var(--ink-2)}
 
 /* ── 상세 패널 ──────────────────────────────────────────────────────── */
-.drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);min-width:320px;max-width:min(900px,95vw);
+/* 폭의 범위는 `drawer.js` 의 `폭한계` 하나가 정한다 (4-9) — 여기 min/max 를
+   적으면 끌 때와 되돌릴 때가 갈린다. 여기는 그 값을 받아 그리기만 한다. */
+.drawer{position:fixed;top:0;right:0;height:100%;width:var(--dw);
   background:var(--paper);border-left:1px solid var(--rule);transform:translateX(100%);
   transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:35;display:flex;flex-direction:column;
   box-shadow:-14px 0 34px -24px rgba(38,40,58,.45)}
@@ -524,6 +545,65 @@ body.dragging-bar .bar{transition:none}
 .chip.stat:hover{background:var(--hover)}
 .chip.stat[disabled]{cursor:default;opacity:.7}
 .chip.stat .cv{width:7px;height:7px;border-radius:50%}
+/* 상태 세 칸 버튼 (4-9 · 목업 B · 2026-09-23) — 고를 것이 셋뿐이라 메뉴를
+   펼치지 않는다. 켜진 칸은 accent 옅은 면 + 진한 accent 글자 700 에 앞에 점,
+   꺼진 칸은 흐린 글자 500 에 회색 점이다.
+   **점의 색은 이 버튼 안에서만 쓴다** — 바·배지·칩의 완료는 그대로 회색이고
+   (4-3 · 시선은 미완료로), 여기 점은 「지금 무엇이 켜져 있나」 만 말한다. */
+.statseg{display:inline-flex;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+/* 꺼진 칸은 목업 B 가 「흐린 글자」 라고 적었지만 **보조색**을 쓴다 — 고를 수
+   있는 상태 이름은 혼자 뜻을 지는 글자라 4-0 의 하한(4.5:1)이 걸린다. 켜진 칸이
+   accent 면 + 700 이라 급은 그대로 갈린다 */
+.statseg button{font:inherit;font-size:var(--fz-md);font-weight:500;line-height:1;
+  display:flex;align-items:center;gap:5px;padding:4px 9px;cursor:pointer;
+  background:none;border:none;border-left:1px solid var(--rule);color:var(--ink-2)}
+.statseg button:first-child{border-left:none}
+.statseg button:hover:not([disabled]):not(.on){background:var(--hover);color:var(--ink)}
+.statseg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.statseg button[disabled]{cursor:default}
+.statseg.saving button{cursor:progress;opacity:.75}
+/* **점 색을 인라인 `background` 로 주지 않는다** — 인라인은 껐다는 규칙을
+   이기므로 꺼진 칸까지 상태색이 된다. 값은 `--dot` 로 받고 켜고 끄는 것은
+   여기서 가른다 */
+.statseg .cv{width:7px;height:7px;border-radius:50%;flex:none;background:var(--rule-2)}
+.statseg button.on .cv{background:var(--dot,currentColor)}
+/* 저장된 '지연' 을 말하는 줄 — 혼자 뜻을 지는 글자라 목록 단 (4-0) */
+.dstale{font-size:var(--fz-md);color:var(--now-ink);line-height:1.5;margin:6px 0 0}
+
+/* 기간을 고르는 달력 팝업 (4-9 · 목업 B) — **드로어 밖에서도 뜬다**
+   (`static/js/datepick.js`). 업무 추가 팝업도 같은 부품을 쓴다.
+   고른 양끝은 accent 면 흰 글자, 사이는 비침(`--span`) — 그 값은 이미 있는
+   토큰이다(4-0). 새 색을 만들지 않는다. */
+.datepick{position:fixed;z-index:60;width:292px;background:var(--paper);
+  border:1px solid var(--rule);border-radius:var(--r-lg);padding:10px;
+  box-shadow:0 12px 30px -14px rgba(38,40,58,.45)}
+.datepick .dpbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.datepick .dpbar b{font-size:var(--fz-md);font-weight:600;font-variant-numeric:tabular-nums}
+.datepick .dpbar button{font:inherit;background:none;border:none;cursor:pointer;
+  color:var(--ink-2);padding:2px 8px;border-radius:var(--r)}
+.datepick .dpbar button:hover{background:var(--hover)}
+.datepick .dpwd,.datepick .dpgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.datepick .dpwd i{font-style:normal;text-align:center;font-size:var(--fz-sm);color:var(--ink-2);padding:2px 0}
+.datepick .dpwd i:first-child{color:var(--now-ink)}
+.datepick .dpgrid .pad{display:block}
+.datepick .dpgrid button{font:inherit;font-size:var(--fz-md);font-variant-numeric:tabular-nums;
+  background:none;border:none;cursor:pointer;padding:5px 0;border-radius:var(--r);color:var(--ink)}
+.datepick .dpgrid button.red{color:var(--now-ink)}
+.datepick .dpgrid button:hover{background:var(--hover)}
+.datepick .dpgrid button.mid{background:var(--span);border-radius:0}
+/* **모서리는 눈금 둘뿐이다** (4-0) — 목업 B 의 6px 을 그대로 쓰면 셋째가 생겨
+   한 화면에 4·6·8 이 함께 뜬다. 열여덟 가지가 흩어져 있던 그 자리로 돌아간다 */
+.datepick .dpgrid button.edge{background:var(--accent);color:#fff;border-radius:var(--r)}
+.datepick .dphint{font-size:var(--fz-sm);color:var(--ink-2);margin:8px 2px 0;line-height:1.5}
+.datepick .dperr{font-size:var(--fz-sm);color:var(--now-ink);margin:4px 2px 0}
+.datepick .dpfoot{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+/* 기간 줄의 달력 단추 — 켜지면 accent 테두리·면 (목업 B) */
+.calbtn{font:inherit;font-size:var(--fz-sm);background:none;cursor:pointer;
+  border:1px solid var(--rule);border-radius:var(--r);padding:1px 6px;color:var(--ink-2);flex:none}
+.calbtn:hover{background:var(--hover)}
+.calbtn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+/* 기한이 지났으면 앞에 「마감 n일 지남 ·」 — 계산값이다 (4-3) */
+.dlate{color:var(--now-ink);font-weight:600}
 /* 제목 — 노션의 페이지 제목 크기. 번호는 작게 보조로 (4-14),
    제목 글자는 누르면 그 자리에서 고친다 (4-9) */
 .dtitle{font-size:var(--fz-4xl);font-weight:600;line-height:1.3;letter-spacing:-.02em;
@@ -564,18 +644,10 @@ body.dragging-bar .bar{transition:none}
   border:none;padding:0;cursor:pointer;display:flex;align-items:center;gap:6px;
   min-width:0;flex:1;text-align:left}
 .dmeta dd .dates{display:flex;align-items:center;gap:2px;min-width:0;flex:1;flex-wrap:wrap}
-.dmeta dd .dates .sep{color:var(--ink-3);padding:0 2px}
-.dmeta dd .dates .span{font-variant-numeric:tabular-nums;font-size:var(--fz-xs);color:var(--ink-3);
-  margin-left:2px;flex:none}
-.dmeta input[type=date]{font:inherit;font-size:var(--fz-md);
-  font-variant-numeric:tabular-nums;letter-spacing:-.055em;color:var(--ink);background:none;
-  border:none;border-radius:var(--r);padding:2px 2px;cursor:pointer;width:auto;min-width:74px}
-.dmeta input[type=date]:hover{background:var(--hover)}
-.dmeta input[type=date]:focus{outline:none;background:var(--paper);
-  box-shadow:inset 0 0 0 1px var(--link)}
-/* 아이콘 없이 — 날짜를 누르면 달력이 열린다 */
-.dmeta input[type=date]::-webkit-calendar-picker-indicator{display:none}
-.dmeta input[type=date]::-webkit-inner-spin-button{display:none}
+/* 기간 줄에는 입력 칸이 없다 (4-9 · 2026-09-23) — 날짜 둘을 각각 받던
+   `input[type=date]` 와 그 사이의 `.sep`·`.span` 을 걷었다. 지금은 한 줄
+   글자(`#dspan`)와 달력 단추 하나이고, 고르는 것은 `datepick.js` 의 팝업이다.
+   부르는 자리가 없는 규칙을 남겨 두면 다음 사람이 그것을 지금 모양으로 읽는다 */
 
 .teamtag{display:inline-flex;align-items:center;gap:6px}
 .teamtag i{width:8px;height:8px;border-radius:50%;flex:none;display:block}
@@ -1003,7 +1075,7 @@ button.btn:disabled{opacity:.4;cursor:default}
   .legend{display:none}
   .board{display:none}
   .mlist{display:block;flex:1;overflow:auto}
-  .drawer{width:100%;max-width:100%;min-width:0;border-left:none}
+  .drawer{width:100%;border-left:none}
   .grip{display:none}
   .dhead{padding:18px 16px 0}
   .dbody{padding:18px 16px 30px}
@@ -1081,6 +1153,21 @@ button.btn:disabled{opacity:.4;cursor:default}
 .plist label:hover{background:var(--hover)}
 .plist .dw{margin-left:auto;font-variant-numeric:tabular-nums;font-size:var(--fz-sm);color:var(--ink-2)}
 .plist .sub{color:var(--ink-2);font-size:var(--fz-sm)}
+/* 관련팀 저장 뒤의 두 팝업 (4-9 · 목업 B) — 알릴 팀 고르기(340) · 결과(320).
+   어두운 막은 `.modal` 것을 그대로 쓴다 — 새로 만들지 않는다.
+   **목업이 둘을 나눠 적었으므로 코드도 나눈다** — 하나로 두었더니 주석은
+   둘을 말하는데 결과도 340 이었다(검토가 잡음). 고르는 팝업이 더 넓은 것은
+   부서 이름과 「새로 들어감」 꼬리가 한 줄에 서기 때문이다 */
+.modal .sheetbox.narrow{width:min(340px,100%)}
+.modal .sheetbox.narrow.res{width:min(320px,100%)}
+.plist.notify label{min-height:36px}
+.plist.notify .tag{margin-left:auto;font-style:normal;font-size:var(--fz-sm);color:var(--ink-3)}
+.plist.notify .tag.new{color:var(--accent)}
+/* 결과 세 줄 — 관련팀 / 알림 / 업무 목록 */
+.relres{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:var(--fz-md)}
+.relres dt{color:var(--ink-3)}
+.relres dd{color:var(--ink)}
+.relres dd.bad{color:var(--now-ink)}
 
 /* ── 상세 패널의 선행 / 후속 / 관련 — 세 묶음 카드 (4-9) ─────────────
    방향이 다른 셋을 같은 무게의 목록으로 펼치면 무엇이 나를 막는지 안 읽힌다.
@@ -1110,8 +1197,21 @@ button.btn:disabled{opacity:.4;cursor:default}
    '진행 불가' / '일부 진행 가능' / '진행 가능' / '완료'. */
 .diag{border-top:1px solid var(--rule);background:var(--paper);flex:none;
   max-height:38vh;display:flex;flex-direction:column;padding:12px 26px 14px}
-.dg-h{display:flex;align-items:center;gap:8px;padding:10px 14px 8px;flex:none;
-  background:var(--side);border-radius:var(--r-lg) var(--r-lg) 0 0}
+/* **평소에는 한 줄이다** (4-9 · 목업 B · 2026-09-23) — 머리가 단추다.
+   근거가 대여섯 줄이라 늘 펼쳐 두면 아래의 「+ 하위 업무 추가」 가 밀린다. */
+.dg-h{display:flex;align-items:center;gap:8px;padding:10px 14px;flex:none;width:100%;
+  font:inherit;text-align:left;cursor:pointer;border:none;
+  background:var(--side);border-radius:var(--r-lg)}
+.diag:has(.dg-b:not([hidden])) .dg-h{border-radius:var(--r-lg) var(--r-lg) 0 0}
+/* 첫 근거 한 줄 — 넘치면 … (목업 B). **흐림이 아니라 보조다** — 그 줄이
+   없으면 접힌 패널에서 무엇이 막고 있는지를 화면 어디에서도 알 수 없어,
+   4-0 의 「혼자 뜻을 지는 글자」 에 걸린다 */
+.dg-h .one{flex:1;min-width:0;font-size:var(--fz-sm);color:var(--ink-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dg-h .caret{flex:none;color:var(--ink-3);font-size:var(--fz-xs)}
+.dgre{align-self:flex-end;margin-top:6px;font:inherit;font-size:var(--fz-sm);padding:2px 9px;
+  border-radius:var(--r);cursor:pointer;border:1px solid var(--rule-2);
+  background:var(--paper);color:var(--ink-2)}
 .dg-h .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
 .diag.g-block .dg-h .dot{background:var(--now)}
 .diag.g-block .dg-h .ttl{color:var(--now-ink)}
@@ -1120,10 +1220,7 @@ button.btn:disabled{opacity:.4;cursor:default}
 .diag.g-go .dg-h .dot{background:var(--go)}
 .diag.g-go .dg-h .ttl{color:#3B6E4B}
 .diag.g-done .dg-h .ttl{color:var(--ink-2)}
-.dg-h .ttl{font-size:var(--fz-md);font-weight:600}
-.dg-h button{margin-left:auto;font:inherit;font-size:var(--fz-sm);padding:2px 9px;border-radius:var(--r);
-  cursor:pointer;border:1px solid var(--rule-2);background:var(--paper);color:var(--ink-2)}
-.dg-h button:hover{background:var(--paper);color:var(--ink)}
+.dg-h .ttl{font-size:var(--fz-md);font-weight:600;flex:none}
 .dg-b{overflow-y:auto;padding:0 14px 12px;font-size:var(--fz-md);line-height:1.6;
   background:var(--side);border-radius:0 0 var(--r-lg) var(--r-lg)}
 .dg-v{font-weight:600;font-size:var(--fz-base);line-height:1.5;margin-bottom:9px;color:var(--ink-2)}
@@ -2206,7 +2303,7 @@ input[type=password]{font:inherit;font-size:var(--fz-lg);
 }
 
 /* 패널이 행 아래로 들어온 모습 (4-14) — 같은 패널, 자리만 다르다 */
-.drawer.inline{position:static;height:auto;width:auto;max-width:none;min-width:0;transform:none;
+.drawer.inline{position:static;height:auto;width:auto;transform:none;
   border-left:none;box-shadow:none;transition:none}
 .drawer.inline .grip{display:none}
 .drawer.inline .dbody{max-height:62vh}
