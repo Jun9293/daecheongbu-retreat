@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -1072,6 +1073,15 @@ def set_related_departments(
 
 class NotifyRelatedIn(BaseModel):
     keys: list[str]
+    # **저장 한 번마다 화면이 만들어 보내는 값** (4-9 · 2026-09-24 사람이 정함).
+    # 이것이 `dedupe_key` 의 셋째 자리라, 사람이 다시 저장하고 다시 체크하면
+    # 다시 갑니다 — 막는 것은 **같은 저장을 두 번 누르거나 재시도한 경우**뿐입니다.
+    save_id: str = ""
+
+
+# 저장 식별값의 꼴 — 글자·숫자·`-`·`_` 만, 8~64자. **서버가 보고 거절한다**
+# (화면만 믿으면 빈 값이나 고정값이 와도 그대로 열쇠가 되어 다시 못 보낸다)
+_SAVE_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
 
 @router.post("/board/task/{run_id}/related-departments/notify")
@@ -1093,9 +1103,19 @@ def notify_related_departments(
     화면의 결과 팝업이 못 간 팀을 적는다. 다 됐다고 말해 놓고 절반만 가면
     보낸 사람은 갔다고 믿는다 (5-1 의 그 판단과 같은 자리).
 
-    **같은 구성으로 다시 저장해도 두 번 가지 않는다** — `dedupe_key` 가
-    (업무, 그 팀) 하나라 같은 사람에게 두 번 서지 않는다. 알림은 앱 알림함으로만
-    가고 푸시는 안 나간다(11-2 의 기준 — 그 순간 사람이 움직일 일이 아니다).
+    **같은 저장이 겹치면 한 통만 선다** — `dedupe_key` 가 (업무, 팀,
+    **저장 식별값**) 셋이다 (2026-09-24 사람이 정함). 사람이 팝업에서 다시
+    체크하면 저장이 다른 것이므로 **다시 간다** — 막는 것은 같은 저장을 두 번
+    누르거나 재시도한 경우뿐이다. 전에는 열쇠가 (업무, 팀) 둘이라 한 번 가고
+    나면 관련팀을 뗐다 다시 붙여도 알릴 길이 없었다.
+
+    **열람 전용은 안 받는다** (2026-09-24 사람이 정함) — 위험 점검과 **같은
+    자리**(`notifications.department_members`)를 부른다. 판정을 새로 짓거나
+    복사하면 두 벌이 되고 갈린 쪽을 아무도 눈치채지 못한다. 그 팀 소속이 전부
+    열람 전용이면 **「받을 사람 없음」 = 못 간 쪽**이다.
+
+    알림은 앱 알림함으로만 가고 푸시는 안 나간다(11-2 의 기준 — 그 순간 사람이
+    움직일 일이 아니다).
     """
     run = _load_run(db, retreat, run_id)
     if not _can_edit(db, user, run):
@@ -1104,20 +1124,36 @@ def notify_related_departments(
     unknown = [k for k in payload.keys if k not in dept_by_key]
     if unknown:
         raise HTTPException(status_code=400, detail=f"모르는 부서 키입니다: {', '.join(unknown)}")
+    # **아무것도 만들기 전에 본다.** 뒤에서 보면 앞의 몇 팀은 이미 알림이 서고
+    # 그다음에 400 이 나가, 화면은 「못 보냈다」 인데 알림함에는 서 있게 된다
+    if not _SAVE_ID.match(payload.save_id or ""):
+        raise HTTPException(
+            status_code=400,
+            detail="저장 식별값이 없거나 형식이 틀립니다 — 저장을 다시 해 주세요.")
 
-    from app.notifications import notify
+    from app.notifications import department_members, notify
 
     sent: list[str] = []
     already: list[str] = []
     failed: list[dict] = []
+    걸러진수 = 0
     for key in payload.keys:
         dept = dept_by_key[key]
         try:
-            people = perm.members_of(db, key)
+            # **위험 점검과 같은 자리다** — 그 부서 소속에서 열람 전용을 뺀다
+            people = department_members(db, dept.id)
+            걸러진수 += len(perm.members_of(db, key)) - len(people)
+            # **누른 사람 자신은 여기서 뺀다.** `notify` 도 `exclude_user_id` 로
+            # 빼지만, 거기서 빠지면 만든 것이 0 이 되어 아래의 「이미 알림」
+            # 갈래로 떨어진다 — 처음 보내는데 화면이 「이미 알림」 이라고
+            # 말하게 된다(2026-09-24 검토가 잡음). 받을 사람이 나뿐이면
+            # 그것은 겹친 것이 아니라 **보낼 데가 없는 것**이다
+            people = [p for p in people if p.id != user.id]
             if not people:
                 # **못 간 것은 못 갔다고 말한다** — 받을 사람이 없는 팀에
-                # 「보냄」 이라고 적으면 아무도 안 봤다는 사실이 사라진다
-                failed.append({"key": key, "name": dept.name, "why": "그 팀에 사람이 없습니다"})
+                # 「보냄」 이라고 적으면 아무도 안 봤다는 사실이 사라진다.
+                # 전부 열람 전용이라 빈 것도 여기로 온다(사람이 정한 그 자리)
+                failed.append({"key": key, "name": dept.name, "why": "받을 사람이 없습니다"})
                 continue
             만든것 = notify(
                 db,
@@ -1126,7 +1162,7 @@ def notify_related_departments(
                 kind="관련팀",
                 title=f"관련팀으로 지정됐습니다 — {run.library.title}",
                 body=f"{short_name(dept.name)} 팀이 이 업무의 관련팀입니다.",
-                dedupe_key=f"related:{run.id}:{key}",
+                dedupe_key=f"related:{run.id}:{key}:{payload.save_id}",
                 link=f"/tasks?task={run.id}",
                 target_type="task_run",
                 target_id=run.id,
@@ -1136,16 +1172,18 @@ def notify_related_departments(
             # **안 간 것을 「보냄」 이라고 적지 않는다** (4-11 — 「보냈는가」 를
             # 부풀리지 않는다). `notify()` 는 같은 dedupe_key 가 이미 있으면
             # 아무것도 안 만들고 빈 목록을 돌려주는데, 그것까지 보냄으로 세면
-            # 두 번째 저장에서 화면이 「보냄」 이라 말하고 실제로는 아무 일도
-            # 안 일어난다(검토가 잡음). 두 번 안 가는 것은 뜻한 바이고, 그
-            # 사실을 그대로 말하는 것이 이 갈래다
+            # 화면이 「보냄」 이라 말하고 실제로는 아무 일도 안 일어난다
+            # (검토가 잡음). **이제 이 갈래는 같은 저장이 겹쳤을 때만 선다** —
+            # 열쇠에 저장 식별값이 들어갔으므로, 다른 저장에서 체크한 팀은
+            # 위의 `sent` 로 간다
             (sent if 만든것 else already).append(key)
         except Exception as exc:   # noqa: BLE001 — 한 팀이 막혀도 나머지는 간다
             failed.append({"key": key, "name": dept.name, "why": str(exc) or "보내지 못했습니다"})
     db.commit()
     # 서버 로그에 한 줄 — 무엇이 갔고 무엇이 못 갔는지가 앱 밖에도 남는다
     print(f"[관련팀 알림] run={run.id} 보냄={sent} 이미={already} "
-          f"못감={[f['key'] for f in failed]}", flush=True)
+          f"못감={[f['key'] for f in failed]} 열람전용으로_거른_사람={걸러진수}",
+          flush=True)
     return {
         "sent": sent,
         "sent_names": [dept_by_key[k].name for k in sent],

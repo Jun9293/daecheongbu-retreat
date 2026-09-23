@@ -1055,8 +1055,24 @@ const 점검 = async () => {
       // 왼쪽 목록은 sticky 로 떠 있어 그 아래로 바가 지나간다. 배경이 반투명하면
       // **뒤의 바가 비친다.** CSS 에 규칙이 있다는 것만으로는 뒤엣것이 이기는지
       // 알 수 없으므로 **계산된 스타일**로 본다 (10장).
+      /* **`rgb()` 만 읽으면 안 된다.** 팀색을 면에 섞는 자리(4-0 · `color-mix`)는
+         브라우저가 `color(srgb 0.89 0.91 0.92)` 꼴로 돌려준다 — 알파가 아예
+         없는(=불투명한) 값인데 옛 정규식이 못 읽어 **반투명으로 셌다.**
+         2026-09-24 에 보드에서 그 거짓 실패가 났다. 새 꼴에서 알파는 `/` 뒤에
+         오므로, 그것이 없으면 불투명이다. */
       const 불투명 = el => {
         const bg = getComputedStyle(el).backgroundColor;
+        const 새꼴 = bg.match(/^(?:color|rgba?|hsla?|oklab|oklch|lab|lch)\(([^)]*)\)$/);
+        if (새꼴 && 새꼴[1].includes('/')) {
+          // **퍼센트도 읽는다** — `/ 50%` 를 `parseFloat` 로만 읽으면 50 이 되어
+          // `>= 1` 로 **불투명**이 된다(막는 쪽이 새는 방향).
+          const 끝 = 새꼴[1].split('/').pop().trim();
+          const a = 끝.endsWith('%') ? parseFloat(끝) / 100 : parseFloat(끝);
+          // **못 읽으면 반투명 쪽에 둔다** — 읽기 실패가 통과가 되면
+          // 「아무것도 안 보는 검사는 통과가 아니다」 를 어긴다 (11-3)
+          return Number.isFinite(a) && a >= 1;
+        }
+        if (새꼴 && !새꼴[1].includes(',')) return true;   // 쉼표도 `/` 도 없으면 알파가 없다
         const m = bg.match(/^rgba?\(([^)]+)\)/);
         if (!m) return false;
         const parts = m[1].split(',').map(v => parseFloat(v));

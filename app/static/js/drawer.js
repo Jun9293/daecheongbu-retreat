@@ -416,7 +416,12 @@ function openRelatedPicker(d) {
   box.onclick = e => {
     if (e.target === box || e.target.closest('[data-close]')) box.hidden = true;
   };
+  let 저장중 = false;
   $('relpicksave').onclick = async () => {
+    // **저장 단추도 잠근다** — 아래 알림 확정만 잠가 두면 짝이 안 맞는다.
+    // 겹쳐 누르면 저장이 둘 나가고 저장 식별값도 둘이 생긴다(검토가 잡음)
+    if (저장중) return;
+    저장중 = true;
     const keys = [...box.querySelectorAll('input:checked')].map(i => i.value);
     const res = await fetch(`/board/task/${cur}/related-departments`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -427,6 +432,7 @@ function openRelatedPicker(d) {
       const warn = $('relpickwarn');
       warn.textContent = data.detail || '저장하지 못했습니다.';
       warn.hidden = false;
+      저장중 = false;          // 되돌리고 다시 누를 수 있게 둔다
       return;
     }
     box.hidden = true;
@@ -436,11 +442,31 @@ function openRelatedPicker(d) {
     renderDrawer();
     // **저장이 끝났고, 알림은 그다음이다** (4-9 · 목업 B · 2026-09-23).
     // 하나도 안 골라도 되고, 안 고르면 아무 데도 안 간다.
-    await 알릴팀을고른다(cur, data.related_department_keys || [], 전);
+    // 저장이 실제로 끝난 **이 자리**에서 만든다 — 팝업 안에서 만들면
+    // 돌아가기로 닫고 다시 열 때마다 새 값이 되어, 같은 저장의 두 번째
+    // 누름을 못 막는다
+    await 알릴팀을고른다(cur, data.related_department_keys || [], 전, 저장표만든다());
     // 고스트 바는 이 값에서 나온다 — 직접 고쳐 그렸다고 true 를 돌려준
     // 화면만 새로고침을 건너뛴다 (담당팀 이동과 같은 규칙)
     if (call('onRelatedTeams', cur) !== true) location.reload();
   };
+}
+
+/* **저장 한 번에 식별값 하나** (4-9 · 2026-09-24 사람이 정함).
+
+   `dedupe_key` 의 셋째 자리이고, 이것 때문에 **사람이 다시 저장하고 다시
+   체크하면 알림이 다시 간다.** 막는 것은 같은 저장을 두 번 누르거나 재시도한
+   경우뿐이다 — 전에는 (업무, 팀) 둘이라 한 번 가고 나면 관련팀을 뗐다 다시
+   붙여도 알릴 길이 없었다.
+
+   `crypto.randomUUID` 가 없는 자리(옛 브라우저 · 안전하지 않은 출처)에서도
+   돌아야 해서 물러설 길을 둔다 — 서버의 꼴 검사(글자·숫자·`-`·`_` · 8~64자)를
+   양쪽 다 지난다. */
+function 저장표만든다() {
+  try {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID().replaceAll('-', '');
+  } catch (err) { /* 안전하지 않은 출처 */ }
+  return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
 }
 
 /* 「어느 팀에 알릴까요?」 (목업 B) — **저장은 이미 끝났다.**
@@ -451,7 +477,7 @@ function openRelatedPicker(d) {
 
    `전` 은 저장 전의 키 집합이다. 꼬리표를 「새로 추가」/「기존」 으로 가르는 데만
    쓴다 — 무엇이 바뀌었는지를 글로 또 적지는 않는다(결과 세 줄이 이미 말한다). */
-function 알릴팀을고른다(runId, keys, 전) {
+function 알릴팀을고른다(runId, keys, 전, 저장표) {
   return new Promise(resolve => {
     if (!keys.length) { resolve(); return; }
     const 이름 = new Map((detail.departments || []).map(t => [t.key, t]));
@@ -477,7 +503,12 @@ function 알릴팀을고른다(runId, keys, 전) {
     };
     box.querySelector('.plist.notify').onchange = 센다;
     $('relnotifyback').onclick = () => { box.hidden = true; resolve(); };
+    let 보내는중 = false;
     go.onclick = async () => {
+      // **결과가 올 때까지 잠근다** — `disabled` 만으로는 이미 들어온 클릭이
+      // 겹칠 수 있어 깃발도 함께 본다. 두 번 눌러도 한 번만 나간다
+      if (보내는중) return;
+      보내는중 = true;
       const 고른것 = [...box.querySelectorAll('.plist.notify input:checked')].map(i => i.value);
       go.disabled = true;
       let 결과 = {sent_names: [], failed: []};
@@ -485,11 +516,16 @@ function 알릴팀을고른다(runId, keys, 전) {
         try {
           const res = await fetch(`/board/task/${runId}/related-departments/notify`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({keys: 고른것}),
+            body: JSON.stringify({keys: 고른것, save_id: 저장표}),
           });
-          결과 = res.ok ? await res.json()
-            // **통째로 실패해도 삼키지 않는다** — 고른 것을 전부 못 간 쪽에 적는다
-            : {sent_names: [], failed: 고른것.map(k => ({name: (이름.get(k) || {}).name || k, why: '보내지 못했습니다'}))};
+          // **통째로 실패해도 삼키지 않는다** — 고른 것을 전부 못 간 쪽에 적고,
+          // **서버가 말한 까닭을 그대로 싣는다**(저장 식별값이 틀렸을 때가 그렇다).
+          // 「보내지 못했습니다」 로 뭉뚱그리면 다시 저장하면 된다는 것을 모른다
+          const 몸 = await res.json().catch(() => ({}));
+          결과 = res.ok ? 몸
+            : {sent_names: [], failed: 고른것.map(k => ({
+                name: (이름.get(k) || {}).name || k,
+                why: 몸.detail || '보내지 못했습니다'}))};
         } catch (err) {
           결과 = {sent_names: [], failed: 고른것.map(k => ({name: (이름.get(k) || {}).name || k, why: '보내지 못했습니다'}))};
         }
@@ -506,9 +542,10 @@ function 결과를보인다(box, 팀들, 결과, resolve) {
   const 간것 = 결과.sent_names || [];
   const 이미 = 결과.already_names || [];
   const 못간것 = 결과.failed || [];
-  // **안 간 것을 「보냄」 이라고 적지 않는다** (4-11). 같은 (업무, 팀)으로 두
-  // 번째 저장하면 알림은 안 가는데, 그것을 보냄으로 적으면 화면이 없는 일을
-  // 말한다 — 세 갈래를 그대로 낸다
+  // **안 간 것을 「보냄」 이라고 적지 않는다** (4-11). 같은 저장이 겹치면
+  // (두 번 누르거나 재시도) 알림은 안 가는데, 그것을 보냄으로 적으면 화면이
+  // 없는 일을 말한다 — 세 갈래를 그대로 낸다. **다른 저장에서 체크한 팀은
+  // 보냄이다** — 열쇠에 저장 식별값이 들어 있다
   const 조각 = [];
   if (간것.length) 조각.push(`${간것.join(', ')} — 보냄`);
   if (이미.length) 조각.push(`${이미.join(', ')} — 이미 알림`);
@@ -1641,6 +1678,11 @@ function originOf(target) {
     // **드로어의 상태 칩은 2026-09-23 에 세 칸 버튼이 되어 메뉴를 안 연다**(4-9) —
     // 그 자리는 `#drawer` 안이라 위의 `drawer` 가 이미 안다
     pickcell: at('.cell.st.pick') || at('.asg.pick'),
+    // **기간 달력 팝업** — `#statmenu` 와 같은 자리다. 둘 다 `document.body`
+    // 아래 뜨므로 `#drawer` 안이 아니고, 모르면 팝업을 만지는 순간 「바깥
+    // 클릭」 이 되어 **드로어가 닫힌다.** 실제로 그랬고 `docs/checks/drawer.js`
+    // 가 「달력 취소 → 드로어가 닫힘」 으로 잡았다 (2026-09-24)
+    datepick: at('.datepick'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
@@ -1687,7 +1729,8 @@ addEventListener('click', () => {
   const 어느쪽이든 = k => down[k] || up[k];
   if (!어느쪽이든('relitem') && !어느쪽이든('statmenu') && !어느쪽이든('pickcell')) closeMenus();
   if (!dw.classList.contains('open')) return;
-  if (어느쪽이든('drawer') || 어느쪽이든('statmenu')) return;
+  // 기간 달력 팝업도 드로어가 띄운 것이다 — `body` 아래 뜬다고 바깥이 아니다
+  if (어느쪽이든('drawer') || 어느쪽이든('statmenu') || 어느쪽이든('datepick')) return;
   if (어느쪽이든('task')) return;         // 다른 업무를 여는 동작이다
   if (어느쪽이든('chrome')) return;       // 소속 선택·필터를 만질 때 닫히면 불편하다
   closeDrawer();

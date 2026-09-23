@@ -357,7 +357,7 @@ def test64_e02_알림_일부가_실패하면_결과에_적는다(admin_client, �
     """
     r = admin_client.post(
         f"/board/task/{업무['run']}/related-departments/notify",
-        json={"keys": ["sketch"]},
+        json={"keys": ["sketch"], "save_id": "e02aaaaaaaaa"},
     )
     assert r.status_code == 200, r.text
     답 = r.json()
@@ -368,8 +368,11 @@ def test64_e02_알림_일부가_실패하면_결과에_적는다(admin_client, �
     assert "못 보냄" in JS
 
 
-def test64_e03_같은_구성으로_다시_저장해도_두_번_안_간다(admin_client, 업무):
-    """`dedupe_key` 가 (업무, 그 팀) 하나다 — 같은 사람에게 두 번 서지 않는다.
+def test64_e03_같은_저장을_두_번_눌러도_한_통만_선다(admin_client, 업무):
+    """`dedupe_key` 가 (업무, 팀, **저장 식별값**) 셋이다 (2026-09-24 사람이 정함).
+
+    같은 저장을 두 번 누르거나 재시도하면 식별값이 같으므로 한 통만 선다.
+    **다른 저장이면 다시 간다** — 그쪽은 `test65_d01` 이 잰다.
 
     **그리고 두 번째는 「보냄」 이 아니라 「이미 알림」 이다** (4-11 — 「보냈는가」
     를 부풀리지 않는다). 처음에는 둘 다 `sent` 로 세어, 아무것도 안 갔는데
@@ -383,10 +386,10 @@ def test64_e03_같은_구성으로_다시_저장해도_두_번_안_간다(admin_
         db.commit()
         uid = u.id
     답들 = []
-    for _ in range(2):
+    for _ in range(2):   # **같은 식별값** — 두 번 누른 것과 같다
         r = admin_client.post(
             f"/board/task/{업무['run']}/related-departments/notify",
-            json={"keys": ["sketch"]},
+            json={"keys": ["sketch"], "save_id": "e03samesave"},
         )
         assert r.status_code == 200, r.text
         답들.append(r.json())
@@ -396,16 +399,16 @@ def test64_e03_같은_구성으로_다시_저장해도_두_번_안_간다(admin_
     with app_session() as db:
         수 = db.query(models.Notification).filter(
             models.Notification.user_id == uid,
-            models.Notification.dedupe_key == f"related:{업무['run']}:sketch",
+            models.Notification.dedupe_key == f"related:{업무['run']}:sketch:e03samesave",
         ).count()
-    assert 수 == 1, f"같은 구성으로 두 번 저장했더니 알림이 {수}건이다"
+    assert 수 == 1, f"같은 저장을 두 번 눌렀더니 알림이 {수}건이다"
 
 
 def test64_e04_모르는_부서_키는_거절한다(admin_client, 업무):
     """셋 중 둘만 가면 보낸 사람은 셋 다 갔다고 믿는다 (5-1 · 같은 규칙)."""
     r = admin_client.post(
         f"/board/task/{업무['run']}/related-departments/notify",
-        json={"keys": ["없는팀"]},
+        json={"keys": ["없는팀"], "save_id": "e04aaaaaaaaa"},
     )
     assert r.status_code == 400
 
