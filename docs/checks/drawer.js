@@ -90,6 +90,10 @@
  * 보임/숨김은 속성이 아니라 offsetParent 로 판정한다 — el.hidden 은 거짓말을 한다.
  */
 (async () => {
+// 상한은 **하나**다 — 항목마다 다른 값을 주는 길을 두지 않는다.
+// 점검 밖에 두는 것은 `뒷정리` 도 같은 값을 써야 하기 때문이다(커밋 전 검토)
+const 상한기본 = 3000;
+
 /* **묶임은 판마다 재지 않고 한 번만 잰다** (2026-09-24 커밋 전 검토).
    재는 데 `sleep(25)` 를 한 번 쓰는데 **그 한 번이 둘째 단에서 60초**라,
    자가시험처럼 점검을 스무 번 도는 자리에서는 **재는 도구가 재려던 시간을
@@ -173,8 +177,6 @@ const 점검 = async (옵션 = {}) => {
 
      **단, 주변이 무너졌으면 못 쟀음이 아니라 ✗ 입니다** — 기다리던
      것이 안 나타난 이유가 그 회귀일 수 있기 때문입니다(`check` 참조). */
-  // 상한은 **하나**다 — 항목마다 다른 값을 주는 길을 두지 않는다
-  const 상한기본 = 3000;
 
   /* **기다림을 하나씩 적어 둔다** (2026-09-24 · 지시문 3 · 봐둘것 BI-h).
      「왜 한 갈래가 10~12분인가」 를 가르려면 **무엇을 얼마나 기다렸고 그중
@@ -250,6 +252,15 @@ const 점검 = async (옵션 = {}) => {
   const 묶임 = await 느린가();
 
   if (!dw) return {치명: '이 화면에는 상세 패널이 없습니다 (/board · /calendar · /tasks 에서 돌리세요)', 묶임};
+
+  /* **처음 상태에서 시작한다** (2026-09-24 커밋 전 검토 · 봐둘것 BI-m).
+     재현한 고장은 **평소 점검** 쪽이었는데 고침을 자가시험에만 넣었었다 —
+     사람이 업무 하나를 열어 본 채 붙여넣으면 아래 `opener.click()` 이
+     그 행을 **접고**, 나오는 말이 「드로어가 열리지 않음」 이라 **앱
+     고장으로 읽힌다.** 목록은 펼침이 `?task=` 로 주소에 남아(4-14) 새로
+     고쳐도 다시 열린 채라 드문 상태가 아니다.
+     **자가시험이 쓰는 그 부품을 그대로 쓴다** — 두 벌이 되면 갈린다. */
+  const 시작뒷정리 = await 뒷정리();
 
   /* ── 전제: 넓은 화면인가 ──────────────────────────────────────────
      이 점검은 **1280px 위**를 전제로 씁니다 — 사이드바 갈래가 그 경계에서
@@ -1490,9 +1501,12 @@ const 점검 = async (옵션 = {}) => {
     + ' 아니라 이 판에서 답을 못 얻은 것입니다 (주변은 그대로인데'
     + ' 기다린 상태가 안 나타남 — 그 줄이 무엇을 기다리는지 보세요)');
   if (묶임) results.push('· ' + 묶임);
+  // **못 닫은 채로 시작했으면 말한다** — 삼키면 다음 줄들의 빨강이 무엇
+  // 탓인지 못 가른다(갈래별 `뒷정리못함` 과 같은 까닭)
+  if (시작뒷정리.length) results.push('· 시작할 때 못 닫은 것: ' + 시작뒷정리.join(' · '));
   console.table(results);
   return {화면: where, 통과: errors.length === 0 && 완주, 완주, 멈춤함, 실패: errors,
-          항목수: 잰것, 건너뜀, 못쟀음, 묶임, 항목: results};
+          항목수: 잰것, 건너뜀, 못쟀음, 묶임, 시작뒷정리, 항목: results};
 };
 
 /* ── 자가시험 — 고장을 심어서 검사를 검사한다 ───────────────────────
@@ -1537,6 +1551,20 @@ const 캡처막기 = (골라, 무엇 = 'click') => {
    손보면 **열리는 순간 지워지고 고장이 없던 일이 됩니다.** 실제로 그렇게
    넷이 「통과로 지나감」 으로 나왔습니다 (2026-09-12).
    그래서 **그 줄을 지켜보며 다시 쓸 때마다** 손봅니다. */
+/* **드로어 안의 노드는 다시 그릴 때 통째로 갈린다.** `줄을지켜본다` 는
+   그 노드 자신을 지켜보므로 **노드가 바뀌면 같이 사라진다** — `#statseg`
+   가 그랬다: 열 때마다 새 노드라 심은 고장이 지워지고 ⑰ 이 늘 「통과로
+   지나감」 이었다(봐둘것 BI-i · 3 → 2 → 3 으로 재어 확인했다).
+   그래서 **바뀌지 않는 바깥**(`#drawer`)을 지켜보며 다시 심는다. */
+const 드로어를지켜본다 = 손본다 => {
+  const dw = document.getElementById('drawer');
+  if (!dw) return () => {};
+  const ob = new MutationObserver(() => 손본다());
+  ob.observe(dw, {childList: true, subtree: true});
+  손본다();
+  return () => ob.disconnect();
+};
+
 const 줄을지켜본다 = 손본다 => {
   const 줄 = document.getElementById('dmoved');
   if (!줄) return () => {};
@@ -1585,6 +1613,20 @@ const 값을붙든다 = (언제, 값 = null) => {
   return () => { clearInterval(t); if (걸린것) delete 걸린것.textContent; };
 };
 
+/* **여기 없는 갈래가 둘 있다 — 사람이 정할 것으로 올렸다**(2026-09-24
+   커밋 전 검토). `뒷정리` 자체를 재는 둘인데, 지금 이 표의 모양
+   (`나와야` = 나와야 할 ✗ 문구)에 안 들어맞는다:
+
+     ㉠ 무언가를 연 채 끝나는 갈래  — 맞는 결과가 **「아무것도 안 빨간 것」**
+     ㉢ 닫는 길을 부순 갈래         — 맞는 결과가 `뒷정리못함` (✗ 가 아니다)
+
+   둘 다 이 판에서 **손으로 만들어 세 화면에서 쟀지만**(보고 3-4) 여기
+   안 남겼다. 그래서 지금은 누가 `뒷정리` 의 `Drawer.close()` 한 줄을
+   지워도 **자가시험이 조용히 초록**이다 — 11-3 이 「심기를 남기지 않으면
+   다음 입구는 못 잡는다」 고 적어 둔 바로 그 자리다.
+
+   어떤 꼴로 남길지(⑫ 에 얹을지 · 갈래에 플래그를 둘지 · 판마다 손으로
+   만들지)는 이 표의 모양을 바꾸는 일이라 혼자 정하지 않는다. */
 const 고장들 = [
   {갈래: '① 주변 붕괴', 고장: '드로어 안을 누르면 패널이 닫힌다',
    나와야: '드로어가 닫힘',
@@ -1745,27 +1787,70 @@ const 고장들 = [
    나와야: '상태 칸이',
    못심음: () => !document.getElementById('statseg'),
    심는다: () => {
-     const seg = document.getElementById('statseg');
-     const 뗀것 = seg.lastElementChild;
-     seg.removeChild(뗀것);
-     return () => { if (seg.isConnected) seg.appendChild(뗀것); };
+     // **다시 그려도 살아남게 심는다** — `#statseg` 는 드로어를 열 때마다
+     // 새 노드라, 한 번만 떼면 여는 순간 돌아오고 고장이 없던 일이 된다
+     let 뗀것 = null;
+     const 그만 = 드로어를지켜본다(() => {
+       const seg = document.getElementById('statseg');
+       if (seg && seg.children.length > 2) {
+         뗀것 = seg.lastElementChild;
+         seg.removeChild(뗀것);
+       }
+     });
+     return () => {
+       그만();
+       const seg = document.getElementById('statseg');
+       if (seg && 뗀것 && !뗀것.isConnected && seg.children.length < 3) seg.appendChild(뗀것);
+     };
    }},
   {갈래: '⑱ 켠 칸이 둘', 고장: '두 칸을 한꺼번에 켠다',
    나와야: '켜진 칸이',
    못심음: () => !document.getElementById('statseg'),
    심는다: () => {
-     const 칸들 = [...document.querySelectorAll('#statseg button')];
-     const 더켠것 = 칸들.filter(b => !b.classList.contains('on'));
-     더켠것.forEach(b => b.classList.add('on'));
-     return () => 더켠것.forEach(b => b.classList.remove('on'));
+     // ⑰ 과 같은 자리다 — `#statseg` 의 버튼은 드로어를 다시 그릴 때마다
+     // 새 노드라, 지금 있는 것에만 표시를 달면 여는 순간 고장이 사라진다
+     // **원래 켜져 있던 칸이 몇째인지 기억한다** — 다시 그려 손댄것이
+     // 낡았을 때 「첫 칸만 남긴다」 로 치우면 실제 상태가 완료인 업무가
+     // 대기로 보인다. 추측이 아니라 그때 본 값으로 되돌린다(커밋 전 검토)
+     let 손댄것 = [], 원래켠칸 = -1;
+     const 그만 = 드로어를지켜본다(() => {
+       const 칸들 = [...document.querySelectorAll('#statseg button')];
+       if (!칸들.length) return;
+       const 켜진 = 칸들.filter(b => b.classList.contains('on'));
+       if (켜진.length === 1) 원래켠칸 = 칸들.indexOf(켜진[0]);
+       const 더켤것 = 칸들.filter(b => !b.classList.contains('on'));
+       더켤것.forEach(b => b.classList.add('on'));
+       if (더켤것.length) 손댄것 = 더켤것;
+     });
+     return () => {
+       그만();
+       손댄것.forEach(b => b.classList.remove('on'));
+       const 칸들 = [...document.querySelectorAll('#statseg button')];
+       if (원래켠칸 >= 0 && 칸들.length > 원래켠칸)
+         칸들.forEach((b, i) => b.classList.toggle('on', i === 원래켠칸));
+     };
    }},
   {갈래: '⑲ 진단이 처음부터 펼쳐져 있음', 고장: '접힌 채로 안 시작한다',
    나와야: '진단이 처음부터 펼쳐져 있음',
    못심음: () => !document.getElementById('dgB'),
    심는다: () => {
-     const 몸 = document.getElementById('dgB');
-     const t = setInterval(() => { 몸.hidden = false; }, 5);
-     return () => clearInterval(t);
+     const 원래 = document.getElementById('dgB').hidden;
+     /* **판마다 다시 찾는다** — 처음 잡은 노드를 붙들면 드로어를 다시
+        그릴 때 그것이 떨어져 나가 **심은 것이 스스로 죽는다.** ⑰·⑱ 이
+        바로 그 자리였다(726초를 조용히 새던 곳 · 커밋 전 검토가 짚었다). */
+     const t = setInterval(() => {
+       const n = document.getElementById('dgB');
+       if (n) n.hidden = false;
+     }, 5);
+     /* **타이머만 끄면 펼친 채로 남는다** — 그러면 그다음 판이 전부
+        「진단이 처음부터 펼쳐져 있음」 으로 빨개지고, 맨 끝 판이 그것을
+        「걷히지 않은 고장」 으로 잡는다(2026-09-24 에 실제로 그랬다).
+        **지금 붙어 있는 노드**에 되돌린다 — 다시 그리며 갈렸을 수 있다. */
+     return () => {
+       clearInterval(t);
+       const 지금 = document.getElementById('dgB');
+       if (지금) 지금.hidden = 원래;
+     };
    }},
   {갈래: '⑳ 달력 팝업이 취소해도 안 닫힘', 고장: '취소를 먹는다',
    나와야: '취소해도 달력 팝업이 안 닫힘',
@@ -1807,6 +1892,66 @@ const 고장들 = [
    }},
 ];
 
+/* **갈래가 끝나면 점검이 열어 둔 것을 닫는다** (2026-09-24 · 봐둘것 BI-m).
+
+   앞 판은 맨 끝 깨끗한 판이 「드로어가 열리지 않음」 으로 죽는 것을
+   **「남은 메뉴」** 탓으로 적었는데 **그 진단이 틀렸다** — `#statmenu` 는
+   늘 DOM 에 있고 `display:none` 일 뿐이라, 존재만 보는 선택자가 숨은
+   요소를 잡은 것이었다(10장의 「속성이 아니라 화면을 확인한다」 를 검사
+   자신이 어겼다).
+
+   **진짜 까닭은 열린 채 끝난 드로어다.** 점검은 맨 처음에 `opener.click()`
+   을 **조건 없이** 누르는데, 목록에서 그 행의 드로어가 이미 열려 있으면
+   그 누름이 **접는다** — 그러면 「열렸다」 가 영영 참이 안 되어 치명이다.
+   드로어를 열어 둔 채 평소 점검을 돌려 그대로 재현했다.
+
+   그래서 **판과 판 사이를 처음 상태로 되돌린다.** 닫는 길은 점검이 이미
+   쓰는 그 단추들이고(새로 짓지 않는다), **닫혔는지 재어** 못 닫은 것을
+   돌려준다 — 조용히 넘어가면 다음 판의 실패가 무엇 탓인지 못 가른다. */
+const 뒷정리 = async () => {
+  const 보임 = el => !!(el && getComputedStyle(el).display !== 'none'
+                       && el.getBoundingClientRect().width > 0);
+  const 눌러 = el => { if (el) el.click(); };
+
+  // ① 떠 있는 것부터 — 점검이 쓰는 그 단추로 닫는다
+  눌러(document.querySelector('#dlog [data-cancel-edit]'));
+  눌러(document.querySelector('#prepick [data-close]'));
+  눌러(document.querySelector('.datepick .dpcancel'));
+
+  // ② 상태·담당자 메뉴는 단추가 없다 — 바깥을 눌러 닫는 그 길을 그대로 쓴다.
+  //    `originOf` 가 둘 다 바깥으로 보므로 드로어도 함께 닫힌다
+  if (보임(document.getElementById('statmenu'))) {
+    for (const t of ['pointerdown', 'pointerup', 'click'])
+      document.body.dispatchEvent(new PointerEvent(t,
+        {bubbles: true, clientX: 2, clientY: 2, detail: t === 'click' ? 1 : 0}));
+  }
+
+  // ③ 드로어는 앱이 가진 길로 닫는다
+  try { if (window.Drawer && Drawer.close) Drawer.close(); } catch (e) {}
+
+  // ④ **닫혔는지 잰다.** 전환이 있으므로 잠깐 본다
+  const 아직 = async () => {
+    const dw = document.getElementById('drawer');
+    const 남 = [];
+    if (dw && dw.classList.contains('open')) 남.push('드로어');
+    if (보임(document.getElementById('statmenu'))) 남.push('상태·담당자 메뉴');
+    if (document.querySelector('.datepick')) 남.push('기간 달력');
+    if (보임(document.getElementById('prepick'))) 남.push('선행 고르기');
+    if (document.querySelector('#dlog textarea.editbox')) 남.push('논의 편집창');
+    return 남;
+  };
+  /* **상한을 따로 두지 않는다** — 묶인 탭은 폴 한 번이 1초라(BI-h)
+     1500ms 면 폴 한 번뿐이고, 그러면 갈래마다 거짓 「뒷정리 실패」 가
+     서서 무효 문구가 엉뚱한 데를 가리킨다. 점검의 상한과 같이 간다. */
+  const 끝 = Date.now() + 상한기본;
+  for (;;) {
+    const 남 = await 아직();
+    if (!남.length) return [];
+    if (Date.now() >= 끝) return 남;
+    await 잠깐잔다(25);
+  }
+};
+
 const 자가시험 = async () => {
   const 시작한때 = Date.now();
   /* **묶였는지 먼저 말한다** (2026-09-24 · BI-h). 끝에 말하면 **열두 분을
@@ -1820,12 +1965,22 @@ const 자가시험 = async () => {
   window.__진행 = {묶임: 묶임먼저, 시작: Date.now(), 지난갈래: [], 지금: null};
   /* **재는 것이 있는지 먼저 본다.** 이미 빨간 판에서 심으면, 나온 ✗ 가
      내가 심은 것인지 원래 있던 것인지 갈 수 없다 (점검 자신의 ③ 과 같은 자리). */
+  /* **시작 상태를 되돌리는 것은 이제 점검이 한다** — 그 머리에서 부르고
+     못 닫은 것을 자기 항목에 적는다. 여기서 또 부르면 두 벌이 되고,
+     그때 「못 닫았다」 를 누가 말하는지가 갈린다(커밋 전 검토). */
   const 깨끗 = await 점검();
-  if (깨끗.치명) return {자가시험: false, 치명: 깨끗.치명, 묶임: 묶임먼저};
+  /* **시작할 때 못 닫은 것은 치명이 아니어도 싣는다** — 갈래별
+     `뒷정리못함` 은 0 이어도 내기로 해 놓고 이 자리만 기준이 달랐다.
+     빠지면 「무엇 위에서 재기 시작했나」 가 결과에 안 남는다(커밋 전 검토). */
+  const 시작뒷정리 = (깨끗.시작뒷정리 || []).length ? 깨끗.시작뒷정리 : undefined;
+  if (깨끗.치명) return {자가시험: false, 치명: 깨끗.치명, 묶임: 묶임먼저, 시작뒷정리};
   if (깨끗.실패.length) return {자가시험: false, 실패: 깨끗.실패,
     까닭: '심기 전부터 ✗ 가 있습니다 — 그것을 먼저 고치세요'};
 
   const 표 = [];
+  // **뒷정리 실패는 「무효」 와 따로 센다** — 뭉치면 다음 판의 빨강이
+  // 걷히지 않은 고장 탓인지 못 닫은 것 탓인지 안 갈린다 (사람이 정함)
+  const 뒷정리못함 = [];
   let 놓친갈래 = 0, 못심은갈래 = 0;
   /* **어디까지 갔는지 창에 남긴다** (2026-09-24). 표는 맨 끝에 한 번
      찍히므로, 한복판에서 멈추면 **그때까지 아무것도 안 남는다** — 어느
@@ -1859,8 +2014,15 @@ const 자가시험 = async () => {
     const 걷어낸다 = g.심는다(깨끗.항목);
     let 판;
     const 잰때 = Date.now();
+    let 뒷정리탈 = [];
     try { 판 = await 점검({멈춤}); } finally { 걷어낸다(); }
+    /* **걷어낸 다음에 닫는다** — 고장이 살아 있는 채로 닫으려 하면
+       그 고장이 닫는 누름까지 막는다(⑧ 이 그 꼴이다). */
+    // **걸린초는 재는 데 든 시간이다** — 치우는 시간을 섞으면 BI-i 표의
+    // 수가 「그 갈래를 재는 데 걸린 시간」 이 아니게 된다(커밋 전 검토)
     const 걸린초 = Math.round((Date.now() - 잰때) / 100) / 10;
+    뒷정리탈 = await 뒷정리();
+    if (뒷정리탈.length) 뒷정리못함.push({갈래: g.갈래, 남은것: 뒷정리탈});
     const 실패 = (판.실패 || []).map(String);
     /* **건너뜀 갈래는 ✗ 가 아닌 것이 정답이다.** 그 `·` 줄이 나오고
        ✗ 가 하나도 안 늘어야 잡은 것이다 — 심었는데 ✗ 가 나면 그쪽이
@@ -1915,9 +2077,15 @@ const 자가시험 = async () => {
      줄은 남기되 믿을 수 없다는 것을 나온것이 스스로 말한다. */
   const 끝깨끗 = await 점검();
   const 다걷혔나 = !끝깨끗.치명 && 끝깨끗.실패.length === 0;
-  if (!다걷혔나) console.error('자가시험 — 맨 끝 깨끗한 판이 빨갛습니다:'
-    + ' 걷히지 않은 고장이 있다는 뜻이라 **이 판의 판정 전체가 무효**입니다',
-    끝깨끗.치명 || 끝깨끗.실패);
+  /* **빨간 까닭을 뭉치지 않는다** (2026-09-24 사람이 정함 · BI-m). 맨 끝
+     판이 빨간 데는 두 가지가 있고 **사람이 할 일이 다르다** — 고장이 안
+     걷힌 것(심기·걷기를 봐야 한다)과 앞 갈래가 열어 둔 것을 못 닫은 것
+     (뒷정리를 봐야 한다). 하나로 적으면 엉뚱한 데를 판다. */
+  const 뒷정리탓 = 뒷정리못함.length > 0;
+  if (!다걷혔나) console.error('자가시험 — 맨 끝 깨끗한 판이 빨갛습니다: '
+    + (뒷정리탓 ? '**앞 갈래 뒷정리 실패**가 있었습니다 — 그쪽을 먼저 보세요'
+               : '걷히지 않은 고장이 있다는 뜻이라 **이 판의 판정 전체가 무효**입니다'),
+    끝깨끗.치명 || 끝깨끗.실패, 뒷정리못함);
 
   window.__진행.지금 = null;
   console.table(표);
@@ -1928,7 +2096,11 @@ const 자가시험 = async () => {
   const 잰갈래 = 고장들.length - 못심은갈래;
   if (!잰갈래) console.warn('자가시험 — 이 계정·화면에서는 심을 수 있는 갈래가 하나도 없습니다');
   return {자가시험: 다걷혔나 && 놓친갈래 === 0 && 잰갈래 > 0,
-          무효: 다걷혔나 ? undefined : '맨 끝 깨끗한 판이 빨감 — 걷히지 않은 고장',
+          무효: 다걷혔나 ? undefined
+            : 뒷정리탓 ? '맨 끝 깨끗한 판이 빨감 — **앞 갈래 뒷정리 실패** (걷히지 않은 고장이 아니다)'
+            : '맨 끝 깨끗한 판이 빨감 — 걷히지 않은 고장',
+          // **못 닫은 것은 0 이어도 낸다** — 빈 것과 「안 봤다」 가 갈려야 한다
+          뒷정리못함, 시작뒷정리,
           화면: 깨끗.화면, 갈래: 표,
           잰갈래, 놓친갈래, 못심은갈래,
           // **걸린 시간을 낸다** — 한 화면이 얼마나 걸리는지 모르면 다음
