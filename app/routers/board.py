@@ -1136,13 +1136,18 @@ def notify_related_departments(
     sent: list[str] = []
     already: list[str] = []
     failed: list[dict] = []
-    걸러진수 = 0
+    # **사정은 로그에만 팀별로 적는다** (2026-09-24 사람이 정함) — 화면 문구는
+    # 두 경우가 같은 한 말이다. 「사람이 아예 없다」 와 「전부 열람 전용이다」 는
+    # 총무팀이 할 일이 다르지만(사람을 붙이는 것과 권한을 바꾸는 것), 화면에
+    # 가려 적으면 그 팀의 소속 구성이 드러난다. **이름과 아이디는 안 남긴다.**
+    로그: list[str] = []
     for key in payload.keys:
         dept = dept_by_key[key]
         try:
             # **위험 점검과 같은 자리다** — 그 부서 소속에서 열람 전용을 뺀다
+            소속 = perm.members_of(db, key)
             people = department_members(db, dept.id)
-            걸러진수 += len(perm.members_of(db, key)) - len(people)
+            걸러진 = len(소속) - len(people)
             # **누른 사람 자신은 여기서 뺀다.** `notify` 도 `exclude_user_id` 로
             # 빼지만, 거기서 빠지면 만든 것이 0 이 되어 아래의 「이미 알림」
             # 갈래로 떨어진다 — 처음 보내는데 화면이 「이미 알림」 이라고
@@ -1152,7 +1157,18 @@ def notify_related_departments(
             if not people:
                 # **못 간 것은 못 갔다고 말한다** — 받을 사람이 없는 팀에
                 # 「보냄」 이라고 적으면 아무도 안 봤다는 사실이 사라진다.
-                # 전부 열람 전용이라 빈 것도 여기로 온다(사람이 정한 그 자리)
+                # 전부 열람 전용이라 빈 것도 여기로 온다(사람이 정한 그 자리).
+                # **화면 문구는 한 말이고 사정은 로그가 가른다** — 바로 아래.
+                #
+                # 셋째 갈래(`누른사람뿐`)는 **누른 사람이 그 팀의 유일한 받을
+                # 사람**일 때다. 앞의 둘과 달리 총무팀이 고칠 것이 없다 — 자기
+                # 알림을 자기에게 안 보내는 것뿐이다. 이름을 「받을사람없음」
+                # 으로 두면 **셋 다에 맞는 말**이라 가른 뜻이 없어진다
+                # (2026-09-24 검토가 짚었다)
+                사정 = ("소속없음" if not 소속
+                      else "전원열람전용" if 걸러진 == len(소속)
+                      else "누른사람뿐")
+                로그.append(f"{key}:못감({사정},거른사람={걸러진})")
                 failed.append({"key": key, "name": dept.name, "why": "받을 사람이 없습니다"})
                 continue
             만든것 = notify(
@@ -1177,13 +1193,16 @@ def notify_related_departments(
             # 열쇠에 저장 식별값이 들어갔으므로, 다른 저장에서 체크한 팀은
             # 위의 `sent` 로 간다
             (sent if 만든것 else already).append(key)
+            로그.append(f"{key}:{'보냄' if 만든것 else '이미'}(거른사람={걸러진})")
         except Exception as exc:   # noqa: BLE001 — 한 팀이 막혀도 나머지는 간다
+            로그.append(f"{key}:막힘")
             failed.append({"key": key, "name": dept.name, "why": str(exc) or "보내지 못했습니다"})
     db.commit()
     # 서버 로그에 한 줄 — 무엇이 갔고 무엇이 못 갔는지가 앱 밖에도 남는다
-    print(f"[관련팀 알림] run={run.id} 보냄={sent} 이미={already} "
-          f"못감={[f['key'] for f in failed]} 열람전용으로_거른_사람={걸러진수}",
-          flush=True)
+    # **팀별로 한 조각씩** — 합으로만 적으면 팀이 둘 이상일 때 어느 팀에서
+    # 몇을 걸렀는지 되짚을 수 없다. 팀 키와 사정과 수만 적고 **사람 이름과
+    # 아이디는 안 적는다**(로그도 새는 자리다 — 11-2)
+    print(f"[관련팀 알림] run={run.id} " + " ".join(로그), flush=True)
     return {
         "sent": sent,
         "sent_names": [dept_by_key[k].name for k in sent],
