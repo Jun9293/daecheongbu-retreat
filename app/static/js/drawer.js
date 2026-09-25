@@ -1683,6 +1683,9 @@ function originOf(target) {
     // 클릭」 이 되어 **드로어가 닫힌다.** 실제로 그랬고 `docs/checks/drawer.js`
     // 가 「달력 취소 → 드로어가 닫힘」 으로 잡았다 (2026-09-24)
     datepick: at('.datepick'),
+    // **업무 추가 팝업**(6-7) — 달력 팝업과 같은 까닭이다. `body` 아래 뜨므로
+    // 모르면 팝업을 만지는 순간 드로어가 닫힌다
+    addpop: at('.addpop'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
@@ -1730,7 +1733,8 @@ addEventListener('click', () => {
   if (!어느쪽이든('relitem') && !어느쪽이든('statmenu') && !어느쪽이든('pickcell')) closeMenus();
   if (!dw.classList.contains('open')) return;
   // 기간 달력 팝업도 드로어가 띄운 것이다 — `body` 아래 뜬다고 바깥이 아니다
-  if (어느쪽이든('drawer') || 어느쪽이든('statmenu') || 어느쪽이든('datepick')) return;
+  if (어느쪽이든('drawer') || 어느쪽이든('statmenu') || 어느쪽이든('datepick')
+      || 어느쪽이든('addpop')) return;
   if (어느쪽이든('task')) return;         // 다른 업무를 여는 동작이다
   if (어느쪽이든('chrome')) return;       // 소속 선택·필터를 만질 때 닫히면 불편하다
   closeDrawer();

@@ -26,6 +26,14 @@
         <td class="cal-cell{{ ' out' if not cell.in_month }}{{ ' today' if cell.is_today }}"
             data-date="{{ cell.date }}">
           <span class="cal-d">{{ cell.day_label }}</span>
+          {#- 이 날짜로 업무를 추가한다 (6-7) — 그 날짜가 채워진 채로 팝업이 열린다.
+              이 달 밖 칸에는 안 단다: 점도 거기엔 안 놓는다(4-13) -#}
+          {% if cell.in_month and user and not is_readonly(user) %}
+          <button type="button" class="calplus" data-addpop
+                  data-addpop-sub="{{ cell.date[5:7]|int }}/{{ cell.date[8:]|int }} 에 추가"
+                  data-addpop-date="{{ cell.date }}"
+                  aria-label="{{ cell.date }} 에 업무 추가">+</button>
+          {% endif %}
           {% for dot in cell.dots %}{{ caldot(dot) }}{% endfor %}
           {% if cell.more %}
           <details class="cal-more">
@@ -51,7 +59,13 @@
       {% for cell in week %}
         {% if cell.dots or cell.more %}
         <div class="calday{{ ' today' if cell.is_today }}" data-date="{{ cell.date }}">
-          <span class="calday-d">{{ cell.day_label }}<i>{{ cal.weekdays[cell.weekday] }}</i></span>
+          <span class="calday-d">{{ cell.day_label }}<i>{{ cal.weekdays[cell.weekday] }}</i>
+            {% if user and not is_readonly(user) %}
+            <button type="button" class="calplus" data-addpop
+                    data-addpop-sub="{{ cell.date[5:7]|int }}/{{ cell.date[8:]|int }} 에 추가"
+                    data-addpop-date="{{ cell.date }}"
+                    aria-label="{{ cell.date }} 에 업무 추가">+</button>
+            {% endif %}</span>
           <div class="calday-l">
             {% for dot in cell.dots + cell.more %}{{ caldot(dot) }}{% endfor %}
           </div>

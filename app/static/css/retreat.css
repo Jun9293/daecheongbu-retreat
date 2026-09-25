@@ -1619,7 +1619,24 @@ button.btn:disabled{opacity:.4;cursor:default}
 .cal-wd{font-size:var(--fz-md);font-weight:500;color:var(--ink-2);padding:0 0 7px;
   text-align:left;border-bottom:1px solid var(--rule)}
 .cal-wd:first-child,.calweek .calday-d i{color:var(--now)}   /* 일요일 */
-.cal-cell{vertical-align:top;height:120px;padding:5px 4px 7px;
+/* 날짜 칸의 「+」 — 그 날짜로 업무를 추가한다 (6-7).
+   **늘 보이면 한 달에 서른 개가 서서 점보다 눈에 띈다**(4-3 의 「시선은 미완료로」).
+   그래서 호버·초점에서만 보인다. 다만 **손가락에는 호버가 없으므로**(4-0 의 그
+   자리) `hover:none` 인 기기에서는 옅게 늘 보인다 — 안 그러면 그 기기에서만
+   여는 길이 통째로 없다. */
+/* **누르는 칸은 24px 이상**(4-14 이 상위 표시에서 정한 그 하한) — 호버가 없는
+   기기에서는 이것이 늘 보이는 유일한 여는 길이라 더 그렇다 */
+.calplus{position:absolute;right:1px;top:1px;width:24px;height:24px;line-height:1;
+  font:inherit;font-size:var(--fz-md);color:var(--ink-3);background:none;border:none;
+  border-radius:var(--r);cursor:pointer;opacity:0;padding:0}
+.cal-cell:hover .calplus,.calplus:focus-visible{opacity:1}
+.calplus:hover{background:var(--hover);color:var(--ink)}
+.calday-d{position:relative}
+.calday-d .calplus{right:-6px;top:-2px}
+.calday:hover .calplus{opacity:1}
+@media (hover:none){.calplus{opacity:.55}}
+
+.cal-cell{position:relative;vertical-align:top;height:120px;padding:5px 4px 7px;
   border-bottom:1px solid var(--rule);border-right:1px solid var(--rule)}
 .cal-cell:last-child{border-right:0}
 .cal-d{display:block;font-size:var(--fz-md);color:var(--ink-2);margin-bottom:4px;
@@ -2423,3 +2440,39 @@ body.dopen:has(.drawer.inline){padding-right:0}
   font:inherit;font-size:var(--fz-md);color:var(--ink-2);padding:1px 8px;cursor:pointer}
 .eplaces .pl:hover{background:var(--hover);color:var(--ink)}
 .eplaces .pl.detach:hover{color:var(--red-ink);border-color:var(--red-ink)}
+
+/* 업무 추가 팝업 (6-7 · 목업 C) — 보드·달력에서 뜨고, 옛 화면(`/board/add`)은
+   같은 몸통을 그대로 페이지에 그린다(`partials/addpop.html`).
+   **모서리는 눈금 둘뿐이다**(4-0) — 목업의 10px 을 그대로 쓰면 셋째가 생긴다.
+   달력 팝업에서 6px 을 안 들인 것과 같은 자리. */
+.addpop{position:fixed;z-index:70;width:min(640px,calc(100vw - 16px));
+  max-height:calc(100vh - 40px);display:flex;flex-direction:column;
+  background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-lg);
+  box-shadow:0 18px 44px -18px rgba(38,40,58,.5)}
+/* 윗줄 44px — 어디든 잡고 끌면 옮겨진다(× 는 뺀다) */
+.addpop .apbar{flex:none;height:44px;display:flex;align-items:center;gap:8px;
+  padding:0 8px 0 14px;background:var(--side);border-bottom:1px solid var(--rule);
+  border-radius:var(--r-lg) var(--r-lg) 0 0;cursor:move;touch-action:none;user-select:none}
+/* 목업 C 는 14.5px 이라고 적었지만 **4-0 의 눈금 밖**이라 목록 단으로 둔다 —
+   문서 머리의 그 표와 같은 판단(사이드바 13px · 모서리 6px 을 안 들인 자리). */
+.addpop .apbar b{font-size:var(--fz-md);font-weight:600}
+.addpop .apbar .apsub{font-size:var(--fz-sm);color:var(--ink-3);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addpop .apx{margin-left:auto;flex:none;width:28px;height:28px;font:inherit;font-size:var(--fz-xl);
+  line-height:1;background:none;border:none;border-radius:var(--r);color:var(--ink-2);cursor:pointer}
+.addpop .apx:hover{background:var(--hover);color:var(--ink)}
+.addpop .apbody{overflow:auto;padding:14px 16px 18px}
+.addpop .apbody.apwait{color:var(--ink-2);font-size:var(--fz-md)}
+.addpop .lib{max-height:240px;overflow:auto}
+/* 첫 줄 — 옆의 값이 뜻을 다 지는 자리가 아니라 혼자 서는 안내라 보조색이다 (4-0) */
+.aplead{font-size:var(--fz-sm);color:var(--ink-2);margin:0 0 14px;line-height:1.55}
+.apsec + .apsec{margin-top:26px;padding-top:20px;border-top:1px solid var(--rule)}
+.apsec h3{font-size:var(--fz-lg);font-weight:600;margin:0 0 4px}
+.apsec .apsub2{font-size:var(--fz-sm);color:var(--ink-2);margin:0 0 14px;line-height:1.5}
+.apdate{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:30px}
+.apdates{font-size:var(--fz-md);color:var(--ink)}
+.apdates:not([data-start=""]){font-variant-numeric:tabular-nums}
+/* 「날짜 없음 — …」 은 혼자 뜻을 지는 글자라 보조다 (4-0) */
+.apdates[data-start=""]{color:var(--ink-2)}
+/* 까닭은 틀린 칸 바로 아래에 (4-9) — 혼자 뜻을 지는 글자라 목록 단 (4-0) */
+.aperr{display:block;font-size:var(--fz-md);color:var(--red-ink);margin-top:6px}

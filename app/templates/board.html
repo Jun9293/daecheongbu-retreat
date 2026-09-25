@@ -14,7 +14,7 @@
     {{ board.done }}/{{ board.total }} 완료{% if board.late %} · 지연 {{ board.late }}건{% endif %}
   </span>
   {% if not is_readonly(user) %}
-  <a class="addlink" href="/board/add">+ 업무 추가</a>
+  <a class="addlink" href="/board/add" data-addpop data-addpop-sub="보드에서">+ 업무 추가</a>
   {% endif %}
   <div class="legend">
     <span class="lg"><i class="k-main"></i>Main</span>
@@ -133,4 +133,5 @@
 <script src="{{ static('js/datepick.js') }}" defer></script>
 <script src="{{ static('js/drawer.js') }}" defer></script>
 <script src="{{ static('js/board.js') }}" defer></script>
+<script src="{{ static('js/board_add.js') }}" defer></script>
 {% endblock %}

@@ -151,6 +151,15 @@ document.addEventListener('wheel', e => {
   goMonth(month);
 }, {passive: false});
 
+/* 업무 추가 팝업(6-7)이 저장한 뒤 — **보던 달을 잃지 않는다.** 페이지를 다시
+   그리면 달·범위 칩·미완료만이 처음으로 돌아간다(4-13 의 그 까닭). */
+if (window.업무추가) window.업무추가.다시그린다 = () => {
+  const g = grid();
+  if (!g) return false;        // 못 그렸다 — 부른 쪽이 페이지를 다시 그린다
+  goMonth(g.dataset.month);
+  return true;
+};
+
 const dots = runId => [...document.querySelectorAll(`.cal-dot[data-run="${runId}"]`)];
 
 /* 같은 업무가 여러 곳에 있다 — 월 격자, 좁은 화면의 주 목록, 그리고
