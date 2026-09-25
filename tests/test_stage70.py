@@ -112,12 +112,18 @@ def test70_b03_달력을_새로_만들지_않는다():
         assert 만드는말 not in 팝업JS, f"팝업이 달력을 스스로 그리려 한다 ({만드는말})"
 
 
-def test70_b04_서버는_ISO_를_그대로_받는다():
-    """0단계 훑기의 그 결론 — 규약이 안 바뀌었다는 것을 붙든다."""
-    assert "dt.date.fromisoformat(payload.start)" in 라우터
-    assert "기간을 다시 골라주세요." in 라우터
-    # 화면도 ISO 를 그대로 싣는다 (`dataset.start` 가 `YYYY-MM-DD` 다)
-    assert "start: 날짜.dataset.start || ''" in 팝업JS
+def test70_b04_팝업은_그_엔드포인트로_보낸다():
+    """2단계가 정한 규약 — **여는 방식만 바뀌었지 저장 경로는 그대로다**(6-7).
+
+    **날짜를 어떻게 읽는지는 여기서 안 본다.** 전에는 이 시험이
+    「서버는 ISO 를 그대로 받는다」 였는데, 그 단언 둘이 3단계 뒷정리 뒤
+    `test71_d03` 과 **글자까지 같아졌다** — 같은 사실이 두 곳이면 갈린다
+    (2026-09-25 두 번째 검토). 날짜 쪽은 `tests/test_stage71.py` 가 지고,
+    여기는 이 판이 실제로 붙든 것(저장 경로)만 짚는다.
+    """
+    assert "/board/add/new" in 팝업JS
+    assert "/board/add/existing" in 팝업JS
+    assert "/board/add/form" in 팝업JS, "몸통을 받아 가는 곳이 바뀌었다"
 
 
 def test70_b05_까닭_글은_템플릿이_들고_JS_가_지우지_않는다():

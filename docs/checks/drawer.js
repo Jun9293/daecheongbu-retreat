@@ -1533,6 +1533,31 @@ const 점검 = async (옵션 = {}) => {
           ' 상위를 안 고르면 그 칸 아래에 까닭', '상위를 안 골랐는데 까닭이 안 뜬다');
         q('#nkind button[data-v="main"]').click();
 
+        /* **날짜를 안 고른 것은 잘못이 아니다** (2026-09-25 사람이 정함 · 봐둘것 BJ-c).
+           안 고르면 날짜 없는 업무가 되고 달력이 따로 모아 둔다(4-13). 그러니
+           **막는 글이 뜨면 안 된다** — 위에서 빈 채로 눌렀을 때 뜬 까닭은 이름과
+           상위 둘뿐이어야 한다.
+
+           **여기서도 저장은 안 누른다**(10장) — 누르면 업무가 생기고 그것은 지울
+           길이 없다(0장). 서버가 실제로 받는지는 `tests/test_stage71.py` 가 잰다. */
+        if (날짜.dataset.start) {
+          results.push('· 날짜가 이미 채워져 있어 「안 골라도 안 막힌다」 는 건너뜀');
+        } else {
+          /* **단추를 먼저 잰다** — `잰다` 는 까닭에 그 갈래의 `나와야` 가
+             들어간 ✗ 를 만나면 **그 자리에서 던진다**. 아래 「막는 글」 이
+             ㉖ 의 `나와야` 라, 그것을 먼저 두면 여기까지 못 온다 —
+             심어도 안 재는 줄이 된다(2026-09-25 두 번째 검토). 이 줄의
+             까닭에는 `나와야` 가 없어 ✗ 여도 안 던지고, 그다음 줄이
+             제 노릇을 그대로 한다. */
+          잰다(!q('#addNew').disabled, ' 날짜가 비어도 만들기 단추가 살아 있음',
+            '날짜가 비면 만들기 단추가 죽는다');
+          const 막는글 = [...pop.querySelectorAll('.aperr')].filter(el => !el.hidden)
+            .map(el => el.textContent.trim())
+            .filter(t => /기간|날짜/.test(t));
+          잰다(막는글.length === 0,
+            ' 날짜를 안 골라도 막는 글이 안 뜸', `날짜를 안 골랐다고 막는다 (${막는글.join(' · ')})`);
+        }
+
         // 라이브러리 줄 — **고르기만 하고 누르지 않는다**
         const 줄 = pop.querySelector('.trow[data-i]');
         if (줄) {
@@ -1988,6 +2013,40 @@ const 고장들 = [
 
         **옮긴 적이 없는 업무를 연 판에서는 못 심는다** — 그 줄이 아예
         안 뜬다. 그때는 ✗ 가 아니라 「못 심음」 이 그쪽의 정답이다. */
+  /* **옛 동작을 되돌려 심는다** — 2026-09-25 전에는 날짜를 안 고르고 저장하면
+     서버가 400 을 냈고 화면은 그 까닭을 `#nerrsave` 에 냈다. 그 자리가 되살아나면
+     「안 고른 것」 이 다시 「잘못 고른 것」 이 된다 (봐둘것 BJ-c). */
+  {갈래: '㉖ 업무 추가 — 날짜를 안 골랐다고 막음', 고장: '빈 날짜에 막는 글이 뜬다',
+   나와야: '날짜를 안 골랐다고 막는다',
+   못심음: 항목 => 항목.some(r => String(r).includes('여는 자리가 없어')
+     || String(r).includes('날짜가 이미 채워져 있어')),
+   심는다: () => {
+     const f = e => {
+       const b = e.target instanceof Element && e.target.closest('#addNew');
+       if (!b) return;
+       const pop = document.getElementById('addpop');
+       const 날짜 = pop && pop.querySelector('#ndates');
+       if (!날짜 || 날짜.dataset.start) return;
+       const 줄 = pop.querySelector('#nerrsave');
+       줄.textContent = '기간을 다시 골라주세요.';
+       줄.hidden = false;
+       /* **단추도 함께 죽인다** — 그러지 않으면 「만들기 단추가 살아 있음」
+          항목이 이 갈래에서도 참이라 **아무것도 안 재는 줄**이 된다
+          (2026-09-25 커밋 전 검토). 지금 코드는 `#addNew` 의 `disabled` 를
+          어디서도 안 건드리므로, 그 줄은 심어야만 빨개진다. */
+       b.disabled = true;
+     };
+     /* **캡처가 아니라 거품 단계다** — 앱의 `addNew` 핸들러가 맨 앞에서
+        `#nerrsave` 를 끄므로, 캡처에서 켜면 **그 직후에 앱이 도로 끈다**
+        (그렇게 심었더니 통과로 지나갔다). 뒤에 서야 심은 것이 남는다. */
+     document.addEventListener('click', f, false);
+     return () => {
+       document.removeEventListener('click', f, false);
+       const b = document.getElementById('addNew');
+       if (b) b.disabled = false;   // 안 되살리면 다음 갈래가 통째로 흔들린다
+     };
+   }},
+
   {갈래: '⑬ 끈 자리 — 줄이 빈다', 고장: '어느 자리를 따르는지 글이 사라진다',
    나와야: '옮긴 자리 줄이 비어 있음',
    못심음: 항목 => 항목.some(r => String(r).includes('손으로 옮긴 적이 없어')),
