@@ -1466,6 +1466,160 @@ const 점검 = async (옵션 = {}) => {
       } else results.push('· 기간을 가진 점이 없거나 좁은 화면이라 건너뜀');
     }
 
+    /* ── 업무 추가 팝업 (6-7 · 목업 C) ───────────────────────────────
+       **여는 자리가 있는 화면에서만 돈다** — 보드의 「+ 업무 추가」 와 달력
+       날짜 칸의 「+」 다. 목록에는 그 자리가 없다.
+
+       **아무것도 저장하지 않는다**(10장 · 2026-09-24). 「선택한 업무 추가」 와
+       「새 업무 만들기」 를 실제로 누르면 **업무가 생기고 그것은 지울 길이
+       없다**(0장) — 점검 한 번이 라이브러리와 다음 회차의 자동 분류(6-2)를
+       영영 바꾼다. 그래서 **저장 직전까지**만 잰다: 고른 수가 늘고 단추가
+       켜지는 것, 그리고 빈 채로 눌렀을 때 나오는 까닭 글 둘. */
+    const 여는자리 = document.querySelector('[data-addpop]');
+    if (!여는자리 || !shown(여는자리)) {
+      results.push('· 업무 추가 팝업 — 이 화면·계정에는 여는 자리가 없어 건너뜀');
+    } else {
+      const 주소전 = location.pathname + location.search;
+      여는자리.click();
+      const 떴나 = await 잠깐본다(() => {
+        const p = $('addpop');
+        return p && p.querySelector('[data-add-root]');
+      }, 4000);
+      if (!떴나) {
+        잰다(false, ' 업무 추가 팝업이 뜸', '업무 추가 팝업이 안 뜬다');
+      } else {
+        const pop = $('addpop'), q = sel => pop.querySelector(sel);
+        잰다(location.pathname + location.search === 주소전,
+          ' 팝업이 뜨고 화면을 안 옮김', '업무 추가가 화면을 옮긴다');
+
+        // 구역 순서 — 새 업무 만들기가 위, 라이브러리에서 넣기가 아래
+        const 제목들 = [...pop.querySelectorAll('.apsec h3')].map(h => h.textContent.trim());
+        잰다(제목들[0] === '새 업무 만들기' && 제목들[1] === '라이브러리에서 넣기',
+          ` 구역 순서 (${제목들.join(' → ')})`, '업무 추가 구역 순서가 뒤집혔다');
+
+        // 날짜 줄 — 비었으면 그렇다고 적는다 (목업 C)
+        const 날짜 = q('#ndates');
+        if (!날짜.dataset.start) {
+          잰다(날짜.textContent.includes('날짜 없음'),
+            ' 날짜가 비면 「날짜 없음」 으로 말함', '빈 날짜 줄이 아무 말도 안 한다');
+        } else {
+          잰다(/\d{4}/.test(날짜.textContent),
+            ` 날짜가 채워져 뜸 (${날짜.dataset.start})`, '채워진 날짜가 줄에 안 보인다');
+        }
+
+        // 달력 단추는 **드로어와 같은 부품**을 연다 — 두 벌이면 고르는 차례가 갈린다
+        q('#ncalbtn').click();
+        await 잠깐본다(() => document.querySelectorAll('.datepick').length > 0, 2000);
+        const 달력들 = document.querySelectorAll('.datepick');
+        잰다(달력들.length === 1 && !!window.DatePick && window.DatePick.isOpen(),
+          ` 달력이 같은 부품 하나로 뜸 (${달력들.length}개)`, '업무 추가의 달력이 따로 논다');
+        window.DatePick?.close();
+        await 잠깐본다(() => !document.querySelector('.datepick'), 1500);
+
+        // 하위를 고르면 상위 칸이 뜨고 첫 줄이 고르지 않은 자리다
+        q('#nkind button[data-v="sub"]').click();
+        잰다(!q('#parentField').hidden && q('#nparent').options[0]
+             && q('#nparent').options[0].value === '',
+          ' 하위를 고르면 상위 칸이 뜸', '하위인데 상위 칸이 안 뜬다');
+
+        // 까닭 글 둘 — **저장은 안 된다**(이름이 비었고 상위도 안 골랐다)
+        q('#ntitle').value = '';
+        q('#addNew').click();
+        await 잠깐본다(() => !q('#nerrtitle').hidden, 1500);
+        잰다(!q('#nerrtitle').hidden && q('#nerrtitle').textContent.trim().length > 0,
+          ` 이름이 비면 그 칸 아래에 까닭 (${q('#nerrtitle').textContent.trim()})`,
+          '이름이 비었는데 까닭이 안 뜬다');
+        잰다(!q('#nerrparent').hidden && q('#nerrparent').textContent.trim().length > 0,
+          ' 상위를 안 고르면 그 칸 아래에 까닭', '상위를 안 골랐는데 까닭이 안 뜬다');
+        q('#nkind button[data-v="main"]').click();
+
+        // 라이브러리 줄 — **고르기만 하고 누르지 않는다**
+        const 줄 = pop.querySelector('.trow[data-i]');
+        if (줄) {
+          줄.click();
+          잰다(q('#pickCount').textContent === '1' && !q('#addExisting').disabled,
+            ' 라이브러리 줄을 고르면 수가 늘고 단추가 켜짐', '고른 수·단추가 안 따라온다');
+          줄.click();
+          잰다(q('#pickCount').textContent === '0' && q('#addExisting').disabled,
+            ' 다시 누르면 0건이 되고 단추가 꺼짐', '고른 것을 못 푼다');
+        } else results.push('· 라이브러리에 넣을 것이 남지 않아 건너뜀');
+
+        // 윗줄을 잡고 끌면 옮겨지고, × 는 끌기에서 뺀다 (목업 C)
+        const 끌기 = (el, dx, dy) => {
+          const r = el.getBoundingClientRect(), sx = r.left + r.width / 2, sy = r.top + r.height / 2;
+          const 낸다 = (t, cx, cy) => el.dispatchEvent(new PointerEvent(t,
+            {bubbles: true, clientX: cx, clientY: cy, pointerId: 1, button: 0, isPrimary: true}));
+          낸다('pointerdown', sx, sy); 낸다('pointermove', sx + dx, sy + dy); 낸다('pointerup', sx + dx, sy + dy);
+        };
+        const 처음자리 = [pop.offsetLeft, pop.offsetTop];
+        끌기(pop.querySelector('.apbar'), -100, 60);
+        const 끈자리 = [pop.offsetLeft, pop.offsetTop];
+        잰다(끈자리[0] !== 처음자리[0] || 끈자리[1] !== 처음자리[1],
+          ' 윗줄을 끌면 옮겨짐', '팝업이 안 끌린다');
+        끌기(pop.querySelector('.apx'), -200, 0);
+        잰다(pop.offsetLeft === 끈자리[0] && pop.offsetTop === 끈자리[1],
+          ' × 는 끌기에서 빠짐', '× 로도 끌린다');
+        끌기(pop.querySelector('.apbar'), -99999, 99999);
+        잰다(pop.offsetLeft >= 80 - pop.offsetWidth && pop.offsetLeft <= innerWidth - 80
+             && pop.offsetTop >= 0 && pop.offsetTop <= innerHeight - 44,
+          ` 끌어도 화면 밖으로 안 나감 (${pop.offsetLeft},${pop.offsetTop})`, '팝업이 화면 밖으로 나간다');
+
+        /* 팝업을 만져도 **드로어가 안 닫힌다** — `body` 아래 뜨므로
+           `originOf` 가 모르면 닫힌다(9장 · 실제로 달력 팝업이 그랬다).
+
+           **여기서 드로어를 연다.** 앞의 상태를 그대로 쓰면, 이 회귀를 심었을
+           때 **앞의 어느 누름이 이미 드로어를 닫아** 이 항목이 건너뜀이 되고
+           고장이 통과로 지나간다 — 자가시험이 실제로 그렇게 놓쳤다(㉔).
+           업무를 여는 자리를 누르면 드로어가 열리고, 팝업은 바깥 클릭으로
+           닫히지 않으므로 둘이 함께 떠 있다. */
+        if (!dw.classList.contains('open')) {
+          const 열자리 = document.querySelector('.bar[data-run], .cal-dot[data-run]');
+          if (열자리) { 열자리.click(); await 잠깐본다(() => 열렸다(), 4000); }
+        }
+        if (dw.classList.contains('open') && $('addpop')) {
+          const 잎 = pop.querySelector('.aplead');
+          const r = 잎.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          for (const t of ['pointerdown', 'pointerup']) 잎.dispatchEvent(new PointerEvent(t,
+            {bubbles: true, clientX: cx, clientY: cy, pointerId: 1, button: 0, isPrimary: true}));
+          잎.dispatchEvent(new MouseEvent('click', {bubbles: true, clientX: cx, clientY: cy, detail: 1, button: 0}));
+          // 기다리지 않는다 — 닫는 길은 그 클릭 안에서 동기로 돈다(어림으로 재는
+          // 자리를 늘리지 않는다 · `tests/test_stage18.py` 가 그 수를 붙든다)
+          잰다(dw.classList.contains('open'),
+            ' 팝업을 만져도 드로어가 열려 있음', '팝업을 만지면 드로어가 닫힌다');
+        } else results.push('· 드로어를 열 자리가 없어 「팝업을 만져도 안 닫힘」 은 건너뜀');
+
+        // 닫는 길 둘 — × 와 Esc
+        pop.querySelector('.apx').click();
+        잰다(!$('addpop'), ' × 로 닫힘', '× 로 안 닫힌다');
+        여는자리.click();
+        await 잠깐본다(() => !!$('addpop'), 3000);
+        dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+        await 잠깐본다(() => !$('addpop'), 1500);
+        잰다(!$('addpop'), ' Esc 로 닫힘', 'Esc 로 안 닫힌다');
+      }
+
+      /* 달력에서는 **날짜 칸의 「+」** 가 그 날짜를 채운 채로 연다 (6-7) */
+      if (where === '달력') {
+        const 더하기 = [...document.querySelectorAll('.cal-cell:not(.out) .calplus, .calweeks .calplus')][0];
+        if (!더하기) {
+          results.push('· 날짜 칸의 「+」 가 없어 건너뜀');
+        } else {
+          더하기.click();
+          await 잠깐본다(() => {
+            const p = $('addpop');
+            return p && p.querySelector('[data-add-root]');
+          }, 4000);
+          const pop = $('addpop');
+          잰다(!!pop && pop.querySelector('#ndates').dataset.start === 더하기.dataset.addpopDate,
+            ` 날짜 칸의 「+」 가 그 날짜로 엶 (${더하기.dataset.addpopDate})`,
+            '날짜 칸의 「+」 가 날짜를 안 채운다');
+          잰다(!!pop && pop.querySelector('.apsub').textContent.includes('추가'),
+            ' 윗줄 부제가 그 날짜를 말함', '팝업 부제가 날짜를 안 말한다');
+          pop?.querySelector('.apx').click();
+        }
+      }
+    }
+
     /* **안 잰 것을 안 잰 것으로 낸다.** `·` 로 시작하는 줄은 건너뛴
        항목이고 errors 를 늘리지 않는다 — 그래서 「92/92」 가 「전부 쟀고
        전부 통과」 로 읽히는데, 실은 「빨간 것이 없다」 일 뿐이다.
@@ -1752,6 +1906,71 @@ const 고장들 = [
      return () => { s.textContent = 원래; };
    }},
 
+  /* ── 업무 추가 팝업 (6-7 · 목업 C) ──────────────────────────────
+     **여는 자리가 없는 화면·계정에서는 못 심는다** — 목록에는 그 자리가
+     아예 없고, 열람 전용에게는 단추를 안 그린다(7 과 같은 모양이지만
+     이쪽은 건너뜀이 아니라 **못 심음**이다: 심을 자리 자체가 없다). */
+  {갈래: '㉒ 업무 추가 — 팝업이 안 뜸', 고장: '여는 자리를 눌러도 아무 일이 없다',
+   나와야: '업무 추가 팝업이 안 뜬다',
+   못심음: 항목 => 항목.some(r => String(r).includes('여는 자리가 없어')),
+   /* **기본 동작도 막는다.** 보드의 여는 자리는 `<a href="/board/add">` 라
+      (자바스크립트가 죽었을 때의 길 · 6-7), 전파만 끊으면 앱의 핸들러가
+      `preventDefault` 를 못 해 **브라우저가 옛 화면으로 옮겨 간다** — 그러면
+      점검이 아니라 판이 통째로 날아간다. */
+   심는다: () => {
+     const f = e => {
+       if (e.target instanceof Element && e.target.closest('[data-addpop]')) {
+         e.preventDefault();
+         e.stopPropagation();
+       }
+     };
+     document.addEventListener('click', f, true);
+     return () => document.removeEventListener('click', f, true);
+   }},
+  {갈래: '㉓ 업무 추가 — 구역 순서', 고장: '라이브러리에서 넣기가 위로 올라간다',
+   나와야: '업무 추가 구역 순서가 뒤집혔다',
+   못심음: 항목 => 항목.some(r => String(r).includes('여는 자리가 없어')),
+   /* **받아 오는 조각을 바꾼다 — 되풀이로 뒤집지 않는다.** 20ms 마다
+      뒤집어 놓았더니 **달력에서만 통과로 지나갔다**: 점검이 팝업을 보자마자
+      읽어서, 뒤집기와 읽기가 경주를 했다. 심는 것이 흔들리면 놓친 것과
+      안 새는 것이 같은 모양이 된다(값을붙든다 머리의 그 자리).
+      팝업은 늘 이 조각으로 그려지므로 여기서 바꾸면 어긋날 수가 없다. */
+   심는다: () => {
+     const 원래 = window.fetch;
+     window.fetch = async (u, o) => {
+       const res = await 원래.call(window, u, o);
+       if (!String(u).includes('/board/add/form')) return res;
+       const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+       const 구역 = [...doc.querySelectorAll('.apsec')];
+       if (구역.length === 2) 구역[0].parentNode.insertBefore(구역[1], 구역[0]);
+       return new Response(doc.body.innerHTML, {status: res.status, headers: res.headers});
+     };
+     return () => { window.fetch = 원래; };
+   }},
+  /* **`originOf` 가 팝업을 모르는 그 회귀를 심는다** — 달력 팝업이 실제로
+     그랬고(2026-09-24), 새 팝업도 `body` 아래 뜨므로 같은 입구다 */
+  {갈래: '㉔ 업무 추가 — 팝업을 만지면 드로어가 닫힘', 고장: '팝업 안 클릭이 바깥으로 읽힌다',
+   나와야: '팝업을 만지면 드로어가 닫힌다',
+   못심음: 항목 => 항목.some(r => String(r).includes('여는 자리가 없어')
+     || String(r).includes('드로어를 열 자리가 없어')),
+   심는다: () => {
+     const f = e => {
+       if (e.target instanceof Element && e.target.closest('#addpop')) Drawer.close();
+     };
+     document.addEventListener('click', f, true);
+     return () => document.removeEventListener('click', f, true);
+   }},
+  {갈래: '㉕ 달력 — 날짜 칸의 +', 고장: '「+」 가 날짜를 안 싣는다',
+   화면: '달력', 나와야: '날짜 칸의 「+」 가 날짜를 안 채운다',
+   못심음: 항목 => 항목.some(r => String(r).includes('「+」 가 없어')
+     || String(r).includes('여는 자리가 없어')),
+   심는다: () => {
+     const 칸들 = [...document.querySelectorAll('.calplus[data-addpop-date]')];
+     const 원래 = 칸들.map(b => b.dataset.addpopDate);
+     칸들.forEach(b => b.removeAttribute('data-addpop-date'));
+     return () => 칸들.forEach((b, i) => b.dataset.addpopDate = 원래[i]);
+   }},
+
   /* ── 점검이 통째로 죽는 것 ───────────────────────────────────────
      같은 이름의 지역 변수 하나가 판정 줄을 가려 점검이 한복판에서
      죽었고, **그때 알아본 것은 사람이지 출력이 아니었습니다**(AJ-b).
@@ -2020,6 +2239,8 @@ const 뒷정리 = async () => {
   눌러(document.querySelector('#dlog [data-cancel-edit]'));
   눌러(document.querySelector('#prepick [data-close]'));
   눌러(document.querySelector('.datepick .dpcancel'));
+  // **업무 추가 팝업도 떠 있는 것이다** (6-7) — 그 팝업이 가진 닫는 단추로 닫는다
+  눌러(document.querySelector('#addpop .apx'));
 
   // ② 상태·담당자 메뉴는 단추가 없다 — 바깥을 눌러 닫는 그 길을 그대로 쓴다.
   //    `originOf` 가 둘 다 바깥으로 보므로 드로어도 함께 닫힌다
@@ -2052,6 +2273,7 @@ const 뒷정리 = async () => {
     if (document.querySelector('.datepick')) 남.push('기간 달력');
     if (보임(document.getElementById('prepick'))) 남.push('선행 고르기');
     if (document.querySelector('#dlog textarea.editbox')) 남.push('논의 편집창');
+    if (document.getElementById('addpop')) 남.push('업무 추가 팝업');
     return 남;
   };
   /* **상한을 따로 두지 않는다** — 묶인 탭은 폴 한 번이 1초라(BI-h)
@@ -2102,7 +2324,17 @@ const 자가시험 = async () => {
      나온것이 아니라 창에 두는 까닭은 **안 끝나도 읽을 수 있어야** 해서다. */
   window.__진행 = {화면: 깨끗.화면, 묶임: 묶임먼저, 시작: Date.now(),
                    지난갈래: [], 지금: null};
-  for (const g of 고장들) {
+  /* **갈래를 골라 돌 수 있다** (`window.__갈래고름` 에 든 글자 · 2026-09-25).
+     한 갈래가 10분까지 가므로(BI-h) 스물여덟을 세 화면 · 두 계정으로 돌면
+     한 판에 안 들어간다. **갈래를 새로 더한 판**은 그 갈래만 심어 재고,
+     무엇을 골랐는지 결과에 싣는다 — 안 실으면 「전부 쟀다」 로 읽힌다.
+     **비우면 전부 돈다** — 기본은 그대로다. */
+  const 고름 = window.__갈래고름 || '';
+  // 여럿을 고를 때는 `|` 로 잇는다 — 한 판에 여러 갈래를 재는 일이 흔하다
+  const 고름들 = 고름.split('|').map(x => x.trim()).filter(Boolean);
+  const 돌갈래 = 고름들.length
+    ? 고장들.filter(g => 고름들.some(x => g.갈래.includes(x))) : 고장들;
+  for (const g of 돌갈래) {
     window.__진행.지금 = {갈래: g.갈래, 든때: Date.now()};
     /* **화면에만 있는 갈래는 그 화면에서만 심는다.** 「안 해 봤다」 가
        아니라 「이 화면에 그 자리가 없다」 이고, 그 화면에서 돌리면
@@ -2235,7 +2467,7 @@ const 자가시험 = async () => {
      늘어나면 「놓친 갈래 0」 이 되는데, 그건 다 잡았다는 뜻이 아니라
      **아무것도 안 재 봤다**는 뜻이다 — 실명 검사가 29개 중 0개를 보며
      초록을 내던 그 모양이다. */
-  const 잰갈래 = 고장들.length - 못심은갈래;
+  const 잰갈래 = 돌갈래.length - 못심은갈래;
   if (!잰갈래) console.warn('자가시험 — 이 계정·화면에서는 심을 수 있는 갈래가 하나도 없습니다');
   return {자가시험: 다걷혔나 && 놓친갈래 === 0 && 잰갈래 > 0,
           무효: 다걷혔나 ? undefined
@@ -2245,6 +2477,8 @@ const 자가시험 = async () => {
           뒷정리못함, 시작뒷정리,
           화면: 깨끗.화면, 갈래: 표,
           잰갈래, 놓친갈래, 못심은갈래,
+          // **골라 돌았으면 그렇다고 말한다** — 안 적으면 「전부 쟀다」 로 읽힌다
+          고른갈래: 고름 || undefined, 전체갈래: 고장들.length,
           // **걸린 시간을 낸다** — 한 화면이 얼마나 걸리는지 모르면 다음
           // 사람이 또 「끝날 때까지」 기다리다 판을 못 닫는다
           걸린초: Math.round((Date.now() - 시작한때) / 1000),

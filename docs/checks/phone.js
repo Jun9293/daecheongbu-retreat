@@ -260,6 +260,39 @@ const 점검 = async () => {
          '호버가 없는데 가장자리 띠가 살아 있어 본문 왼쪽의 누름을 가져간다');
   }
 
+  // ── ⑦ 업무 추가 팝업이 이 폭에서 화면을 넘지 않는가 (6-7 · 목업 C) ──
+  /* 팝업은 넓은 화면에서 **폭 640** 이다. 그 값을 그대로 두면 휴대폰에서
+     가로가 잘리고, 잘린 쪽에 「새 업무 만들기」 단추가 있으면 **그 기기에서만
+     아무것도 못 만든다** — 2026-09-12 에 이동 수단이 통째로 없던 것과 같은
+     모양이다(4-0). **여기서만 잰다**: 넓은 창에서는 640 이 맞는 값이라
+     `drawer.js` 쪽 점검이 이것을 재면 늘 통과한다.
+
+     **아무것도 저장하지 않는다**(10장) — 열고, 재고, 닫는다. */
+  const 여는자리 = document.querySelector('[data-addpop]');
+  if (!여는자리) {
+    results.push('· 이 화면·계정에는 업무 추가를 여는 자리가 없어 건너뜀');
+  } else {
+    여는자리.click();
+    const 떴나 = await 될때까지('업무 추가 팝업이 뜨는 것',
+      () => !!(document.getElementById('addpop') || {}).querySelector?.('[data-add-root]'));
+    const pop = document.getElementById('addpop');
+    if (!떴나 || !pop) {
+      잰다(false, ' 업무 추가 팝업이 뜬다', '이 폭에서 업무 추가 팝업이 안 뜬다');
+    } else {
+      const r = pop.getBoundingClientRect();
+      잰다(r.left >= 0 && r.right <= innerWidth,
+        ` 팝업이 가로로 화면을 안 넘는다 (폭 ${Math.round(r.width)} · 창 ${innerWidth})`,
+        '업무 추가 팝업이 이 폭에서 가로로 잘린다');
+      잰다(r.height <= innerHeight,
+        ` 팝업이 세로로 화면을 안 넘는다 (높이 ${Math.round(r.height)} · 창 ${innerHeight})`,
+        '업무 추가 팝업이 이 폭에서 세로로 넘친다');
+      const 단추 = pop.querySelector('#addNew');
+      잰다(!!단추 && 누를수있나(단추),
+        ' 「새 업무 만들기」 가 눌리는 자리에 있다', '이 폭에서 만들기 단추가 안 눌린다');
+      pop.querySelector('.apx').click();
+    }
+  }
+
   /* **끝까지 갔는가.** 점검이 한복판에서 죽으면 그때까지 잰 것만 남아
      「전부 통과」 로 보인다 — `통과: errors.length === 0` 만으로는 그것을
      못 가른다(11-3 2단계 · drawer.js 의 `완주` 와 같은 자리). 여기까지
@@ -294,6 +327,13 @@ const 캡처막기 = (골라, 무엇 = 'click') => {
 };
 
 const 고장들 = [
+  /* **넓은 화면의 폭을 그대로 쓰는 그 회귀를 심는다** (6-7) — CSS 의
+     `min(640px, …)` 이 그냥 `640px` 로 돌아가면 이 폭에서 가로가 잘린다.
+     팝업은 누른 **뒤에** 그려지므로 스타일로 심는다. */
+  {갈래: '⑦ 업무 추가 팝업이 이 폭에서 잘린다',
+   나와야: '업무 추가 팝업이 이 폭에서 가로로 잘린다',
+   못심음: 항목 => 항목.some(r => String(r).includes('여는 자리가 없어')),
+   심는다: () => 스타일('.addpop{width:640px!important;left:0!important}')},
   {갈래: '① 옛 고장 — 토글이 sidepin 만 붙인다',
    나와야: '메뉴 단추를 누르면 사이드바가 화면 안으로 들어온다',
    심는다: () => {
