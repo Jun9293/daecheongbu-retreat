@@ -49,7 +49,26 @@ function layoutLabels() {
     if (need <= room + 0.5) {                   // 다 들어가면 겹칠 이유가 없다
       if (spill) spill.remove();
       txt.style.clipPath = '';
+      delete bar.dataset.cut;
       return;
+    }
+    /* **밖으로 넘쳐도 되지만 같은 줄 다음 바 시작 − 6px 까지다** (목업 D).
+       넘으면 `…` 로 끊고 **끊겼다고 적는다** — 끊긴 바는 팝업을 열어 제목
+       전체를 보인다(4-1). 끊긴 줄 모르면 그 팝업이 안 열린다 */
+    const 여유 = 다음바까지(bar) - 6;
+    let 보일글 = label;
+    if (need > 여유) {
+      bar.dataset.cut = '1';
+      // 글자 폭으로 자른다 — 글자 수로 세면 한글과 영문이 다르게 잘린다
+      let lo = 0, hi = label.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (gauge.measureText(label.slice(0, mid) + '…').width <= 여유) lo = mid;
+        else hi = mid - 1;
+      }
+      보일글 = label.slice(0, lo) + '…';
+    } else {
+      delete bar.dataset.cut;
     }
     txt.style.clipPath = `inset(-4px ${Math.max(0, need - room)}px -4px -2px)`;
     if (!spill) {
@@ -58,11 +77,28 @@ function layoutLabels() {
       spill.setAttribute('aria-hidden', 'true');
       txt.after(spill);
     }
-    spill.textContent = label;
+    spill.textContent = 보일글;
     spill.style.left = txt.offsetLeft + 'px';
     spill.style.top = txt.offsetTop + 'px';
     spill.style.clipPath = `inset(-4px -8px -4px ${room}px)`;
   });
+}
+
+/* 같은 줄에서 이 바가 쓸 수 있는 폭 — **다음 바 시작까지** (목업 D).
+   같은 `.lane` 안에서 세로로 겹치는(= 같은 줄에 놓인) 바만 본다: 접힌 Main
+   아래에는 줄이 여럿이라 아래 줄의 바를 이웃으로 보면 애먼 데서 끊긴다 */
+function 다음바까지(bar) {
+  const lane = bar.parentElement;
+  if (!lane) return 1e6;
+  const 내왼쪽 = bar.offsetLeft, 내위 = bar.offsetTop;
+  let 끝 = lane.clientWidth;
+  lane.querySelectorAll('.bar').forEach(other => {
+    if (other === bar || !other.offsetParent) return;
+    if (Math.abs(other.offsetTop - 내위) > 2) return;   // 다른 줄이다
+    if (other.offsetLeft <= 내왼쪽) return;
+    끝 = Math.min(끝, other.offsetLeft);
+  });
+  return Math.max(0, 끝 - 내왼쪽);
 }
 
 /* ── 세로 격자선: 열마다 div 를 넣지 않고 한 번만 겹쳐 그린다 ── */
@@ -91,6 +127,27 @@ function applyFilters() {
     row.dataset.ok = ok ? '1' : '';
     if (ok) count[row.dataset.of] = (count[row.dataset.of] || 0) + 1;
   });
+  /* **접힌 줄에 눕는 바에도 건다** — 그 바들은 Main **행 안**이라 위의
+     `.row` 훑기가 안 닿는다. 안 걸면 「미완료만」 을 켜도 완료된 하위 바가
+     남고, 날짜 칸을 골라도 안 걸린 하위가 남는다(4-8 이 「그 안에서도 걸린
+     업무만 펼쳐집니다」 라고 한 자리 · 커밋 전 검토가 잡았다).
+     **META 에서 본다** — 눕는 바에는 날짜·상태가 안 실려 있다 */
+  sheet.querySelectorAll('.bar.sl').forEach(bar => {
+    const ids = (bar.dataset.runs || bar.dataset.run || '').split(' ').filter(Boolean);
+    // 합친 바는 **하나라도 걸리면 남긴다** — 그 바 뒤에 업무가 여럿이라,
+    // 하나가 안 걸린다고 지우면 걸린 업무가 화면에서 함께 사라진다
+    const 남길까 = ids.some(id => {
+      const m = META[id];
+      if (!m) return true;                       // 모르면 안 지운다
+      if (onlyOpen && m.status === '완료') return false;
+      if (dateSel) {
+        const a = m.start, b = m.end || m.start;
+        if (!a || b < dateSel[0] || a > dateSel[1]) return false;
+      }
+      return true;
+    });
+    bar.hidden = !남길까;
+  });
   sheet.querySelectorAll('.row.team').forEach(team => {
     const key = team.dataset.team, n = count[key] || 0;
     let open;
@@ -107,7 +164,11 @@ function applyFilters() {
       // 소속 외 부서는 숨기지 않고 흐리게 — 존재는 인지되어야 한다
       team.classList.toggle('dim', !isMine && mine !== 'all');
     }
-    team.querySelector('.ct').textContent = dateSel ? `${n}건` : team.dataset.ct;
+    // **글자가 아니라 마크업을 되돌린다** — `textContent` 로 되돌리면
+    // 「· 지연 n건」 의 `<b class="lt">` 가 사라져 붉은 강조가 안 돌아온다
+    const ct = team.querySelector('.ct');
+    if (dateSel) ct.textContent = `${n}건`;
+    else ct.innerHTML = team.dataset.ctHtml;
     sheet.querySelectorAll(`.row[data-of="${key}"]`).forEach(row => {
       row.style.display = (open && row.dataset.ok) ? '' : 'none';
     });
@@ -145,7 +206,7 @@ function applyMobileFilters(mine, onlyOpen) {
 }
 
 sheet.querySelectorAll('.row.team').forEach(team => {
-  team.dataset.ct = team.querySelector('.ct').textContent;
+  team.dataset.ctHtml = team.querySelector('.ct').innerHTML;
   team.querySelector('.lc').onclick = () => {
     team.classList.toggle('collapsed');
     const hidden = team.classList.contains('collapsed');
@@ -235,10 +296,23 @@ function reveal(runId) {
     if (row.dataset.run === String(runId)) { row.dataset.ok = '1'; row.style.display = ''; }
     else if (row.dataset.ok) row.style.display = '';
   });
+  /* **상위 Main 도 편다** (4-7). 2026-09-25 부터 하위가 있는 Main 이 기본
+     접힘이라 **부서만 펴면 그 하위는 여전히 접힌 줄 안에 있다.** 접힌 하위
+     줄은 `hidden` 이고 `[hidden]{display:none!important}` 가 이기므로
+     `style.display=''` 로는 안 열린다 — 접기 고리를 그대로 부른다 */
+  const 그줄 = sheet.querySelector(`.row.sub[data-run="${runId}"][data-parent]`);
+  if (!그줄) return;
+  let 위 = 그줄.previousElementSibling;
+  while (위 && !위.classList.contains('main')) 위 = 위.previousElementSibling;
+  if (위 && 위.classList.contains('folded')) 접거나편다(위, true);
 }
 
 function findBar(runId) {
-  const all = [...sheet.querySelectorAll(`.bar[data-run="${runId}"]`)];
+  // **합친 바도 본다** — 접힌 Main 아래에서 여러 하위가 바 하나로 묶이면
+  // 그 바가 그 run 들의 **유일한 산 자리**다(`data-runs`). 안 보면 연결선이
+  // 숨은 바에서 출발해 아무 데도 안 그려진다 (4-5)
+  const all = [...sheet.querySelectorAll(
+    `.bar[data-run="${runId}"], .bar[data-runs~="${runId}"]`)];
   return all.find(x => !x.dataset.ghost && x.offsetParent) || all.find(x => x.offsetParent) || all[0];
 }
 
@@ -285,10 +359,17 @@ function link(runId) {
   unlink();
   curLink = runId;
   const related = new Set((META[runId] || {}).related_run_ids || []);
-  sheet.querySelectorAll('.bar[data-run]').forEach(el => {
-    const id = Number(el.dataset.run), row = el.closest('.row');
-    if (id === Number(runId)) { el.classList.add('anchor'); row.classList.add('anchorrow'); }
-    else if (related.has(id)) { el.classList.add('lit'); row.classList.add('hl'); }
+  /* **합친 바도 본다** — 접힌 Main 아래의 하위는 그 바가 **유일한 산 자리**다
+     (`data-runs`). 안 보면 `anchor` 가 숨은 바에만 붙어 `drawWires` 의
+     `offsetParent` 걸러내기에서 전부 빠지고 **선이 통째로 안 그려진다** —
+     4-5 가 「관련 업무가 하나도 없어도 선택 표시는 반드시 나타나야 한다」 고
+     못박은 자리다(커밋 전 검토가 잡았다) */
+  const 누구들 = el => el.dataset.run ? [Number(el.dataset.run)]
+    : (el.dataset.runs || '').split(' ').filter(Boolean).map(Number);
+  sheet.querySelectorAll('.bar[data-run], .bar[data-runs]').forEach(el => {
+    const ids = 누구들(el), row = el.closest('.row');
+    if (ids.includes(Number(runId))) { el.classList.add('anchor'); row.classList.add('anchorrow'); }
+    else if (ids.some(id => related.has(id))) { el.classList.add('lit'); row.classList.add('hl'); }
   });
   drawWires();
 }
@@ -529,8 +610,15 @@ function applyStatus(runId, view) {
 }
 
 /* ── 보드 클릭 ── */
+/* **안 여는 자리** — 접기 손잡이와 「하위 n건」. 둘 다 `.lc[data-go]` 안에
+   있어서 그냥 두면 **행을 여는 쪽이 먼저 돈다**(같은 요소에 걸린 리스너는
+   등록 순서대로 불리므로 `stopPropagation` 으로는 못 막는다). 「여는 자리」
+   목록을 두지 않고 **안 여는 자리**만 적는 것은 4-14 가 정한 그 방식이다 */
+const 보드안여는곳 = '.fold, .subn';
+
 sheet.addEventListener('click', e => {
   if (Drawer.recentDrag()) return;
+  if (e.target.closest(보드안여는곳)) return;
   const go = e.target.closest('[data-go]');
   if (go) { goTo(go.dataset.go); return; }
   const bar = e.target.closest('.bar[data-run]');
@@ -613,6 +701,166 @@ Drawer.init({
       + '행 구조가 바뀌는 것이라 담당팀 이동과 같이 기본값(새로고침)을 쓴다',
   },
 });
+
+/* ── 3단계: 접힘 · 오늘 · 업무 팝업 (목업 D · F) ──────────────────── */
+
+/* **펼침 상태는 기기에 남는다** (4-1). 서버는 늘 접힌 채로 내고, 여기서
+   남은 값만 펼친다 — 서버가 남은 값을 모르므로 펼친 채로 내면 접어 둔
+   사람의 화면이 한 번 깜빡인다. 회차마다 따로 남긴다 */
+const FOLDKEY = 'dcb.board.open.' + (sheet.dataset.retreat || '0');
+const 펼친것 = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(FOLDKEY) || '[]')); }
+  catch { return new Set(); }        // 사파리 비공개 창 등 — 없는 것으로 본다
+};
+const 펼침을남긴다 = set => {
+  try { localStorage.setItem(FOLDKEY, JSON.stringify([...set])); } catch {}
+};
+
+function 접거나편다(row, open) {
+  row.classList.toggle('folded', !open);
+  const btn = row.querySelector('.fold');
+  if (btn) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const 말 = open ? '하위 업무 접기' : '하위 업무 펼치기';
+    // 보이는 말과 읽어 주는 이름은 같은 글자여야 한다 (4-0 의 그 규칙)
+    btn.title = 말; btn.setAttribute('aria-label', 말);
+    btn.textContent = open ? '▼' : '▶';
+  }
+  // 하위 줄은 Main 바로 다음부터 이어져 있다
+  let next = row.nextElementSibling;
+  while (next && next.classList.contains('sub') && next.dataset.parent) {
+    next.hidden = !open;
+    next = next.nextElementSibling;
+  }
+}
+
+(function 접힘을세운다() {
+  const 열린 = 펼친것();
+  sheet.querySelectorAll('.row.main[data-subs]').forEach(row => {
+    접거나편다(row, 열린.has(row.dataset.run));
+  });
+})();
+
+sheet.addEventListener('click', e => {
+  const 손잡이 = e.target.closest('.fold, .subn');
+  if (!손잡이) return;
+  e.stopPropagation();                       // 행을 여는 것과 겹치지 않게
+  const row = 손잡이.closest('.row.main[data-subs]');
+  if (!row) return;
+  const open = row.classList.contains('folded');
+  접거나편다(row, open);
+  const 열린 = 펼친것();
+  open ? 열린.add(row.dataset.run) : 열린.delete(row.dataset.run);
+  펼침을남긴다(열린);
+  // 줄이 늘고 줄었다 — 격자선과 연결선을 다시 잰다
+  drawGrid(); layoutLabels(); drawWires();
+});
+
+/* ── 오늘 ── */
+const todayLine = sheet.querySelector('.todayline');
+const todayCol = Number(getComputedStyle(sheet).getPropertyValue('--todaycol')) || 0;
+function 오늘선을놓는다() {
+  if (!todayLine || !todayCol) return;
+  const hc = headers()[todayCol - 1];
+  if (!hc) return;
+  sheet.style.setProperty('--todayx', (hc.offsetLeft + hc.offsetWidth / 2) + 'px');
+}
+/* 수련회 띠 — 머리 칸을 재서 본문까지 같은 자리에 깐다 (목업 D).
+   칸 폭이 구간마다 달라 CSS 로는 못 더한다(오늘 선과 같은 자리) */
+const 수련회띠 = sheet.querySelector('.retreatband');
+function 수련회띠를놓는다() {
+  if (!수련회띠) return;
+  const rt = sheet.querySelector('.row.head .hc.rt');
+  if (!rt) return;
+  sheet.style.setProperty('--rtx', rt.offsetLeft + 'px');
+  sheet.style.setProperty('--rtw', rt.offsetWidth + 'px');
+}
+오늘선을놓는다();
+수련회띠를놓는다();
+addEventListener('resize', () => { 오늘선을놓는다(); 수련회띠를놓는다(); });
+
+const todayBtn = document.getElementById('todaybtn');
+if (todayBtn) todayBtn.onclick = () => {
+  const hc = headers()[todayCol - 1];
+  if (!hc) return;
+  // 오늘 선이 **가운데** 오게 (목업 D). 왼쪽 고정 칸만큼은 늘 가려져 있다
+  const 가림 = sheet.querySelector('.hlbl').offsetWidth;
+  board.scrollTo({
+    left: Math.max(0, hc.offsetLeft - 가림 - (board.clientWidth - 가림) / 2 + hc.offsetWidth / 2),
+    behavior: 'smooth',
+  });
+};
+
+/* ── 업무 팝업 (F) ────────────────────────────────────────────────────
+   여는 조건은 셋이다 (4-1) — **끊긴 바 · 합친 바 · 축 상한 밖 바**.
+   마지막 것은 **제목이 안 끊겨도** 연다: 바는 마지막 칸에 붙고 `→` 만
+   달리므로, 팝업이 안 열리면 그 업무의 실제 날짜를 말할 자리가 화면
+   어디에도 없다. 왼쪽 칸에서 `…` 로 끊긴 이름도 같은 팝업이다. */
+function 팝업감(el) {
+  if (!el) return null;
+  if (el.classList.contains('bar')) {
+    const 끊김 = el.dataset.cut, 합침 = el.classList.contains('merged');
+    const 축밖 = !!el.querySelector('.beyond');
+    if (!끊김 && !합침 && !축밖) return null;
+    return 실은것(el);
+  }
+  // 왼쪽 칸의 이름 — `…` 로 끊겼을 때만
+  const nm = el.closest('.lc') && el.closest('.lc').querySelector('.nm');
+  if (!nm || nm.scrollWidth <= nm.clientWidth + 1) return null;
+  const row = el.closest('.row[data-run]');
+  // 왼쪽 칸도 **그 줄의 바가 실어 온 것**을 쓴다 — 여기서 새로 짓지 않는다
+  return row ? 실은것(row.querySelector('.bar[data-pop]')) : null;
+}
+
+/* **문장을 만드는 곳은 `board.popup_meta` 하나다**(4-1). 화면은 서버가
+   실어 보낸 것을 읽기만 한다.
+
+   전에는 여기 둘째 벌(`메타줄`)이 있었고 주석에 「서버가 준 한 줄이 없을
+   때만 쓰는 되돌림」 이라고 적어 두었는데, **`data-pop` 을 다는 곳이 합친
+   바뿐이라 끊긴 바는 실제로 그쪽을 타고 있었다** — 되돌림이 아니라 주
+   경로였다(커밋 전 검토). 둘이 같은 글자를 내고 있어서 눈에 안 띄었다.
+   이제 보통 바도 `data-pop` 을 달고, 짓는 코드는 화면에 없다. */
+function 실은것(el) {
+  if (!el || !el.dataset.pop) return null;
+  try { return JSON.parse(el.dataset.pop); } catch { return null; }
+}
+
+sheet.addEventListener('mouseover', e => {
+  const el = e.target.closest('.bar, .lc .nm');
+  const items = 팝업감(el);
+  if (items) window.TaskPop && window.TaskPop.open(el.closest('.bar') || el, items);
+});
+sheet.addEventListener('mouseout', e => {
+  if (e.target.closest('.bar, .lc .nm')) window.TaskPop && window.TaskPop.later();
+});
+/* 휴대폰 — **첫 탭이 팝업이고 두 번째 탭이 드로어다** (4-1 · 목업 F).
+   손가락에는 호버가 없어 위의 `mouseover` 가 안 온다.
+
+   **둘째 탭을 흘려 보내야 한다.** 전에는 여기서 늘 `stopPropagation()` 을
+   걸어 **드로어를 여는 버블 리스너가 영영 안 돌았다** — 몇 번을 탭해도
+   팝업만 다시 떴다(커밋 전 검토). 팝업이 `pointerdown` 에서 이미 닫히므로
+   「지금 떠 있나」 로는 못 가른다: **누가 띄웠는지**를 따로 기억한다.
+
+   820px 아래에서는 보드가 숨지만 **`hover:none` 인 터치 노트북**은 그
+   폭에서도 보드를 본다(4-0 이 짚어 둔 그 기기다). */
+let 팝업띄운바 = null;
+sheet.addEventListener('click', e => {
+  if (matchMedia('(hover:hover)').matches) return;
+  if (e.target.closest(보드안여는곳)) return;
+  const el = e.target.closest('.bar, .lc .nm');
+  const 대상 = el && (el.closest('.bar') || el);
+  if (!대상) { 팝업띄운바 = null; return; }
+  if (팝업띄운바 === 대상) {           // 두 번째 탭 — 그대로 흘려 보낸다
+    팝업띄운바 = null;
+    window.TaskPop && window.TaskPop.close();
+    return;
+  }
+  const items = 팝업감(el);
+  if (!items) { 팝업띄운바 = null; return; }
+  e.preventDefault(); e.stopPropagation();
+  팝업띄운바 = 대상;
+  window.TaskPop && window.TaskPop.open(대상, items);
+}, true);
 
 drawGrid();
 applyFilters();

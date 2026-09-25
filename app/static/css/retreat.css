@@ -38,6 +38,11 @@
      왼쪽 고정 칸과 내용 칸이 같은 값을 써야 가로로 훑을 때 안 끊긴다.
      업무 팝업에서 항목 사이를 가르는 선도 이 값이다 (목업 F). */
   --row-line:#ECEDF1;
+  /* **수련회 기간이라는 사실 하나**만 말한다 — 보드의 수련회 칸과 달력의
+     수련회 날(4-0 의 넷째 색 · 2026-09-23 사람이 목업으로 정함).
+     **면에만 깔고 그 위에 글자를 얹지 않는다** — 얹는 자리는 9장의 4.5:1 이
+     그대로 걸리고, 붉은 글자는 `--red-ink` 한 값이다(면색 `--now` 가 아니다) */
+  --span-retreat:#F3F2FF;
 
   /* 뜻이 있는 색 */
   /* accent (4-0) — 선택 테두리 · 활성 메뉴 · 진행중 표시 · 기본 버튼.
@@ -121,7 +126,8 @@
   --fz-3xl:calc(var(--fz) + 8px);
   --fz-4xl:calc(var(--fz) + 11px);
 
-  --label-w:322px; --wk:118px; --day:58px; --retreat:126px;
+  /* 목업 D 의 칸 폭. 왼쪽 고정 칸 300 = 업무 칸 + 담당 칸 64(가운데 12px) */
+  --label-w:300px; --who-w:64px; --wk:118px; --day:58px; --retreat:126px; --after:118px;
   /* 글자를 키운 만큼 칸도 올린다 — 안 올리면 바 안에서 위아래가 붙는다.
      2026-09-21 에 `--fz` 를 15 → 16px 로 올리면서 한 줄을 2px 씩 더 키웠다
      (42·38·33 → 44·40·35, 바도 26 → 28px). 부서를 다 편 96행이 그만큼
@@ -345,7 +351,8 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 .hc:hover{background:var(--hover)}
 .hc.sel{background:var(--ink)!important;border-right-color:var(--ink)}
 .hc.sel .dw,.hc.sel .dt{color:#fff!important}
-.hc.rt{background:var(--side)}
+/* 면은 아래 `.hc.sect-retreat` 가 칠한다 — 여기서 `--side` 를 또 주면
+   뒤엣것이 이겨 **죽은 선언**이 되고, 고치는 사람이 왜 안 바뀌나 한다 */
 .hc.rt .dw{color:var(--ink)} .hc.rt .dt{color:var(--ink-2)}
 .hlbl{position:sticky;left:0;z-index:26;background:var(--paper);border-bottom:1px solid var(--rule);
   border-right:1px solid var(--rule);display:flex;flex-direction:column;justify-content:center;padding-left:14px}
@@ -399,7 +406,11 @@ select:focus,input:focus{outline:none;border-color:var(--link)}
 /* 머리 줄로 선 하위(부서가 다른 하위 등)는 하위 급이되 트리 들여쓰기는 안 한다 — 들여쓰면 바로 위
    Main 의 하위로 읽힌다(봐둘것 BF-a · 커밋 전 검토). 무엇의 하위인지는 「↑ 상위」 가 말한다 */
 .row.sub.headsub .lc{padding-left:30px}
-/* 가로 격자선을 넣지 않는다. 넣어봤으나 화면이 답답해져 뺐다. */
+/* **행은 가로선으로 갈린다** (4-0 · 2026-09-23 사람이 목업으로 정함).
+   2026-08-31~09-23 에는 안 넣었는데, 그 판단은 **한 행에 바가 한 줄일 때만**
+   맞았다 — 접힌 Main 아래에 하위가 여러 줄로 누우면 어느 바가 어느 행의
+   것인지 여백만으로 안 갈린다. 왼쪽 칸과 내용 칸이 **같은 값**을 쓴다:
+   갈리면 가로로 훑을 때 선이 끊겨 보인다 */
 .lane{position:relative;grid-column:2/-1;display:grid;grid-template-columns:subgrid}
 .gl{border-right:1px solid var(--rule);pointer-events:none}
 .gl.shift{border-left:1px solid var(--rule-2)}
@@ -495,6 +506,135 @@ body.dragging-bar .bar{transition:none}
 /* ── 모바일 목록: D-주차 → 부서 (CLAUDE.md Phase 1 완료 기준) ────────
    24칸 간트는 폰에서 쓸 수 없다. "이번 주에 뭐가 있나"가 먼저 보이도록
    주차를 바깥 묶음으로 두고 그 안에서 부서 순으로 정렬한다. */
+/* 행 가로선 — 부서 줄 · 업무 줄 **아래**. 왼쪽 칸과 내용 칸이 같은 값이라
+   가로로 훑을 때 선이 안 끊긴다 (4-0 · 목업 D) */
+.row.team .lc,.row.team .cell,
+.row.main .lc,.row.main .lane,
+.row.sub .lc,.row.sub .lane{border-bottom:1px solid var(--row-line)}
+
+/* ── 3단계: 목업 D 의 보드 ───────────────────────────────────────────── */
+/* **여기 값은 목업 D 가 정한 것이다.** 4-0 의 눈금과 부딪히는 자리는
+   CLAUDE.md 머리 표에 적고 눈금 쪽으로 갔다 — 그 표가 정본이다 */
+
+/* 머리 첫 줄 — 구간. 칸 수는 서버가 세어 `span` 으로 준다 */
+/* **붙는 자리와 줄 높이는 같은 값 하나여야 한다** — 5-8 이 봉사자 시간표에서
+   같은 고장을 적어 두었다(「둘째 머리 줄을 top:30px 로 적어 두고 실제 높이가
+   26px 이면 그 4px 틈으로 본문이 비쳐 지나간다」). `--sech` 하나를 높이와
+   `top` 에 함께 쓴다 */
+.sheet{--sech:22px}
+.row.sechead{position:sticky;top:0;z-index:25}
+.sc{height:var(--sech);display:flex;align-items:center;justify-content:center;
+  font-size:var(--fz-xs);font-weight:600;color:var(--ink-2);background:var(--paper);
+  border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule);
+  white-space:nowrap;overflow:hidden}
+.sc.plan,.sc.after{background:var(--side)}
+.sc.retreat{background:var(--span-retreat)}
+.hlbl.sec{position:sticky;left:0;z-index:27;background:var(--paper);height:var(--sech);
+  border-right:1px solid var(--rule-2);border-bottom:1px solid var(--rule)}
+/* 날짜 줄은 구간 줄 아래에 붙는다 — 두 줄이 함께 sticky 다 */
+.row.head{top:var(--sech)}
+.hc.sect-plan,.hc.sect-after{background:var(--side)}
+.hc.sect-retreat{background:var(--span-retreat)}
+/* 날짜 줄 — 목업 D 는 36px 인데 **우리 글자가 한 단 크다**(머리 표의 그 자리).
+   줄 간격을 본문 것(1.65)으로 두면 64px 이 되어 머리가 본문을 밀어낸다 —
+   글자는 눈금을 따르고 **줄 간격만** 좁혀 그 값에 가장 가깝게 둔다 */
+.hc{padding:4px 0 3px}
+.hc .dw,.hc .dt{line-height:1.15}
+
+/* 오늘 칸 — accent 옅은 면 + accent 글자 (목업 D) */
+.hc.today{background:var(--accent-soft)}
+.hc.today .dw,.hc.today .dt{color:var(--link);font-weight:600}
+/* 구간 경계는 진한 선, 구간 안은 옅은 선 */
+.hc.sect-d2:first-of-type,.hc.after.shift{border-left:1px solid var(--rule-2)}
+.hc.rt{border-left:1px solid var(--rule-2);border-right:1px solid var(--rule-2)}
+
+/* **수련회 칸은 머리부터 끝까지** `#F3F2FF` 다 (목업 D). 머리만 칠하면
+   본문에서 그 기간이 어디인지 안 보인다 — 그 면이 말하는 것은 「회차
+   기간이라는 사실 하나」 이고(4-0) 그것은 본문에도 해당한다.
+   `.gridlines` 와 같은 수법으로 한 번만 겹쳐 그린다 — 행마다 칸을 넣으면
+   줄 수만큼 늘어난다 */
+.retreatband{position:absolute;top:0;bottom:0;background:var(--span-retreat);
+  pointer-events:none;z-index:0;left:var(--rtx,-9999px);width:var(--rtw,0)}
+
+/* 본문의 오늘 세로선 — 2px accent, 불투명 .55 (목업 D) */
+/* 자리는 JS 가 머리 칸을 **재서** 넣는다(`--todayx`) — 칸 폭이 구간마다
+   달라 CSS 로는 못 더한다. 값이 없으면 화면 밖이라 안 보인다 */
+.todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--link);opacity:.55;
+  pointer-events:none;z-index:6;left:var(--todayx,-9999px)}
+
+/* 범례 끝의 「오늘」 단추 */
+.todaybtn{font:inherit;font-size:var(--fz-sm);padding:3px 10px;border-radius:var(--r);
+  border:1px solid var(--link);background:var(--link);color:#fff;cursor:pointer}
+.todaybtn:hover{filter:brightness(1.08)}
+.legend .k-late{color:var(--red-ink);font-weight:800;font-size:var(--fz-xs)}
+
+/* 담당 칸 — 왼쪽 고정 칸 안에서 오른쪽 64px 를 고정으로 쓴다(목업 D).
+   전에는 이름 옆에 그냥 흘러서 제목이 길면 담당자가 밀려 나갔다 */
+.lc .who{width:var(--who-w);box-sizing:content-box;
+  border-left:1px solid var(--rule);margin-left:12px;padding-left:8px}
+
+/* 하위 펼치기 토글 */
+.fold{flex:none;width:16px;height:16px;margin-right:2px;border:none;background:none;padding:0;
+  font-size:var(--fz-xs);color:var(--ink-2);cursor:pointer;line-height:1;
+  transition:transform .15s}
+.row.main:not(.folded) .fold{transform:rotate(90deg)}
+/* 「하위 n건」 — 접혀 있다는 사실과 몇 건인지가 같은 자리에 있어야 펴 볼지 정한다 */
+/* 「하위 n건」 은 **혼자 뜻을 진다** — 접혀 있다는 사실과 몇 건인지를
+   말하는 자리가 화면에 여기뿐이다. 4-0 의 흐림 자리가 아니다 */
+.subn{flex:none;padding-left:8px;font-size:var(--fz-sm);color:var(--ink-2);cursor:pointer}
+.row.main:not(.folded) .subn{display:none}
+
+/* 접힌 Main — 하위 줄은 숨고 하위 바가 Main 아래 한 줄에 눕는다.
+   **둘 다 그려 두고 보이는 쪽만 자리를 차지한다** — 그래야 펼침을 켜고 끌 때
+   서버를 다시 부르지 않고, `findBar` 의 `offsetParent` 가 산 바를 고른다 */
+.row.main.folded .lc,.row.main.folded .lane{height:var(--rowh,48px)}
+.row.main:not(.folded) .bar.sl{display:none}
+.row.main.folded + .row.sub[data-parent]{display:none}
+.bar.sl{position:absolute;height:14px;font-size:var(--fz-xs);align-self:start}
+.bar.sl.merged{cursor:default}
+
+/* 바 치수 — 목업 D. `align-self:center` 를 쓰지 않고 위에서 재는 것은
+   접힌 줄의 하위 바가 같은 기준점을 써야 하기 때문이다 */
+.row.main .bar.m{align-self:start;margin-top:5px;height:20px;font-size:var(--fz-sm)}
+.row.sub .bar.s{align-self:start;margin-top:8px;height:16px;font-size:var(--fz-sm)}
+
+/* 지연은 바 글자 앞 `!` 하나다 — 「지연 n일」 은 바가 좁을수록 제목을 밀어낸다.
+   며칠인지는 팝업과 드로어가 말한다 (4-1) */
+.bar .flag{font-weight:800}
+/* 축 상한 밖 — 마지막 칸에 붙되 그 칸이 마감이 아님을 말한다 (4-1 · 9장) */
+.bar .beyond{flex:none;font-weight:700;color:var(--ink-2);position:relative;z-index:2}
+
+/* 날짜 없는 업무 — 놓을 칸이 없다 (4-1) */
+.nodate{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  font:inherit;font-size:var(--fz-sm);color:var(--ink-2);cursor:pointer;
+  background:none;border:1px dashed var(--rule-2);border-radius:var(--r);
+  padding:3px 8px;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nodate:hover{background:var(--hover);color:var(--ink-2)}
+
+/* 좁은 폭 목록의 「날짜 없음」 — 넓은 폭의 점선 표시와 같은 자리다 */
+.mrow .meta .nodatetag{color:var(--ink-2);font-style:italic}
+
+/* 부서 줄의 지연 수 */
+.row.team .lc .ct .lt{color:var(--red-ink);font-weight:600}
+
+/* 업무 팝업 (F) — 보드·달력 한 부품. `body` 아래 뜨므로 `originOf` 가
+   이 자리를 알아야 만지는 순간 드로어가 닫히지 않는다 */
+.taskpop{position:fixed;z-index:60;width:280px;background:var(--paper);
+  border:1px solid var(--rule-2);border-radius:var(--r-lg);
+  box-shadow:0 8px 24px rgba(38,40,58,.16);padding:4px 0;font-size:var(--fz-sm)}
+.taskpop .tp{display:block;width:100%;text-align:left;background:none;border:none;
+  font:inherit;padding:8px 12px;cursor:pointer;color:var(--ink)}
+.taskpop .tp + .tp{border-top:1px solid var(--row-line)}
+.taskpop .tp:hover{background:var(--hover)}
+.taskpop .tpt{display:block;font-size:var(--fz-md);font-weight:600;white-space:normal}
+/* 팝업의 그 줄은 **팝업이 있는 까닭**이다 — 기간·상태·담당팀을 말하는
+   자리가 거기뿐이라 옆에 뜻을 대신 져 줄 값이 없다 */
+.taskpop .tpm{display:block;margin-top:3px;font-size:var(--fz-xs);color:var(--ink-2)}
+.taskpop .tpopen{display:block;width:100%;text-align:left;background:none;border:none;
+  border-top:1px solid var(--row-line);font:inherit;font-size:var(--fz-sm);
+  padding:8px 12px;cursor:pointer;color:var(--link);font-weight:600}
+.taskpop .tpopen:hover{background:var(--hover)}
+
 .mlist{display:none}
 .mgroup > h3{position:sticky;top:0;z-index:5;margin:0;background:var(--side);
   border-bottom:1px solid var(--rule);padding:8px 14px;font-size:var(--fz-base);font-weight:600;

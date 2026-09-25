@@ -1686,6 +1686,9 @@ function originOf(target) {
     // **업무 추가 팝업**(6-7) — 달력 팝업과 같은 까닭이다. `body` 아래 뜨므로
     // 모르면 팝업을 만지는 순간 드로어가 닫힌다
     addpop: at('.addpop'),
+    // **업무 팝업**(F · 4-1 · 4-13) — 같은 까닭이다. 이것은 **읽는 카드**라
+    // 만드는 폼(`.addpop`)과 다른 부품이고, 여기 자리만 같이 쓴다
+    taskpop: at('.taskpop'),
     relitem: at('.relitem') || at('.fitem'),
     // 무엇이 '업무를 여는 것' 인지는 화면마다 다르다 — 보드는 바와 업무명,
     // 달력은 점이다. 그래서 host 가 판단한다.
@@ -1734,7 +1737,7 @@ addEventListener('click', () => {
   if (!dw.classList.contains('open')) return;
   // 기간 달력 팝업도 드로어가 띄운 것이다 — `body` 아래 뜬다고 바깥이 아니다
   if (어느쪽이든('drawer') || 어느쪽이든('statmenu') || 어느쪽이든('datepick')
-      || 어느쪽이든('addpop')) return;
+      || 어느쪽이든('addpop') || 어느쪽이든('taskpop')) return;
   if (어느쪽이든('task')) return;         // 다른 업무를 여는 동작이다
   if (어느쪽이든('chrome')) return;       // 소속 선택·필터를 만질 때 닫히면 불편하다
   closeDrawer();

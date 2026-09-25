@@ -21,8 +21,15 @@
     <span class="lg"><i class="k-sub"></i>하위</span>
     <span class="lg"><i class="k-sch"></i>일정</span>
     <span class="lg"><i class="k-done"></i>완료</span>
+    <span class="lg"><b class="k-late">!</b>지연</span>
     <span class="lg"><i class="k-gh"></i>관련업무</span>
     <span class="lg"><i class="k-lit"></i>연결선</span>
+    {# 「한눈에 보기(맞춤)」 는 두지 않는다 — 줄여서 다 보이게 하면 칸이 좁아져
+       바 글자가 통째로 사라진다. 보드를 여는 사람이 묻는 것은 「전체가 몇
+       칸인가」 가 아니라 「지금 무엇이 걸려 있나」 다 (4-1) #}
+    {% if board.today_column %}
+    <button type="button" class="todaybtn" id="todaybtn">오늘</button>
+    {% endif %}
   </div>
 </div>
 
@@ -32,9 +39,30 @@
 <div class="bar {{ 'sch' if row.kind == 'schedule' else ('s' if row.child else 'm') }}
             {{ 'ghost' if row.ghost else row.status }}"
      style="grid-column:{{ row.col_start }}/{{ row.col_end }};background:{{ row.background }};border-color:{{ row.border }};--team:{{ row.owner_color }}"
-     tabindex="0" data-run="{{ row.run_id }}"{% if row.ghost %} data-ghost="1"{% endif %}>
-  {%- if row.status == '지연' and not row.ghost %}<span class="flag">지연</span>{% endif -%}
+     tabindex="0" data-run="{{ row.run_id }}"{% if row.ghost %} data-ghost="1"{% endif %}
+     {#- 팝업 한 줄은 **서버가 만든다**(`board.popup_meta`) — 화면이 다시
+         조립하면 두 벌이 되고, 끊긴 바는 **되돌림이 아니라 주 경로**라
+         그쪽이 실제로 쓰인다(커밋 전 검토가 잡았다) #}
+     data-pop="{{ [{'title': row.title, 'run_id': row.run_id, 'meta_line': row.meta_line}]|tojson|forceescape }}">
+  {%- if row.status == '지연' and not row.ghost %}<span class="flag">!</span>{% endif -%}
   <span class="txt">{{ '↳ ' if row.ghost }}{{ row.title }}</span>
+  {%- if row.beyond %}<span class="beyond" aria-hidden="true">→</span>{% endif -%}
+</div>
+{%- endmacro %}
+
+{# 접힌 Main 아래 한 줄에 눕는 하위 바 (4-1 · 목업 D).
+   **합친 바에는 `data-run` 이 없다** — 뒤에 run 이 여럿이라 끌면 어느 것이
+   움직이는지 화면이 말해 주지 못한다(2026-09-23 사람이 정함). 끄는 자리가
+   `.bar[data-run]` 을 찾으므로 **구조로 막힌다.** 누구인지는 `data-runs` 가
+   말하고 연결선·강조가 그것을 읽는다 #}
+{% macro lanebar(b, lane) -%}
+<div class="bar sl {{ 'sch' if b.kind == 'schedule' else '' }} {{ b.status }}{{ ' merged' if b.merged }}"
+     style="grid-column:{{ b.col_start }}/{{ b.col_end }};top:{{ 29 + lane * 18 }}px;background:{{ b.background }};border-color:{{ b.border }};--team:{{ b.owner_color }}"
+     tabindex="0" data-runs="{{ b.run_ids }}"{% if b.run_id %} data-run="{{ b.run_id }}"{% endif %}
+     data-pop="{{ b.pop_items|tojson|forceescape }}">
+  {%- if b.status == '지연' %}<span class="flag">!</span>{% endif -%}
+  <span class="txt">{{ b.title }}</span>
+  {%- if b.beyond %}<span class="beyond" aria-hidden="true">→</span>{% endif -%}
 </div>
 {%- endmacro %}
 
@@ -47,33 +75,64 @@
 {%- endmacro %}
 
 {% macro task_row(row, dept) -%}
-<div class="row {{ 'sub' if row.child or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}{{ ' headsub' if row.child and not row.depth and not row.ghost }}"
+{# 하위가 있는 Main 은 **접힌 채로 시작한다**(4-1) — `folded` 가 그 표시다.
+   펼침은 기기에 남고(board.js) 서버는 늘 접힌 채로 낸다: 남은 값을 서버가
+   모르므로, 펼친 채로 내면 접어 둔 사람의 화면이 한 번 깜빡인다 #}
+<div class="row {{ 'sub' if row.child or row.ghost else 'main' }}{{ ' ghostrow' if row.ghost }}{{ ' headsub' if row.child and not row.depth and not row.ghost }}{{ ' folded' if row.sub_count }}{{ ' undated' if row.undated }}"
      data-of="{{ dept.key }}" data-run="{{ row.run_id }}" data-s="{{ row.start }}" data-e="{{ row.end }}"
-     data-status="{{ row.status }}">
+     data-status="{{ row.status }}"{% if row.sub_count %} data-subs="{{ row.sub_count }}" style="--rowh:{{ row.row_height }}px"{% endif %}
+     {#- **고스트에는 안 단다** — 고스트도 `depth=1` 이지만 접힌 Main 의
+         하위가 아니라 **남의 부서 업무**다(4-4). 달면 그 부서의 마지막 Main 을
+         접을 때 그 뒤에 이어진 고스트 줄까지 함께 숨는다 — 고스트가 마지막
+         하위 바로 뒤에 오기 때문이다 #}
+     {%- if row.depth and not row.ghost %} data-parent="1"{% endif %}>
   <div class="lc" data-go="{{ row.run_id }}">
+    {%- if row.sub_count %}<button type="button" class="fold" aria-expanded="false"
+        title="하위 업무 펼치기" aria-label="하위 업무 펼치기">▶</button>{% endif -%}
     <span class="nm">{{ '↳ ' if row.ghost }}{% if row.no and not row.ghost %}<span class="runno">{{ row.no }}</span>{% endif %}{{ row.title }}</span>
     {{- pup(row.parent) }}
+    {%- if row.sub_count %}<span class="subn">하위 {{ row.sub_count }}건{% if row.undated_subs %} · 날짜 없음 {{ row.undated_subs }}{% endif %}</span>{% endif -%}
     <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
     {%- if row.ghost %}
     <span class="owner"><i style="background:{{ row.owner_color }}"></i>{{ row.owner_name }}</span>
     {%- endif %}
   </div>
   <div class="lane">
+    {%- if row.undated %}
+    {# 날짜 없는 업무 — 놓을 칸이 없다. 조용히 빼면 그것이 정확히 놓치는
+       지점이다(4-1 · 4-13 이 달력에서 따로 모아 두는 것과 같은 자리) #}
+    <button type="button" class="nodate" data-go="{{ row.run_id }}"
+            title="날짜 없음 · 누르면 드로어에서 날짜를 정합니다">날짜 없음 · 누르면 드로어에서 날짜를 정합니다</button>
+    {%- else %}
     {{ bar(row) }}
+    {%- endif %}
+    {%- for lane in (row.lanes or []) %}{% set li = loop.index0 %}{% for b in lane %}{{ lanebar(b, li) }}{% endfor %}{% endfor -%}
   </div>
 </div>
 {%- endmacro %}
 
 <div class="board" id="board">
-  <div class="sheet" id="sheet" style="--grid:{{ board.grid }}">
+  <div class="sheet" id="sheet" data-retreat="{{ retreat.id }}" style="--grid:{{ board.grid }}{% if board.today_column %};--todaycol:{{ board.today_column }}{% endif %}">
     <svg id="wires"></svg>
+    <div class="retreatband" aria-hidden="true"></div>
+    {% if board.today_column %}<div class="todayline" aria-hidden="true"></div>{% endif %}
+
+    {# 머리는 두 줄이다 (목업 D) — 구간 줄 22px + 날짜 줄 36px.
+       구간은 칸에서 세어 만든다(`axis.sections`) — 따로 적으면 칸을 하나
+       늘렸을 때 한쪽만 고쳐진다 #}
+    <div class="row sechead">
+      <div class="hlbl sec"></div>
+      {% for sec in board.sections %}
+      <div class="sc {{ sec.key }}" style="grid-column:span {{ sec.span }}">{{ sec.label }}</div>
+      {% endfor %}
+    </div>
 
     <div class="row head">
       <div class="hlbl"><b>부서 · 업무</b><span>Main ▸ 하위 ▸ 관련업무</span></div>
       {% for cell in board.headers %}
-      <div class="hc {{ cell.kind if cell.kind != 'week' else '' }}{{ ' shift' if cell.shift }}{{ ' rt' if cell.kind == 'retreat' }}"
+      <div class="hc {{ cell.kind if cell.kind != 'week' else '' }}{{ ' shift' if cell.shift }}{{ ' rt' if cell.kind == 'retreat' }}{{ ' sect-' + cell.section }}{{ ' today' if board.today_column == loop.index }}"
            data-cs="{{ cell.start }}" data-ce="{{ cell.end }}" data-lb="{{ cell.label }}">
-        <span class="dw">{{ cell.top }}</span><span class="dt">{{ cell.bottom }}</span>
+        <span class="dw">{{ cell.top }}{% if board.today_column == loop.index %} · 오늘{% endif %}</span><span class="dt">{{ cell.bottom }}</span>
       </div>
       {% endfor %}
     </div>
@@ -84,7 +143,9 @@
         <span class="caret">▼</span>
         <span class="sw" style="background:{{ dept.color }}"></span>
         <span class="nm">{{ dept.name }}</span>
-        <span class="ct">{{ dept.count }}건{% if dept.ghost_count %} +{{ dept.ghost_count }}{% endif %}</span>
+        {# 완료 막대 · 총 건수는 없앴다 — 막대는 **완료를 눈에 띄게 하는 것**이라
+           4-3 의 「시선은 미완료로」 와 반대로 간다 (목업 D) #}
+        <span class="ct">완료 {{ dept.done }}/{{ dept.count }}건{% if dept.late %} <b class="lt">· 지연 {{ dept.late }}건</b>{% endif %}</span>
       </div>
       <div class="cell" style="grid-column:2/-1"></div>
     </div>
@@ -101,7 +162,7 @@
     {% for row in group.rows %}
     <button type="button" class="mrow{{ ' sub' if row.child }}{{ ' done' if row.status == '완료' }}"
             data-run="{{ row.run_id }}" data-go="{{ row.run_id }}" data-of="{{ row.department_key }}"
-            data-s="{{ row.start }}" data-e="{{ row.end }}" data-status="{{ row.status }}">
+            data-s="{{ row.start or '' }}" data-e="{{ row.end or '' }}" data-status="{{ row.status }}">
       <span class="st" style="background:{{ row.border }}"></span>
       <span class="mid">
         <span class="nm">{{ row.title }}</span>
@@ -109,7 +170,9 @@
           <i style="background:{{ row.department_color }}"></i>
           <span class="dept">{{ row.department_name }}</span>
           <span class="who" {{ '' if row.assignee else 'hidden' }}>{{ row.assignee or '' }}</span>
-          <span>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
+          {#- 날짜가 없으면 **없다고 적는다** — 개회일로 채우면 없던 날짜를 얻는다 (4-1) #}
+          {% if row.start %}<span>{{ row.start[5:]|replace('-','/') }}{% if row.end != row.start %}–{{ row.end[5:]|replace('-','/') }}{% endif %}</span>
+          {%- else %}<span class="nodatetag">날짜 없음</span>{% endif %}
           {{- pup(row.parent) }}
         </span>
       </span>
@@ -132,6 +195,8 @@
    씁니다 (4-9 · 6-7). drawer.js 보다 먼저 와야 `window.DatePick` 이 준비됩니다 #}
 <script src="{{ static('js/datepick.js') }}" defer></script>
 <script src="{{ static('js/drawer.js') }}" defer></script>
+{# 업무 팝업(F) — 보드와 달력이 같이 쓰는 한 부품. board.js 가 부르므로 먼저 #}
+<script src="{{ static('js/taskpop.js') }}" defer></script>
 <script src="{{ static('js/board.js') }}" defer></script>
 <script src="{{ static('js/board_add.js') }}" defer></script>
 {% endblock %}
