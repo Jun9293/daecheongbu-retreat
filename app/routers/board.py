@@ -900,7 +900,10 @@ class NewTaskIn(BaseModel):
     title: str
     department_key: str | None = None
     kind: str = "main"
-    start: str
+    # **날짜는 안 골라도 된다** (2026-09-25 사람이 정함) — 회의 항목 전환이
+    # 마감 없는 항목을 그대로 넘기는 것과 같은 자리다(12장). 안 고른 것은
+    # 잘못 고른 것이 아니다 — 그런 업무는 달력이 따로 모아 둔다 (4-13)
+    start: str | None = None
     end: str | None = None
     parent_library_id: int | None = None
 
@@ -932,8 +935,12 @@ def add_new(
         user, payload.department_key):
         raise HTTPException(status_code=403, detail="내 부서의 업무만 추가할 수 있습니다.")
 
+    # **안 고른 것과 잘못 고른 것을 가른다.** 안 골랐으면 날짜 없는 업무로
+    # 만들고(`create_run` 이 그 모양을 이미 안다 — 상대 위치도 안 지어낸다),
+    # 꼴이 틀린 값일 때만 그 문구를 낸다. 마감이 시작보다 앞서는 것은
+    # `create_run` 이 자기 말로 따로 막는다.
     try:
-        start = dt.date.fromisoformat(payload.start)
+        start = dt.date.fromisoformat(payload.start) if payload.start else None
         end = dt.date.fromisoformat(payload.end) if payload.end else start
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="기간을 다시 골라주세요.") from exc
@@ -959,7 +966,9 @@ def add_new(
         action="업무_신규생성",
         target_type="task_library",
         target_id=lib.id,
-        summary=f"{lib.title} ({start.isoformat()} ~ {end.isoformat()})",
+        # 날짜가 없으면 그렇다고 적는다 — `isoformat()` 을 그냥 부르면 터진다
+        summary=(f"{lib.title} ({start.isoformat()} ~ {end.isoformat()})"
+                 if start else f"{lib.title} (날짜 없음)"),
     )
     return {"library_id": lib.id, "redirect": "/board"}
 
