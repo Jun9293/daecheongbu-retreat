@@ -84,9 +84,18 @@ def bar_style(status: str, color: str, *, kind: str, ghost: bool) -> tuple[str, 
 
 
 class Axis:
-    """보드 가로축."""
+    """보드 가로축 — **구간이 다섯이다** (목업 D · 2026-09-23 사람이 정함).
 
-    def __init__(self, open_date: dt.date, close_date: dt.date, first_week: int) -> None:
+        기획(주) · 준비(주) · D-2주(하루) · 수련회 · 후속(주)
+
+    앞의 둘은 `dweek.PLANNING_UNTIL_D_WEEK` 하나로 갈린다 — 같은 주 단위
+    칸이고 **머리의 구간 줄만** 다르다. 뒤의 「후속」 은 2026-09-23 에
+    새로 붙었다: 결산·환급·정리는 폐회 뒤에 하는 일인데(4-15 의 결산 홈이
+    그것을 세고 있다) **축 밖이라 보드에 설 자리가 없었다.**
+    """
+
+    def __init__(self, open_date: dt.date, close_date: dt.date, first_week: int,
+                 *, after_weeks: int = dweek.MIN_AFTER_WEEKS) -> None:
         self.open_date = open_date
         self.close_date = close_date
         self.first_week = first_week
@@ -100,21 +109,67 @@ class Axis:
         while cursor < open_date:
             self.days.append(cursor)
             cursor += dt.timedelta(days=1)
-        self.total = len(self.week_sundays) + len(self.days) + 1
+        # **후속은 폐회 다음 날이 든 주부터** 주 단위로 간다. 첫 칸의 일요일은
+        # 그 날이 든 주의 일요일이다 — 앞쪽 칸들이 전부 일요일 눈금이라
+        # 여기만 폐회 다음 날로 시작하면 한 주가 어긋난 채 이어진다.
+        self.after_weeks = max(0, min(after_weeks, dweek.LAST_AFTER_WEEK))
+        first_after = close_date + dt.timedelta(days=1)
+        first_after -= dt.timedelta(days=(first_after.weekday() + 1) % 7)
+        self.after_sundays = [
+            first_after + dt.timedelta(days=7 * i) for i in range(self.after_weeks)
+        ]
+        self.total = (len(self.week_sundays) + len(self.days) + 1
+                      + len(self.after_sundays))
 
     @property
     def shift_index(self) -> int:
         """주 단위 → 일 단위로 바뀌는 열 번호 (여기에 굵은 세로선)."""
         return len(self.week_sundays) + 1
 
+    @property
+    def retreat_column(self) -> int:
+        return len(self.week_sundays) + len(self.days) + 1
+
+    def section_of_week(self, n: int) -> str:
+        """D-n주가 「기획」 인가 「준비」 인가 — 가르는 자리는 여기 하나다."""
+        return "plan" if n > dweek.PLANNING_UNTIL_D_WEEK else "prep"
+
     def column_of(self, day: dt.date) -> int:
+        """그 날이 앉는 열. **범위 밖은 가까운 쪽 끝에 붙인다** (9장).
+
+        뒤로 나간 것은 `beyond_of` 가 따로 말한다 — 마지막 칸에 붙이기만 하면
+        「마지막 주가 마감인 업무」 와 「반년 뒤가 마감인 업무」 가 같은 모양이다.
+        """
+        if day > self.close_date and self.after_sundays:
+            index = (day - self.after_sundays[0]).days // 7
+            if index < 0:
+                return self.retreat_column
+            return self.retreat_column + 1 + min(index, len(self.after_sundays) - 1)
         if day >= self.open_date:
-            return self.total
+            return self.retreat_column
         if self.days and day >= self.days[0]:
             return len(self.week_sundays) + 1 + (day - self.days[0]).days
         sunday = day - dt.timedelta(days=(day.weekday() + 1) % 7)
         index = (sunday - self.week_sundays[0]).days // 7
         return max(1, min(len(self.week_sundays), index + 1))
+
+    def beyond_of(self, end: dt.date) -> bool:
+        """그 마감이 **축 뒤쪽 상한 밖**인가 (바 끝에 `→` 를 단다 · 4-1)."""
+        if not self.after_sundays:
+            return end > self.close_date
+        return end > self.after_sundays[-1] + dt.timedelta(days=6)
+
+    def sections(self) -> list[dict]:
+        """머리 첫 줄 — 구간마다 (이름, 칸 수). **칸에서 세어 만든다** —
+        따로 적으면 칸을 하나 늘렸을 때 한쪽만 고쳐진다."""
+        out: list[dict] = []
+        for cell in self.headers():
+            if out and out[-1]["key"] == cell["section"]:
+                out[-1]["span"] += 1
+            else:
+                out.append({"key": cell["section"], "label": SECTION_LABELS[cell["section"]],
+                            "span": 1})
+        return out
 
     def headers(self) -> list[dict]:
         cells = []
@@ -123,6 +178,7 @@ class Axis:
             cells.append(
                 {
                     "kind": "week",
+                    "section": self.section_of_week(n),
                     "top": f"D-{n}",
                     "bottom": f"{sunday.month}/{sunday.day}",
                     "label": f"D-{n}주 ({sunday.month}/{sunday.day} 주)",
@@ -135,6 +191,7 @@ class Axis:
             cells.append(
                 {
                     "kind": "day",
+                    "section": "d2",
                     "top": WEEKDAYS[(day.weekday() + 1) % 7],
                     "bottom": f"{day.month}/{day.day}",
                     "label": f"{day.month}/{day.day}",
@@ -146,6 +203,7 @@ class Axis:
         cells.append(
             {
                 "kind": "retreat",
+                "section": "retreat",
                 "top": "수련회",
                 "bottom": f"{self.open_date.month}/{self.open_date.day}"
                 f"–{self.close_date.month}/{self.close_date.day}",
@@ -155,7 +213,123 @@ class Axis:
                 "shift": False,
             }
         )
+        for i, sunday in enumerate(self.after_sundays):
+            cells.append(
+                {
+                    "kind": "after",
+                    "section": "after",
+                    "top": f"D+{i + 1}",
+                    "bottom": f"{sunday.month}/{sunday.day}",
+                    "label": f"D+{i + 1}주 ({sunday.month}/{sunday.day} 주)",
+                    "start": sunday.isoformat(),
+                    "end": (sunday + dt.timedelta(days=6)).isoformat(),
+                    "shift": i == 0,
+                }
+            )
         return cells
+
+
+SECTION_LABELS = {
+    "plan": "기획 · 주 단위 (D-주)",
+    "prep": "준비 · 주 단위 (D-주)",
+    "d2": "D-2주 · 하루 단위",
+    "retreat": "수련회",
+    "after": "후속 · 주 단위",
+}
+
+
+def collapsed_lanes(subs: list[dict]) -> list[list[dict]]:
+    """접힌 Main 아래 한 줄에 눕힐 하위 바들 (목업 D · 4-1).
+
+    둘을 한다.
+
+    **합친다** — 시작 칸과 끝 칸이 **둘 다** 같은 하위끼리는 바 하나로 묶고
+    이름을 「, 」 로 잇는다. 합친 바는 끌 수 없다(run 이 여럿이라 끌면 어느
+    것이 움직이는지 화면이 말해 주지 못한다 · 2026-09-23 사람이 정함).
+
+    **눕힌다** — 일부만 겹치면 앞에서부터 빈 줄에 넣고, 없으면 줄을 하나 더
+    둔다. **겹친 채로 그리면 뒤엣것이 앞엣것을 덮어 있는 업무가 화면에서
+    사라진다.**
+
+    날짜 없는 하위는 여기 안 눕힌다 — 놓을 칸이 없다(점선 표시가 대신한다).
+    """
+    묶음: dict[tuple[int, int], list[dict]] = {}
+    차례: list[tuple[int, int]] = []
+    for sub in subs:
+        if sub.get("undated"):
+            # **여기서 빼는 것은 「바를 안 놓는다」 뿐이다** — 몇 건인지는
+            # `undated_subs` 가 세어 왼쪽 칸이 말한다. 조용히 빼면 접힌
+            # 동안 그 업무가 화면 어디에도 없다(4-1 · 커밋 전 검토)
+            continue
+        키 = (sub["col_start"], sub["col_end"])
+        if 키 not in 묶음:
+            묶음[키] = []
+            차례.append(키)
+        묶음[키].append(sub)
+
+    바들 = []
+    for 키 in sorted(차례):
+        무리 = 묶음[키]
+        첫 = 무리[0]
+        바들.append({
+            "col_start": 키[0],
+            "col_end": 키[1],
+            "title": ", ".join(x["title"] for x in 무리),
+            "run_id": 첫["run_id"] if len(무리) == 1 else None,
+            "run_ids": " ".join(str(x["run_id"]) for x in 무리),
+            "merged": len(무리) > 1,
+            # 합친 바의 생김새는 **첫째 것**을 따른다 — 여럿의 상태를 섞을
+            # 규칙이 없고, 섞으면 같은 칸이 상태에 따라 색이 오락가락한다
+            "status": 첫["status"],
+            "kind": 첫["kind"],
+            "background": 첫["background"],
+            "border": 첫["border"],
+            "owner_color": 첫["owner_color"],
+            "beyond": any(x.get("beyond") for x in 무리),
+            # **`items` 라고 부르지 않는다** — dict 의 메서드 이름이라 Jinja 가
+            # 키가 아니라 그 메서드를 준다(화면이 한 번 터졌다)
+            "pop_items": [{"title": x["title"], "run_id": x["run_id"],
+                           "meta_line": x["meta_line"]} for x in 무리],
+        })
+
+    lanes: list[list[dict]] = []
+    for 바 in 바들:
+        for lane in lanes:
+            if all(바["col_start"] >= 놓인["col_end"] or 바["col_end"] <= 놓인["col_start"]
+                   for 놓인 in lane):
+                lane.append(바)
+                break
+        else:
+            lanes.append([바])
+    return lanes
+
+
+def _축안에(axis: "Axis", day: dt.date) -> bool:
+    """그 날이 축이 실제로 덮는 기간 안인가.
+
+    `column_of` 는 **범위 밖도 가까운 쪽 끝에 붙이므로**(9장) 그것만으로는
+    「오늘이 축에 있다」 를 알 수 없다 — 그대로 그리면 회차가 한참 지난 뒤에도
+    오늘 선이 마지막 칸에 붙어 **거짓말을 한다.**
+    """
+    처음 = axis.week_sundays[0] if axis.week_sundays else axis.open_date
+    끝 = (axis.after_sundays[-1] + dt.timedelta(days=6)) if axis.after_sundays else axis.close_date
+    return 처음 <= day <= 끝
+
+
+def _after_weeks(close_date: dt.date, runs: list[TaskRun], today: dt.date) -> int:
+    """후속 칸을 몇 개 그릴까 — **오늘이 든 주와 가장 늦은 마감 중 늦은 쪽**까지.
+
+    (2026-09-23 사람이 정함). 마감으로만 정하면 폐회가 한참 지난 회차에서
+    축이 세 칸에 멈추는데, 그러면 「오늘」 단추가 **옮길 오늘 선이 축에 없다.**
+    """
+    ends = [due_of(r) for r in runs]
+    늦은 = max([d for d in ends if d] + [today], default=today)
+    if 늦은 <= close_date:
+        return dweek.MIN_AFTER_WEEKS
+    first = close_date + dt.timedelta(days=1)
+    first -= dt.timedelta(days=(first.weekday() + 1) % 7)
+    필요 = (늦은 - first).days // 7 + 1
+    return max(dweek.MIN_AFTER_WEEKS, min(dweek.LAST_AFTER_WEEK, 필요))
 
 
 def _first_week(open_date: dt.date, runs: list[TaskRun]) -> int:
@@ -263,6 +437,32 @@ def paint_of(run: TaskRun, today: dt.date, *, ghost: bool = False) -> dict:
         "tooltip": tooltip_of(run, status=run.status, overdue=overdue,
                               overdue_days=days),
     }
+
+
+def popup_meta(run: TaskRun, today: dt.date) -> str:
+    """업무 팝업(F)의 둘째 줄 — **「기간 · 상태 · 담당팀」** 한 줄.
+
+    **만드는 곳은 여기 하나다** — 보드와 달력이 같은 부품을 쓰므로(4-1 · 4-13)
+    화면마다 조립하면 두 벌이 되고 갈린 쪽을 아무도 눈치채지 못한다.
+    `tooltip_of` 와 다른 함수인 것은 **담는 것이 다르기 때문**이다: 툴팁은
+    부서를 앞에 놓고 상위·담당자까지 싣고, 팝업은 목업 F 가 정한 셋만 싣는다.
+
+    **축 밖으로 나간 업무가 실제 날짜를 말하는 자리가 여기다**(4-1) — 바는
+    마지막 칸에 붙고 `→` 만 달리므로, 이 줄이 없으면 그 날짜가 화면 어디에도
+    없다.
+    """
+    start = run.start_date or run.end_date
+    end = run.end_date or run.start_date
+    조각 = []
+    if start:
+        조각.append(start.isoformat() if start == end
+                   else f"{start.isoformat()} – {end.isoformat()}")
+    else:
+        조각.append("날짜 없음")
+    늦음 = overdue_days_of(run, today)
+    조각.append(f"지연 {늦음}일" if 늦음 else paint_of(run, today)["badge"]["label"])
+    조각.append(run.department.name if run.department else "담당 없음")
+    return " · ".join(조각)
 
 
 def tooltip_of(run: TaskRun, *, status: str, overdue: bool,
@@ -432,7 +632,8 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
     open_date = retreat.start_date
     close_date = retreat.end_date or open_date
     runs = load_runs(db, retreat)
-    axis = Axis(open_date, close_date, _first_week(open_date, runs))
+    axis = Axis(open_date, close_date, _first_week(open_date, runs),
+                after_weeks=_after_weeks(close_date, runs, today))
 
     by_library = {run.library_id: run for run in runs}
     # 후속("나를 기다리는 업무")은 저장하지 않는다 — 선행의 역방향으로 계산한다
@@ -497,7 +698,11 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
     def make_row(run: TaskRun, *, depth: int, ghost: bool, owner_color: str,
                  head_parent: bool = False) -> dict:
         lib = run.library
-        start = run.start_date or open_date
+        # **날짜가 없는 것과 개회일에 있는 것은 다르다** (4-1 · 봐둘것 BJ-d).
+        # 전에는 둘 다 개회일 자리에 보통 바로 서서, 수련회 칸에 잡힌 진짜
+        # 업무와 구별이 안 됐다. 이제 바를 안 그리고 점선 표시를 둔다.
+        undated = run.start_date is None and run.end_date is None
+        start = run.start_date or run.end_date or open_date
         end = run.end_date or start
         # **첫 렌더도 paint_of 를 지난다.** 여기서 bar_style 을 직접 부르면
         # 처음 그린 바와 API 로 다시 칠한 바가 서로 다른 길에서 나온다 —
@@ -519,6 +724,12 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
             "child": is_child(run, depth),
             "col_start": axis.column_of(start),
             "col_end": axis.column_of(end) + 1,
+            # 축 뒤쪽 상한 밖 — 바 끝에 `→` 를 달고 **제목이 안 끊겨도** 팝업을
+            # 연다(4-1). 그러지 않으면 실제 날짜를 말할 자리가 어디에도 없다
+            "beyond": axis.beyond_of(end) and not undated,
+            "undated": undated,
+            # 팝업(F)이 쓰는 한 줄 — 만드는 곳을 화면에 두면 보드와 달력이 갈린다
+            "meta_line": popup_meta(run, today),
             "background": background,
             "border": border,
             "owner_name": short_name(run.department.name) if run.department else "담당 없음",
@@ -541,11 +752,24 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
         mains = [r for r in own if r.library.parent_library_id not in own_libs]
         rows: list[dict] = []
         for main in mains:
-            rows.append(make_row(main, depth=0, ghost=False, owner_color=dept.color,
-                                 head_parent=True))
-            for sub in own:
-                if sub.library.parent_library_id == main.library_id:
-                    rows.append(make_row(sub, depth=1, ghost=False, owner_color=dept.color))
+            head = make_row(main, depth=0, ghost=False, owner_color=dept.color,
+                            head_parent=True)
+            subs = [make_row(sub, depth=1, ghost=False, owner_color=dept.color)
+                    for sub in own
+                    if sub.library.parent_library_id == main.library_id]
+            # **하위가 있는 Main 은 기본 접힘이다** (4-1 · 목업 D). 접힌 줄에
+            # 눕힐 바를 서버가 미리 만들어 둔다 — 화면에는 접힌 것과 펼친 것이
+            # 둘 다 그려지고 **보이는 쪽만** 자리를 차지한다(`offsetParent`).
+            # 그래야 펼침을 켜고 끌 때 서버를 다시 부르지 않는다.
+            head["lanes"] = collapsed_lanes(subs)
+            head["sub_count"] = len(subs)
+            # 접힌 동안 바를 못 놓는 하위 — 놓을 칸이 없다. 왼쪽 칸이 그 수를
+            # 말한다(안 말하면 접힌 채로는 있는 줄도 모른다)
+            head["undated_subs"] = sum(1 for x in subs if x.get("undated"))
+            # 행 높이 48 + (줄 수 − 1) × 18 (목업 D)
+            head["row_height"] = 48 + max(0, len(head["lanes"]) - 1) * 18
+            rows.append(head)
+            rows.extend(subs)
 
         # 관련팀으로 지정된 업무는 점선 고스트 바로 이 부서 행에도 나타난다
         ghosts = [
@@ -574,7 +798,11 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                 "label_tint": tint(dept.color, 0.03),
                 "rows": rows,
                 "ghost_rows": ghost_rows,
-                "count": len(rows),
+                "count": len(own),
+                # 부서 줄은 「완료 n/n건」 과 지연만 적는다 (4-1 · 목업 D).
+                # **고스트는 안 센다** — 남의 부서 업무다
+                "done": sum(1 for r in own if r.status == "완료"),
+                "late": sum(1 for r in own if overdue_of(r, today)),
                 "ghost_count": len(ghost_rows),
             }
         )
@@ -593,7 +821,9 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                 "label_tint": "#FAFBFA",
                 "rows": rows,
                 "ghost_rows": [],
-                "count": len(rows),
+                "count": len(unassigned),
+                "done": sum(1 for r in unassigned if r.status == "완료"),
+                "late": sum(1 for r in unassigned if overdue_of(r, today)),
                 "ghost_count": 0,
             }
         )
@@ -620,8 +850,12 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
                         else "담당 없음",
                         "department_color": r.department.color if r.department else NO_DEPARTMENT_COLOR,
                         "assignee": r.assignee.name if r.assignee else None,
-                        "start": (r.start_date or open_date).isoformat(),
-                        "end": (r.end_date or r.start_date or open_date).isoformat(),
+                        # **없으면 없다고 낸다** — 개회일로 채우면 화면이
+                        # 「8/21」 이라고 적어 없던 날짜를 얻는다 (4-1)
+                        "start": (r.start_date or r.end_date).isoformat()
+                        if (r.start_date or r.end_date) else None,
+                        "end": (r.end_date or r.start_date).isoformat()
+                        if (r.start_date or r.end_date) else None,
                         "border": paint_of(r, today)["bar_border"],
                         "parent": parent_of(r, by_library),
                         "child": is_child(r),
@@ -635,15 +869,20 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
     grid = (
         "var(--label-w) "
         f"repeat({len(axis.week_sundays)},var(--wk)) "
-        f"repeat({len(axis.days)},var(--day)) var(--retreat)"
+        f"repeat({len(axis.days)},var(--day)) var(--retreat) "
+        f"repeat({len(axis.after_sundays)},var(--after))"
     )
     return {
         "axis": axis,
         "grid": grid,
         "mobile_groups": mobile_groups,
         "headers": axis.headers(),
+        "sections": axis.sections(),
         "columns": axis.total,
         "shift_index": axis.shift_index,
+        # 오늘 선을 그릴 열 — 오늘이 축 밖이면 None (그리지 않는다)
+        "today_column": axis.column_of(today) if _축안에(axis, today) else None,
+        "today": today.isoformat(),
         "departments": dept_blocks,
         "meta": meta,
         "total": len(runs),
@@ -655,16 +894,36 @@ def build(db: Session, retreat: Retreat, *, can_edit=None, today: dt.date | None
     }
 
 
+# 좁은 폭 목록에서 **날짜 없는 업무만 모으는 묶음** (4-1 · 4-13). 정수 주차와
+# 안 섞이게 따로 둔다 — 개회일 자리로 떨어뜨리면 수련회 기간에 실제로 잡힌
+# 업무와 구별이 안 된다(봐둘것 BJ-d 가 넓은 폭에서 짚은 그 자리다)
+NO_DATE_BUCKET = "__nodate__"
+
+
 def _by_week(runs: list[TaskRun], open_date: dt.date, axis: Axis):
-    """실행 업무를 D-주차로 묶는다. 개회일 이후 업무는 수련회 기간으로 모은다."""
-    buckets: dict[int, list[TaskRun]] = {}
+    """실행 업무를 D-주차로 묶는다. 개회일 이후 업무는 수련회 기간으로 모은다.
+
+    **날짜가 없는 업무는 따로 모은다** — 전에는 `start_date or open_date` 라
+    「수련회 기간」 묶음에 개회일 날짜를 달고 섰다. 넓은 폭은 고쳤는데 좁은
+    폭만 남아 있던 자리다(2026-09-25 커밋 전 검토).
+    """
+    buckets: dict[object, list[TaskRun]] = {}
     for run in runs:
-        start = run.start_date or open_date
+        if run.start_date is None and run.end_date is None:
+            buckets.setdefault(NO_DATE_BUCKET, []).append(run)
+            continue
+        start = run.start_date or run.end_date
         week = 0 if start >= open_date else max(1, dweek.week_of(open_date, start))
         buckets.setdefault(min(week, axis.first_week), []).append(run)
 
     out = []
-    for week in sorted(buckets, key=lambda w: (w == 0, -w)):
+    # 날짜 없는 묶음은 **맨 뒤**에 — 「이번 주에 뭐가 있나」 가 먼저다
+    주차들 = sorted((w for w in buckets if w != NO_DATE_BUCKET),
+                  key=lambda w: (w == 0, -w))
+    for week in list(주차들) + ([NO_DATE_BUCKET] if NO_DATE_BUCKET in buckets else []):
+        if week == NO_DATE_BUCKET:
+            out.append(("날짜 없는 업무", "nodate", buckets[week]))
+            continue
         if week == 0:
             out.append(("수련회 기간", "retreat", buckets[week]))
             continue
@@ -679,13 +938,23 @@ def planning_slots(open_date: dt.date, close_date: dt.date | None = None) -> lis
     보드는 업무가 있는 데까지만 그리지만, 고를 때는 그보다 앞도 열어 둔다.
     기획 단계 업무는 D-13주보다 훨씬 앞에 있기 때문이다.
     """
-    axis = Axis(open_date, close_date or open_date, dweek.PLANNING_FIRST_WEEK)
+    # **후속 칸은 안 낸다** (`after_weeks=0`). 보드의 축이 뒤로 늘어난 것이
+    # (2026-09-25) 여기까지 따라오면 「수련회 기간 · 8/30」 이라는 이름의 칸이
+    # 셋 생긴다 — 아래 `else` 가 `after` 를 수련회로 읽기 때문이다.
+    # **폐회 뒤 주에 업무를 놓게 할지는 사람이 정할 것**이라 지금은 전과
+    # 같은 칸만 낸다(봐둘것 BJ-g · 커밋 전 검토가 잡았다)
+    axis = Axis(open_date, close_date or open_date, dweek.PLANNING_FIRST_WEEK,
+                after_weeks=0)
     out = []
     for cell in axis.headers():
         if cell["kind"] == "week":
             label = f"{cell['top']}주 · {cell['bottom']} 주"
         elif cell["kind"] == "day":
             label = f"{cell['bottom']} ({cell['top']})"
+        elif cell["kind"] == "after":
+            # 지금은 `after_weeks=0` 이라 안 오지만, 사람이 열기로 하면 여기다 —
+            # **`else` 로 흘려 보내면 「수련회 기간」 이라는 거짓 이름이 붙는다**
+            label = f"{cell['top']}주 · {cell['bottom']} 주"
         else:
             label = f"수련회 기간 · {cell['bottom']}"
         out.append(
