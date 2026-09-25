@@ -82,9 +82,16 @@ def test67_b03_드로어_폭은_finally_에서_되돌린다():
     되돌 = 점검JS[at:점검JS.index("};", at)]
     assert "removeItem" in 되돌, "값이 없던 경우를 안 다룬다"
 
-    끝 = 점검JS.index("  } finally {")
-    토막 = 점검JS[끝:끝 + 400]
-    assert "폭되돌리기()" in 토막, 토막
+    # **`finally` 를 순서로 찾지 않는다** — 2026-09-25 에 그 앞에 다른
+    # `finally`(스크롤 되돌리기)가 생겨 첫째를 집었고, **잘 도는 자리가
+    # 빨갛게** 나왔다. 폭을 되돌리는 그 블록을 **이름으로** 찾는다
+    토막 = None
+    for m in re.finditer(r"\} finally \{", 점검JS):
+        조각 = 점검JS[m.start():m.start() + 400]
+        if "폭되돌리기()" in 조각:
+            토막 = 조각
+            break
+    assert 토막, "폭을 되돌리는 `finally` 가 없다"
     # **실패를 삼키지 않는다** — 조용히 넘어가면 다음 판이 또 남의 값 위에서 잰다
     assert "잰다(false" in 토막, 토막
 

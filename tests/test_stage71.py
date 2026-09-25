@@ -125,23 +125,41 @@ def test71_c02_마감이_시작보다_앞서면_막힌다(회차, admin_client):
     assert "마감이 시작보다" in res.json()["detail"]
 
 
-def test71_c03_마감만_보내면_시작은_빈_채로_남는다(회차, admin_client):
-    """**「그 날 하루」 가 아니다** — 시작은 비고 마감만 들어간다.
+def test71_c03_마감만_보내면_그_날_하루다(회차, admin_client):
+    """**한쪽만 고른 것은 그 날 하루다** (2026-09-25 사람이 정함 · 봐둘것 BJ-e).
 
-    `create_run` 의 `end = end or start` 에는 거울이 없어서, start 만 빈 채로
-    run 이 섭니다. 그 run 을 읽는 네 자리가 서로 다른 말을 합니다 —
-    달력은 마감에 점 하나, 보드는 개회일부터 마감까지 긴 바, 드로어는 둘 다
-    없음, 활동 기록은 「날짜 없음」.
+    `create_run` 의 `end = end or start` 와 `start = start or end` 가 대칭이다.
+    한쪽만 채우면 「시작 없이 마감만」 이라는 셋째 자리가 생기고, 그 run 을
+    달력 · 보드 · 드로어 · 활동 기록이 **서로 다르게** 읽었다.
 
-    **화면에서는 안 닿습니다** — `DatePick` 이 늘 둘 다 채웁니다. 그래서
-    지금 새는 곳은 없고, **이 시험은 지금 코드가 무엇을 하는지만** 붙듭니다.
-    하루로 볼지 막을지는 사람이 정할 것으로 올렸습니다(2026-09-25 · 봐둘것 BJ-e).
+    **화면에서는 안 닿는 모양이었다** — `DatePick` 이 늘 둘 다 채운다.
+    그래서 이 시험이 그 자리를 지키는 유일한 자리다.
     """
     res = 만든다(admin_client, end="2026-07-11")
     assert res.status_code == 200, res.text
     run = 그업무(res.json()["library_id"])
-    assert run.end_date == dt.date(2026, 7, 11)
-    assert run.start_date is None, "시작이 마감으로 채워졌다면 네 자리를 다시 봐야 한다"
+    하루 = dt.date(2026, 7, 11)
+    assert run.start_date == 하루 and run.end_date == 하루
+
+
+def test71_c03b_시작만_보내도_그_날_하루다(회차, admin_client):
+    """반대쪽도 같다 — 대칭이 아니면 한쪽만 고친 것이다."""
+    res = 만든다(admin_client, start="2026-07-09")
+    assert res.status_code == 200, res.text
+    run = 그업무(res.json()["library_id"])
+    하루 = dt.date(2026, 7, 9)
+    assert run.start_date == 하루 and run.end_date == 하루
+
+
+def test71_c03c_한쪽만_골라도_활동_기록이_날짜를_적는다(회차, admin_client):
+    """**「날짜 없음」 이 아니다** — 기록이 화면과 다른 말을 하면 안 된다."""
+    res = 만든다(admin_client, end="2026-07-11", title="마감만 고른 업무")
+    assert res.status_code == 200
+    with app_session() as db:
+        로그 = db.scalars(select(models.ActivityLog)
+                         .where(models.ActivityLog.action == "업무_신규생성")).all()
+    말 = 로그[-1].summary or ""
+    assert "2026-07-11" in 말 and "날짜 없음" not in 말
 
 
 def test71_c04_이름이_비면_그대로_막힌다(회차, admin_client):
@@ -172,3 +190,37 @@ def test71_d03_라우터가_안_고른_것과_잘못_고른_것을_가른다():
     assert "dt.date.fromisoformat(payload.start) if payload.start else None" in 라우터
     # 그 문구는 남는다 — 뜻만 좁아졌다(꼴이 틀린 값)
     assert "기간을 다시 골라주세요." in 라우터
+
+
+# ── 마. 넷이 같은 것을 말하나 (BJ-e 를 닫는 자리) ───────────────────
+
+def test71_e01_한쪽만_고른_업무를_넷이_같게_읽는다(회차, admin_client):
+    """**달력 · 보드 · 드로어 · 활동 기록**이 같은 날을 말해야 한다.
+
+    이 모양은 화면에 진입점이 없다(`DatePick` 이 늘 둘 다 채운다) — 그래서
+    여기서 API 로 직접 만들어 넷을 한 자리에서 잰다. 넷이 갈리던 것이
+    봐둘것 BJ-e 였고, `create_run` 의 대칭 한 줄이 그것을 닫았다.
+    """
+    하루 = dt.date(2026, 7, 11)
+    res = 만든다(admin_client, end=하루.isoformat(), title="한쪽만 고른 업무")
+    assert res.status_code == 200, res.text
+    run = 그업무(res.json()["library_id"])
+
+    # ㄱ. 저장 — 그 날 하루
+    assert run.start_date == 하루 and run.end_date == 하루
+
+    # ㄴ. 달력 — 「날짜가 없는 업무」 쪽이 아니라 그 달에 점으로 선다
+    달력 = admin_client.get(f"/calendar?month=2026-07&scope=all").text
+    앞 = 달력[:달력.index("날짜가 없는 업무")] if "날짜가 없는 업무" in 달력 else 달력
+    assert "한쪽만 고른 업무" in 앞, "마감만 고른 업무가 「날짜 없는 업무」 로 갔다"
+
+    # ㄷ. 드로어 — 기간 줄이 그 날을 말한다 (개회일이 아니다)
+    드로어 = admin_client.get(f"/board/task/{run.id}").json()
+    assert 드로어["start"] == 하루.isoformat()
+    assert 드로어["end"] == 하루.isoformat()
+
+    # ㄹ. 활동 기록 — 「날짜 없음」 이 아니다
+    with app_session() as db:
+        로그 = db.scalars(select(models.ActivityLog)
+                         .where(models.ActivityLog.action == "업무_신규생성")).all()
+    assert 하루.isoformat() in (로그[-1].summary or "")

@@ -1237,14 +1237,26 @@ const 점검 = async (옵션 = {}) => {
     // ── 화면마다 다른 두 가지 ─────────────────────────────────────────
     //    패널은 한 벌이지만 그것을 담은 화면은 각자의 규칙이 있다.
     if (isBoard) {
-      // 가로 격자선을 넣지 않는다 (CLAUDE.md 4-0).
-      // 세로선은 남기므로 '선이 하나도 없다'가 아니라 '가로선만 없다'를 본다.
-      const rows = [...sheet.querySelectorAll('.row.main .lane, .row.sub .lane')].filter(shown);
-      const lined = rows.filter(el => {
-        const cs = getComputedStyle(el);
-        return cs.borderBottomWidth !== '0px' && cs.borderBottomStyle !== 'none';
+      /* **행은 가로선으로 갈린다** (4-0 · 목업 D · 2026-09-23 에 뒤집혔다).
+         그전에는 이 자리가 「가로선이 없다」 를 쟀다 — 그 판단은 **한 행에
+         바가 한 줄일 때만** 맞았고, 접힌 Main 아래에 하위가 여러 줄로 누우면
+         어느 바가 어느 행의 것인지 여백만으로 안 갈린다(4-1).
+         **왼쪽 칸과 내용 칸이 같은 값**인 것까지 본다 — 갈리면 가로로 훑을 때
+         선이 끊겨 보인다. 세로선 규칙은 그대로다. */
+      const rows = [...sheet.querySelectorAll('.row.main, .row.sub')].filter(shown);
+      const 값 = new Set();
+      rows.slice(0, 20).forEach(row => {
+        ['.lc', '.lane'].forEach(sel => {
+          const el = row.querySelector(sel);
+          if (!el) return;
+          const cs = getComputedStyle(el);
+          값.add(cs.borderBottomWidth === '0px' || cs.borderBottomStyle === 'none'
+            ? '없음' : cs.borderBottomColor);
+        });
       });
-      잰다(lined.length === 0, ` 가로 격자선 없음 (${lined.length}줄)`, '행에 가로선이 남아 있음');
+      잰다(rows.length === 0 || (값.size === 1 && !값.has('없음')),
+        ` 행 가로선이 왼쪽 칸과 내용 칸에 같은 값으로 있다 (${[...값].join(' · ')})`,
+        `행 가로선이 없거나 갈렸다 (${[...값].join(' · ')})`);
       const vert = [...sheet.querySelectorAll('.gridlines i')].length;
       잰다(vert > 0, ` 세로 격자선은 남아 있음 (${vert}개)`, '세로 격자선이 사라짐');
 
@@ -1645,6 +1657,132 @@ const 점검 = async (옵션 = {}) => {
       }
     }
 
+    /* ── 3단계: 보드 (목업 D · F) ──────────────────────────────────
+       **보드에서만 잰다** — 달력·목록에는 이 자리가 아예 없다. 「건너뜀」 으로
+       내는 것과 「없다」 로 내는 것을 가르는 자리다 (11-3). */
+    if (where === '보드') {
+      /* 구간 · 후속 칸 — 축이 수련회에서 끝나지 않는다.
+         **속성이 아니라 화면을 본다**(10장) — `querySelectorAll` 은
+         `display:none` 인 것도 그대로 찾는다. 자가시험이 후속 칸을 숨겨
+         심었을 때 이 줄이 그것을 못 보고 지나갔다(㉗ 이 「놓침」 이었다) */
+      const 구간 = [...sheet.querySelectorAll('.row.sechead .sc')]
+        .filter(shown).map(x => x.className.split(' ')[1]);
+      잰다(구간.length >= 3 && 구간[구간.length - 1] === 'after',
+        ` 구간 줄이 있고 마지막이 후속이다 (${구간.join('·')})`,
+        '구간 줄이 없거나 후속 칸이 없다');
+      const 후속칸 = [...sheet.querySelectorAll('.row.head .hc.after')].filter(shown);
+      잰다(후속칸.length >= 3 && 후속칸.length <= 26,
+        ` 후속 칸이 최소 3 · 최대 26 안이다 (${후속칸.length}칸)`,
+        `후속 칸 수가 범위 밖이다 (${후속칸.length})`);
+
+      // 오늘 — 머리 강조와 세로선은 함께 있거나 함께 없다
+      const 오늘칸 = sheet.querySelector('.row.head .hc.today');
+      const 오늘선 = sheet.querySelector('.todayline');
+      const 오늘단추 = document.getElementById('todaybtn');
+      if (!오늘칸) {
+        results.push('· 오늘이 축 밖이라 「오늘」 은 건너뜀');
+      } else {
+        잰다(!!오늘선 && !!오늘단추, ' 오늘 칸 · 세로선 · 단추가 함께 있다',
+          '오늘 칸은 있는데 세로선이나 단추가 없다');
+        잰다(오늘칸.textContent.includes('오늘'), ' 오늘 칸 머리에 「오늘」 이 붙는다',
+          '오늘 칸에 그 글자가 없다');
+        /* **부드럽게 옮기므로 끝난 뒤에 잰다** — 스크롤이 움직이기 시작한
+           것만 보고 재면 아직 도착 전이라 **잘 도는 자리가 빨갛게 나온다**
+           (실제로 그랬다). 재는 것은 「움직였나」 가 아니라 「보이나」 다.
+
+           **먼저 반대쪽으로 놓고 잰다**(10장) — 오늘 칸이 이미 보이는 자리에서
+           재면 누르기 전부터 참이라 **헛통과**한다(「달력 칸 크기 고정」 이
+           같은 값끼리 견줘 지나갔던 그 자리다 · 커밋 전 검토). 끝나면 걷는다. */
+        const 보이나 = () => 오늘칸.offsetLeft - board.scrollLeft > 0
+          && 오늘칸.offsetLeft - board.scrollLeft < board.clientWidth;
+        const 원래스크롤 = board.scrollLeft;
+        try {
+          board.scrollLeft = 0;
+          await 잠깐본다(() => !보이나(), 1500);
+          잰다(!보이나(), ' 재기 전에는 오늘 칸이 안 보인다 (반대쪽으로 놓음)',
+            '맨 왼쪽으로 옮겨도 오늘 칸이 보인다 — 이 자리는 아무것도 못 잰다');
+          오늘단추.click();
+          await 잠깐본다(보이나, 4000);
+          잰다(보이나(), ' 「오늘」 단추가 오늘 칸을 보이게 옮긴다',
+            '「오늘」 을 눌러도 오늘 칸이 안 보인다');
+        } finally {
+          // **되돌리기는 `finally` 에** — 중간에 죽어도 보던 자리는 돌아온다 (10장)
+          board.scrollLeft = 원래스크롤;
+        }
+      }
+
+      // 접힘 — **기본이 접힘이고** 토글하면 하위 줄이 보인다 (4-1)
+      const 접힌줄 = [...sheet.querySelectorAll('.row.main[data-subs]')].filter(x => x.offsetParent);
+      if (!접힌줄.length) {
+        results.push('· 이 화면·계정에는 하위가 있는 Main 이 없어 접힘은 건너뜀');
+      } else {
+        const 줄 = 접힌줄[0];
+        const 폈던가 = !줄.classList.contains('folded');
+        if (폈던가) 줄.querySelector('.fold').click();     // 접힌 자리에서 시작한다
+        잰다(줄.classList.contains('folded'), ' 하위가 있는 Main 이 접혀 있다',
+          '하위가 있는 Main 이 안 접힌다');
+        잰다(!!줄.querySelector('.subn'), ' 접힌 줄에 「하위 n건」 이 있다',
+          '접혀 있는데 몇 건인지 안 적혀 있다');
+        const 눕은바 = [...줄.querySelectorAll('.bar.sl')].filter(x => x.offsetParent);
+        잰다(눕은바.length > 0 || !!줄.querySelector('.nodate'),
+          ` 접힌 줄 아래에 하위 바가 눕는다 (${눕은바.length}개)`,
+          '접혔는데 하위 바가 안 보인다');
+        // 겹쳐 그리지 않는다 — 같은 줄의 바끼리 가로로 안 겹친다
+        const 겹침 = 눕은바.some((a, i) => 눕은바.some((b, j) => j > i
+          && Math.abs(a.offsetTop - b.offsetTop) < 2
+          && a.offsetLeft < b.offsetLeft + b.offsetWidth
+          && b.offsetLeft < a.offsetLeft + a.offsetWidth));
+        잰다(!겹침, ' 같은 줄의 하위 바가 겹치지 않는다',
+          '하위 바가 겹쳐 뒤엣것이 앞엣것을 덮는다');
+
+        줄.querySelector('.fold').click();
+        await 잠깐본다(() => !줄.classList.contains('folded'), 1500);
+        const 하위줄 = 줄.nextElementSibling;
+        // **속성이 아니라 화면을 본다** (10장) — `hidden === true` 는
+        // 「숨겨졌다」 가 아니다. `display` 를 준 규칙이 `[hidden]` 을 이긴다
+        const 하위보임 = !!(하위줄 && 하위줄.offsetParent
+          && getComputedStyle(하위줄).display !== 'none');
+        잰다(!줄.classList.contains('folded') && 하위보임,
+          ' 펼치면 하위 줄이 보인다', '펼쳐도 하위 줄이 안 보인다');
+        잰다(!([...줄.querySelectorAll('.bar.sl')].some(x => x.offsetParent)),
+          ' 펼치면 눕은 바가 사라진다', '펼쳤는데 눕은 바가 그대로 있다');
+        줄.querySelector('.fold').click();                 // 원래대로
+        await 잠깐본다(() => 줄.classList.contains('folded'), 1500);
+        if (폈던가) 줄.querySelector('.fold').click();     // 사람의 값으로 되돌린다
+      }
+
+      // 합친 바는 끌 수 없다 — **구조로** 막는다 (`data-run` 이 없다)
+      const 합친바 = [...sheet.querySelectorAll('.bar.sl.merged')].filter(x => x.offsetParent);
+      if (!합친바.length) {
+        results.push('· 이 화면에는 합친 바가 없어 「못 끈다」 는 건너뜀');
+      } else {
+        잰다(합친바.every(x => !x.dataset.run && x.dataset.runs),
+          ' 합친 바에 data-run 이 없다 (끌 수 없다)',
+          '합친 바에 data-run 이 있다 — 끌 수 있게 된다');
+        const 전 = 합친바[0].style.gridColumn;
+        합친바[0].dispatchEvent(new MouseEvent('mousedown', {bubbles: true, button: 0, clientX: 300}));
+        dispatchEvent(new MouseEvent('mousemove', {bubbles: true, clientX: 600}));
+        dispatchEvent(new MouseEvent('mouseup', {bubbles: true}));
+        잰다(합친바[0].style.gridColumn === 전, ' 합친 바를 끌어도 안 움직인다',
+          '합친 바가 끌려 움직였다');
+      }
+
+      // 날짜 없는 업무 — 점선 표시가 있고 누를 수 있다
+      const 날짜없음 = [...sheet.querySelectorAll('.nodate')].filter(x => x.offsetParent);
+      if (!날짜없음.length) {
+        results.push('· 이 화면에는 날짜 없는 업무가 없어 건너뜀');
+      } else {
+        잰다(날짜없음[0].dataset.go, ' 날짜 없음 표시가 드로어로 간다',
+          '날짜 없음 표시에 갈 곳이 없다');
+        const 그줄 = 날짜없음[0].closest('.row');
+        /* **그 줄 자신의 바**만 본다 — 접힌 Main 아래에 눕는 하위 바(`.bar.sl`)는
+           그 Main 의 것이 아니라 하위들의 것이라, 같이 세면 하위가 있는
+           날짜 없는 Main 에서 잘못 빨개진다(커밋 전 검토) */
+        잰다(!그줄.querySelector('.bar.m[data-run], .bar.s[data-run]'),
+          ' 날짜 없는 줄에는 자기 바가 없다', '날짜가 없는데 바가 그려졌다');
+      }
+    }
+
     /* **안 잰 것을 안 잰 것으로 낸다.** `·` 로 시작하는 줄은 건너뛴
        항목이고 errors 를 늘리지 않는다 — 그래서 「92/92」 가 「전부 쟀고
        전부 통과」 로 읽히는데, 실은 「빨간 것이 없다」 일 뿐이다.
@@ -2013,6 +2151,60 @@ const 고장들 = [
 
         **옮긴 적이 없는 업무를 연 판에서는 못 심는다** — 그 줄이 아예
         안 뜬다. 그때는 ✗ 가 아니라 「못 심음」 이 그쪽의 정답이다. */
+  /* ── 3단계: 보드 (목업 D · F) ──────────────────────────────────────
+     넷 다 **이 판에서 새로 만든 자리**다. 심는 고장은 「그것이 없던 때」 로
+     되돌리는 것이라, 되돌아가면 곧바로 빨개진다 (11-3) */
+  {갈래: '㉗ 보드 — 후속 칸이 없다', 고장: '축이 수련회에서 끝난다',
+   화면: '보드', 나와야: '구간 줄이 없거나 후속 칸이 없다',
+   못심음: 항목 => 항목.some(r => String(r).includes('구간 줄이 있고')
+     && !String(r).includes('after')),
+   심는다: () => {
+     const 걷은 = [...document.querySelectorAll('#sheet .row.head .hc.after, #sheet .row.sechead .sc.after')];
+     걷은.forEach(el => { el.dataset.숨김 = el.style.display || ''; el.style.display = 'none'; });
+     return () => 걷은.forEach(el => { el.style.display = el.dataset.숨김; delete el.dataset.숨김; });
+   }},
+
+  {갈래: '㉘ 보드 — 「오늘」 단추가 안 옮긴다', 고장: '누르면 아무 일도 안 난다',
+   화면: '보드', 나와야: '「오늘」 을 눌러도 오늘 칸이 안 보인다',
+   못심음: 항목 => 항목.some(r => String(r).includes('오늘이 축 밖이라')),
+   심는다: () => {
+     const b = document.getElementById('todaybtn');
+     if (!b) return () => {};
+     const 옛 = b.onclick;
+     b.onclick = e => { e.preventDefault(); e.stopPropagation(); };
+     return () => { b.onclick = 옛; };
+   }},
+
+  {갈래: '㉙ 보드 — 합친 바를 끌 수 있다', 고장: '합친 바에 data-run 이 붙는다',
+   화면: '보드', 나와야: '합친 바에 data-run 이 있다',
+   못심음: 항목 => 항목.some(r => String(r).includes('합친 바가 없어')),
+   심는다: () => {
+     const 바들 = [...document.querySelectorAll('#sheet .bar.sl.merged')];
+     바들.forEach(el => { el.dataset.run = (el.dataset.runs || '').split(' ')[0] || '1'; });
+     return () => 바들.forEach(el => { delete el.dataset.run; });
+   }},
+
+  {갈래: '㉚ 보드 — 날짜 없는 업무에 바가 선다', 고장: '개회일 자리에 보통 바가 그려진다',
+   화면: '보드', 나와야: '날짜가 없는데 바가 그려졌다',
+   못심음: 항목 => 항목.some(r => String(r).includes('날짜 없는 업무가 없어')),
+   심는다: () => {
+     /* **옛 동작을 되돌린다** — `start_date or open_date` 이던 시절에는
+        날짜 없는 업무도 수련회 칸에 보통 바로 서서, 거기 실제로 잡힌
+        업무와 구별이 안 됐다 (봐둘것 BJ-d) */
+     const 심은 = [];
+     document.querySelectorAll('#sheet .nodate').forEach(표시 => {
+       const lane = 표시.parentElement;
+       const 바 = document.createElement('div');
+       바.className = 'bar m 대기';
+       바.style.gridColumn = '1/2';
+       바.dataset.run = 표시.dataset.go;
+       바.textContent = '옛 동작';
+       lane.appendChild(바);
+       심은.push(바);
+     });
+     return () => 심은.forEach(x => x.remove());
+   }},
+
   /* **옛 동작을 되돌려 심는다** — 2026-09-25 전에는 날짜를 안 고르고 저장하면
      서버가 400 을 냈고 화면은 그 까닭을 `#nerrsave` 에 냈다. 그 자리가 되살아나면
      「안 고른 것」 이 다시 「잘못 고른 것」 이 된다 (봐둘것 BJ-c). */

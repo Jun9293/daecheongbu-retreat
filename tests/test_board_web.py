@@ -377,8 +377,25 @@ def test_바의_격자_좌표가_실제_날짜와_맞는다(admin_client, board_
     assert axis.column_of(dt.date(2026, 8, 20)) == 23      # 개회 전날
     assert axis.column_of(dt.date(2026, 8, 21)) == 24      # 수련회 칸
     assert axis.column_of(dt.date(2026, 8, 23)) == 24      # 폐회일도 같은 칸
-    assert axis.total == 24
+    assert axis.retreat_column == 24
     assert axis.shift_index == 12                          # 굵은 세로선 위치
+
+    # **뒤에 후속 칸이 붙었다** (2026-09-25 · 목업 D). 몇 칸인지는 오늘과
+    # 가장 늦은 마감이 정하므로 **수를 박지 않는다** — 박으면 돌리는 날에
+    # 따라 빨개진다. 재는 것은 **자리**다: 수련회 칸 바로 뒤부터 시작하고,
+    # 축의 총 칸 수가 그만큼 늘어난다.
+    from app.domain import dweek
+
+    assert len(axis.after_sundays) >= dweek.MIN_AFTER_WEEKS
+    assert len(axis.after_sundays) <= dweek.LAST_AFTER_WEEK
+    assert axis.total == axis.retreat_column + len(axis.after_sundays)
+    assert axis.column_of(dt.date(2026, 8, 24)) == 25      # 폐회 다음 날 = 첫 후속 칸
+    assert axis.column_of(dt.date(2026, 8, 30)) == 26      # 그다음 주
+    # 상한 밖은 마지막 칸에 붙되 `→` 로 그렇다고 말한다 (4-1 · 9장)
+    먼날 = axis.after_sundays[-1] + dt.timedelta(days=30)
+    assert axis.column_of(먼날) == axis.total
+    assert axis.beyond_of(먼날) is True
+    assert axis.beyond_of(dt.date(2026, 8, 24)) is False
 
 
 # ---------------------------------------------------------------- 모바일
@@ -742,19 +759,34 @@ def test_선택된_바가_라벨_열_위로_올라오지_않는다():
         assert int(dragging.group(1)) < 라벨, "끄는 바가 라벨 열 위로 올라온다"
 
 
-def test_가로_격자선이_생기지_않았다():
-    """수용기준 13 — 가로선은 넣지 않는다 (4-0). 행은 여백과 호버로 갈린다.
-    날짜 헤더 아래 한 줄만 남는데, 그것은 격자선이 아니라 sticky 경계다."""
-    css = _re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=_re.S)
+def test_행_가로선이_왼쪽_칸과_내용_칸에_같은_값으로_있다():
+    """**2026-09-23 에 뒤집혔다** (4-0 · 목업 D).
 
-    lined = []
+    그전에는 「가로 격자선을 넣지 않는다」 였고 이 시험이 그것을 지켰다.
+    그 판단은 **한 행에 바가 한 줄일 때만** 맞았다 — 접힌 Main 아래에 하위가
+    여러 줄로 누우면(4-1) 어느 바가 어느 행의 것인지 여백만으로 안 갈린다.
+    되돌린 것이 아니라 **행의 모양이 달라져 근거가 바뀐 것**이다.
+
+    재는 것은 둘이다 — **있는가**, 그리고 **왼쪽 칸과 내용 칸이 같은 값인가.**
+    두 값이 갈리면 가로로 훑을 때 선이 끊겨 보인다.
+    """
+    css = _re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=_re.S)
+    자리들 = (".row.team .lc", ".row.team .cell", ".row.main .lc",
+            ".row.main .lane", ".row.sub .lc", ".row.sub .lane")
+
+    값 = {}
     for m in _re.finditer(r"([^{}]+)\{([^}]*)\}", css):
         selector, decl = m.group(1).strip(), m.group(2)
-        if "border-bottom" not in decl or "border-bottom:0" in decl:
-            continue
-        if not _re.search(r"\.row\.(main|sub|team)|\.lc\b|\.lane\b", selector):
+        b = _re.search(r"border-bottom:\s*([^;}]+)", decl)
+        if not b or b.group(1).strip().startswith("0"):
             continue
         if ".hlbl" in selector or ".row.head" in selector:
-            continue        # sticky 경계는 격자선이 아니다
-        lined.append(selector)
-    assert lined == [], f"행에 가로선이 생겼다: {lined}"
+            continue        # sticky 경계는 행 가로선이 아니다
+        for 자리 in 자리들:
+            if 자리 in selector:
+                값[자리] = b.group(1).strip()
+
+    빠진 = [자리 for 자리 in 자리들 if 자리 not in 값]
+    assert not 빠진, f"행 가로선이 없는 자리: {빠진}"
+    assert len(set(값.values())) == 1, f"왼쪽 칸과 내용 칸의 가로선이 갈렸다: {값}"
+    assert "--row-line" in next(iter(값.values())), "4-0 이 정한 토큰을 안 쓴다"

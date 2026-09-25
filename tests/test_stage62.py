@@ -295,9 +295,18 @@ def test62_c06_마법사_줄에_상위가_보인다(계층, admin_client):
 
 
 def _바(page: str, run_id: int) -> str:
-    m = re.search(r'<div class="bar ([^"]*)"[^>]*data-run="%d"' % run_id, page, re.S)
-    assert m, f"run {run_id} 의 바가 없다"
-    return " ".join(m.group(1).split())
+    """그 줄 **자신의** 바 클래스.
+
+    **접힌 Main 아래 눕는 바(`.bar.sl`)를 빼야 한다**(2026-09-25 3단계) —
+    하위가 하나면 그 바에도 같은 `data-run` 이 붙어서, 그냥 찾으면 그쪽이
+    먼저 잡히고 `sl` 이 나온다. 여기서 보려는 것은 **하위 줄이 어떤 모양으로
+    그려지나** 이지 접힌 줄에 눕는 모양이 아니다.
+    """
+    for m in re.finditer(r'<div class="bar ([^"]*)"[^>]*data-run="%d"' % run_id, page, re.S):
+        cls = " ".join(m.group(1).split())
+        if not cls.startswith("sl "):
+            return cls
+    raise AssertionError(f"run {run_id} 의 바가 없다")
 
 
 def _줄급(page: str, run_id: int) -> str:
