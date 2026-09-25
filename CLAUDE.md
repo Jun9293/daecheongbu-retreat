@@ -32,6 +32,8 @@ Claude Code가 이 프로젝트에서 작업할 때 **매번 먼저 읽어야 �
 | C — 팝업 모서리 10px | `--r-lg`(8px) | 같은 자리입니다 — 10px 을 들이면 4·8·10 이 함께 뜹니다 |
 | C — 팝업 윗줄 「업무 추가」 14.5px | 글자 눈금의 **목록 단** | 14.5 는 눈금 밖입니다. 혼자 뜻을 지는 글자라 하한도 그 단입니다 |
 | C — 첫 줄 「흐림 12px」 | **보조색**(`--ink-2`) · **보조 단** | 그 한 줄은 옆에 뜻을 대신 져 줄 값이 없습니다(B 의 꺼진 상태 칸과 같은 까닭). 크기도 눈금 밖입니다 |
+| **D · F — 글자 크기 전부**(구간 11 · 날짜 12/11 · 팀명 13.5 · 번호 11 · 제목 13 · 바 12/11.5/11 · 「하위 n건」 11.5 · 팝업 13/11.5) | **글자 눈금의 그 단** — 장식은 `--fz-xs` · 보조는 `--fz-sm` · 목록은 `--fz-md` | 목업 D 는 `--fz` 를 15px 로 올리기 전에 그린 값이라 **전부 눈금 아래**입니다. 하나씩 예외를 파면 한 화면에 11·11.5·12·13·13.5 가 함께 뜨고, **4-0 이 눈금을 세우며 없앤 그 상태**로 돌아갑니다 |
+| F — 팝업 모서리 10px | `--r-lg`(8px) | C 와 같은 자리입니다 — 4·8·10 이 함께 뜹니다 |
 
 **이 값들을 정하는 자리는 여기 한 곳이고 목업 파일은 이 자리를 가리킵니다** — 코드 주석과 시험이 그 자리에서 자기 까닭을 적는 것은 그대로입니다(그게 없으면 고치는 사람이 못 봅니다). 값이 갈리는 것을 막는 것이지 까닭을 한 번만 적으라는 말이 아닙니다 —
 값을 두 곳에 적으면 한쪽만 고쳐집니다. 자리는 `tests/test_stage64.py` 가 잽니다.
@@ -5234,6 +5236,10 @@ Phase 1 은 기존 FastAPI + SQLAlchemy + Jinja 앱 위에 얹었습니다. 어�
 | **소속 읽기·쓰기 — 여기 하나** (4-12) | `app/domain/permissions.py` (`my_dept_keys` · `is_lead_of` · `leads_of` · `members_of` · `admins` · `assign` · `set_memberships` · `unassign_keys` · `describe`) — `user_departments` 를 다른 파일이 읽으면 `test25_f01` 이 빨개진다 |
 | `users.department_id` → 소속 줄 옮기기 (일회성) | `scripts/부서옮기기.py` — 미리보기 기본 · `--실행`. 사본 먼저, 표는 날 연결에서 다시 만든다 |
 | 바깥 링크 (4-17) | `app/routers/settings.py` 의 `external_link` · `/settings/external-link` · `templating._external_link` — 주소는 DB 에만 |
+| **보드 가로축 — 구간 다섯 · 후속 칸 (4-1 · 목업 D)** | `app/domain/board.py` 의 `Axis` — `section_of_week`(기획/준비를 가르는 자리 하나) · `sections`(머리 첫 줄 · **칸에서 세어 만든다** — 따로 적으면 칸을 늘렸을 때 한쪽만 고쳐진다) · `beyond_of`(축 상한 밖 · 바 끝의 `→`) · `_after_weeks`(**오늘이 든 주와 가장 늦은 마감 중 늦은 쪽** · 최소 `dweek.MIN_AFTER_WEEKS` · 최대 `dweek.LAST_AFTER_WEEK`) · `_축안에`(오늘 선을 그릴지 — `column_of` 는 범위 밖도 끝에 붙이므로 그것만으로는 못 가린다) |
+| **접힌 Main 아래 하위 바 (4-1 · 목업 D)** | `app/domain/board.py` 의 `collapsed_lanes` — 시작·끝 칸이 둘 다 같은 하위끼리 **합치고**, 일부만 겹치면 앞의 빈 줄에 **눕힌다**(겹친 채로 그리면 뒤엣것이 앞엣것을 덮어 있는 업무가 사라진다). **합친 바에는 `data-run` 이 없다** — 끄는 자리가 `.bar[data-run]` 을 찾으므로 「합친 바는 못 끈다」 가 구조로 막힌다. 누구인지는 `data-runs` 가 말하고 `board.js` 의 `findBar` 가 그것도 본다 |
+| **업무 팝업의 한 줄 (목업 F)** | `app/domain/board.py` 의 `popup_meta` — **만드는 곳은 여기 하나다.** 보드와 달력이 같은 부품을 쓰므로 화면마다 조립하면 두 벌이 된다. `tooltip_of` 와 다른 함수인 것은 **담는 것이 달라서**다(툴팁은 부서가 앞이고 상위·담당자까지 싣는다) |
+| **업무 팝업 (F · 보드 · 달력 공용)** | `app/static/js/taskpop.js` — **여기 한 벌뿐이다.** 달력에서만 맨 아래 「상세 열기」 를 켠다. `body` 아래 뜨므로 `originOf` 가 그 자리를 알아야 한다(`taskpop`) — 모르면 팝업을 만지는 순간 드로어가 닫힌다. **`data-addpop`(업무 추가 팝업)과 다른 부품이다**: 저쪽은 만드는 폼이고 이것은 읽는 카드다 |
 | 보드 화면 | `app/routers/board.py` · `templates/board.html` · `static/js/board.js` |
 | 수련회 진행 (5장) | `app/domain/live.py` · `app/routers/live.py` · `templates/live.html` · `static/js/live.js` |
 | 총무팀 일정의 시각 판정 | `app/domain/live.py` (`program_state` · `late_items` · `leftover_post` — 전부 `now` 를 받는다) |
