@@ -1,3 +1,8 @@
+{#
+  옛 주소(`/board/add`)의 화면 — **몸통은 팝업과 같은 조각**(`partials/addpop.html`)이다.
+  2026-09-23 부터 보드·달력에서는 팝업으로 연다(6-7). 이 주소는 자바스크립트가
+  죽었을 때의 길로 남는다 — 달력의 점에 `href` 를 남겨 둔 것과 같은 자리(4-13).
+#}
 {% extends "retreat_base.html" %}
 {% block title %}업무 추가 · {{ retreat.name }}{% endblock %}
 
@@ -7,88 +12,7 @@
     <a class="btn back" href="/board">← 보드로 돌아가기</a>
     <h2>업무 추가</h2>
   </div>
-  <p class="lead">회차를 연 뒤에도 업무는 늘어납니다.
-    라이브러리에 이미 있는 것을 이번 회차에 넣거나, 아예 새로 만들 수 있습니다.
-    <b>새로 만든 것도 라이브러리에 남아</b> 다음 회차의 후보가 됩니다.
-    {% if not viewer_is_admin %}내 부서의 업무만 추가할 수 있습니다.{% endif %}</p>
-
-  <section>
-    <h3 style="font-size:15px;font-weight:600;margin:0 0 8px">라이브러리에서 넣기</h3>
-    <p class="lead" style="margin-bottom:12px">이번 회차에 아직 없는 업무입니다. 하위 업무는 함께 딸려 옵니다.</p>
-    {% if library_rows %}
-    <div class="tools">
-      <span class="cnt">선택 <b id="pickCount">0</b> / {{ library_rows|length }}건</span>
-      <button type="button" class="btn pri" id="addExisting" style="margin-left:auto" disabled>선택한 업무 추가</button>
-    </div>
-    <div class="lib" id="addLib">
-      {% for row in library_rows %}
-      <div class="trow off" data-i="{{ row.library_id }}" data-dept="{{ row.department_key or '' }}">
-        <span class="box"></span>
-        <span class="main"><span class="nm">{{ row.title }}
-          <span class="tag low">{{ row.kind_label }}</span></span></span>
-        <span class="tm">
-          {%- for d in departments %}{% if d.key == row.department_key %}
-          <i style="background:{{ d.color }}"></i>{{ d.name }}{% endif %}{% endfor %}
-          {%- if not row.department_key %}담당 없음{% endif %}</span>
-        <span class="dwlbl">D-{{ row.d_week }}주</span>
-        <span class="dtlbl">{{ row.start_label }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="card"><div style="font-size:13.5px;color:var(--ink-3)">
-      라이브러리의 업무가 이미 모두 이번 회차에 들어가 있습니다.</div></div>
-    {% endif %}
-  </section>
-
-  <section style="margin-top:34px">
-    <h3 style="font-size:15px;font-weight:600;margin:0 0 8px">새 업무 만들기</h3>
-    <p class="lead" style="margin-bottom:12px">라이브러리에 없던 일입니다. 만들면 이번 회차에 바로 들어갑니다.</p>
-    <div class="card">
-      <div class="field"><label for="ntitle">업무 이름</label>
-        <input id="ntitle" type="text" placeholder="예: 방한 물품 추가 구매"></div>
-      <div class="row2">
-        <div class="field"><label for="ndept">담당 부서</label>
-          <select id="ndept">
-            {% for d in departments %}
-            <option value="{{ d.key }}" {% if d.key == my_department_key %}selected{% endif %}>{{ d.name }}</option>
-            {% endfor %}
-          </select></div>
-        <div class="field"><label for="nkind">분류</label>
-          <select id="nkind">
-            <option value="main">Main — 산출물이 남는 단위</option>
-            <option value="sub">하위 — Main 을 완성하기 위한 단계</option>
-            <option value="schedule">일정 — 날짜만 지키면 되는 것</option>
-          </select></div>
-      </div>
-      <div class="field" id="parentField" hidden><label for="nparentSearch">상위 업무</label>
-        <input id="nparentSearch" type="search" placeholder="업무 이름으로 찾기" autocomplete="off">
-        <select id="nparent" size="6" style="margin-top:6px"></select>
-        <span class="basis" id="nparentCount"></span>
-        {% if not parents %}<span class="basis">이번 회차에 Main 업무가 없어 하위를 만들 수 없습니다.</span>{% endif %}
-      </div>
-      <div class="row2">
-        <div class="field"><label for="nstart">시작</label>
-          <select id="nstart">
-            {% for slot in slots %}
-            <option value="{{ slot.start }}" data-end="{{ slot.end }}"
-              {% if slot.label.startswith('D-13주') %}selected{% endif %}>{{ slot.label }}</option>
-            {% endfor %}
-          </select></div>
-        <div class="field"><label for="nend">마감</label>
-          <select id="nend">
-            {% for slot in slots %}
-            <option value="{{ slot.end }}" data-start="{{ slot.start }}"
-              {% if slot.label.startswith('D-13주') %}selected{% endif %}>{{ slot.label }}</option>
-            {% endfor %}
-          </select></div>
-      </div>
-      <p class="basis" style="margin:-6px 0 14px">보드와 같은 눈금입니다 —
-        D-3주까지는 주 단위, D-2주부터 개회일까지는 하루 단위입니다.
-        기획 업무는 D-13주보다 앞에도 놓을 수 있습니다.</p>
-      <button type="button" class="btn pri" id="addNew">새 업무 만들기</button>
-    </div>
-  </section>
+  {% include "partials/addpop.html" %}
 </main>
 
 <footer class="wizfoot">
@@ -99,6 +23,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script id="parents-data" type="application/json">{{ parents|tojson }}</script>
+<script src="{{ static('js/datepick.js') }}" defer></script>
 <script src="{{ static('js/board_add.js') }}" defer></script>
 {% endblock %}

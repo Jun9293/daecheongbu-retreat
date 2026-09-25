@@ -1,0 +1,91 @@
+{#
+  업무 추가 팝업의 몸통 (CLAUDE.md 6-7 · 목업 C) — **팝업과 옛 화면(`/board/add`)이
+  같은 이 조각을 그린다.** 두 벌이면 한쪽에만 칸이 생기고, 갈린 쪽을 아무도 눈치채지 못한다.
+
+  껍데기(윗줄 · 끌기 · 닫기)를 만드는 곳은 `static/js/board_add.js` 하나다.
+  구역 순서는 **새 업무 만들기가 위, 라이브러리에서 넣기가 아래**다 (2026-09-23 사람이 목업으로 정함).
+#}
+<div class="apbody" id="addpopbody" data-add-root>
+
+  <p class="aplead">새로 만든 업무도 라이브러리에 남아 다음 회차의 후보가 됩니다.{%
+    if not viewer_is_admin %} 내 부서의 업무만 추가할 수 있습니다.{% endif %}</p>
+
+  <section class="apsec">
+    <h3>새 업무 만들기</h3>
+    <p class="apsub2">라이브러리에 없던 일 — 만들면 이번 회차에 바로 들어갑니다.</p>
+
+    <div class="field"><label for="ntitle">업무 이름</label>
+      <input id="ntitle" type="text" placeholder="예: 방한 물품 추가 구매">
+      <span class="aperr" id="nerrtitle" hidden>업무 이름을 적어 주세요.</span></div>
+
+    <div class="row2">
+      <div class="field"><label for="ndept">담당 부서</label>
+        <select id="ndept">
+          {% for d in departments %}
+          <option value="{{ d.key }}" {% if d.key == my_department_key %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select></div>
+      {# 분류는 세 칸이다 — 고를 것이 셋뿐이라 펼칠 이유가 없다(드로어의 상태 칸과 같은 부품 `.statseg`) #}
+      <div class="field"><label id="nkindlbl">분류</label>
+        <span class="statseg" id="nkind" role="group" aria-labelledby="nkindlbl">
+          <button type="button" data-v="main" class="on" aria-pressed="true"
+                  title="산출물이 남는 단위">Main</button>
+          <button type="button" data-v="sub" aria-pressed="false"
+                  title="Main 을 완성하기 위한 단계">하위</button>
+          <button type="button" data-v="schedule" aria-pressed="false"
+                  title="날짜만 지키면 되는 것">일정</button>
+        </span></div>
+    </div>
+
+    <div class="field" id="parentField" hidden><label for="nparentSearch">상위 업무</label>
+      <input id="nparentSearch" type="search" placeholder="업무 이름으로 찾기" autocomplete="off">
+      <select id="nparent" size="6" style="margin-top:6px"></select>
+      <span class="basis" id="nparentCount"></span>
+      {% if not parents %}<span class="basis">이번 회차에 Main 업무가 없어 하위를 만들 수 없습니다.</span>{% endif %}
+      <span class="aperr" id="nerrparent" hidden>하위 업무는 상위 업무를 골라야 합니다.</span></div>
+
+    {# 날짜는 드로어의 기간 줄과 **같은 부품**(DatePick)으로 고른다 — 4-9 · 목업 C #}
+    <div class="field"><label id="ndatelbl">기간</label>
+      <div class="apdate">
+        <span id="ndates" class="apdates" data-start="" data-end=""
+          >날짜 없음 — 달력 버튼으로 고르기</span>
+        {# 이름은 **하나**다 — `aria-labelledby` 를 함께 두면 그쪽이 이겨서
+           읽어 주는 이름이 「기간」 이 된다(드로어의 같은 단추는 `aria-label` 하나다) #}
+        <button type="button" class="calbtn" id="ncalbtn"
+                aria-label="기간 고르기">달력</button>
+      </div></div>
+
+    <button type="button" class="btn pri" id="addNew">새 업무 만들기</button>
+    <span class="aperr" id="nerrsave" hidden></span>
+  </section>
+
+  <section class="apsec">
+    <h3>라이브러리에서 넣기</h3>
+    <p class="apsub2">이번 회차에 아직 없는 업무 — 하위 업무는 함께 딸려 옵니다.</p>
+    {% if library_rows %}
+    <div class="tools">
+      <span class="cnt">선택 <b id="pickCount">0</b> / {{ library_rows|length }}건</span>
+      <button type="button" class="btn pri" id="addExisting" style="margin-left:auto" disabled>선택한 업무 추가</button>
+    </div>
+    <div class="lib" id="addLib">
+      {% for row in library_rows %}
+      <div class="trow off" data-i="{{ row.library_id }}" data-dept="{{ row.department_key or '' }}">
+        <span class="box"></span>
+        <span class="main"><span class="nm">{{ row.title }}
+          <span class="tag low">{{ row.kind_label }}</span></span></span>
+        <span class="tm">
+          {%- for d in departments %}{% if d.key == row.department_key %}
+          <i style="background:{{ d.color }}"></i>{{ d.name }}{% endif %}{% endfor %}
+          {%- if not row.department_key %}담당 없음{% endif %}</span>
+        <span class="dwlbl">D-{{ row.d_week }}주</span>
+        <span class="dtlbl">{{ row.start_label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="basis">라이브러리의 업무가 이미 모두 이번 회차에 들어가 있습니다.</p>
+    {% endif %}
+  </section>
+
+  <script id="parents-data" type="application/json">{{ parents|tojson }}</script>
+</div>

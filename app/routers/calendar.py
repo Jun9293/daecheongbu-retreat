@@ -82,7 +82,8 @@ def calendar_partial(
     calendar.js 가 이것을 받아 `#calgrid` 만 갈아 끼운다.
     전체 페이지와 **같은 계산(_view) · 같은 partial** 을 그린다."""
     view = _view(request, month, scope, only_open, db, user, retreat)
-    return render(request, "partials/calendar_grid.html", {"cal": view})
+    # `user` 도 넘긴다 — 격자가 「이 날짜에 추가」 단추를 열람 전용에게 안 그린다(6-7)
+    return render(request, "partials/calendar_grid.html", {"cal": view, "user": user})
 
 
 @router.get("/calendar")

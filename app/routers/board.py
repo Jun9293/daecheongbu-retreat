@@ -710,17 +710,10 @@ def add_discussion(
 # ---------------------------------------------------------------- 업무 추가
 
 
-@router.get("/board/add")
-def add_task_page(
-    request: Request,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    retreat: Retreat = Depends(get_current_retreat),
-):
-    """회차를 연 뒤에도 업무는 늘어난다.
+def _add_form_context(db: Session, user: User, retreat: Retreat) -> dict:
+    """업무 추가 폼이 쓰는 값 — **옛 화면과 팝업 조각이 같은 이것을 쓴다.**
 
-    라이브러리에 이미 있는 것을 이번 회차에 넣거나, 아예 새 업무를 만든다.
-    새로 만든 것도 라이브러리에 남아 다음 회차의 후보가 된다.
+    두 곳에서 따로 모으면 한쪽에만 후보가 빠지고, 갈린 쪽을 아무도 눈치채지 못한다.
     """
     from app.domain import dweek as dweek_mod
     from app.models import TaskLibrary
@@ -762,10 +755,6 @@ def add_task_page(
 
     departments = sorted(retreat.departments, key=lambda d: d.sort_order)
 
-    # 기간은 보드와 같은 눈금으로 고른다 — 주 단위 구간은 주로, 일 단위 구간은 날짜로.
-    # 보드가 그리는 범위보다 앞쪽까지 열어 둔다 (기획 업무는 D-13주보다 앞에 있다).
-    slots = board_view.planning_slots(retreat.start_date, retreat.end_date)
-
     parents = sorted(
         (
             {"library_id": run.library_id, "title": run.library.title,
@@ -776,10 +765,7 @@ def add_task_page(
         key=lambda p: p["title"],       # 가나다순
     )
 
-    return render(
-        request,
-        "board_add.html",
-        {
+    return {
             "user": user,
             "retreat": retreat,
             "retreats": all_retreats(db),
@@ -790,12 +776,39 @@ def add_task_page(
             "my_department_key": perm.primary_key(user),
             "my_department_keys": sorted(perm.my_dept_keys(user)),
             "viewer_is_admin": perm.is_admin(user),
-            "slots": slots,
             "parents": parents,
             "active_tab": "board",
             "page_subtitle": "업무 추가",
-        },
-    )
+    }
+
+
+@router.get("/board/add")
+def add_task_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """회차를 연 뒤에도 업무는 늘어난다.
+
+    라이브러리에 이미 있는 것을 이번 회차에 넣거나, 아예 새 업무를 만든다.
+    새로 만든 것도 라이브러리에 남아 다음 회차의 후보가 된다.
+
+    보드·달력에서는 이제 팝업으로 연다(6-7) — 이 주소는 자바스크립트가 죽었을
+    때의 길로 남는다.
+    """
+    return render(request, "board_add.html", _add_form_context(db, user, retreat))
+
+
+@router.get("/board/add/form")
+def add_task_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """팝업이 받아 가는 몸통 조각 — 화면(`board_add.html`)과 **같은 조각**이다."""
+    return render(request, "partials/addpop.html", _add_form_context(db, user, retreat))
 
 
 class AddExistingIn(BaseModel):
