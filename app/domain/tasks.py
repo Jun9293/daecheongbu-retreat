@@ -112,7 +112,13 @@ def create_run(
         raise ValueError("알 수 없는 분류입니다.")
     if kind == "sub" and parent_library_id is None:
         raise ValueError("하위 업무는 상위 업무를 골라야 합니다.")
+    # **둘은 대칭이다** (2026-09-25 사람이 정함 · 봐둘것 BJ-e). 한쪽만 채우면
+    # 「시작 없이 마감만」 이라는 셋째 자리가 생기고, 그 run 을 달력 · 보드 ·
+    # 드로어 · 활동 기록이 **서로 다르게** 읽는다(달력은 점 하나, 보드는
+    # 개회일부터 긴 바, 드로어는 둘 다 없음, 기록은 「날짜 없음」).
+    # 한쪽만 고른 것은 **그 날 하루**다 — 둘 다 없으면 그대로 날짜 없는 업무다.
     end = end or start
+    start = start or end
     if start and end and end < start:
         raise ValueError("마감이 시작보다 빠릅니다.")
 

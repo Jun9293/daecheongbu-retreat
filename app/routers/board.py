@@ -946,7 +946,7 @@ def add_new(
         raise HTTPException(status_code=400, detail="기간을 다시 골라주세요.") from exc
 
     try:
-        lib, _run = tasks_domain.create_run(
+        lib, run = tasks_domain.create_run(
             db,
             retreat,
             title=payload.title,
@@ -966,9 +966,12 @@ def add_new(
         action="업무_신규생성",
         target_type="task_library",
         target_id=lib.id,
+        # **선 run 에서 읽는다** — 여기 들고 있는 값은 화면이 보낸 것이고,
+        # `create_run` 이 한쪽만 고른 것을 그 날 하루로 맞춘다(봐둘것 BJ-e).
+        # 보낸 값으로 적으면 기록만 「날짜 없음」 이 되어 화면과 다른 말을 한다.
         # 날짜가 없으면 그렇다고 적는다 — `isoformat()` 을 그냥 부르면 터진다
-        summary=(f"{lib.title} ({start.isoformat()} ~ {end.isoformat()})"
-                 if start else f"{lib.title} (날짜 없음)"),
+        summary=(f"{lib.title} ({run.start_date.isoformat()} ~ {run.end_date.isoformat()})"
+                 if run.start_date else f"{lib.title} (날짜 없음)"),
     )
     return {"library_id": lib.id, "redirect": "/board"}
 

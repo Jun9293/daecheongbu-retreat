@@ -322,10 +322,16 @@ def test_board_axis_switches_from_weeks_to_days(db):
     db.commit()
 
     view = board_view.build(db, retreat)
-    assert view["columns"] == 24  # 주 11칸 + 일 12칸 + 수련회 1칸
+    # 주 11칸 + 일 12칸 + 수련회 1칸 = 24. **그 뒤에 후속 칸이 붙는다**
+    # (2026-09-25 · 목업 D) — 몇 칸인지는 오늘과 가장 늦은 마감이 정하므로
+    # **수를 박지 않는다**(박으면 돌리는 날에 따라 빨개진다)
+    앞 = [c for c in view["headers"] if c["kind"] != "after"]
+    뒤 = [c for c in view["headers"] if c["kind"] == "after"]
+    assert len(앞) == 24
+    assert view["columns"] == 24 + len(뒤)
     assert view["shift_index"] == 12
     assert view["headers"][0]["top"] == "D-13"
-    assert view["headers"][-1]["kind"] == "retreat"
+    assert 앞[-1]["kind"] == "retreat"
 
     bar = view["departments"][0]["rows"][0]
     assert (bar["col_start"], bar["col_end"]) == (12, 19)
@@ -435,6 +441,12 @@ def test_고를_수_있는_칸은_보드보다_넓다(db):
 
     assert slots[0]["label"].startswith("D-26주")
     assert slots[-1]["label"].startswith("수련회 기간")
+    # **「수련회 기간」 은 하나뿐이다.** 보드의 축이 뒤로 늘어난 뒤(2026-09-25)
+    # 그 기본값이 여기까지 따라와 **후속 칸 셋이 「수련회 기간 · 8/30」 으로**
+    # 붙었는데, `slots[-1]` 만 보는 위 줄은 그것을 그대로 통과했다
+    # (커밋 전 검토 · 검토-원칙 2-③). 폐회 뒤 주에 놓게 할지는 사람이 정한다
+    assert sum(1 for x in slots if x["label"].startswith("수련회 기간")) == 1
+    assert [x for x in slots if x["kind"] == "after"] == []
     # D-3주 다음부터는 하루 단위
     weekly = [s for s in slots if s["kind"] == "week"]
     daily = [s for s in slots if s["kind"] == "day"]
