@@ -70,7 +70,7 @@ def cal_data(admin_client):
             runs[title] = run.id
             return run
 
-        # 한 날(8/12)에 다섯 — PER_DAY(3) 를 넘겨 접힌다
+        # 한 날(8/12)에 다섯 — 접지 않고 전부 선다 (4-13 · 2026-09-26)
         for i in range(5):
             task(f"몰린 업무 {i + 1}", end=dt.date(2026, 8, 12),
                  assignee=admin.id if i < 2 else None)
@@ -185,18 +185,24 @@ def test_03_마감일이_없는_업무가_따로_모인다(admin_client, cal_dat
 # ---------------------------------------------------------------- 4. 쌓기·접기
 
 
-def test_04_한_날에_여럿이면_쌓이고_넘치면_접힌다(admin_client, cal_data):
+def test_04_한_날의_업무는_전부_보인다(admin_client, cal_data):
+    """**2026-09-23 에 뒤집혔다** (4-13 · 목업 E) — 세 건이 넘으면 접어 두던 것을
+    걷었다. 까닭은 「다 펼치면 그 주만 세로로 길어진다」 였는데, **접힌 것은
+    아무도 펴 보지 않는다**: 달력을 여는 사람이 묻는 것이 「이번 주에 내가 뭘
+    해야 하나」 인데 그 답의 일부가 접혀 있으면 그 화면이 답을 반만 한다.
+    주가 길어지는 대가는 받기로 했다(0장의 그 판단 기준).
+    """
     with app_session() as db:
         view = build(db, cal_data, scope="all")
 
     cell = cell_on(view, "2026-08-12")
-    assert len(cell["dots"]) == cal_domain.PER_DAY == 3
-    assert len(cell["more"]) == 2, "넘친 것이 접히지 않았다"
+    assert len(cell["dots"]) == 5, "접혀서 안 보이는 것이 있다"
+    assert cell["more"] == []
     assert len(titles_on(view, "2026-08-12")) == 5
 
     page = admin_client.get("/calendar?scope=all").text
-    assert "외 2건" in page
-    assert "<details" in page          # 눌러서 편다
+    assert "외 2건" not in page
+    assert "cal-more" not in page          # 접는 자리 자체가 없다
 
 
 # ---------------------------------------------------------------- 5·6·7. 생김새
@@ -365,7 +371,7 @@ def test_08d_닫으면_보던_달과_칩이_그대로다(admin_client, cal_data)
     # 달 값은 화면이 내보내는 그대로다 (`2026-08-01`) — 4-13 의 그 함정
     assert 'data-month="2026-08-01"' in page
     # **패널을 여닫는 것**은 주소를 바꾸지 않는다. 범위를 고르는 것은 바꾼다 —
-    # `외 N건`·위쪽 건수·날짜 없는 업무 수를 다시 세어야 하기 때문이다
+    # 위쪽 건수·날짜 없는 업무 수를 다시 세어야 하기 때문이다
     js = open("app/static/js/calendar.js", encoding="utf-8").read()
     고르는곳 = js[js.index("scopePick.addEventListener"):js.index("const dots =")]
     나머지 = js.replace(고르는곳, "")
@@ -864,7 +870,8 @@ def test_r01_달력이_마감일_변경을_받는다(admin_client, cal_data):
     # 칸이 자기 날짜를 말해야 점을 옮길 수 있다
     page = admin_client.get("/calendar?scope=all").text
     assert 'class="cal-cell' in page and "data-date=" in page
-    assert 'data-per-day="' in page
+    # `data-per-day` 는 뺐다 — 접기가 없어졌다 (4-13 · 2026-09-26)
+    assert 'data-per-day="' not in page
     # `data-today` 는 뺐다 — 화면이 날짜를 견주지 않으므로 필요 없다
     assert 'data-today="' not in page
 
@@ -904,9 +911,12 @@ def test_r03_기간을_바꿔도_다시_불러오지_않는다():
     assert "scopePick" in js[js.index("location.href") - 400:js.index("location.href")]
     at = js.rindex("location.href")
     assert "res.ok" in js[at - 200:at], "물러섬이 아닌 곳에서 전체 페이지를 부른다"
-    # 숫자도 함께 맞춘다 — 외 N건 · 날짜 없는 업무 N건 · 위쪽 건수
+    # 숫자도 함께 맞춘다 — 날짜 없는 업무 N건 · 위쪽 건수
     assert "recount" in js
-    assert "cal-more" in js and "calundated" in js and "calcount" in js
+    assert "calundated" in js and "calcount" in js
+    # 접기는 **화면 쪽에도 안 남는다** (2026-09-26 검토 [H]) — 서버는 다 펴 보내는데
+    # 점이 옮겨 갈 때 JS 가 다시 접으면 두 벌이 되고, 첫 그림만 보는 시험은 못 잡는다
+    assert "cal-more" not in js, "JS 가 접기를 다시 만든다"
 
 
 def test_r03b_숫자를_더하지_않고_세어서_다시_적는다():
@@ -928,7 +938,7 @@ def test_r12_calbar_가_없어도_죽지_않는다():
     **낱말만 잰다** — 실제로 안 죽는지는 `docs/checks/drawer.js` 가
     보드·목록(범위 막대가 없는 화면)에서 잰다."""
     js = read_js("calendar.js")
-    for guarded in ("bar?.dataset.onlyOpen", "bar?.dataset.perDay"):
+    for guarded in ("bar?.dataset.onlyOpen",):
         assert guarded in js, f"{guarded} 가 ?. 로 막혀 있지 않다"
     # 옛 방식(막지 않은 접근)이 남아 있지 않은지
     assert "document.querySelector('.calbar').dataset" not in js
@@ -1139,7 +1149,7 @@ def test_r2_06_되돌아오면_그_업무의_안내만_지운다():
 
 
 def test_r2_07_치워_둔_것은_숫자에_들어가지_않는다():
-    """화면에 없는 것이 숫자에 들어가면 `외 N건` 과 위쪽 건수가 눈에 보이는
+    """화면에 없는 것이 숫자에 들어가면 위쪽 건수가 눈에 보이는
     것과 어긋난다.
 
     **낱말만 잰다** — 실제 숫자가 맞는지는 화면을 부르는 시험들이 잰다."""
@@ -1536,15 +1546,15 @@ def test_t_07_달을_걸치면_격자_안쪽만_칠한다():
     assert ".cal-cell.inspan{border-radius:0}" in css
 
 
-def test_t_09_외_N건_안의_점에서도_동작한다():
-    """문서에 한 번만 걸어 두면 나중에 펼쳐지는 점도 그대로 잡힌다.
+def test_t_09_나중에_놓인_점에서도_동작한다():
+    """문서에 한 번만 걸어 두면 날짜가 바뀌어 다시 놓인 점도 그대로 잡힌다.
 
     **낱말만 잰다** — 마우스를 올려 띠가 뜨는 것은 브라우저에서만
     일어난다(`docs/checks/drawer.js` 의 달력 판이 그 자리를 본다)."""
     js = code_only(read_js("calendar.js"))
     assert "document.addEventListener('mouseover'" in js
     assert ".cal-dot[data-start]" in js
-    # 점마다 따로 걸면 `외 N건` 안에서 나중에 옮겨 놓은 점이 빠진다
+    # 점마다 따로 걸면 나중에 옮겨 놓은 점이 빠진다
     assert "querySelectorAll('.cal-dot').forEach(d => d.addEventListener" not in js
 
 

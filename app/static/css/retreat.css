@@ -1788,6 +1788,37 @@ button.btn:disabled{opacity:.4;cursor:default}
 .cal-cell.today{box-shadow:inset 0 0 0 2px var(--link)}
 .cal-cell.today .cal-d{color:var(--link);font-weight:600}
 
+/* ── 목업 E (2026-09-26) ───────────────────────────────────────────
+   수련회 날은 4-0 의 그 한 값(`--span-retreat`)이다 — 보드의 수련회 칸과
+   **같은 사실**을 말한다. 날짜 글자는 이 달 600 · 밖은 흐림 400,
+   일요일과 공휴일은 **붉은 글자 한 값**(`--red-ink`)이다: 지연 면색을
+   글자에 쓰면 이 음영 위에서 9장의 4.5:1 아래로 떨어진다 (4-0). */
+.cal-cell.span{background:var(--span-retreat)}
+.cal-cell .cal-d{font-weight:600}
+.cal-cell.out .cal-d{font-weight:400}
+.cal-d.red{color:var(--red-ink)}
+/* 꼬리표는 **한 줄뿐**이다 — 고르는 것은 구조가 한다 (`cell.tag`) */
+.cal-tag{display:inline-block;margin-left:5px;font-size:var(--fz-xs);line-height:1.4;
+  vertical-align:1px;color:var(--ink-2)}
+.cal-tag.open,.cal-tag.span{color:var(--accent);font-weight:600}
+.cal-tag.holiday{color:var(--red-ink)}
+.cal-tag.today{color:var(--link);font-weight:600}
+/* 지연은 글자 앞의 `!` 하나다 (보드의 바와 같은 규칙 · 4-1) */
+.cal-dot .cal-bang{color:var(--red-ink);font-weight:700;flex:none}
+/* 날짜 없는 업무 목록의 담당팀 — 옆의 제목이 뜻을 지는 자리라 흐림 (4-0) */
+.cal-dot .cal-dept{flex:none;color:var(--ink-2);font-size:var(--fz-sm)}
+/* 범례 — 견본은 4-0 의 값 그대로다 */
+.callegend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  color:var(--ink-2);font-size:var(--fz-sm)}
+.callegend span{display:inline-flex;align-items:center;gap:4px}
+.callegend .lg{width:12px;height:12px;border-radius:var(--r);display:inline-block;
+  border:1px solid var(--rule-2)}
+.callegend .lg.span{background:var(--span)}
+.callegend .lg.retreat{background:var(--span-retreat)}
+.callegend .lg.late{background:var(--st-late-bg);color:var(--red-ink);border:0;
+  font-weight:700;font-size:var(--fz-xs);text-align:center;line-height:12px}
+.callegend .lg.done{background:var(--st-done-bg)}
+
 .cal-dot{display:flex;align-items:center;gap:5px;min-width:0;
   padding:2px 5px 2px 3px;margin-bottom:2px;border-radius:var(--r);
   border:1px solid transparent;font-size:var(--fz-md);line-height:1.45;color:var(--ink)}
@@ -1819,11 +1850,6 @@ button.btn:disabled{opacity:.4;cursor:default}
 .cal-dot.done .cal-t{color:var(--ink-3);text-decoration:line-through}
 .cal-dot.late .cal-t{color:var(--now-ink);font-weight:500}
 
-.cal-more{font-size:var(--fz-md)}
-.cal-more summary{color:var(--ink-2);cursor:pointer;padding:1px 5px;list-style:none}
-.cal-more summary::-webkit-details-marker{display:none}
-.cal-more summary:hover{color:var(--ink-2)}
-.cal-more[open] summary{color:var(--ink-2)}
 
 .calempty{padding:28px 20px;color:var(--ink-2);font-size:var(--fz-base);text-align:center}
 
@@ -2193,21 +2219,85 @@ button.btn:disabled{opacity:.4;cursor:default}
 .fintbl .nowrap{white-space:nowrap}
 /* 차액이 음수(초과)면 붉다 — 100% 로 덮지 않는다 (7-3). 값은 --red-ink 하나 */
 .fintbl .overrun,.grouphead .overrun{color:var(--red-ink);font-weight:600;font-style:normal}
-/* 구분 제목 줄 (7-3) — 자료 행과 갈리도록 옅은 채움. 4-0 의 값만 쓴다:
-   완료 배지의 채움(#EFEFED). 항목은 줄이 아니라 첫 세부항목의 라벨(.itemlbl) */
-.fintbl tr.l1row td{background:var(--st-done-bg);font-weight:600;border-top:1px solid var(--rule-2)}
 .fintbl tr.grand td{font-weight:700;border-top:2px solid var(--rule-2)}
-/* 구분 제목 줄 (UI 정리 판 1 · 1-b) — 이름 · 세부항목 수 · 소계가 한 줄이고
-   접기 단추는 목록의 캐럿과 같은 것이다. 접힘은 화면 안에서만이다 */
-.budtbl .fold{border:0;background:none;padding:0 6px 0 0;cursor:pointer;color:var(--ink-3);
-  font:inherit;line-height:1;vertical-align:baseline}
-.budtbl .fold .caret{display:inline-block;font-size:var(--fz-xs);transition:transform .15s}
-.budtbl .fold[aria-expanded="false"] .caret{transform:rotate(-90deg)}
-.budtbl tr.l1row .cnt{margin-left:6px}
-/* 항목은 별도 줄이 아니라 첫 세부항목 줄의 들여쓴 작은 라벨이다 (1-c) */
-.budtbl .itemlbl{display:inline-block;font-size:var(--fz-sm);color:var(--ink-2);font-weight:500;
-  padding-left:8px}
-.budtbl td.l3{padding-left:22px}
+/* ── 예산 표 (7-3 · 2026-09-26 사람이 정한 확정본) ──────────────────────
+   구분은 **왼쪽 열로 빠져 병합**되고, 세부항목이 여럿인 항목은 항목 셀이
+   병합된다(구글시트와 같은 모양). 구분 접기 토글은 없앴다 — 접는 자리와
+   병합된 셀이 한 칸에서 부딪힌다. */
+.budtbl td.l1,.budtbl td.l2{vertical-align:middle;font-weight:600}
+.budtbl td.l1{background:var(--st-done-bg)}
+.budtbl th.c-l1,.budtbl td.l1{width:9%}
+.budtbl th.c-l2,.budtbl td.l2{width:11%}    /* 좁게 — 병합되어 줄바꿈해도 행이 잘 안 는다 */
+.budtbl th.c-l3,.budtbl td.l3{width:13%}
+.budtbl th.c-note,.budtbl td.note{width:16%}  /* 비고 폭을 먼저 확보한다 */
+.budtbl td.note{color:var(--ink-2);font-size:var(--fz-sm)}
+/* 소계 — 제목은 예산금액 **바로 왼쪽**이고 음영은 구분 칸까지 간다.
+   그래서 구분 셀의 rowspan 은 세부항목 줄까지만이다 */
+.budtbl tr.subtot td{background:var(--st-done-bg);font-weight:600;
+  border-top:1px solid var(--rule-2)}
+/* 머리줄은 스크롤해도 붙어 있다 — 열두 칸짜리 표라 아래로 내려가면 무슨 칸인지 잊는다 */
+.budwrap{max-height:70vh;overflow:auto}
+.budwrap .fintbl thead th{position:sticky;top:0;z-index:2;background:var(--paper)}
+.budtbl .editall{margin-left:8px;float:right}
+/* ── 전체 편집 (7-3) — 핸들은 **편집 상태에서만** 그려진다 ── */
+.budtbl .grip{display:none}
+.budtbl.editing .grip{display:inline-block;cursor:grab;color:var(--ink-3);
+  padding-right:4px;user-select:none}
+.budtbl .bi{font:inherit;font-size:var(--fz-sm);padding:3px 5px;width:100%;
+  border:1px solid var(--rule);border-radius:var(--r);background:var(--paper);color:var(--ink)}
+.budtbl .bi.r{text-align:right}
+.budtbl .bi.mono{font-variant-numeric:tabular-nums}
+.budtbl.editing td{padding:4px 6px}
+.budtbl tr.dropbefore td{box-shadow:inset 0 2px 0 var(--accent)}
+.budtbl tr.dropafter td{box-shadow:inset 0 -2px 0 var(--accent)}
+.budbar{display:flex;gap:8px;align-items:center;padding:8px 0}
+.budbar .hint{flex:1}
+/* ── 지출 표 (7-4 · 2026-09-26 확정본) ────────────────────────────────
+   예산 항목은 묶음 전체에 걸친 한 칸, 세부항목-2 는 이어진 같은 값끼리
+   병합, 세부항목-3 이 없으면 세부항목-2 가 가로로 합친다 */
+.exptbl td.catcell,.exptbl td.l3b{vertical-align:middle}
+.exptbl td.catcell{font-weight:600}
+.exptbl th.c-cat{width:15%}
+.exptbl th.c-l3b{width:14%}
+.exptbl th.c-l3c{width:10%}
+.exptbl tr.longrow td{border-top:0;padding-top:0}
+/* 긴 내용(명단·비고)은 **…** 로 줄이고 팝업이 전체를 보인다 */
+.exptbl .longcell{border:0;background:none;padding:0 10px 0 0;cursor:pointer;
+  font:inherit;font-size:var(--fz-sm);color:var(--ink-2);max-width:42ch;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.exptbl .longcell:hover{color:var(--ink);text-decoration:underline}
+/* 영수증은 칩이다 — 누르면 팝업이 열린다 */
+.exptbl .rcptchip{font:inherit;font-size:var(--fz-xs);font-variant-numeric:tabular-nums;
+  padding:1px 7px;margin-right:3px;cursor:pointer;color:var(--ink);
+  border:1px solid var(--rule-2);border-radius:999px;background:var(--paper)}
+.exptbl .rcptchip.memo{border-style:dashed;color:var(--ink-2)}
+.exptbl .rcptadd{font:inherit;font-size:var(--fz-xs);border:0;background:none;
+  color:var(--ink-2);cursor:pointer;padding:1px 4px}
+.exptbl .payer.acct{font:inherit;border:0;background:none;padding:0;cursor:pointer;
+  color:var(--ink);border-bottom:1px dotted var(--rule-2)}
+/* 팝업 — 긴 내용 · 계좌 · 영수증이 **한 부품**을 쓴다 (7-4) */
+.exppop{position:fixed;z-index:60;min-width:200px;max-width:340px;
+  background:var(--paper);border:1px solid var(--rule-2);border-radius:var(--r-lg);
+  box-shadow:0 8px 24px rgba(38,40,58,.16);padding:10px;font-size:var(--fz-sm)}
+.exppop .poprow{display:flex;gap:6px;align-items:center;padding:3px 0;flex-wrap:wrap}
+.exppop .poprow.full{display:block;white-space:pre-wrap;color:var(--ink)}
+.exppop .popmsg{flex:1;color:var(--ink-2)}
+.exppop .popedit{width:100%;font:inherit;font-size:var(--fz-sm);padding:5px 6px;
+  border:1px solid var(--rule);border-radius:var(--r);resize:vertical}
+.exppop .rcptview{display:block;margin:4px 0}
+.exppop .rcptview img{max-width:100%;max-height:260px;border-radius:var(--r);display:block}
+.exppop .mono{font-variant-numeric:tabular-nums}
+.exppop .dim{color:var(--ink-2)}
+/* 지출 「전체 편집」 — 칸만 입력으로 바뀐다(줄은 안 옮긴다) */
+.exptbl .ei{font:inherit;font-size:var(--fz-sm);padding:3px 5px;width:100%;
+  border:1px solid var(--rule);border-radius:var(--r);background:var(--paper);color:var(--ink)}
+.exptbl .ei.r{text-align:right}
+.exptbl .ei.mono{font-variant-numeric:tabular-nums}
+.exptbl .ei[type=checkbox]{width:auto}
+.exptbl.editing td{padding:4px 6px}
+.exptbl tr.willcancel td{opacity:.45;text-decoration:line-through;
+  text-decoration-color:var(--rule-2)}
+.chip.editall{cursor:pointer;font:inherit}
 /* 수입이 없을 때의 잔액 — 값이 아니라 말이다. 빨강을 쓰지 않는다 (2-a) */
 .kpi .v.unset{font-size:var(--fz-xl);font-weight:600;color:var(--ink-2);padding-top:6px}
 .rowedit summary{cursor:pointer;color:var(--ink-2);font-size:var(--fz-sm)}

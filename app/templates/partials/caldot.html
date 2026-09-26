@@ -18,8 +18,14 @@
    {#- **조립하지 않는다.** 이 한 줄을 만드는 곳은 `board.tooltip_of` 하나뿐이고
        첫 그림도 바뀐 뒤도 거기서 나온 값을 그대로 쓴다 — 매크로와 화면이
        각각 조립하던 때는 담당자를 바꾸면 옛 사람이 툴팁에 남았다. -#}
-   title="{{ dot.tooltip }}">
+   title="{{ dot.tooltip }}" data-meta="{{ dot.meta }}">
   <i class="cal-tm" style="background:{{ dot.color }}"></i>
+  {#- 지연은 **글자 앞의 `!` 하나**다 (목업 E · 보드의 바와 같은 규칙 · 4-1) —
+      「지연 n일」 을 칩에 쓰면 좁은 칸에서 제목을 밀어낸다. 며칠인지는 팝업이 말한다 -#}
+  {% if dot.overdue %}<b class="cal-bang" aria-hidden="true">!</b>{% endif %}
   <span class="cal-t">{{ dot.title }}</span>
+  {#- 날짜 없는 업무 목록에서는 담당팀을 함께 적는다 (목업 E) — 달력 칸에서는
+      자리가 없어 안 적는다. 그 목록은 `.calday-l` 밖이라 이 표시로 가른다 -#}
+  {% if dot.dept_name %}<span class="cal-dept">{{ dot.dept_name }}</span>{% endif %}
 </a>
 {%- endmacro %}

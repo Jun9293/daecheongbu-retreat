@@ -19,6 +19,7 @@ import datetime as dt
 from sqlalchemy.orm import Session
 
 from app.domain import board as board_domain
+from app.domain import holidays
 from app.models import Retreat, TaskRun, User
 
 # 고를 수 있는 범위. **부서 키가 그대로 값이 된다** — 여기 셋만 특별하다.
@@ -36,7 +37,6 @@ LEGACY_DEPT = "dept"
 
 # 한 칸에 이만큼까지 펼쳐 두고 나머지는 접는다. 다 펼치면 칸이 세로로
 # 길어져 주 높이가 들쭉날쭉해지고, 그러면 달력으로 읽히지 않는다.
-PER_DAY = 3
 
 WEEKDAYS = ("일", "월", "화", "수", "목", "금", "토")
 
@@ -108,6 +108,14 @@ def dot_of(run: TaskRun, *, today: dt.date) -> dict:
         # 점에 실어 두고 화면이 다시 조립하던 것을 걷어냈다. 담당자를 바꾸면
         # 그 값을 아무도 갱신하지 않아 옛 사람이 남았다 (board.tooltip_of).
         "tooltip": paint["tooltip"],
+        # 팝업(F)의 한 줄 — **만드는 곳은 `board.popup_meta` 하나다**(4-1 · 4-13).
+        # 툴팁과 담는 것이 달라 함수가 둘이다: 툴팁은 부서를 앞에 놓고 상위·
+        # 담당자까지 싣고, 팝업은 목업 F 가 정한 셋(기간 · 상태 · 담당팀)만 싣는다.
+        # **둘 다 둔다** — 팝업은 **끊긴 칩**에만 뜨고(안 끊긴 칩은 제목이 다
+        # 보인다) 그때 그 줄이 제목 전체를 말한다. 툴팁을 걷으면 안 끊긴 칩에서
+        # 상태·담당팀을 볼 길이 사라진다 (2026-09-26 이 판이 정함 · 4-13 이
+        # 「어느 쪽이 서는지 정하라」 고 한 자리)
+        "meta": board_domain.popup_meta(run, today),
         # **기간은 구조가 실어 보낸다** — 점에 마우스를 올렸을 때 화면이
         # 계산하거나 서버에 다시 묻지 않는다. 점이 자기 것을 들고 있다 (4-13).
         # 시작일이 없으면 마감일 하루짜리로 본다.
@@ -154,13 +162,23 @@ def build(
     # ── 마감일에 점 하나 ──
     by_day: dict[str, list[dict]] = {}
     undated: list[dict] = []
-    for run in sorted(runs, key=lambda r: (r.library.title or "")):
+    # 칸 안 차례는 **지연 → 진행중·대기 → 완료** 다 (목업 E) — 급한 것이 위로
+    # 온다. 같은 급 안에서는 제목 차례라 같은 자료면 늘 같은 자리에 선다
+    def 급(run) -> tuple:
+        늦음 = board_domain.overdue_of(run, today) if run.status != "완료" else 0
+        급수 = 0 if 늦음 else (2 if run.status == "완료" else 1)
+        return (급수, run.library.title or "")
+
+    for run in sorted(runs, key=급):
         end = run.end_date or run.start_date
         dot = dot_of(run, today=today)
         if end is None:
             # **놓을 자리가 없다고 조용히 빼지 않습니다.** 그게 정확히
-            # 놓치는 지점입니다 — 달력 아래에 따로 모아 보여줍니다
-            undated.append(dot)
+            # 놓치는 지점입니다 — 달력 아래에 따로 모아 보여줍니다.
+            # 그 목록은 줄마다 **제목 · 담당팀**이다 (목업 E) — 달력 칸에는
+            # 자리가 없어 안 적고 여기서만 적는다
+            undated.append({**dot,
+                            "dept_name": run.department.name if run.department else "담당 없음"})
         else:
             by_day.setdefault(end.isoformat(), []).append(dot)
 
@@ -174,9 +192,29 @@ def build(
         for _ in range(7):
             iso = day.isoformat()
             dots = by_day.get(iso, [])
+            # 꼬리표는 **한 줄뿐이다** — 수련회 개회 > 수련회 > 공휴일 > 오늘 차례로
+            # 고른다(목업 E). 여럿을 붙이면 좁은 칸에서 날짜 글자를 밀어낸다
+            공휴 = holidays.이름(day)
+            수련회날 = bool(retreat.start_date and retreat.end_date
+                          and retreat.start_date <= day <= retreat.end_date)
+            if 수련회날 and day == retreat.start_date:
+                꼬리 = {"글": "수련회 개회", "결": "open"}
+            elif 수련회날:
+                꼬리 = {"글": "수련회", "결": "span"}
+            elif 공휴:
+                꼬리 = {"글": 공휴, "결": "holiday"}
+            elif day == today:
+                꼬리 = {"글": "오늘", "결": "today"}
+            else:
+                꼬리 = None
             row.append({
                 "date": iso,
                 "day": day.day,
+                "retreat": 수련회날,
+                "holiday": 공휴,
+                # 일요일과 공휴일은 날짜 글자가 지연색이다 (목업 E)
+                "red": ((day.weekday() + 1) % 7 == 0) or bool(공휴),
+                "tag": 꼬리,
                 # **1일에는 달을 함께 적는다.** `1` 만 있으면 어느 달의 1일인지
                 # 알기 어렵고, 앞뒤 달 칸이 섞여 있어 더 그렇다 — 오히려
                 # 옆 달(`.out`) 쪽이 더 헷갈리므로 거기도 같게 적는다.
@@ -184,8 +222,12 @@ def build(
                 "in_month": day.month == first.month,
                 "is_today": day == today,
                 "weekday": (day.weekday() + 1) % 7,
-                "dots": dots[:PER_DAY],
-                "more": dots[PER_DAY:],
+                # **전부 보이고 칸 높이가 는다** (4-13 · 2026-09-23 사람이 정함) —
+                # 접힌 것은 아무도 펴 보지 않는다. `more` 는 빈 채로 남긴다:
+                # 화면 둘(격자 · 주 목록)이 그 이름을 쓰고 있고, 그 자리를
+                # 지우는 것은 이 판의 일이 아니다
+                "dots": dots,
+                "more": [],
             })
             day += dt.timedelta(days=1)
         weeks.append(row)
@@ -211,5 +253,8 @@ def build(
         "only_open": only_open,
         "count": shown,
         "total": len(runs),
-        "per_day": PER_DAY,
+        # **표에 없는 해를 조용히 비우지 않는다** (4-13) — 빈 것과 모르는 것이
+        # 같은 모양이면 그 해에 공휴일이 없다고 읽는다
+        "holiday_table": holidays.있나(first.year),
+        "holiday_years": f"{holidays.아는해[0]}~{holidays.아는해[-1]}",
     }

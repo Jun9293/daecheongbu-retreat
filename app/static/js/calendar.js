@@ -22,10 +22,9 @@ const note = document.getElementById('calnote');
    **`.calbar` 가 없어도 죽지 않는다** — 이 파일은 패널이 있는 화면이면
    어디서든 실릴 수 있고, 그때 상태 변경이 통째로 멈추면 안 된다. */
 const onlyOpen = () => bar?.dataset.onlyOpen === '1';
-const perDay = () => Number(bar?.dataset.perDay) || 3;
 
 /* 범위를 고르면 **서버에 다시 물어본다.** 보드는 그 자리에서 흐리게 하면
-   되지만(같은 행이 계속 있다), 달력은 `외 N건`·위쪽 건수·날짜 없는 업무 수를
+   되지만(같은 행이 계속 있다), 달력은 위쪽 건수·날짜 없는 업무 수를
    **다시 세어야** 한다 — 화면에서 감추기만 하면 그 숫자들이 옛것으로 남는다.
 
    **보던 달과 `미완료만` 을 함께 들고 간다** (4-13). 주소에 남겨야
@@ -162,8 +161,8 @@ if (window.업무추가) window.업무추가.다시그린다 = () => {
 
 const dots = runId => [...document.querySelectorAll(`.cal-dot[data-run="${runId}"]`)];
 
-/* 같은 업무가 여러 곳에 있다 — 월 격자, 좁은 화면의 주 목록, 그리고
-   `외 N건` 안. 하나만 고치면 화면을 넓혔다 좁혔을 때 어긋난다. */
+/* 같은 업무가 여러 곳에 있다 — 월 격자와 좁은 화면의 주 목록.
+   하나만 고치면 화면을 넓혔다 좁혔을 때 어긋난다. */
 function titleOf(runId) {
   const one = dots(runId)[0];
   const label = one && one.querySelector('.cal-t');
@@ -270,7 +269,7 @@ function applyDates(runId, saved) {
 
 /* 이 달 밖으로 나간 점을 치워 두는 자리. 화면에 그리지 않지만 DOM 에는
    남아 있어서, 되돌리면 그대로 살아난다. **숫자에는 들어가지 않는다** —
-   `recount()` 가 이 자리를 빼고 세므로 `외 N건` 과 위쪽 건수가 화면과 맞는다. */
+   `recount()` 가 이 자리를 빼고 세므로 위쪽 건수가 화면과 맞는다. */
 function stash(dot) {
   let box = document.getElementById('calstash');
   if (!box) {
@@ -282,22 +281,11 @@ function stash(dot) {
   box.appendChild(dot);
 }
 
-/* 한 칸에 `per_day` 개까지만 펼치고 나머지는 `외 N건` 안에 넣는다 (4-13).
-   다 펼치면 그 주만 세로로 길어져 달력으로 읽히지 않는다. */
+/* 한 칸의 업무는 **전부 보인다** (4-13 · 2026-09-26). 접어 두면 아무도 펴
+   보지 않고, 달력을 여는 사람이 묻는 「이번 주에 내가 뭘 해야 하나」 의 답이
+   반만 선다. 주가 길어지는 대가는 받기로 했다. */
 function placeInGrid(cell, dot) {
-  const open = [...cell.children].filter(el => el.classList.contains('cal-dot'));
-  let more = cell.querySelector('.cal-more');
-  if (open.length < perDay()) {
-    if (more) more.before(dot); else cell.appendChild(dot);
-    return;
-  }
-  if (!more) {
-    more = document.createElement('details');
-    more.className = 'cal-more';
-    more.innerHTML = '<summary></summary>';
-    cell.appendChild(more);
-  }
-  more.appendChild(dot);
+  cell.appendChild(dot);
 }
 
 /* 좁은 화면의 주 목록. **그 날 줄이 아직 없으면 만든다** — 목록은 점이 있는
@@ -322,14 +310,9 @@ function placeInWeekList(iso, dot) {
   day.querySelector('.calday-l').appendChild(dot);
 }
 
-/* 숫자를 화면과 맞춘다 — `외 N건` · `날짜가 없는 업무 N건` · 위쪽의 건수.
+/* 숫자를 화면과 맞춘다 — `날짜가 없는 업무 N건` · 위쪽의 건수.
    **세어서 다시 적는다.** 더하고 빼면 한 번 어긋난 뒤로 영영 어긋난다. */
 function recount() {
-  document.querySelectorAll('.cal-more').forEach(more => {
-    const n = more.querySelectorAll('.cal-dot').length;
-    if (!n) { more.remove(); return; }
-    more.querySelector('summary').textContent = `외 ${n}건`;
-  });
   document.querySelectorAll('.calweeks .calday').forEach(day => {
     if (!day.querySelectorAll('.cal-dot').length) day.remove();
   });
@@ -345,7 +328,7 @@ function recount() {
   }
 
   // **치워 둔 것(`#calstash`)은 세지 않는다.** 화면에 없는 것이 숫자에
-  // 들어가면 `외 N건` 과 위쪽 건수가 눈에 보이는 것과 어긋난다.
+  // 들어가면 위쪽 건수가 눈에 보이는 것과 어긋난다.
   const count = document.querySelector('.calcount');
   if (count) {
     const grid = document.querySelector('.cal-grid');
@@ -451,8 +434,8 @@ function showSpan(dot) {
   }
 }
 
-/* `mouseover`/`mouseout` 을 문서에 하나만 건다 — 점이 `외 N건` 안에서
-   나중에 펼쳐지거나 날짜가 바뀌어 다시 놓여도 그대로 동작한다. */
+/* `mouseover`/`mouseout` 을 문서에 하나만 건다 — 점이 날짜가 바뀌어
+   다시 놓여도 그대로 동작한다. */
 document.addEventListener('mouseover', e => {
   const dot = e.target.closest && e.target.closest('.cal-dot[data-start]');
   if (dot) showSpan(dot);
@@ -468,13 +451,56 @@ document.addEventListener('mouseout', e => {
 // (패널이 열릴 때는 `Drawer.init` 의 `onOpen` 이 지운다 — 여기가 아니다)
 addEventListener('resize', clearSpan);
 
+/* 칩이 **끊겼으면** 보드와 같은 팝업을 연다 (목업 E · F) — 담는 것이 같고
+   **달력에서만** 맨 아래 「상세 열기」 를 켠다(4-13). 보드에는 스크롤해서 갈
+   자리가 있지만 여기는 없다. 부품은 `taskpop.js` 하나다 — 3단계가 만든 것을
+   그대로 쓰고 여기서 새로 만들지 않는다. */
+function 끊겼나(dot) {
+  const t = dot.querySelector('.cal-t');
+  return !!t && t.scrollWidth > t.clientWidth + 1;
+}
+function 팝업을연다(dot) {
+  if (!window.TaskPop) return false;
+  TaskPop.open(dot, [{
+    title: dot.querySelector('.cal-t') ? dot.querySelector('.cal-t').textContent : '',
+    run_id: dot.dataset.run,
+    meta_line: dot.dataset.meta || dot.getAttribute('title') || ''
+  }], {상세열기: true});
+  return true;
+}
+
 /* 점을 누르면 패널이 열린다. `href` 는 그대로 두었다 —
-   자바스크립트가 죽었거나 가운데 버튼으로 누르면 보드로 가는 길이 남는다. */
+   자바스크립트가 죽었거나 가운데 버튼으로 누르면 보드로 가는 길이 남는다.
+
+   **손가락에는 호버가 없다** (4-13 · 목업 E) — 그 기기에서는 **첫 탭이
+   칠함과 팝업**이고 **두 번째 탭이 드로어**다. 마우스가 있는 기기는 호버가
+   이미 칠하므로 누르면 바로 드로어로 간다. */
+const 손가락 = window.matchMedia && matchMedia('(hover: none)').matches;
+let 탭한점 = null;
 document.addEventListener('click', e => {
   const dot = e.target.closest('.cal-dot[data-run]');
   if (!dot) return;
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;   // 새 탭으로 여는 길은 막지 않는다
   e.preventDefault();
+  if (손가락 && 탭한점 !== dot) {
+    탭한점 = dot;
+    showSpan(dot);
+    팝업을연다(dot);
+    return;
+  }
+  탭한점 = null;
   Drawer.open(dot.dataset.run);
+});
+
+/* 마우스를 올렸을 때 — 칠하는 것은 위의 `mouseover` 가 하고, **끊긴 칩**이면
+   팝업도 함께 연다. 안 끊긴 칩은 제목이 다 보이므로 열지 않는다(보드와 같은
+   조건 · 4-1) */
+document.addEventListener('mouseover', e => {
+  const dot = e.target.closest && e.target.closest('.cal-dot[data-run]');
+  if (dot && !손가락 && 끊겼나(dot)) 팝업을연다(dot);
+});
+document.addEventListener('mouseout', e => {
+  const dot = e.target.closest && e.target.closest('.cal-dot[data-run]');
+  if (dot && !손가락 && window.TaskPop) TaskPop.later();
 });
 })();

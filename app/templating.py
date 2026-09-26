@@ -135,6 +135,7 @@ templates.env.filters["short_date"] = short_date
 templates.env.filters["dday"] = dday
 # 계좌번호의 끝 숫자 넷 (7-4 · 재정 차례 5) — 자르는 규칙은 domain.budget 하나
 from app.domain.budget import account_tail as _account_tail  # noqa: E402
+from app.domain.budget import 긴줄인가 as _긴줄인가  # noqa: E402
 templates.env.filters["account_tail"] = _account_tail
 
 
@@ -167,6 +168,8 @@ templates.env.globals["ROLE_LABELS"] = perm.ROLE_LABELS
 templates.env.globals["today"] = dt.date.today
 templates.env.globals["can_edit_dept"] = can_edit_dept
 templates.env.globals["is_other_dept"] = is_other_dept
+# 긴 내용 줄이 서는지 — 화면과 병합 수가 같은 판정을 쓴다 (7-4)
+templates.env.globals["긴줄인가"] = _긴줄인가
 # **열람 전용인가는 사람을 받는다** (도막 4 · ②) — 소속이 없는 일반도 열람 전용이다
 templates.env.globals["is_readonly"] = perm.is_readonly
 templates.env.globals["내_부서키"] = perm.my_dept_keys
