@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import pathlib
+import re
 
 import pytest
 from sqlalchemy import select
@@ -511,3 +512,46 @@ def test74_h05_긴_내용_칸이_그_지출_줄을_가리킨다(admin_client, �
         db.commit()
     page = admin_client.get(f"/expenses?retreat_id={지출['retreat']}").text
     assert f'class="longrow" data-of="{지출["ids"][0]}"' in page, "긴 내용 줄에 주인 표시가 없다"
+
+
+def test74_h06_계좌_팝업은_눌러서도_열린다():
+    """손가락에는 호버가 없다 — 올림으로만 열면 **그 기기에서 계좌를 볼 길이
+    통째로 없다**(7-4 의 「휴대폰은 눌러서 열고」 · 2026-09-27 사람이 정함).
+
+    올림으로 여는 길은 그대로 두고 **둘 다** 된다 — 그래서 `mouseover` 쪽도
+    함께 남아 있는지 본다.
+
+    **낱말만 잰다** — 누름으로 실제로 열리는지는 `docs/checks/fin.js` 의
+    갈래 ⑮ 가 잰다(브라우저에서만 일어나는 일이다 · 10장). 여기서 보는 것은
+    **여는 길이 둘 다 있는가** 와 **편집 중 막기가 계좌를 안 건드리는가** 다.
+    """
+    원문 = (ROOT / "app" / "static" / "js" / "exppop.js").read_text(encoding="utf-8")
+
+    def 코드줄(글: str) -> str:
+        """주석 줄을 걷는다 — 글자를 찾는 시험은 코드와 설명을 못 가린다(10장).
+
+        **`/*`~`*/` 를 정규식으로 걷지 않는다** — 이 파일에는 문자열 안에
+        `image/*` 가 있어서 그 `/*` 가 짝을 찾아 **코드를 통째로 먹는다**
+        (2026-09-27 에 실제로 그래서 이 시험이 빨개졌다). 줄 머리로 가르면
+        그 함정을 안 밟는다.
+        """
+        남 = [줄 for 줄 in 글.splitlines()
+              if not 줄.strip().startswith(("*", "//", "/*"))]
+        return chr(10).join(남)
+
+    js = 코드줄(원문)
+    몸통 = js[js.index("addEventListener('click'"):]
+    assert "closest('.payer.acct')" in 몸통, "누름으로 계좌 팝업을 여는 자리가 없다"
+    assert "addEventListener('mouseover'" in js, "올림으로 여는 길이 사라졌다"
+
+    # **편집 중 막기는 계좌에 해당 없다** — 막기의 축은 「저장이 일어날 수
+    # 있나」 이고 계좌 팝업에는 저장도 화면 다시 읽기도 없다. 그래서 `누른줄`
+    # 에 계좌를 넣으면 안 된다 — 넣으면 편집 중에 계좌를 볼 길이 막힌다.
+    #
+    # **한 줄이 아니라 구간을 본다** (2026-09-27 커밋 전 검토 [D]) — 이 파일의
+    # 문체는 `var 칩0 = …` 처럼 **먼저 변수로 뽑아 두는 쪽**이라, 회귀는
+    # `var 계좌0 = …; var 누른줄 = (… || 계좌0);` 모양으로 온다. 그때 그 한
+    # 줄에는 `payer` 가 없어 **막으려던 것이 그대로 지나간다**
+    시작 = 몸통.index("var 누른줄")
+    구간 = 몸통[몸통.rindex("var 긴", 0, 시작):몸통.index("if (긴)", 시작)]
+    assert "payer" not in 구간 and "acct" not in 구간,         f"편집 중 막기가 계좌까지 막는다: {구간.strip()[:120]}"
