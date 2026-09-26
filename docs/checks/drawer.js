@@ -1377,6 +1377,32 @@ const 점검 = async (옵션 = {}) => {
           .find(r => { const c = r.querySelector('.cell.st');
                        return c && c.classList.contains('pick') === 고를수; });
         const menu = $('statmenu');
+        /* **드로어를 먼저 닫고 들어간다** (2026-09-26 에 두 계정으로 돌려
+           보고 알았다). 바로 위의 「행의 빈 곳」 시험이 드로어를 열어 두는데,
+           그 상태로 들어가면 배지 차례의 **바깥 클릭이 드로어까지 닫고**
+           폭 전환(0.22s · 4-9)이 도는 동안 목록이 흔들린다. 그 흔들림이
+           `scroll` 로 잡혀 **다음에 뜬 메뉴를 앱이 곧바로 닫는다** — 그것은
+           앱이 일부러 하는 일이고(4-14 「스크롤하면 닫는다」), 여기서 ✗ 로
+           나오면 **화면이 아니라 검사가 흔들린 것**이다. 실제로 부서 리더
+           계정에서 「칸의 가장자리 → 메뉴 안 뜸」 이 그렇게 나왔다. */
+        /* **클래스가 아니라 폭이 멎기를 기다린다.** `open` 은 곧바로
+           떨어지지만 폭은 0.22s 동안 줄고, 흔들리는 것은 그 폭이다 —
+           클래스만 보고 들어갔더니 ✗ 가 배지 차례로 **옮겨 갔을 뿐**
+           이었다. 두 번 같은 값이 나오면 멎은 것이다(어림한 시간을
+           박지 않는다 — 그러면 검사가 흔들린다). */
+        const 폭이멎기를 = async 라벨 => {
+          let 앞 = -1;
+          await 될때까지(라벨, () => {
+            const w = Math.round(dw.getBoundingClientRect().width);
+            const 같나 = w === 앞; 앞 = w; return 같나;
+          }, 1500);
+        };
+        if (dw.classList.contains('open')) {
+          Drawer.close();
+          await 될때까지('상태 칸 시험 전 행 접기',
+            () => !dw.classList.contains('open'), 1500);
+        }
+        await 폭이멎기를('드로어 폭이 멎기를');
         for (const 고를수있나 of [true, false]) {
           const row = 칸있는행(고를수있나);
           const stcell = row && row.querySelector('.cell.st');
@@ -1415,6 +1441,7 @@ const 점검 = async (옵션 = {}) => {
             if (열렸나) {
               Drawer.close();
               await 될때까지('행 접기', () => !dw.classList.contains('open'), 1500);
+              await 폭이멎기를('행 접은 뒤 폭이 멎기를');
             }
           }
         }
@@ -1476,6 +1503,113 @@ const 점검 = async (옵션 = {}) => {
         const 지워짐 = document.querySelectorAll('.cal-cell.inspan').length === 0;
         잰다(지워짐, ' 손을 떼면 사라짐', '비침이 남아 있음');
       } else results.push('· 기간을 가진 점이 없거나 좁은 화면이라 건너뜀');
+
+      /* ── 목업 E 로 다시 그린 자리 (2026-09-26 · 봐둘것 BJ-i) ────────
+         **여기는 pytest 가 못 보는 자리다**(10장) — 구조가 내는 값은
+         `test_stage75` 가 잡지만, 그 값이 **실제로 칠해지는지**와 손가락
+         두 단계는 브라우저에서만 돈다. */
+
+      // 붉은 날짜 — 일요일과 공휴일은 **한 값**(`--red-ink`)이다 (4-0 · 4-13)
+      const 붉은날 = [...document.querySelectorAll('.cal-cell:not(.out) .cal-d.red')];
+      if (!붉은날.length) results.push('· 이 달에 일요일·공휴일 칸이 없어 건너뜀');
+      else {
+        const 보통 = document.querySelector('.cal-cell:not(.out) .cal-d:not(.red)');
+        const 빨강 = getComputedStyle(붉은날[0]).color;
+        잰다(!보통 || 빨강 !== getComputedStyle(보통).color,
+          ` 일요일·공휴일 날짜가 붉게 칠해짐 (${붉은날.length}칸)`,
+          '붉어야 할 날짜가 보통 날짜와 같은 색이다');
+        /* **한 값인지도 본다** — 지연 면색을 글자에 쓰면 수련회 음영 위에서
+           9장의 4.5:1 아래로 떨어진다(4-0 이 그 한 값을 정해 둔 자리). */
+        const 값들 = new Set(붉은날.map(el => getComputedStyle(el).color));
+        잰다(값들.size === 1, ` 붉은 날짜가 한 값이다 (${값들.size}가지)`,
+          `붉은 날짜에 색이 ${값들.size}가지 쓰였다`);
+      }
+
+      /* 꼬리표는 **한 줄뿐**이다 (4-13) — 여럿 붙으면 좁은 칸에서 날짜
+         글자를 밀어낸다. 칸마다 하나를 넘는지 본다. */
+      /* **잴 자리가 없으면 ✓ 가 아니라 건너뜀이다** — 꼬리표가 하나도
+         없는 판(좁은 폭의 주 단위 목록 등)에서도 「하나뿐이다」 는 참이라
+         안 잰 것이 통과로 센다. 바로 위 「날짜 없는 업무」 가 정확히 그
+         까닭으로 고쳐진 줄이다(2026-09-26 커밋 전 검토 [L]). */
+      if (!document.querySelector('.cal-tag'))
+        results.push('· 이 달에 꼬리표가 없어 건너뜀');
+      else {
+        const 꼬리많은칸 = [...document.querySelectorAll('.cal-cell')]
+          .filter(td => td.querySelectorAll('.cal-tag').length > 1);
+        잰다(꼬리많은칸.length === 0, ' 칸마다 꼬리표가 하나뿐이다',
+          `꼬리표가 둘 이상 붙은 칸이 ${꼬리많은칸.length}개다`);
+      }
+
+      // 수련회 음영은 **면에만** 깔린다 — 그 위에 글자를 얹지 않는다 (4-0)
+      const 음영칸 = [...document.querySelectorAll('.cal-cell.span')];
+      if (!음영칸.length) results.push('· 이 달에 수련회 기간이 없어 음영은 건너뜀');
+      else {
+        const 보통칸 = document.querySelector('.cal-cell:not(.span):not(.out)');
+        잰다(!보통칸 || getComputedStyle(음영칸[0]).backgroundColor
+             !== getComputedStyle(보통칸).backgroundColor,
+          ` 수련회 날에 음영이 깔림 (${음영칸.length}칸)`,
+          '수련회 칸이 보통 칸과 같은 바탕이다');
+      }
+
+      /* 지연 칩은 글자 앞의 **`!` 하나**다 (4-1 · 4-13) — 「지연 n일」 을
+         칩에 쓰면 좁은 칸에서 제목을 밀어낸다. 며칠인지는 팝업이 말한다. */
+      const 지연칩 = [...document.querySelectorAll('.cal-dot')]
+        .filter(d => d.dataset.overdue === '1' || d.querySelector('.cal-bang'));
+      if (!지연칩.length) results.push('· 이 달에 지연된 업무가 없어 `!` 는 건너뜀');
+      else {
+        const 느낌표 = 지연칩.filter(d => d.querySelector('.cal-bang'));
+        잰다(느낌표.length === 지연칩.length,
+          ` 지연 칩 앞에 「!」 가 있다 (${느낌표.length}/${지연칩.length})`,
+          '지연인데 「!」 가 없는 칩이 있다');
+        잰다(!지연칩.some(d => /지연\s*\d+\s*일/.test(d.textContent)),
+          ' 칩에 「지연 n일」 을 쓰지 않는다', '칩에 지연 일수가 적혀 있다');
+      }
+
+      /* 끊긴 칩은 **보드와 같은 팝업**을 연다 (4-1 · 4-13) — 달력에서만
+         맨 아래 「상세 열기」 줄을 켠다. 두 벌이면 담는 것이 갈린다. */
+      const 끊긴칩 = [...document.querySelectorAll('.cal-dot[data-run]')]
+        .filter(d => {
+          const t = d.querySelector('.cal-t');
+          return shown(d) && t && t.scrollWidth > t.clientWidth + 1;
+        });
+      if (!끊긴칩.length) results.push('· 제목이 끊긴 칩이 없어 팝업은 건너뜀');
+      else {
+        끊긴칩[0].dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+        const 떴나 = await 잠깐본다(() => !!document.querySelector('.taskpop'));
+        const 팝 = document.querySelector('.taskpop');
+        잰다(떴나 && !!팝, ' 끊긴 칩에 올리면 팝업이 뜬다', '끊긴 칩의 팝업이 안 뜬다');
+        if (팝) {
+          잰다(!!팝.querySelector('[data-go]') || /상세 열기/.test(팝.textContent),
+            ' 달력 팝업에 「상세 열기」 가 있다',
+            '달력인데 팝업에 「상세 열기」 줄이 없다');
+          /* **한 줄은 구조가 만든다** — `board.popup_meta` 하나가 「기간 ·
+             상태 · 담당팀」 을 조립하고 칩이 `data-meta` 로 실어 온다(4-1).
+             화면이 그것을 **그대로** 띄우는지 본다: 팝업이 따로 조립하면
+             두 벌이 되고 갈린 쪽을 아무도 눈치채지 못한다. */
+          const 한줄 = (끊긴칩[0].dataset.meta || '').trim();
+          잰다(!!한줄 && 팝.textContent.includes(한줄),
+            ` 팝업이 구조가 만든 한 줄을 그대로 낸다 (${한줄.slice(0, 24)})`,
+            한줄 ? '팝업의 한 줄이 data-meta 와 다르다' : '칩에 data-meta 가 없다');
+          // 제목 전체가 보여야 한다 — 끊겨서 여는 팝업이므로
+          const 제목 = (끊긴칩[0].querySelector('.cal-t') || {}).textContent || '';
+          잰다(!!제목 && 팝.textContent.includes(제목.trim()),
+            ' 팝업이 제목 전체를 보인다', '팝업에 제목 전체가 없다');
+        }
+        끊긴칩[0].dispatchEvent(new MouseEvent('mouseout',
+          {bubbles: true, relatedTarget: document.body}));
+        await 잠깐본다(() => !document.querySelector('.taskpop'));
+      }
+
+      /* **터치 두 단계는 이 두 파일 어디에서도 못 잽니다** (4-13 · BJ-i).
+         첫 탭이 칠함이고 두 번째가 드로어인데, 갈리는 자리가
+         `matchMedia('(hover: none)')` 이라 **호버가 없는 기기에서만** 돕니다 —
+         이 점검은 넓은 화면(호버 있음)을 전제하고, `phone.js` 가 도는
+         좁은 폭에서는 달력이 주 단위 목록이라 칠함 자체를 안 합니다.
+         **손가락이 달린 기기에서 사람이 봐야 하는 자리**이고, 코드가 그
+         갈래를 들고 있는지는 `test75_c04` 가 잡습니다. 안 잰 것을 ✓ 로
+         세지 않으려고 여기 건너뜀으로 적습니다. */
+      results.push('· 터치 두 단계 — 호버가 있는 이 화면에서는 못 잼'
+        + ' (손가락 기기에서 사람이 봅니다 · 낱말은 test75_c04)');
     }
 
     /* ── 업무 추가 팝업 (6-7 · 목업 C) ───────────────────────────────
@@ -2059,6 +2193,65 @@ const 고장들 = [
    화면: '달력', 나와야: '기간 비침이 동작하지 않음',
    못심음: 항목 => 항목.some(r => String(r).includes('기간을 가진 점이 없거나')),
    심는다: () => 캡처막기(el => el.closest('.cal-dot'), 'mouseover')},
+  /* ── 목업 E 로 다시 그린 자리 (2026-09-26 · 봐둘것 BJ-i) ───────────
+     구조가 내는 값은 `test_stage75` 가 잡는다 — 여기서 심는 것은 **그 값이
+     화면에 실제로 칠해지는가** 다. 둘은 다른 자리라 둘 다 필요하다. */
+  {갈래: '㉗ 달력 — 붉은 날짜가 안 붉다', 고장: '붉은 날짜를 보통 색으로 칠한다',
+   화면: '달력', 나와야: '붉어야 할 날짜가 보통 날짜와 같은 색이다',
+   못심음: 항목 => 항목.some(r => String(r).includes('일요일·공휴일 칸이 없어')),
+   심는다: () => 스타일('.cal-d.red{color:var(--ink-2)!important}')},
+  {갈래: '㉘ 달력 — 꼬리표가 둘씩 붙는다', 고장: '칸마다 꼬리표를 하나 더 붙인다',
+   화면: '달력', 나와야: '꼬리표가 둘 이상 붙은 칸이',
+   못심음: 항목 => !document.querySelector('.cal-tag'),
+   심는다: () => {
+     const 더한것 = [];
+     document.querySelectorAll('.cal-cell .cal-tag').forEach(t => {
+       const 사본 = t.cloneNode(true);
+       t.after(사본);
+       더한것.push(사본);
+     });
+     return () => 더한것.forEach(el => el.remove());
+   }},
+  {갈래: '㉙ 달력 — 수련회 음영이 안 깔린다', 고장: '음영을 보통 칸과 같게 한다',
+   화면: '달력', 나와야: '수련회 칸이 보통 칸과 같은 바탕이다',
+   못심음: 항목 => 항목.some(r => String(r).includes('수련회 기간이 없어')),
+   심는다: () => 스타일('.cal-cell.span{background:transparent!important}')},
+  {갈래: '㉚ 달력 — 지연 칩에 「!」 가 없다', 고장: '느낌표를 감춘다',
+   화면: '달력', 나와야: '지연인데 「!」 가 없는 칩이 있다',
+   못심음: 항목 => 항목.some(r => String(r).includes('지연된 업무가 없어')),
+   /* **뗀 자리를 들고 있다가 되돌린다.** 「다시 그리면 돌아온다」 고 적어
+      두었는데 **사실이 아니다** — 달력은 격자를 다시 안 그리고 상태를 바꿀
+      때도 점만 고쳐 칠한다. 안 되돌리면 **맨 끝 깨끗한 판이 빨개지고**,
+      11-3 이 「그러면 그 판의 판정 전체가 무효」 라고 정한 자리가 된다
+      (2026-09-26 커밋 전 검토 [B]). 이번 판은 그 달에 지연 업무가 없어
+      못심음이라 안 터졌을 뿐이다. */
+   심는다: () => {
+     const 들 = [...document.querySelectorAll('.cal-dot .cal-bang')];
+     const 자리 = 들.map(b => [b.parentNode, b.nextSibling]);
+     들.forEach(b => b.remove());
+     return () => 들.forEach((b, i) => 자리[i][0].insertBefore(b, 자리[i][1]));
+   }},
+  {갈래: '㉛ 달력 — 팝업이 한 줄을 따로 조립한다', 고장: '팝업이 한 줄을 따로 짓는다',
+   화면: '달력', 나와야: '팝업의 한 줄이 data-meta 와 다르다',
+   못심음: 항목 => 항목.some(r => String(r).includes('제목이 끊긴 칩이 없어')),
+   /* **칩의 `data-meta` 를 건드려서는 이 갈래를 못 심는다** (2026-09-26 에
+      두 번 돌려 보고 알았다) — 팝업이 바로 그 값으로 한 줄을 짓기 때문에,
+      비우면 검사가 「칩에 data-meta 가 없다」 는 **다른 고장**으로 빠지고
+      값을 바꾸면 팝업도 따라 바뀌어 **영영 안 걸린다.** 재려는 것은
+      「팝업이 그 한 줄을 따로 조립하는가」 이므로 **팝업 쪽**을 바꾼다. */
+   심는다: () => {
+     // **값이 이미 같으면 안 쓴다** — 안 그러면 콜백이 자기 쓰기를 다시
+     // 듣는다. 지금 안 도는 것은 브라우저의 최적화에 기댄 것이라 못 믿는다
+     // (2026-09-26 커밋 전 검토 [K])
+     const 고친다 = () => document.querySelectorAll('.taskpop .tpm')
+       .forEach(el => { if (el.textContent !== '따로 지은 한 줄')
+                          el.textContent = '따로 지은 한 줄'; });
+     const mo = new MutationObserver(고친다);
+     mo.observe(document.body, {childList: true, subtree: true});
+     고친다();
+     return () => mo.disconnect();
+   }},
+
   {갈래: '⑪ 달력 — 날짜 없는 업무', 고장: '건수가 사라진다',
    화면: '달력', 나와야: '날짜 없는 업무 자리에 건수가 없다',
    못심음: 항목 => 항목.some(r => String(r).includes('날짜 없는 업무가 없어')),
