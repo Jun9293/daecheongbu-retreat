@@ -107,8 +107,13 @@ class CategorySummary:
     category: BudgetCategory
     planned: int
     spent: int
-    # 비율 = 항목 예산 / 지출예산 총액 (7-3). 총액을 알아야 하므로 build 가 채운다.
+    # **예산비율** = 항목 예산 / 지출예산 총액 (7-3). 총액을 알아야 하므로 build 가 채운다.
     ratio_pct: float = 0.0
+    # **결산비율** = 항목 결산 / 총 결산금액 (2026-09-26 사람이 정함).
+    # 「집행률」(결산 ÷ 그 항목의 예산)과 **다른 수다** — 이쪽은 쓴 돈 전체에서
+    # 이 항목이 차지하는 몫이라 분모가 총 결산이다. 둘을 한 이름으로 두면
+    # 「100%를 넘는 비율」 과 「합이 100인 비율」 이 같은 칸에 섞인다
+    settle_ratio_pct: float = 0.0
 
     @property
     def remaining(self) -> int:
@@ -132,6 +137,9 @@ class GroupSummary:
 
     name: str
     rows: list[CategorySummary] = field(default_factory=list)
+    # 소계 줄의 두 비율 — 줄의 것과 **같은 분모**를 쓴다. build 가 채운다
+    ratio_pct: float = 0.0
+    settle_ratio_pct: float = 0.0
 
     @property
     def planned(self) -> int:
@@ -144,6 +152,22 @@ class GroupSummary:
     @property
     def remaining(self) -> int:
         return self.planned - self.spent
+
+    @property
+    def items(self) -> list[list[CategorySummary]]:
+        """같은 항목(level2)끼리 묶은 것 — 화면이 **항목 셀을 병합**한다 (7-3).
+
+        묶는 곳이 여기 하나여야 표의 rowspan 과 소계가 같은 것을 센다.
+        **이어진 줄만 묶는다** — 사람이 순서를 정하는 표라 떨어져 있는 같은
+        이름을 붙이면 사람이 놓은 자리가 화면에서 바뀐다.
+        """
+        out: list[list[CategorySummary]] = []
+        for row in self.rows:
+            if out and out[-1][0].category.level2 == row.category.level2:
+                out[-1].append(row)
+            else:
+                out.append([row])
+        return out
 
 
 @dataclass
@@ -257,9 +281,15 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
     canceled_spent = sum(row.spent for row in canceled)
 
     total_planned = sum(r.planned for r in rows)
+    # 결산비율의 분모는 **총 결산금액**이다 — 미지정·취소된 항목에 걸린 지출까지
+    # 든 값(BudgetSummary.total_spent 와 같은 셈)이라야 화면의 총계와 맞는다
+    total_spent = sum(r.spent for r in rows) + uncategorized + canceled_spent
     for row in rows:
         row.ratio_pct = (
             round(row.planned / total_planned * 100, 1) if total_planned > 0 else 0.0
+        )
+        row.settle_ratio_pct = (
+            round(row.spent / total_spent * 100, 1) if total_spent > 0 else 0.0
         )
 
     # 구분(level1)별 소계 — 목록 순서를 지키며 묶는다
@@ -272,6 +302,14 @@ def build_budget_summary(db: Session, *, retreat: Retreat) -> BudgetSummary:
             group = by_name[name] = GroupSummary(name=name)
             groups.append(group)
         group.rows.append(row)
+
+    for group in groups:
+        group.ratio_pct = (
+            round(group.planned / total_planned * 100, 1) if total_planned > 0 else 0.0
+        )
+        group.settle_ratio_pct = (
+            round(group.spent / total_spent * 100, 1) if total_spent > 0 else 0.0
+        )
 
     return BudgetSummary(
         categories=rows, groups=groups, canceled_categories=canceled, incomes=incomes,
@@ -457,3 +495,40 @@ def entries_of(db: Session, retreat: Retreat) -> list[ExpenseEntry]:
             .order_by(ExpenseEntry.id)
         )
     )
+
+
+def 긴줄인가(e: ExpenseEntry) -> bool:
+    """그 지출 아래에 **긴 내용 줄**(명단 · 비고)이 서나 (7-4).
+
+    화면과 병합 수가 **같은 이 판정**을 쓴다 — 두 벌이면 rowspan 이 실제 줄
+    수와 어긋나고, 어긋난 쪽이 화면이라 표가 통째로 밀린다.
+    """
+    # **식대는 명단이 비어도 줄이 선다** (2026-09-26 두 번째 검토 [1]) — 그 자리가
+    # 인원을 넣는 유일한 길이라, 비었다고 안 그리면 그 줄은 금액도 못 고친다
+    return bool(e.note or e.is_meal_expense)
+
+
+def 세부묶음(entries: list[ExpenseEntry]) -> list[dict]:
+    """지출 줄을 **세부항목-2(level3b)로 묶는다** (7-4 · 2026-09-26 확정본).
+
+    화면이 그 칸을 **세로로 병합**하고(같은 세부항목에 영수증이 여럿 걸린다),
+    그 묶음에 세부항목-3 이 하나도 없으면 **가로로 합친다**.
+
+    **이어진 줄만 묶는다** — 목록 순서는 사람이 보는 순서라, 떨어져 있는 같은
+    이름을 붙이면 줄이 제자리에서 움직인다(예산 표의 `GroupSummary.items` 와
+    같은 규칙이다).
+    """
+    out: list[dict] = []
+    for e in entries:
+        이름 = (e.level3b or "").strip()
+        if out and out[-1]["name"] == 이름:
+            out[-1]["entries"].append(e)
+        else:
+            out.append({"name": 이름, "entries": [e]})
+    for blk in out:
+        blk["has_l3c"] = any((x.level3c or "").strip() for x in blk["entries"])
+        # **그려질 줄 수**다 — 긴 내용이 있는 지출은 아래에 한 줄이 더 선다.
+        # 병합(rowspan)이 이 수를 안 쓰면 그 묶음 아래의 칸이 통째로 밀린다
+        # (2026-09-26 커밋 전 검토 [C])
+        blk["rows"] = len(blk["entries"]) + sum(1 for x in blk["entries"] if 긴줄인가(x))
+    return out

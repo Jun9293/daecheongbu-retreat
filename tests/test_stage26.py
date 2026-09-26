@@ -126,30 +126,41 @@ def _행들(html):
     return re.findall(r"<tr[^>]*>.*?</tr>", body, re.S)
 
 
-def test26_a01_구분_제목_줄에_소계가_있고_별도_소계_행과_항목_행이_없다(admin_client, 예산):
+def test26_a01_구분은_왼쪽_열로_병합되고_구분마다_소계_줄이_선다(admin_client, 예산):
+    """2026-09-26 확정본 — 구분 제목 줄·접기 토글·세부항목 개수는 없앴다.
+
+    구분은 **왼쪽 열로 빠져 병합**되고, 소계는 **줄로** 서며 그 제목은 예산금액
+    바로 왼쪽이다. 값은 `budget.summary` 의 것이라 화면이 다시 더하지 않는다.
+    """
     page = admin_client.get("/budget").text
     rows = _행들(page)
-    assert not [r for r in rows if 'class="subtotal"' in r], "별도 소계 행이 남아 있다"
-    assert not [r for r in rows if 'class="l2row"' in r], "항목 별도 줄이 남아 있다"
-    heads = [r for r in rows if "l1row" in r]
-    assert len(heads) == 2
-    식비 = next(r for r in heads if "식비" in r)
-    # 제목 줄 = 이름 · 세부항목 수 · 소계(예산·결산·차액) — 값은 summary 의 것
-    assert "세부항목 3" in 식비 and "6,500,000" in 식비 and '<td class="r mono">0</td>' in 식비
-    assert 'data-fold=' in 식비 and 'aria-expanded="true"' in 식비, "접기 단추가 없다"
-    홍보 = next(r for r in heads if "홍보" in r)
-    assert "세부항목 1" in 홍보 and "100,000" in 홍보 and "180,000" in 홍보 and "-80,000" in 홍보
+    assert not [r for r in rows if "l1row" in r], "구분 제목 줄이 남아 있다"
+    assert "data-fold=" not in page, "접기 토글이 남아 있다"
+    assert "세부항목 3" not in page, "세부항목 개수가 남아 있다"
+    소계 = [r for r in rows if 'class="subtot"' in r]
+    assert len(소계) == 2, f"구분마다 소계가 안 섰다: {len(소계)}"
+    for r in 소계:
+        assert '<td colspan="6" class="r">소계</td>' in r, "소계 제목이 예산금액 바로 왼쪽이 아니다"
+    식비 = next(r for r in 소계 if "6,500,000" in r)
+    assert '<td class="r mono">0</td>' in 식비
+    홍보 = next(r for r in 소계 if "100,000" in r)
+    assert "180,000" in 홍보 and "-80,000" in 홍보
+    # 구분 칸은 그 구분의 세부항목 줄만큼 **병합**된다 — 소계 줄은 안 덮는다
+    assert 'class="l1" rowspan="3"' in page and 'class="l1" rowspan="1"' in page
 
 
-def test26_a02_항목_라벨은_첫_세부항목에만_붙고_단가_명수_횟수_칸이_전_행에_있다(admin_client, 예산):
+def test26_a02_항목_칸이_병합되고_단가_명수_횟수_칸이_전_행에_있다(admin_client, 예산):
     page = admin_client.get("/budget").text
-    data = [r for r in _행들(page) if 'class="l1row"' not in r and 'class="grand"' not in r]
+    data = [r for r in _행들(page)
+            if 'class="subtot"' not in r and 'class="grand"' not in r
+            and 'class="canceled"' not in r and "data-cat=" in r]
     assert len(data) == 4
-    labels = [re.search(r'class="itemlbl"[^>]*>([^<]*)<', r) for r in data]
-    assert [m.group(1).strip() if m else None for m in labels] == ["본행사 식사", None, "야식", "포스터"]
+    # 항목 이름은 **그 항목의 첫 줄에만** 있고 거기서 아래로 병합된다
+    l2 = [r for r in data if 'class="l2"' in r]
+    assert len(l2) == 3, f"항목 칸이 줄마다 섰다: {len(l2)}"
+    assert 'class="l2" rowspan="2"' in page, "세부항목 둘인 항목이 안 병합됐다"
     for r in data:
-        assert r.count("<td") >= 11, "단가·명수·횟수 칸이 빠진 행이 있다"
-        assert 'data-group="' in r, "접기가 가리킬 묶음이 없다"
+        assert r.count("<td") >= 9, "단가·명수·횟수 칸이 빠진 행이 있다"
 
 
 def test26_a03_빈_단가는_대시이고_있으면_값이다(admin_client, 예산):

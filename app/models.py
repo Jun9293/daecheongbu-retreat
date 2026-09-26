@@ -276,6 +276,9 @@ class BudgetCategory(Base):
     times: Mapped[int | None] = mapped_column(Integer, nullable=True)
     planned_amount: Mapped[int] = mapped_column(Integer, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 줄 끝의 비고 (7-3 · 2026-09-26 사람이 정함). **NULL 로 붙었다**(11-2) —
+    # 옛 행은 빈 값이고 화면은 빈 칸을 안 그린다
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
     # 지우지 않는다 (0장) — 지출과 같은 취소 표시 (7-3). 걸린 지출은 남는다
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 

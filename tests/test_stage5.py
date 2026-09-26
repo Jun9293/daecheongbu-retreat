@@ -119,16 +119,25 @@ def test5_b01_예산금액은_셋이_있으면_계산_비면_입력값(admin_cli
 
 
 def test5_b02_화면_계산은_저장_전_DB_를_안_건드린다():
-    """즉시 계산은 budget.js 의 미리보기다 — 정본은 서버의 같은 공식이다."""
+    """즉시 계산은 budget.js 의 미리보기다 — 정본은 서버의 같은 공식이다.
+
+    **2026-09-26 에 모양이 바뀌었다** — 줄마다 저장하던 것이 「전체 편집」
+    하나로 바뀌어 저장이 `fetch` 다. 그래서 「fetch 가 아예 없다」 로는 더 못
+    잰다. 지키는 것은 그대로다: **셈하는 함수가 서버를 안 부른다.**
+    """
     js = _read("app", "static", "js", "budget.js")
-    assert "data-calc" in js and "readOnly" in js
-    assert "fetch(" not in js       # 저장 전엔 서버로 아무것도 안 보낸다
+    시작 = js.index("function 예산금액(")
+    끝 = js.index("function 묶는다(")
+    셈 = js[시작:끝]
+    assert "fetch(" not in 셈, "미리보기 셈이 서버를 부른다"
+    # 서버로 가는 곳은 **저장과 되살리기뿐**이다 — 그 둘 말고 fetch 가 늘면 여기서 걸린다
+    assert js.count("fetch(") == 2
 
 
 # ── 2-b. 초과는 붉게 — 100% 로 덮지 않는다 ──────────────────────────
 
 
-def test5_b03_초과_행은_붉고_비율은_100_을_넘는다(admin_client, fin):
+def test5_b03_초과_행은_붉다(admin_client, fin):
     with app_session() as db:
         retreat = db.get(models.Retreat, fin["retreat"])
         summary = budget_domain.build_budget_summary(db, retreat=retreat)
@@ -138,7 +147,11 @@ def test5_b03_초과_행은_붉고_비율은_100_을_넘는다(admin_client, fin
 
     page = admin_client.get(f"/budget?retreat_id={fin['retreat']}").text
     assert "overrun" in page                       # 붉은 클래스 (--red-ink)
-    assert "180.0%" in page                        # 180,000 / 100,000
+    # **줄마다의 집행률 칸은 2026-09-26 에 없어졌다** — 그 자리는 이제
+    # 「결산비율」(그 항목 결산 ÷ 총 결산)이라 100 을 넘지 않는다. 초과를
+    # 말하는 것은 **음수 차액**이고 그것이 붉다
+    assert "집행률" not in page.split("<tbody>")[1].split("</tbody>")[0]
+    assert "결산비율" in page and "예산비율" in page
 
 
 # ── 2-c. 수입은 집행률에 영향이 없다 ─────────────────────────────────
@@ -341,7 +354,9 @@ def test5_f02_홈_결산_숫자는_필터_행_수와_같다(admin_client, fin):
 
     # 눌러 간 화면의 행 수와 같다 — 같은 함수라 갈릴 수 없다
     page = admin_client.get(f"/expenses?filter=noreceipt&retreat_id={fin['retreat']}").text
-    assert page.count('<tr class="otherdept"') + page.count("<tr>") - page.count("<thead><tr>") >= 1
+    # 줄마다 `data-exp` 가 붙는다 (7-4 · 2026-09-26) — 지출 줄만 세고 아래의
+    # 긴 내용 줄(`data-of`)과 영수증 칩은 안 센다
+    assert len(re.findall(r"<tr[^>]*\sdata-exp=", page)) >= 1
 
 
 # ── 4. 회차 상세 「남은 지출」 — 셋 ─────────────────────────────────

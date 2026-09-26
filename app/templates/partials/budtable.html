@@ -1,0 +1,102 @@
+{#
+  예산 표 (CLAUDE.md 7-3 · 2026-09-26 사람이 정한 확정본).
+
+  **보는 판만 여기서 그린다.** 「전체 편집」 을 켜면 `budget.js` 가 같은 표를
+  모델에서 다시 그린다 — 줄을 옮기면 병합(rowspan)이 통째로 달라져서, 서버가
+  그린 칸을 손으로 고치는 것보다 **한 모델에서 다시 그리는 것**이 갈릴 자리가
+  적다. 모델은 아래 `#bud-rows` 가 실어 보낸 것 하나다.
+
+  칸 차례 — 구분 · 항목 · 세부항목 · 단가 · 명수 · 횟수 · 예산금액 ·
+  예산비율 · 결산금액 · 결산비율 · 차액 · 비고 (열두 칸).
+  「소계」 는 **예산금액 바로 왼쪽**에 서고 그 줄의 음영은 **구분 칸까지** 간다 —
+  그래서 구분 셀의 rowspan 은 세부항목 줄까지만이다.
+#}
+<table class="fintbl budtbl" id="budtbl">
+  <thead>
+    <tr>
+      <th class="c-l1">구분</th><th class="c-l2">항목</th><th class="c-l3">세부항목</th>
+      <th class="r">단가</th><th class="r">명수</th><th class="r">횟수</th>
+      <th class="r">예산금액</th><th class="r">예산비율</th>
+      <th class="r">결산금액</th><th class="r">결산비율</th><th class="r">차액</th>
+      <th class="c-note">비고
+        {% if is_admin(user) %}
+        {# 줄마다 「수정」 을 두지 않는다 — 표 전체를 한 번에 편집 상태로 바꾼다 #}
+        <button type="button" class="sbtn editall" id="budedit">전체 편집</button>
+        {% endif %}
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {# 「–」 — 값이 없는 칸. 빈칸으로 두면 칸이 없는 것처럼 읽힌다 #}
+    {% macro n(v) %}{% if v is none %}<td class="r mono dim">–</td>{% else %}<td class="r mono">{{ v|num }}</td>{% endif %}{% endmacro %}
+    {% for group in summary.groups %}
+    {% for item in group.items %}
+    {% set 첫항목 = loop.first %}
+    {% for row in item %}
+    {% set cat = row.category %}
+    <tr data-cat="{{ cat.id }}">
+      {% if loop.first and 첫항목 %}
+      <td class="l1" rowspan="{{ group.rows|length }}">{{ group.name }}</td>
+      {% endif %}
+      {% if loop.first %}
+      <td class="l2" rowspan="{{ item|length }}">{{ cat.level2 }}</td>
+      {% endif %}
+      <td class="l3">{{ cat.level3 or '' }}</td>
+      {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
+      <td class="r mono">{{ row.planned|num }}</td>
+      <td class="r mono dim">{{ row.ratio_pct }}%</td>
+      <td class="r mono">{{ row.spent|num }}</td>
+      <td class="r mono dim">{{ row.settle_ratio_pct }}%</td>
+      {# 차액 = 예산 − 결산. 음수(초과)는 붉다 — 100% 로 덮지 않는다 (7-3) #}
+      <td class="r mono{% if row.remaining < 0 %} overrun{% endif %}">{{ row.remaining|num }}</td>
+      <td class="note">{{ cat.note or '' }}</td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    {# 구분 소계 — 값은 summary 의 것이다. 화면에서 다시 더하지 않는다 #}
+    <tr class="subtot">
+      <td colspan="6" class="r">소계</td>
+      <td class="r mono">{{ group.planned|num }}</td>
+      <td class="r mono dim">{{ group.ratio_pct }}%</td>
+      <td class="r mono">{{ group.spent|num }}</td>
+      <td class="r mono dim">{{ group.settle_ratio_pct }}%</td>
+      <td class="r mono{% if group.remaining < 0 %} overrun{% endif %}">{{ group.remaining|num }}</td>
+      <td></td>
+    </tr>
+    {% endfor %}
+    <tr class="grand">
+      <td colspan="6" class="r">총계</td>
+      <td class="r mono">{{ summary.total_planned|num }}</td>
+      <td class="r mono dim">100%</td>
+      <td class="r mono">{{ summary.total_spent|num }}</td>
+      <td class="r mono dim">100%</td>
+      <td class="r mono{% if summary.total_remaining < 0 %} overrun{% endif %}">{{ summary.total_remaining|num }}</td>
+      <td></td>
+    </tr>
+    {% if summary.uncategorized_spent %}
+    <tr><td colspan="8" class="dim">(예산 항목 미지정 지출)</td>
+      <td class="r mono">{{ summary.uncategorized_spent|num }}</td><td></td><td></td><td></td></tr>
+    {% endif %}
+    {# 취소된 항목에 걸린 지출의 집행 — 총계에 들어 있다. 줄이 없으면 총계가 줄의 합과 안 맞는다 #}
+    {% if summary.canceled_category_spent %}
+    <tr><td colspan="8" class="dim">(취소된 예산 항목에 걸린 지출)</td>
+      <td class="r mono">{{ summary.canceled_category_spent|num }}</td><td></td><td></td><td></td></tr>
+    {% endif %}
+    {# 취소된 예산 항목 — **행은 남고 흐리다**(0장 · 7-3). 합계·비율에는 안 든다.
+       편집에서 「취소」 를 누른 것이 여기로 내려온다 #}
+    {% for row in summary.canceled_categories %}
+    {% set cat = row.category %}
+    <tr class="canceled" data-cat="{{ cat.id }}">
+      <td class="l1">{{ cat.level1 }}</td>
+      <td class="l2">{{ cat.level2 }} <span class="cancelchip">취소됨</span></td>
+      <td class="l3">{{ cat.level3 or '' }}</td>
+      {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
+      <td class="r mono">{{ row.planned|num }}</td>
+      <td class="r mono dim">–</td>
+      <td class="r mono">{{ row.spent|num }}</td>
+      <td class="r mono dim">–</td><td class="r mono dim">–</td>
+      <td class="note">{% if is_admin(user) %}<button type="button" class="sbtn budback" data-cat="{{ cat.id }}">되살리기</button>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

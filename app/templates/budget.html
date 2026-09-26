@@ -31,133 +31,20 @@
     <h3>지출 예산 <small class="cnt">{{ summary.categories|length }}항목</small>
       {# 지출 화면과 같은 자리 — 받을 수 있는 사람(열람 전용 아님)에게만 그린다 #}
       {% if 엑셀을_받는다(user) %}<a class="chip xls" href="/export/expenses.xlsx?retreat_id={{ retreat.id }}">엑셀</a>{% endif %}</h3>
-    <div class="tblwrap">
-      <table class="fintbl budtbl">
-        <thead>
-          <tr>
-            <th>구분</th><th>항목</th><th>세부항목</th>
-            <th class="r">단가</th><th class="r">명수</th><th class="r">횟수</th>
-            <th class="r">예산금액</th><th class="r">비율</th>
-            <th class="r">결산금액</th><th class="r">차액</th><th class="r">집행률</th>
-            {% if is_admin(user) %}<th></th>{% endif %}
-          </tr>
-        </thead>
-        <tbody>
-          {# 「–」 — 값이 없는 칸. 빈칸으로 두면 칸이 없는 것처럼 읽힌다 (1-a) #}
-          {% macro n(v) %}{% if v is none %}<td class="r mono dim">–</td>{% else %}<td class="r mono">{{ v|num }}</td>{% endif %}{% endmacro %}
-          {% for group in summary.groups %}
-          {% set gid = 'g' ~ loop.index %}
-          {# 구분 제목 줄 — 이름 · 세부항목 수 · 소계(예산·결산·차액)를 한 줄에 (1-b·1-d).
-             소계 값은 summary.groups 의 것 — 화면에서 다시 더하지 않는다.
-             접기는 화면 안에서만이고 저장하지 않는다 (새로고침하면 펼침) #}
-          <tr class="l1row" data-fold-head="{{ gid }}">
-            <td colspan="6">
-              <button type="button" class="fold" data-fold="{{ gid }}" aria-expanded="true"
-                      aria-label="{{ group.name }} 접기/펼치기"><span class="caret" aria-hidden="true">▾</span></button>
-              {{ group.name }} <small class="cnt">세부항목 {{ group.rows|length }}</small>
-            </td>
-            <td class="r mono">{{ group.planned|num }}</td><td></td>
-            <td class="r mono">{{ group.spent|num }}</td>
-            <td class="r mono{% if group.remaining < 0 %} overrun{% endif %}">{{ group.remaining|num }}</td>
-            <td></td>{% if is_admin(user) %}<td></td>{% endif %}
-          </tr>
-          {% set seen = namespace(l2=none) %}
-          {% for row in group.rows %}
-          {% set cat = row.category %}
-          {# 항목은 별도 줄이 아니라 첫 세부항목 줄의 들여쓴 라벨이다 (1-c).
-             같은 항목의 둘째 이후 줄은 라벨 없이 같은 깊이 #}
-          {% set first_of_item = cat.level2 != seen.l2 %}
-          {% if first_of_item %}{% set seen.l2 = cat.level2 %}{% endif %}
-          <tr data-group="{{ gid }}"{% if not first_of_item %} class="cont"{% endif %}>
-            <td></td>
-            <td>{% if first_of_item %}<span class="itemlbl">{{ cat.level2 }}</span>{% endif %}</td>
-            <td class="l3">{{ cat.level3 or '' }}</td>
-            {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
-            <td class="r mono">{{ row.planned|num }}</td>
-            <td class="r mono dim">{{ row.ratio_pct }}%</td>
-            <td class="r mono">{{ row.spent|num }}</td>
-            {# 차액 = 예산 − 결산. 음수(초과)는 붉다 — 100% 로 덮지 않는다 (7-3) #}
-            <td class="r mono{% if row.remaining < 0 %} overrun{% endif %}">{{ row.remaining|num }}</td>
-            <td class="r mono{% if row.is_over_budget %} overrun{% endif %}">{{ row.progress_pct }}%</td>
-            {% if is_admin(user) %}
-            <td class="r"><details class="rowedit"><summary>수정</summary>
-              <form method="post" action="/budget/categories/{{ cat.id }}/update" class="editform">
-                <input name="level1" value="{{ cat.level1 }}" placeholder="구분" required>
-                <input name="level2" value="{{ cat.level2 }}" placeholder="항목" required>
-                <input name="level3" value="{{ cat.level3 or '' }}" placeholder="세부항목">
-                <input name="unit_price" type="number" min="0" value="{{ cat.unit_price if cat.unit_price is not none else '' }}" placeholder="단가" data-calc="unit">
-                <input name="headcount" type="number" min="0" value="{{ cat.headcount if cat.headcount is not none else '' }}" placeholder="명수" data-calc="head">
-                <input name="times" type="number" min="0" value="{{ cat.times if cat.times is not none else '' }}" placeholder="횟수" data-calc="times">
-                <input name="planned_amount" type="number" min="0" value="{{ cat.planned_amount }}" placeholder="예산금액" data-calc="planned">
-                <button class="sbtn p" type="submit">저장</button>
-              </form>
-              {# 지우지 않는다 (0장) — 취소 표시만 하고 아래에서 되살린다 (7-3) #}
-              <form method="post" action="/budget/categories/{{ cat.id }}/cancel"
-                    onsubmit="return confirm('이 예산 항목을 취소할까요? 행은 아래에 흐리게 남고 합계에서 빠집니다. 걸린 지출은 그대로 남습니다.')">
-                <button class="sbtn" type="submit">취소</button>
-              </form>
-            </details></td>
-            {% endif %}
-          </tr>
-          {% endfor %}
-          {% endfor %}
-          <tr class="grand">
-            <td colspan="6">총계</td>
-            <td class="r mono">{{ summary.total_planned|num }}</td><td></td>
-            <td class="r mono">{{ summary.total_spent|num }}</td>
-            <td class="r mono{% if summary.total_remaining < 0 %} overrun{% endif %}">{{ summary.total_remaining|num }}</td>
-            <td class="r mono">{{ summary.progress_pct }}%</td>
-            {% if is_admin(user) %}<td></td>{% endif %}
-          </tr>
-          {% if summary.uncategorized_spent %}
-          <tr><td colspan="8" class="dim">(예산 항목 미지정 지출)</td>
-            <td class="r mono">{{ summary.uncategorized_spent|num }}</td><td></td><td></td>
-            {% if is_admin(user) %}<td></td>{% endif %}</tr>
-          {% endif %}
-          {# 취소된 항목에 걸린 지출의 집행 — 총계에 들어 있다. 줄이 없으면 총계가 줄의 합과 안 맞는다 #}
-          {% if summary.canceled_category_spent %}
-          <tr><td colspan="8" class="dim">(취소된 예산 항목에 걸린 지출)</td>
-            <td class="r mono">{{ summary.canceled_category_spent|num }}</td><td></td><td></td>
-            {% if is_admin(user) %}<td></td>{% endif %}</tr>
-          {% endif %}
-          {# 취소된 예산 항목 — 행은 남고 흐리다. 합계·비율에는 안 든다 (0장 · 7-3) #}
-          {% for row in summary.canceled_categories %}
-          {% set cat = row.category %}
-          <tr class="canceled">
-            <td>{{ cat.level1 }}</td>
-            <td>{{ cat.level2 }} <span class="cancelchip">취소됨</span></td>
-            <td class="l3">{{ cat.level3 or '' }}</td>
-            {{ n(cat.unit_price) }}{{ n(cat.headcount) }}{{ n(cat.times) }}
-            <td class="r mono">{{ row.planned|num }}</td>
-            <td class="r mono dim">–</td>
-            <td class="r mono">{{ row.spent|num }}</td>
-            <td class="r mono dim">–</td><td class="r mono dim">–</td>
-            {% if is_admin(user) %}
-            <td class="r"><form method="post" action="/budget/categories/{{ cat.id }}/cancel">
-              <button class="sbtn" type="submit">되살리기</button></form></td>
-            {% endif %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    {# 표는 partial 한 벌이다 — 보는 판을 여기서 그리고, 「전체 편집」 은
+       같은 모델에서 budget.js 가 다시 그린다 (7-3) #}
+    <div class="tblwrap budwrap">
+      {% include "partials/budtable.html" %}
     </div>
-
     {% if is_admin(user) %}
-    <details class="addbox">
-      <summary>+ 예산 항목 추가</summary>
-      {# 세 칸을 채우면 예산금액이 **즉시** 계산되어 보인다 — 저장 전엔 DB 불변 (7-3) #}
-      <form method="post" action="/budget/categories" class="editform" id="cat-add">
-        <input name="level1" placeholder="구분 (예: 식비)" required>
-        <input name="level2" placeholder="항목 (예: 본행사 식사)" required>
-        <input name="level3" placeholder="세부항목">
-        <input name="unit_price" type="number" min="0" placeholder="단가" data-calc="unit">
-        <input name="headcount" type="number" min="0" placeholder="명수" data-calc="head">
-        <input name="times" type="number" min="0" placeholder="횟수" data-calc="times">
-        <input name="planned_amount" type="number" min="0" placeholder="예산금액 (직접 입력)" data-calc="planned">
-        <span class="calcnote" data-calc="note"></span>
-        <button class="sbtn p" type="submit">추가</button>
-      </form>
-    </details>
+    {# 편집 상태에서만 뜨는 줄 — 저장은 표 전체를 한 번에 보낸다 #}
+    <div class="budbar" id="budbar" hidden>
+      <button type="button" class="sbtn" id="budadd">+ 줄 추가</button>
+      <span class="hint" id="budmsg" role="status"></span>
+      <button type="button" class="sbtn" id="budcancel">되돌리기</button>
+      <button type="button" class="sbtn p" id="budsave">저장</button>
+    </div>
+    <script id="bud-rows" type="application/json">{{ 예산행들|tojson }}</script>
     {% endif %}
   </div>
 

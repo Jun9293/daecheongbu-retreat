@@ -281,14 +281,17 @@ def test_지출을_등록하면_예산_진행률에_바로_반영된다(admin_cl
     assert response.status_code == 200
 
     budget_page = admin_client.get("/budget")
-    assert "33.3" in budget_page.text  # 100,000 / 300,000
-    assert "200,000" in budget_page.text  # 잔액
+    # 줄마다의 집행률 칸은 2026-09-26 에 **결산비율**(그 항목 결산 ÷ 총 결산)로
+    # 바뀌었다 — 이 회차에서 쓴 돈이 이 한 건뿐이라 100% 다
+    assert "결산비율" in budget_page.text
+    assert "100,000" in budget_page.text   # 결산금액이 그 자리에 선다
+    assert "200,000" in budget_page.text  # 차액
 
     dashboard = admin_client.get("/dashboard")
     assert "100,000" in dashboard.text
 
 
-def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이_자동_계산된다(admin_client):
+def test_식대_지출은_명단_이름_수로_지원금액을_센다(admin_client):
     _create_retreat(admin_client, cap=8000)
     categories = _create_categories(admin_client, DEFAULT_CATEGORIES)
     meal_cat = categories[4]
@@ -300,8 +303,9 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
             "expense_date": dt.date.today().isoformat(),
             "amount": "130600",
             "is_meal_expense": "1",
-            "meal_headcount": "12",
-            "meal_attendees": "이름1 이름2 이름3",
+            # **인원은 명단 이름 수다** (7-2 · 2026-09-26) — 화면에 인원 칸이 없다.
+            # 열두 이름이면 열두 명이고, 상한은 그 수로 걸린다
+            "meal_attendees": " ".join(f"이름{i}" for i in range(1, 13)),
             "level3b": "모임 식사비-1",
             "payer_name": "박민준",
             "payer_bank": "국민", "payer_account_number": "999-123-4567",
@@ -317,7 +321,8 @@ def test_식대_지출은_인원수만_넣으면_지원금액과_개인부담이
 
     assert entry.subsidy_amount == 96_000  # min(130,600, 12 × 8,000)
     assert entry.personal_burden_amount == 34_600
-    assert entry.meal_attendee_names == ["이름1", "이름2", "이름3"]
+    assert len(entry.meal_attendee_names) == 12
+    assert entry.meal_headcount == 12, "인원은 이름 수로 센다"
 
     page = admin_client.get("/expenses")
     assert "96,000" in page.text
@@ -414,8 +419,8 @@ def test_지출_내역을_엑셀로_내려받을_수_있다(admin_client):
             "budget_category_id": str(categories[4].id),
             "amount": "130600",
             "is_meal_expense": "1",
-            "meal_headcount": "12",
-            "meal_attendees": "이름1 이름2",
+            # 인원은 이름 수다 (7-2) — 열둘을 적어야 상한이 12명으로 걸린다
+            "meal_attendees": " ".join(f"이름{i}" for i in range(1, 13)),
             "payer_name": "박민준",
         },
         follow_redirects=True,

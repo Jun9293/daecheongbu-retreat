@@ -59,6 +59,9 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # equipment_items.note 를 걷는 것은 scripts/비품비고옮기기.py 안에서만 한다.
     # 부팅이 걷으면 아직 안 옮긴 값이 소리 없이 사라진다
     ("equipment_runs", "note", "TEXT"),
+    # 예산 표 줄 끝의 비고 (7-3 · 2026-09-26). **NULL 로 붙는다** — 값을
+    # 안 채운다(11-2). 옛 행은 빈 값이고 읽는 자리가 빈 값을 받는다
+    ("budget_categories", "note", "TEXT"),
     ("departments", "key", "VARCHAR(40)"),
     ("task_library", "always_required", "BOOLEAN NOT NULL DEFAULT 0"),
     ("task_library", "rules", "TEXT"),

@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -51,6 +52,7 @@ def budget_page(
             "retreat": retreat,
             "retreats": all_retreats(db),
             "summary": summary,
+            "예산행들": [_행모양(row) for row in summary.categories],
             "active_tab": "budget",
             "page_subtitle": "예산",
         },
@@ -81,6 +83,154 @@ def _apply_fields(
             category.unit_price, category.headcount, category.times, planned_amount
         ),
     )
+
+
+def _행모양(row) -> dict:
+    """화면이 편집할 때 쓰는 줄 하나 (7-3 · 2026-09-26).
+
+    **보는 판과 같은 값에서 나온다** — 서버가 그린 표와 편집 표가 다른 것을
+    보이면 어느 쪽이 맞는지 화면이 말해 주지 않는다. `spent` 는 읽기만 하는
+    값이라 함께 싣고(편집해도 안 보낸다), 나머지가 저장 대상이다.
+    """
+    cat = row.category
+    return {
+        "id": cat.id,
+        "level1": cat.level1,
+        "level2": cat.level2,
+        "level3": cat.level3 or "",
+        "unit_price": cat.unit_price,
+        "headcount": cat.headcount,
+        "times": cat.times,
+        "planned_amount": cat.planned_amount,
+        "note": cat.note or "",
+        "spent": row.spent,
+    }
+
+
+class 예산줄(BaseModel):
+    id: int | None = None
+    level1: str = ""
+    level2: str = ""
+    level3: str = ""
+    unit_price: int | None = None
+    headcount: int | None = None
+    times: int | None = None
+    planned_amount: int = 0
+    note: str = ""
+
+
+class 예산표(BaseModel):
+    rows: list[예산줄]
+    removed: list[int] = []
+
+
+@router.post("/bulk")
+def save_bulk(
+    payload: 예산표,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """표 전체를 한 번에 저장한다 (7-3 · 2026-09-26 사람이 정한 확정본).
+
+    줄마다 「수정」 을 두지 않고 **「전체 편집」 하나**로 바꾸므로, 저장도 한
+    번이다. 순서(`sort_order`)가 여기서 정해진다 — 화면에서 끌어 옮긴 자리가
+    곧 그 값이다.
+
+    **전부 되거나 전부 안 된다.** 한 줄이 틀렸는데 앞의 열 줄만 저장되면,
+    화면은 「실패」 인데 표는 반쯤 바뀐 채로 남는다(7-5 가 들여오기에서 막은
+    그 모양). 그래서 먼저 다 읽어 보고, 하나라도 걸리면 아무것도 안 바꾼다.
+
+    **빼는 것은 지우는 것이 아니다**(0장 · 7-3) — `removed` 는 **취소 표시**를
+    찍을 뿐이고 행과 걸린 지출은 남는다. 되살리는 길도 그대로다. 화면의 말도
+    「취소」 그대로다: 7-3 이 이미 쓰는 말이라 새 말을 지어내지 않는다.
+    """
+    있는것 = {
+        cat.id: cat
+        for cat in db.scalars(
+            select(BudgetCategory).where(BudgetCategory.retreat_id == retreat.id)
+        )
+    }
+
+    # ── 먼저 읽기만 한다 — 걸리는 줄이 있으면 아무것도 안 바꾼다 ──
+    for 자리, 줄 in enumerate(payload.rows, start=1):
+        if not 줄.level1.strip() or not 줄.level2.strip():
+            raise HTTPException(status_code=400, detail=f"{자리}번째 줄 — 구분과 항목은 비울 수 없습니다.")
+        for 이름, 값 in (("단가", 줄.unit_price), ("명수", 줄.headcount),
+                        ("횟수", 줄.times), ("예산금액", 줄.planned_amount)):
+            if 값 is not None and 값 < 0:
+                raise HTTPException(status_code=400, detail=f"{자리}번째 줄 — {이름}은 0보다 작을 수 없습니다.")
+        if 줄.id is not None and 줄.id not in 있는것:
+            raise HTTPException(status_code=400, detail="이 회차에 없는 예산 항목이 섞여 있습니다.")
+    for cid in payload.removed:
+        if cid not in 있는것:
+            raise HTTPException(status_code=400, detail="이 회차에 없는 예산 항목을 취소하려 합니다.")
+    # **같은 줄이 양쪽에 오면 거절한다** (2026-09-26 커밋 전 검토 [U]) — 화면은
+    # 그런 몸을 안 만들지만, 서버가 그 모호함을 조용히 푸는 쪽(취소)으로 정하면
+    # 나중에 다른 화면이 같은 몸을 보냈을 때 **고친 줄 알고 취소된다**
+    겹침 = {줄.id for 줄 in payload.rows if 줄.id is not None} & set(payload.removed)
+    if 겹침:
+        raise HTTPException(status_code=400, detail="같은 예산 항목을 고치면서 동시에 취소할 수 없습니다.")
+
+    센다 = {"고침": 0, "새로": 0, "취소": 0}
+    취소: list[BudgetCategory] = []
+    되살림: list[BudgetCategory] = []
+    새줄: list[BudgetCategory] = []
+    for 자리, 줄 in enumerate(payload.rows, start=1):
+        cat = 있는것.get(줄.id) if 줄.id is not None else None
+        새것 = cat is None
+        if 새것:
+            cat = BudgetCategory(retreat_id=retreat.id)
+            db.add(cat)
+        전 = _category_values(cat) if not 새것 else {}
+        _apply_fields(
+            cat,
+            level1=줄.level1, level2=줄.level2, level3=줄.level3,
+            unit_price="" if 줄.unit_price is None else str(줄.unit_price),
+            headcount="" if 줄.headcount is None else str(줄.headcount),
+            times="" if 줄.times is None else str(줄.times),
+            planned_amount=줄.planned_amount,
+        )
+        cat.note = 줄.note.strip() or None
+        cat.sort_order = 자리
+        # 되살아난 줄 — 편집 표에 있다는 것은 「이 회차에서 쓴다」 는 뜻이다
+        if cat.canceled_at is not None:
+            cat.canceled_at = None
+            되살림.append(cat)
+        if 새것:
+            센다["새로"] += 1
+            새줄.append(cat)
+        elif _바뀐칸만(전, _category_values(cat))[1]:
+            센다["고침"] += 1
+
+    for cid in payload.removed:
+        cat = 있는것[cid]
+        if cat.canceled_at is None:
+            cat.canceled_at = dt.datetime.now()
+            센다["취소"] += 1
+            취소.append(cat)
+
+    db.commit()
+    # **줄마다도 남긴다** (2026-09-26 두 번째 검토 [4]) — 같은 일을 하는
+    # `/categories/{id}/cancel` 과 `/categories` 가 줄마다 남기는데 묶음 저장만
+    # 합계 한 줄이면 **같은 사실이 길에 따라 다르게 기록된다**(지출 쪽에서 고친
+    # 그 자리와 같다). 0장이 기대는 자리라 더 그렇다
+    for 이름, 것들 in (("예산항목_취소", 취소), ("예산항목_되살림", 되살림),
+                      ("예산항목_생성", 새줄)):
+        for cat in 것들:
+            log_activity(db, retreat_id=retreat.id, actor=user, action=이름,
+                         target_type="budget_category", target_id=cat.id,
+                         summary=f"[{cat.display_name}] 표 저장에서")
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="예산표_저장",
+        target_type="retreat",
+        target_id=retreat.id,
+        summary=f"고침 {센다['고침']} · 새로 {센다['새로']} · 취소 {센다['취소']}",
+    )
+    return {"ok": True, **센다}
 
 
 @router.post("/categories")
