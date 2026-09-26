@@ -52,6 +52,16 @@
      사라지면 고친 줄 알고 넘어간다(5-0 의 그 자리) */
   function 편집중() { return !!document.querySelector('table.exptbl.editing'); }
 
+  /* **그 누름이 어느 지출 줄의 것인가** — 긴 내용 칸은 지출 줄 안에 없고
+     아래에 따로 서는 줄(`tr.longrow[data-of]`)에 있다. `closest('tr[data-exp]')`
+     만 보면 그 자리는 늘 `null` 이라 **권한 판정이 통째로 새어** 편집 중
+     막기가 안 걸렸다(2026-09-26 화면 점검이 잡았다 · 봐둘것 BJ-i). */
+  function 그줄(el) {
+    var 긴줄 = el.closest('tr.longrow');
+    if (긴줄) return document.querySelector('tr[data-exp="' + 긴줄.dataset.of + '"]');
+    return el.closest('tr[data-exp]');
+  }
+
   function 콤마(v) {
     var n = parseInt(String(v == null ? '' : v).replace(/[^0-9-]/g, ''), 10);
     return isNaN(n) ? '' : n.toLocaleString('ko-KR');
@@ -227,8 +237,7 @@
        남의 부서·취소된 줄의 팝업은 저장 단추가 없는 보기 전용이라 편집을 버릴
        일이 없다. 막는 규칙을 「저장이 일어날 수 있나」 로 좁힌다 */
     var 누른줄 = (긴 || 칩0 || 첨부0 || 더0);
-    var 고칠수있는줄 = 누른줄 && 누른줄.closest('tr[data-exp]')
-      && 누른줄.closest('tr[data-exp]').dataset.edit === '1';
+    var 고칠수있는줄 = 누른줄 && (그줄(누른줄) || {dataset: {}}).dataset.edit === '1';
     if (편집중() && 누른줄 && 고칠수있는줄) {
       띄운다(누른줄,
         '<div class="poprow">편집을 저장하거나 끈 뒤에 엽니다 — 지금 열면 고치던 칸이 사라집니다.</div>',

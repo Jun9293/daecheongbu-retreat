@@ -483,3 +483,31 @@ def test74_h03_병합된_세부항목2는_묶음_전체가_따라온다(admin_cl
     # 화면 쪽 — 묶음의 값을 나머지 줄에도 싣는 코드가 있는가
     js = (ROOT / "app" / "static" / "js" / "expedit.js").read_text(encoding="utf-8")
     assert "묶음값" in js and "dataset.blk" in js, "첫 줄만 보내는 옛 모양이다"
+
+
+def test74_h04_긴_내용_칸의_권한은_그_지출_줄에서_본다():
+    """긴 내용 칸은 **지출 줄 안에 없다** — 아래에 따로 서는 줄에 있다.
+
+    `closest('tr[data-exp]')` 로만 찾으면 그 자리는 늘 `null` 이라 권한
+    판정이 통째로 새고, 편집 중 막기(검토 [I])가 **안 걸린다** —
+    2026-09-26 화면 점검이 실제로 그것을 잡았다(봐둘것 BJ-i).
+
+    **낱말만 잰다** — 동작은 `docs/checks/fin.js` 의 갈래 ⑭ 가 잰다(브라우저에서만
+    일어나는 일이다 · 10장). 여기서 보는 것은 **그 판정이 한 자리에 있는가** 다.
+    """
+    js = (ROOT / "app" / "static" / "js" / "exppop.js").read_text(encoding="utf-8")
+    assert "function 그줄(" in js, "어느 지출 줄인지 찾는 자리가 없다"
+    assert "tr.longrow" in js and "dataset.of" in js, "긴 내용 줄을 안 거친다"
+    # 옛 모양(그 줄에서 바로 closest)이 판정에 남아 있지 않다
+    판정 = [줄 for 줄 in js.splitlines() if "고칠수있는줄" in 줄 and "=" in 줄]
+    assert 판정 and all("closest('tr[data-exp]')" not in 줄 for 줄 in 판정),         f"권한 판정이 아직 지출 줄만 본다: {판정}"
+
+
+def test74_h05_긴_내용_칸이_그_지출_줄을_가리킨다(admin_client, 지출):
+    """화면 쪽 — 긴 내용 줄이 어느 지출의 것인지 표시가 있어야 찾아간다."""
+    with app_session() as db:
+        e = db.get(models.ExpenseEntry, 지출["ids"][0])
+        e.note = "영수증 뒷면 참조"
+        db.commit()
+    page = admin_client.get(f"/expenses?retreat_id={지출['retreat']}").text
+    assert f'class="longrow" data-of="{지출["ids"][0]}"' in page, "긴 내용 줄에 주인 표시가 없다"
