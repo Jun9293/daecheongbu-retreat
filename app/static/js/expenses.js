@@ -10,7 +10,6 @@
   var toggle = document.getElementById('meal-toggle');
   var fields = document.getElementById('meal-fields');
   var amountInput = document.getElementById('e-amount');
-  var headInput = document.getElementById('e-head');
   var attInput = document.getElementById('e-att');
   var preview = document.getElementById('meal-preview');
   var attCount = document.getElementById('att-count');
@@ -28,13 +27,15 @@
     if (!toggle || !toggle.checked || !preview) return;
     var cap = parseInt(toggle.dataset.cap || '0', 10);
     var amount = parseInt((amountInput && amountInput.value) || '0', 10) || 0;
-    var head = parseInt((headInput && headInput.value) || '0', 10) || 0;
+    /* **인원은 명단 이름 수다** (7-2 · 2026-09-26) — 인원 칸이 없어졌으므로
+       미리보기도 이름을 센다. 정본 셈은 서버의 `domain.meal.인원수` 다 */
+    var head = countNames(attInput && attInput.value);
     var subsidy = Math.min(amount, head * cap);
     var burden = amount - subsidy;
 
     var slot = preview.querySelector('span') || preview;
     if (!amount || !head) {
-      slot.textContent = '인원수와 금액을 입력하면 지원금액이 자동 계산됩니다.';
+      slot.textContent = '명단과 금액을 입력하면 지원금액이 자동 계산됩니다.';
       preview.classList.remove('warn');
       return;
     }
@@ -47,12 +48,8 @@
   function updateAttCount() {
     if (!attCount || !attInput) return;
     var n = countNames(attInput.value);
-    attCount.textContent = n ? '명단 ' + n + '명 입력됨' : '';
-    // 명단을 적었는데 인원수가 비어 있으면 자동으로 채워준다
-    if (n && headInput && !headInput.value) {
-      headInput.value = n;
-      updatePreview();
-    }
+    attCount.textContent = n ? '명단 ' + n + '명 — 인원은 이름 수로 셉니다' : '';
+    updatePreview();
   }
 
   function syncMealFields() {
@@ -82,11 +79,11 @@
       if (box) box.removeAttribute('open');
     });
   }
-  [amountInput, headInput].forEach(function (el) {
+  [amountInput].forEach(function (el) {
     if (el) el.addEventListener('input', updatePreview);
   });
   if (attInput) attInput.addEventListener('input', updateAttCount);
-  // 계좌번호 복사 (재정 차례 5) — 목록에는 뒤 네 자리만 보이고 전체는 이 단추가 준다.
+  // 계좌번호 복사 — 지출자 이름의 팝업이 그 단추를 그린다 (7-4 · 2026-09-26).
   // 복사를 못 하는 환경이면 조용히 넘기지 않고 단추 글자로 말한다
   document.addEventListener('click', function (ev) {
     var btn = ev.target.closest && ev.target.closest('button.acctcopy');

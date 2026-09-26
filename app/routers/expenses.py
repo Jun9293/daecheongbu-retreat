@@ -13,6 +13,7 @@ import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from app.config import ALLOWED_UPLOAD_EXTS, MAX_UPLOAD_BYTES, UPLOAD_DIR
 from app.db import get_db
 from app.deps import all_retreats, get_current_retreat, log_activity
 from app.domain.budget import (
+    세부묶음,
     FILTERS,
     account_problem,
     build_budget_summary,
@@ -32,7 +34,7 @@ from app.domain.budget import (
     unlinked_receipt_count,
 )
 from app.domain import permissions as perm
-from app.domain.meal import calculate_meal_settlement
+from app.domain.meal import calculate_meal_settlement, 인원수
 from app.models import (
     _now,
     BudgetCategory,
@@ -235,6 +237,14 @@ def expense_list(
             groups.append(group)
         group["entries"].append(e)
 
+    # 세부항목-2 병합은 **도메인 한 곳**에서 묶는다 — 화면이 세면 표의 rowspan 과
+    # 묶음이 다른 것을 셀 수 있다 (7-4)
+    for group in groups:
+        group["blocks"] = 세부묶음(group["entries"])
+        # **그려질 줄 수**도 여기서 센다 — 화면이 더하면 표의 rowspan 과 실제 줄
+        # 수가 갈린다(그 자리를 한 번 밟았다 · 2026-09-26 커밋 전 검토 [C])
+        group["rows"] = sum(blk["rows"] for blk in group["blocks"])
+
     return render(
         request,
         "expenses.html",
@@ -244,6 +254,9 @@ def expense_list(
             "retreats": all_retreats(db),
             "summary": summary,
             "groups": groups,
+            # 편집 상태의 예산 항목 선택지 — 취소된 항목은 고를 수 없다 (7-3)
+            "예산항목들": [{"id": r.category.id, "name": r.category.display_name}
+                        for r in summary.categories],
             "entry_count": len(entries),
             "departments": _departments(db, retreat),
             "meal_defaults": _last_meal_defaults(db, retreat, user),
@@ -299,8 +312,10 @@ def create_expense(
     _계좌꼴(payer_bank, payer_account_number, payer_account_holder)
 
     is_meal = bool(is_meal_expense)
-    headcount = _headcount(meal_headcount) if is_meal else None
     attendees = parse_attendees(meal_attendees) if is_meal else None
+    # 인원은 **명단 이름 수**다 (7-2 · domain.meal.인원수 한 곳) — 이름이 없는
+    # 옛 줄만 적힌 숫자를 쓴다. 화면에는 인원 칸이 없고 이 길로만 들어온다
+    headcount = 인원수(attendees, _headcount(meal_headcount)) if is_meal else None
     subsidy, burden = _settle(retreat, is_meal, amount, headcount)
 
     entry = ExpenseEntry(
@@ -407,32 +422,52 @@ def _바뀐것(entry, 새값: dict) -> tuple[dict, dict]:
     return 전, 후
 
 
-@router.post("/expenses/{entry_id}/update")
-def update_expense(
-    entry_id: int,
-    expense_date: str = Form(""),
-    amount: int = Form(...),
-    budget_category_id: str = Form(""),
-    payer_name: str = Form(""),
-    payer_bank: str = Form(""),
-    payer_account_number: str = Form(""),
-    payer_account_holder: str = Form(""),
-    note: str = Form(""),
-    level3b: str = Form(""),
-    meal_headcount: str = Form(""),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_editor),
-    retreat: Retreat = Depends(get_current_retreat),
-):
-    """등록된 지출을 고친다 (7-4 · 재정 차례 5).
+def 한줄을_고친다(
+    db: Session,
+    user: User,
+    retreat: Retreat,
+    entry: ExpenseEntry,
+    *,
+    expense_date: str | None,
+    amount: int | None,
+    budget_category_id: str | None,
+    payer_name: str | None,
+    payer_bank: str | None,
+    payer_account_number: str | None,
+    payer_account_holder: str | None,
+    note: str | None,
+    level3b: str | None,
+    meal_headcount: str | None,
+) -> tuple[dict, dict]:
+    """지출 한 줄을 고치는 **규칙 한 벌** (7-4 · 재정 차례 5 · 2026-09-26).
 
-    **고칠 수 있는 사람은 등록·취소할 수 있는 사람과 같다**(봐둘것 BA-f 바-ㄱ) — 문은 `_my_entry`
-    하나이고, 취소된 지출은 409 로 막는다(취소는 그 시점의 기록을 지키는 것이다).
-    부서와 식대 여부는 여기서 안 바꾼다 — 부서는 누가 고칠 수 있는지를 정하는 칸이고, 식대 여부는
-    지원금액의 뜻을 바꾼다. 둘 다 잘못 적었으면 취소하고 새로 등록한다(취소된 행이 기록으로 남는다).
-    **바뀐 칸만** 활동 기록에 전후 값으로 남기고, 계좌 셋은 값 없이 「바뀜」 만 남긴다.
+    줄마다 고치는 길(`/expenses/{id}/update`)과 표 전체를 한 번에 저장하는 길
+    (`/expenses/bulk`)이 **같은 이 함수**를 지난다 — 계좌 게이트 · 지원금액을
+    다시 세는 조건 · 지출자만 바꾸는 것을 막는 자리가 두 벌이 되면, 한쪽에서만
+    통과하는 값이 생기고 갈린 쪽을 아무도 눈치채지 못한다.
+
+    **DB 에 값만 담고 commit 하지 않는다** — 묶음 저장이 「전부 되거나 전부 안
+    된다」 를 지키려면 커밋을 부르는 쪽이 쥐고 있어야 한다.
     """
-    entry = _my_entry(db, user, retreat, entry_id)
+    # **안 보낸 칸(None)은 안 고친다** (2026-09-26 커밋 전 검토 [B]) — 표는 칸을
+    # 세로로 병합하므로 묶음의 첫 줄에만 있는 칸이 있다(세부항목-2). 화면이 없는
+    # 칸을 빈 글자로 보내면 저장하는 순간 그 값이 **말없이 지워진다.** 빈 글자는
+    # 여전히 「지우라」 는 뜻이고, 「안 보냈다」 와 「비웠다」 를 여기서 가른다
+    amount = entry.amount if amount is None else amount
+    expense_date = "" if expense_date is None else expense_date
+    budget_category_id = (
+        ("" if entry.budget_category_id is None else str(entry.budget_category_id))
+        if budget_category_id is None else budget_category_id)
+    payer_name = (entry.payer_name or "") if payer_name is None else payer_name
+    payer_bank = (entry.payer_bank or "") if payer_bank is None else payer_bank
+    payer_account_number = ((entry.payer_account_number or "")
+                            if payer_account_number is None else payer_account_number)
+    payer_account_holder = ((entry.payer_account_holder or "")
+                            if payer_account_holder is None else payer_account_holder)
+    note = (entry.note or "") if note is None else note
+    level3b = (entry.level3b or "") if level3b is None else level3b
+    meal_headcount = (("" if entry.meal_headcount is None else str(entry.meal_headcount))
+                      if meal_headcount is None else meal_headcount)
     if amount < 0:
         raise HTTPException(status_code=400, detail="금액은 0원 이상이어야 합니다.")
     # 취소된 예산 항목에 이미 걸린 지출은 그대로 머물 수 있다 — 새로 옮겨 붙이는 것만 막는다
@@ -440,6 +475,11 @@ def update_expense(
         category = entry.budget_category
     else:
         category = _category_or_none(db, retreat, budget_category_id)
+    # **인원은 여기서 명단으로 다시 세지 않는다** (2026-09-26 커밋 전 검토 [G]) —
+    # 인원의 출처는 명단 이름 수이지만(7-2) 그 셈이 도는 자리는 **명단을 고치는
+    # 팝업**(`update_long_field`)이다. 여기서 늘 이름 수로 덮으면, 옛 폼이 인원과
+    # 명단을 따로 받던 시절의 어긋난 줄이 **비고 한 줄만 고쳐도** 인원이 바뀌고
+    # 아래 블록이 지원금액을 다시 세어 **돈이 조용히 달라진다.**
     headcount = _headcount(meal_headcount) if entry.is_meal_expense else None
     새값 = {
         "expense_date": _parse_date(expense_date) or entry.expense_date,
@@ -475,13 +515,50 @@ def update_expense(
     if any(칸 in 새값 and 새값[칸] != getattr(entry, 칸) for 칸 in _계좌칸):
         _계좌꼴(*(새값[칸] for 칸 in _계좌칸))
     전, 후 = _바뀐것(entry, 새값)
-    if not 후:
-        return redirect(f"/expenses?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
-    if "budget_category_id" in 후:
+    if 후 and "budget_category_id" in 후:
         # 시트의 구분·항목·세부항목 칸도 새 항목을 따라간다(등록 때 복사하는 그 칸)
         entry.level1 = category.level1 if category else None
         entry.level2 = category.level2 if category else None
         entry.level3a = category.level3 if category else None
+    return 전, 후
+
+
+@router.post("/expenses/{entry_id}/update")
+def update_expense(
+    entry_id: int,
+    expense_date: str = Form(""),
+    amount: int = Form(...),
+    budget_category_id: str = Form(""),
+    payer_name: str = Form(""),
+    payer_bank: str = Form(""),
+    payer_account_number: str = Form(""),
+    payer_account_holder: str = Form(""),
+    note: str = Form(""),
+    level3b: str = Form(""),
+    meal_headcount: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """등록된 지출을 고친다 (7-4 · 재정 차례 5).
+
+    **고칠 수 있는 사람은 등록·취소할 수 있는 사람과 같다**(봐둘것 BA-f 바-ㄱ) — 문은 `_my_entry`
+    하나이고, 취소된 지출은 409 로 막는다(취소는 그 시점의 기록을 지키는 것이다).
+    부서와 식대 여부는 여기서 안 바꾼다 — 부서는 누가 고칠 수 있는지를 정하는 칸이고, 식대 여부는
+    지원금액의 뜻을 바꾼다. 둘 다 잘못 적었으면 취소하고 새로 등록한다(취소된 행이 기록으로 남는다).
+    **바뀐 칸만** 활동 기록에 전후 값으로 남기고, 계좌 셋은 값 없이 「바뀜」 만 남긴다.
+    """
+    entry = _my_entry(db, user, retreat, entry_id)
+    전, 후 = 한줄을_고친다(
+        db, user, retreat, entry,
+        expense_date=expense_date, amount=amount,
+        budget_category_id=budget_category_id, payer_name=payer_name,
+        payer_bank=payer_bank, payer_account_number=payer_account_number,
+        payer_account_holder=payer_account_holder, note=note,
+        level3b=level3b, meal_headcount=meal_headcount,
+    )
+    if not 후:
+        return redirect(f"/expenses?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
     db.commit()
     log_activity(db, retreat_id=retreat.id, actor=user, action="지출_수정",
                  target_type="expense", target_id=entry.id,
@@ -634,6 +711,158 @@ def detach_receipt(
                  summary=f"[{link.receipt.number}] 떼기 — 영수증은 남음")
     return redirect(f"/expenses?retreat_id={retreat.id}",
                     message=f"영수증 {link.receipt.number}번을 뗐습니다. 영수증은 남아 번호로 다시 이을 수 있습니다.")
+
+
+class 지출줄(BaseModel):
+    """**안 보낸 칸은 안 고친다** — 칸마다 기본이 `None` 이고 그 뜻은 「그대로」 다.
+
+    표가 칸을 **세로로 병합**하기 때문이다(세부항목-2 는 묶음의 첫 줄에만 있다).
+    화면에 입력칸이 없는 줄이 그 칸을 빈 글자로 보내면 저장하는 순간 값이
+    **말없이 지워진다** — 실제로 세부항목-2 가 그랬다(2026-09-26 커밋 전 검토 [B]).
+    빈 글자는 여전히 「지우라」 는 뜻이고, 가르는 자리는 `한줄을_고친다` 하나다.
+    """
+
+    id: int
+    expense_date: str | None = None
+    amount: int | None = None
+    budget_category_id: str | None = None
+    level3b: str | None = None
+    payer_name: str | None = None
+    payer_bank: str | None = None
+    payer_account_number: str | None = None
+    payer_account_holder: str | None = None
+    note: str | None = None
+    meal_headcount: str | None = None
+    paid: bool | None = None
+
+
+class 지출표(BaseModel):
+    rows: list[지출줄]
+    removed: list[int] = []
+
+
+@router.post("/expenses/bulk")
+def save_expenses_bulk(
+    payload: 지출표,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """지출 표 전체를 한 번에 저장한다 (7-4 · 2026-09-26 사람이 정한 확정본).
+
+    예산 화면과 **같은 편집 방식**이다 — 줄마다 「고치기」 를 펴지 않고 「전체
+    편집」 하나로 바꾸고, 저장도 한 번이다.
+
+    **규칙은 한 벌이다** — 줄마다 `한줄을_고친다` 를 지난다(계좌 게이트 · 지원금액
+    을 다시 세는 조건 · 지출자만 바꾸는 것을 막는 자리). 문도 그대로 `_my_entry`
+    라 남의 부서 줄은 403 이고 취소된 줄은 409 다.
+
+    **전부 되거나 전부 안 된다** — 한 줄이 걸리면 그때까지 담은 것을 되돌리고
+    아무것도 안 바꾼다. 절반만 저장된 표는 화면이 「실패」 라고 말하는데 값은
+    반쯤 바뀐 상태다(7-5 가 들여오기에서 막은 그 모양).
+    """
+    고침 = []
+    try:
+        for 자리, 줄 in enumerate(payload.rows, start=1):
+            entry = _my_entry(db, user, retreat, 줄.id)
+            전, 후 = 한줄을_고친다(
+                db, user, retreat, entry,
+                expense_date=줄.expense_date, amount=줄.amount,
+                budget_category_id=줄.budget_category_id, payer_name=줄.payer_name,
+                payer_bank=줄.payer_bank, payer_account_number=줄.payer_account_number,
+                payer_account_holder=줄.payer_account_holder,
+                note=줄.note, level3b=줄.level3b,
+                meal_headcount=줄.meal_headcount,
+            )
+            if 줄.paid is not None and entry.paid != 줄.paid:
+                # 전후 **둘 다** 남긴다 — 「후」 에만 넣으면 활동 기록이 무엇에서
+                # 무엇으로 바뀌었는지 반만 말한다 (2026-09-26 검토 [U])
+                전 = dict(전 or {}, paid=entry.paid)
+                entry.paid = 줄.paid
+                entry.paid_date = dt.date.today() if 줄.paid else None
+                후 = dict(후 or {}, paid=줄.paid)
+            if 후:
+                고침.append((entry.id, 전, 후))
+        취소 = []
+        for eid in payload.removed:
+            entry = _my_entry(db, user, retreat, eid)
+            entry.canceled_at = dt.datetime.now()
+            취소.append(entry.id)
+    except HTTPException as 걸림:
+        db.rollback()
+        raise 걸림
+
+    db.commit()
+    for eid, 전, 후 in 고침:
+        log_activity(db, retreat_id=retreat.id, actor=user, action="지출_수정",
+                     target_type="expense", target_id=eid,
+                     summary=f"[지출 {eid}] 고친 칸: " + " · ".join(후),
+                     before_value=전, after_value=후)
+    # **취소도 줄마다 남긴다** (2026-09-26 커밋 전 검토 [J]) — 같은 일을 하는
+    # `/expenses/{id}/cancel` 이 `지출_취소` 를 `target_id` 와 함께 남기는데, 묶음
+    # 저장만 합계 한 줄이면 **같은 사실이 길에 따라 다르게 기록된다.** 0장이 기대는
+    # 자리라 더 그렇다 — 지우지 않는 대신 무엇이 언제 내려갔는지가 기록에 있어야 한다
+    for eid in 취소:
+        log_activity(db, retreat_id=retreat.id, actor=user, action="지출_취소",
+                     target_type="expense", target_id=eid,
+                     summary=f"[지출 {eid}] 취소 표시")
+    log_activity(db, retreat_id=retreat.id, actor=user, action="지출표_저장",
+                 target_type="retreat", target_id=retreat.id,
+                 summary=f"고침 {len(고침)} · 취소 {len(취소)}")
+    return {"ok": True, "고침": len(고침), "취소": len(취소)}
+
+
+@router.post("/expenses/{entry_id}/long")
+def update_long_field(
+    entry_id: int,
+    kind: str = Form(...),
+    value: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_editor),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """긴 칸(참석자 명단 · 비고)을 팝업에서 고친다 (7-4 · 2026-09-26 사람이 정함).
+
+    목록에서는 `…` 로 줄이고 팝업이 전체를 보인다 — 그 팝업에서 고치고
+    **「저장」 을 눌러야** 반영된다. 문은 다른 고치기와 같은 `_my_entry` 다.
+
+    **명단을 고치면 인원과 지원금액이 따라 움직인다** — 인원은 이름 수이기
+    때문이다(`domain.meal.인원수`). 그 셈을 여기서 다시 적지 않는다.
+    """
+    entry = _my_entry(db, user, retreat, entry_id)
+    if kind not in ("attendees", "note"):
+        raise HTTPException(status_code=400, detail="고칠 수 없는 칸입니다.")
+    if kind == "note":
+        전값, entry.note = entry.note, (value.strip() or None)
+        db.commit()
+        log_activity(db, retreat_id=retreat.id, actor=user, action="지출_수정",
+                     target_type="expense", target_id=entry.id,
+                     summary=f"[지출 {entry.id}] 고친 칸: note",
+                     before_value={"note": 전값}, after_value={"note": entry.note})
+        return {"ok": True, "value": entry.note or ""}
+
+    if not entry.is_meal_expense:
+        raise HTTPException(status_code=400, detail="식대가 아닌 지출에는 명단이 없습니다.")
+    names = parse_attendees(value)
+    전 = {"meal_attendee_names": entry.meal_attendee_names,
+          "meal_headcount": entry.meal_headcount,
+          "subsidy_amount": entry.subsidy_amount}
+    entry.meal_attendee_names = names or None
+    entry.meal_headcount = 인원수(names, entry.meal_headcount if not names else None)
+    entry.subsidy_amount, entry.personal_burden_amount = _settle(
+        retreat, True, entry.amount, entry.meal_headcount)
+    db.commit()
+    log_activity(db, retreat_id=retreat.id, actor=user, action="지출_수정",
+                 target_type="expense", target_id=entry.id,
+                 summary=f"[지출 {entry.id}] 고친 칸: 명단 · 인원 · 지원금액",
+                 before_value=전,
+                 after_value={"meal_attendee_names": entry.meal_attendee_names,
+                              "meal_headcount": entry.meal_headcount,
+                              "subsidy_amount": entry.subsidy_amount})
+    return {"ok": True, "value": " ".join(names),
+            "headcount": entry.meal_headcount,
+            "subsidy": entry.subsidy_amount,
+            "burden": entry.personal_burden_amount}
 
 
 @router.post("/expenses/{entry_id}/paid")

@@ -1,0 +1,132 @@
+{#
+  지출 표의 한 묶음 (CLAUDE.md 7-4 · 2026-09-26 사람이 정한 확정본).
+
+  **예산 화면과 같은 폼이다** — 줄마다 「고치기」 를 펴지 않고 「전체 편집」
+  하나로 표를 바꾼다(`expenses.js`). 여기서는 **보는 판**을 그린다.
+
+  칸 차례 — 번호 · **예산 항목**(구분·항목·세부항목을 합친 칸) · **세부항목-2** ·
+  **세부항목-3** · 일자 · **영수증 금액** · 지원금액 · 개인부담 · 지출자 · 지급.
+
+  세부항목-2 는 **이어진 같은 값끼리 세로로 병합**되고(여러 영수증에 걸친다),
+  세부항목-3 이 그 묶음에 하나도 없으면 **가로로 합친다**. 인원수 칩은 없앴다 —
+  인원은 명단 이름 수이고(7-2) 명단은 팝업이 보인다.
+#}
+{% macro 긴칸(e, kind, 전체, 보임, can_edit) %}
+  {# **보일 글자가 있으면 그린다** — 전체가 비어도 그렇다(식대의 「명단 없음」).
+     인원을 넣는 길이 이 팝업뿐이라 빈 줄에도 자리가 있어야 한다 (검토 [1]) #}
+  {%- if 보임 -%}
+  <button type="button" class="longcell" data-long="{{ kind }}" data-id="{{ e.id }}"
+          data-full="{{ 전체 }}" data-edit="{{ 1 if can_edit else 0 }}"
+          aria-label="전체 보기">{{ 보임 }}</button>
+  {%- endif -%}
+{% endmacro %}
+
+<table class="fintbl exptbl" data-retreat="{{ retreat.id }}">
+  <thead><tr>
+    <th>번호</th><th class="c-cat">예산 항목</th><th class="c-l3b">세부항목-2</th>
+    <th class="c-l3c">세부항목-3</th><th>일자</th>
+    <th class="r">영수증 금액</th><th class="r">지원금액</th><th class="r">개인부담</th>
+    <th>지출자</th><th>지급</th>
+  </tr></thead>
+  <tbody>
+    {% for blk in group.blocks %}
+    {% set 첫묶음 = loop.first %}
+    {% for e in blk.entries %}
+    {# 타 부서 흐림은 부서 **키** 비교 (2장 · is_other_dept).
+       취소된 행은 흐리게 남는다 — 지우지 않는다 (0장 · 7-4) #}
+    {% set rowcls = (('otherdept ' if is_other_dept(user, e.department) else '')
+                     ~ ('canceled' if e.canceled_at else ''))|trim %}
+    {% set can_edit = can_edit_dept(user, e.department) and not e.canceled_at %}
+    {# 편집할 값은 **속성으로 싣는다** — 화면 글자를 되읽으면 콤마·날짜 꼴이
+       섞이고, 비어 있는 칸과 「–」 를 못 가른다 (9장의 그 규칙) #}
+    <tr{% if rowcls %} class="{{ rowcls }}"{% endif %} data-exp="{{ e.id }}"
+        data-edit="{{ 1 if can_edit else 0 }}"
+        data-date="{{ e.expense_date.isoformat() if e.expense_date else '' }}"
+        data-amount="{{ e.amount }}" data-l3b="{{ e.level3b or '' }}"
+        data-cat="{{ e.budget_category_id or '' }}"
+        data-payer="{{ e.payer_name or '' }}" data-paid="{{ 1 if e.paid else 0 }}">
+      <td class="mono rcptcell">
+        {% for r in e.receipts %}
+        {# 영수증은 **칩**이고 누르면 팝업이 연다 — 거기서 보고 · 더 붙이고 · 지운다 #}
+        <button type="button" class="rcptchip{{ ' memo' if not r.stored_name }}"
+                data-rcpt="{{ r.id }}" data-exp="{{ e.id }}" data-no="{{ r.number }}"
+                data-file="{{ ('/uploads/' ~ r.stored_name) if r.stored_name else '' }}"
+                data-orig="{{ r.original_no or '' }}" data-memo="{{ r.memo or '' }}"
+                data-uses="{{ r.expenses|length }}">{{ r.number }}</button>
+        {% else %}<span class="dim">—</span>{% endfor %}
+        {% if can_edit %}<button type="button" class="rcptadd" data-exp="{{ e.id }}"
+           title="이 지출에 새 영수증을 올린다">+ 첨부</button>{% endif %}
+      </td>
+      {% if loop.first and 첫묶음 %}
+      {# 병합 수는 **그려질 줄 수**다 — 긴 내용 줄(아래)이 지출 줄 사이에 끼므로
+         지출 수로 세면 그 묶음 아래의 칸이 통째로 왼쪽으로 밀린다 (검토 [C]) #}
+      <td class="catcell" rowspan="{{ group.rows }}">
+        {% if group.row %}{{ group.row.category.display_name }}
+          {% if group.row.category.canceled_at %}<span class="cancelchip">취소된 예산 항목</span>{% endif %}
+        {% else %}<span class="dim">미지정</span>{% endif %}</td>
+      {% endif %}
+      {% if loop.first %}
+      {# 세부항목-3 이 그 묶음에 하나도 없으면 세부항목-2 가 가로로 합친다 #}
+      <td class="l3b" rowspan="{{ blk.rows }}"{% if not blk.has_l3c %} colspan="2"{% endif %}>
+        {{ blk.name or '' }}</td>
+      {% endif %}
+      {% if blk.has_l3c %}<td class="l3c">{{ e.level3c or '' }}</td>{% endif %}
+      <td class="mono nowrap">{{ e.expense_date|short_date }}</td>
+      <td class="r mono">{{ e.amount|num }}</td>
+      {# 집행 금액은 모델의 한 곳에서 — 화면이 식을 다시 적지 않는다 (7장) #}
+      <td class="r mono">{{ e.settlement_amount|num }}</td>
+      <td class="r mono">{% if e.is_meal_expense and e.personal_burden_amount %}{{ e.personal_burden_amount|num }}{% else %}<span class="dim">–</span>{% endif %}</td>
+      <td class="nowrap payercell" data-acctedit="{{ 1 if 계좌를_본다(user) else 0 }}">
+        {# 계좌는 **이름에 마우스를 올리면** 그 자리에 뜬다 (2026-09-26) — 목록에
+           번호가 줄줄이 서지 않는다. 볼 수 있는 사람 판정은 그대로 계좌를_본다 #}
+        {% if 계좌를_본다(user) and (e.payer_bank or e.payer_account_number or e.payer_account_holder) %}
+        <button type="button" class="payer acct" data-acct="1"
+                data-bank="{{ e.payer_bank or '' }}" data-no="{{ e.payer_account_number or '' }}"
+                data-holder="{{ e.payer_account_holder or '' }}">{{ e.payer_name or '–' }}</button>
+        {% else %}{{ e.payer_name or '–' }}{% endif %}
+        {% if e.canceled_at %}<span class="cancelchip">취소됨</span>{% endif %}
+      </td>
+      <td>
+        {% if can_edit_dept(user, e.department) and not e.canceled_at %}
+        <form method="post" action="/expenses/{{ e.id }}/paid">
+          <input type="hidden" name="redirect_to" value="/expenses{{ '?filter=' ~ filter if filter != 'all' }}">
+          <button class="sbtn{{ ' p' if not e.paid }}" type="submit">{{ '지급완료' if e.paid else '미지급' }}</button>
+        </form>
+        {% else %}
+        <span class="stbadge {{ 'done' if e.paid else 'wait' }}">{{ '지급완료' if e.paid else '미지급' }}</span>
+        {% endif %}
+        {% if e.paid_date %}<div class="dim enote mono">{{ e.paid_date|short_date }}</div>{% endif %}
+        {% if e.canceled_at and can_edit_dept(user, e.department) %}
+        <form method="post" action="/expenses/{{ e.id }}/cancel"><button class="sbtn" type="submit">되살리기</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {# 긴 내용(명단 · 비고)은 줄 아래 한 줄에 **…** 로 선다 — 팝업이 전체를 보이고
+       거기서 고쳐 「저장」 을 눌러야 반영된다 (2026-09-26) #}
+    {% if 긴줄인가(e) %}
+    {# **이 줄도 병합 안쪽이다** — 예산 항목 칸과 세부항목-2 칸이 위에서 내려와
+       자리를 차지하므로 여기서 다시 그리지 않는다 (검토 [C]) #}
+    <tr class="longrow{{ ' canceled' if e.canceled_at }}" data-of="{{ e.id }}">
+      <td></td>
+      <td colspan="{{ 6 if blk.has_l3c else 5 }}" class="longs">
+        {# **식대면 명단 자리를 늘 그린다** (2026-09-26 두 번째 검토 [1]) — 이름이
+           없으면 인원도 없고(7-2), 인원이 빈 식대 줄은 금액을 고칠 때 400 이다.
+           그런데 인원을 넣는 길이 이 팝업뿐이라, 이름이 있을 때만 그리면
+           **그 줄은 영영 못 고친다.** 비어 있으면 「명단 없음」 으로 선다 #}
+        {% if e.is_meal_expense %}
+        {{ 긴칸(e, 'attendees', e.meal_attendee_names|join(' ') if e.meal_attendee_names else '',
+                ((e.meal_attendee_names[:3]|join(' ')) ~ ('…' if e.meal_attendee_names|length > 3 else ''))
+                if e.meal_attendee_names else '명단 없음',
+                can_edit) }}
+        {% endif %}
+        {% if e.note %}
+        {{ 긴칸(e, 'note', e.note, e.note[:24] ~ ('…' if e.note|length > 24 else ''), can_edit) }}
+        {% endif %}
+      </td>
+      <td></td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>

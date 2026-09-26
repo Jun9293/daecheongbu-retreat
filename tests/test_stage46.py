@@ -67,8 +67,10 @@ def test46_a01_계좌_셋이_셋으로_저장되고_보인다(client, admin_clie
         e = db.get(models.ExpenseEntry, eid)
         assert (e.payer_bank, e.payer_account_number, e.payer_account_holder) == (은행, 번호, 예금주)
     page = admin_client.get(f"/expenses?retreat_id={회차['retreat']}").text
-    for 칸, 값 in (("acct-bank", 은행), ("acct-no", 번호), ("acct-holder", 예금주)):
-        assert f'class="{칸}">' in page and 값 in page, 칸
+    # 2026-09-26 부터 계좌는 목록에 줄줄이 서지 않고 **이름에 올리면 뜨는 팝업**이
+    # 든다(7-4) — 값은 그 단추가 들고 있다. 볼 수 있는 판정은 그대로 한 곳이다
+    for 칸, 값 in (("data-bank", 은행), ("data-no", 번호), ("data-holder", 예금주)):
+        assert f'{칸}="{값}"' in page, 칸
     # 엑셀도 셋 — 볼 수 있는 사람의 파일
     wb = load_workbook(io.BytesIO(admin_client.get(
         f"/export/expenses.xlsx?retreat_id={회차['retreat']}").content))
@@ -83,7 +85,8 @@ def test46_a01_계좌_셋이_셋으로_저장되고_보인다(client, admin_clie
     assert "가명지출자" in 남, "목록 자체는 보여야 한다"
     for 값 in (은행, 번호, 예금주):
         assert 값 not in 남
-    assert "enote acct" not in 남, "빈 계좌 줄을 남기지 않는다"
+    assert 'data-acct="1"' not in 남, "못 보는 사람에게 계좌 단추가 그려졌다"
+    assert 'data-acctedit="0"' in 남, "편집에서 계좌 칸을 여는 표시가 틀렸다"
 
 
 def test46_a02_내_정보의_계좌_셋이_등록_폼에_채워진다(admin_client, 회차):
@@ -161,7 +164,7 @@ def test46_c01_영수증_하나에_지출_둘(admin_client, 회차):
         assert not hasattr(models.ExpenseReceipt, "amount")
         assert len(db.get(models.ExpenseEntry, e1).receipts[0].expenses) == 2
     page = admin_client.get(f"/expenses?retreat_id={rid}").text
-    assert "지출 2건" in page
+    assert 'data-uses="2"' in page, "한 장이 두 지출에 걸린 것이 칩에 안 실렸다"
     # 없는 번호는 거절한다
     assert admin_client.post(f"/expenses/{e2}/receipts/link?retreat_id={rid}",
                              data={"number": "9999"}).status_code == 404
@@ -324,9 +327,11 @@ def test46_f01_원본_번호가_보이고_비면_안_그려진다(admin_client, 
         assert r1.original_no == "시트17" and r2.original_no is None
         n1, n2 = r1.number, r2.number
     page = admin_client.get(f"/expenses?retreat_id={rid}").text
-    assert f"영수증 {n1} · 원본 시트17" in page
-    assert f"영수증 {n2} · 원본" not in page, "빈 원본 번호 자리가 그려졌다"
-    assert f"영수증 {n2} · 별첨" in page
+    칩 = {m.group(1): m.group(0) for m in
+          __import__("re").finditer(r'<button[^>]*data-no="(\d+)"[^>]*>', page)}
+    assert 'data-orig="시트17"' in 칩[str(n1)]
+    assert 'data-orig=""' in 칩[str(n2)], "빈 원본 번호가 값으로 실렸다"
+    assert 'data-memo="별첨"' in 칩[str(n2)]
 
     wb = load_workbook(io.BytesIO(admin_client.get(f"/export/expenses.xlsx?retreat_id={rid}").content))
     for 시트 in ("지출 상세내역",):
@@ -407,12 +412,17 @@ def test46_h01_취소된_지출에는_잇기_떼기_붙이기가_409(admin_clien
         # 모델의 마지막 문
         with pytest.raises(ValueError):
             db.get(models.ExpenseEntry, e1).attach_receipt(db.get(models.ExpenseReceipt, r2.id))
-    # 화면 — 칩은 보이고 단추는 없다
+    # 화면 — 칩은 보이고 단추는 없다. 2026-09-26 부터 단추를 만드는 것은 팝업이고
+    # 그 판단의 출처는 **그 줄의 `data-edit`** 하나다(7-4) — 화면이 다시 가르지 않는다
     page = admin_client.get(f"/expenses?retreat_id={rid}").text
-    assert f"영수증 {r1_no} · 취소 전에 걸린 것" in page
-    assert f"/expenses/{e1}/receipts/{r1_id}/detach" not in page
-    assert f"/expenses/{e1}/receipts/link" not in page
-    assert f"/expenses/{e2}/receipts/link" in page, "산 지출에서는 단추가 그려져야 한다"
+    assert f'data-rcpt="{r1_id}"' in page, "취소된 줄의 칩이 사라졌다"
+    assert 'data-memo="취소 전에 걸린 것"' in page
+    import re as _re
+    줄 = {m.group(1): m.group(0) for m in
+          _re.finditer(r'<tr[^>]*data-exp="(\d+)"[^>]*>', page)}
+    assert 'data-edit="0"' in 줄[str(e1)], "취소된 줄이 고칠 수 있는 것으로 그려졌다"
+    assert 'data-edit="1"' in 줄[str(e2)], "산 줄인데 못 고치는 것으로 그려졌다"
+    assert f'class="rcptadd" data-exp="{e1}"' not in page, "취소된 줄에 첨부 단추가 있다"
     # 되살리면 다시 된다
     admin_client.post(f"/expenses/{e1}/cancel?retreat_id={rid}")
     assert admin_client.post(f"/expenses/{e1}/receipts/link?retreat_id={rid}",
@@ -502,5 +512,8 @@ def test46_h03_두_부서에_걸린_영수증과_리더의_취소된_지출(clie
         rcpt_id = db.get(models.ExpenseEntry, 내것).receipts[0].id
     assert client.post(f"/expenses/{내것}/receipts/{rcpt_id}/detach?retreat_id={rid}").status_code == 409
     page = client.get(f"/expenses?retreat_id={rid}").text
-    assert f"/expenses/{내것}/receipts/{rcpt_id}/detach" not in page
-    assert f"/expenses/{내것2}/receipts/link" in page, "리더의 산 지출에는 단추가 있어야 한다"
+    import re as _re
+    줄 = {m.group(1): m.group(0) for m in
+          _re.finditer(r'<tr[^>]*data-exp="(\d+)"[^>]*>', page)}
+    assert 'data-edit="0"' in 줄[str(내것)], "취소된 줄이 고칠 수 있는 것으로 그려졌다"
+    assert 'data-edit="1"' in 줄[str(내것2)], "리더의 산 지출이 못 고치는 것으로 그려졌다"

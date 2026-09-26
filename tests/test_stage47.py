@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast
 import datetime as dt
 import pathlib
+import re
 
 import pytest
 from sqlalchemy import select
@@ -129,7 +130,10 @@ def test47_a02_영수증_원본_번호를_고친다(admin_client, 판):
         assert db.get(models.ExpenseReceipt, rcpt_id).number == no, "자동 번호가 흔들렸다"
     log = _마지막기록("영수증_원본번호_수정")
     assert log.before_value == {"original_no": "17"} and log.after_value == {"original_no": "18-1"}
-    assert f"영수증 {no} · 원본 18-1" in admin_client.get(f"/expenses?retreat_id={rid}").text
+    # **2026-09-26 부터 영수증은 칩이고 원본 번호는 팝업이 말한다** — 목록에
+    # 줄줄이 적지 않는다. 칩이 그 값을 들고 있어야 팝업이 보일 수 있다
+    page = admin_client.get(f"/expenses?retreat_id={rid}").text
+    assert f'data-no="{no}"' in page and 'data-orig="18-1"' in page
     # 비우면 비워진다 — 자리는 안 그려진다
     admin_client.post(f"/expenses/{eid}/receipts/{rcpt_id}/original?retreat_id={rid}", data={"original_no": ""})
     with app_session() as db:
@@ -160,7 +164,10 @@ def test47_a04_부서_리더는_제_부서만_고치고_남의_계좌를_못_바
     assert _고침(client, 판, 남것, note="남의 것").status_code == 403
     # 제 부서 지출 — 화면에 계좌 칸이 없어 빈 값으로 와도 계좌는 그대로, 비고는 바뀐다
     page = client.get(f"/expenses?retreat_id={rid}").text
-    assert f"/expenses/{내것}/update" in page and 번호 not in page
+    # 고치는 길은 **「전체 편집」 하나**다 (7-4 · 2026-09-26) — 줄마다 폼을 펴지 않는다.
+    # 남의 계좌를 못 보는 사람에게는 계좌를 **화면에 싣지 않는다**(그 판정이 이 줄이다)
+    assert 'id="expedit"' in page and 번호 not in page
+    assert 'data-acctedit="0"' in page
     assert _고침(client, 판, 내것, note="리더가 고침", payer_bank="", payer_account_number="",
                payer_account_holder="").status_code in (200, 303)
     with app_session() as db:
@@ -169,12 +176,22 @@ def test47_a04_부서_리더는_제_부서만_고치고_남의_계좌를_못_바
         assert (e.payer_bank, e.payer_account_number) == (은행, 번호), "리더가 남의 계좌를 지웠다"
 
 
-def test47_a05_목록은_계좌번호_뒤_네_자리와_복사_단추(admin_client, 판):
+def test47_a05_계좌는_이름_팝업에서_보이고_복사한다(admin_client, 판):
+    """**2026-09-26 에 자리가 바뀌었다** (7-4) — 목록에 뒤 네 자리를 적던 것이
+    **지출자 이름의 팝업**으로 갔다. 목록에는 번호가 한 자리도 안 서고, 팝업이
+    전체와 「복사」 를 준다. 볼 수 있는 사람 판정은 그대로 `계좌를_본다` 다.
+
+    `account_tail` 은 엑셀·다른 화면이 쓰므로 그대로 잰다.
+    """
     _등록(admin_client, 판, 5_000, payer_bank=은행, payer_account_number=번호)
     page = admin_client.get(f"/expenses?retreat_id={판['retreat']}").text
-    assert f'class="acct-no">{B.account_tail(번호)}</span>' in page
-    assert f'data-copy="{번호}"' in page
+    assert 'class="payer acct"' in page and f'data-no="{번호}"' in page
+    assert 'class="acct-no"' not in page, "목록에 번호가 그대로 섰다"
     assert B.account_tail(번호) == "…1111" and B.account_tail("") == "" and B.account_tail(None) == ""
+    # 「복사」 단추는 팝업이 만든다 — 서버 쪽에는 안 보이므로 **그 부품에서** 잰다
+    # (2026-09-26 검토 [R] — 옮기면서 재는 자리가 통째로 사라졌던 곳)
+    js = (ROOT / "app" / "static" / "js" / "exppop.js").read_text(encoding="utf-8")
+    assert "acctcopy" in js and "data-copy=" in js, "계좌 복사 단추가 사라졌다"
 
 
 # ── 나) 취소된 지출 · 항목 · 수입은 못 고친다 ──
@@ -441,5 +458,16 @@ def test47_g04_취소된_예산_항목에_걸린_지출(admin_client, 판):
     assert _고침(admin_client, 판, e2, budget_category_id=판["c1"]).status_code == 400
     with app_session() as db:
         assert db.get(models.ExpenseEntry, e2).budget_category_id == 판["c2"]
-    # 화면 — 취소된 항목이 그 지출의 선택지에 「(취소된 항목)」 으로 선다
-    assert "(취소된 항목)" in admin_client.get(f"/expenses?retreat_id={rid}").text
+    # 화면 — 그 지출은 취소된 항목 아래에 그대로 서고 머리가 그렇게 말한다.
+    # **선택지에서는 빠진다**(7-3) — 편집 상태의 목록은 산 항목뿐이라 그리로
+    # 새로 옮길 수 없다. 서버도 400 으로 막는다(위)
+    page = admin_client.get(f"/expenses?retreat_id={rid}").text
+    assert "취소된 예산 항목" in page
+    # **선택지에서 빠졌는지를 실제로 잰다** (2026-09-26 두 번째 검토 [9]) —
+    # 전에는 그 말이 주석에만 있어, 화면이 취소된 항목을 다시 실어도 아무것도
+    # 안 빨개졌다. 고를 목록은 서버가 한 번 실어 보내는 그 씨앗 하나다
+    import json as _json
+    씨앗 = re.search(r'<script id="exp-cats"[^>]*>(.*?)</script>', page, re.S)
+    ids = [c["id"] for c in _json.loads(씨앗.group(1))]
+    assert 판["c1"] not in ids, "취소된 예산 항목이 선택지에 남았다"
+    assert 판["c2"] in ids, "산 항목이 선택지에서 빠졌다"

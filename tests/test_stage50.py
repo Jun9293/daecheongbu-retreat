@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import json
 import re
 
 from sqlalchemy import select
@@ -35,15 +36,16 @@ def test50_a01_미지정_묶음과_고치기_폼에_예산_항목_선택지가_�
     eid = _시트에서_온_미지정(판)
     page = admin_client.get(f"/expenses?retreat_id={판['retreat']}").text
     assert "예산 항목 미지정" in page, "못 이은 지출이 모이는 묶음이 안 보인다"
-    폼 = re.search(rf'<form method="post" action="/expenses/{eid}/update".*?</form>', page, re.S)
-    assert 폼, "그 지출의 고치기 폼이 안 그려졌다"
-    선택 = re.search(r'<select name="budget_category_id".*?</select>', 폼.group(0), re.S).group(0)
-    assert f'<option value="{판["c1"]}"' in 선택 and f'<option value="{판["c2"]}"' in 선택
-    assert " selected" not in 선택, "미지정 지출인데 어떤 항목이 미리 골라져 있다"
-    # 금액 칸이 들여온 금액을 그대로 받는가 — step="10" 이면 10원 단위가 아닌 줄은 브라우저가 저장을 막는다(서버 시험에 안 보인다)
-    금액칸 = re.search(r'<input name="amount"[^>]*>', 폼.group(0)).group(0)
-    step = re.search(r'step="(\d+)"', 금액칸)
-    assert step is None or 23_451 % int(step.group(1)) == 0, "고치기 금액 칸이 10원 단위가 아닌 금액을 막는다"
+    # 2026-09-26 부터 줄마다의 고치기 폼이 없다 — 「전체 편집」 이 그 자리다(7-4).
+    # 고를 항목은 **서버가 한 번 실어 보내고** 편집이 켜질 때 그 목록으로 고른다
+    assert f'action="/expenses/{eid}/update"' not in page, "줄마다의 고치기 폼이 남았다"
+    씨앗 = re.search(r'<script id="exp-cats"[^>]*>(.*?)</script>', page, re.S)
+    assert 씨앗, "고를 예산 항목 목록이 안 실렸다"
+    ids = [c["id"] for c in json.loads(씨앗.group(1))]
+    assert 판["c1"] in ids and 판["c2"] in ids
+    # 그 줄은 **미지정인 채로** 선다 — 어떤 항목이 미리 붙어 있으면 안 된다
+    줄 = re.search(rf'<tr[^>]*data-exp="{eid}"[^>]*>', page).group(0)
+    assert 'data-cat=""' in 줄, f"미지정 지출인데 항목이 붙어 있다: {줄}"
     # 목록의 그 줄 제목은 세부항목-2 가 비어 「미지정」 — 시트 글자(구분·항목·세부1)는 화면에 안 보인다(안내문이 짝 표를 쓰게 한 까닭)
     assert "지어낸구분" not in page and "지어낸세부" not in page
 

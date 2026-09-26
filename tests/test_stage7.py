@@ -146,7 +146,11 @@ def test7_d03_회차_상세의_지출_완료_숫자도_취소를_뺀다(admin_cl
 
 def test7_d02_삭제_단추가_화면에_없다():
     """옛 「삭제」 가 남으면 0장과 부딪힌다 — 취소·되살리기만 있다."""
-    html = (ROOT / "app" / "templates" / "expenses.html").read_text(encoding="utf-8")
+    # 2026-09-26 에 표가 부분 템플릿으로 갈렸다 — **둘 다** 본다. 한쪽만 보면
+    # 다른 쪽으로 옮겨 가는 순간 이 시험이 아무것도 안 본다(11-3 의 그 자리)
+    html = "".join(
+        (ROOT / "app" / "templates" / 이름).read_text(encoding="utf-8")
+        for 이름 in ("expenses.html", "partials/exprows.html"))
     assert "/delete" not in html
     assert "/cancel" in html and "되살리기" in html
 
@@ -307,15 +311,26 @@ def test7_f02_등록_폼은_접힌_채_시작하고_버튼으로_열린다(admin
     assert "exp-close" in js                              # 닫기 단추
 
 
-def test7_f03_예산_구분_행과_항목_라벨이_갈린다(admin_client, money_retreats):
-    """UI 정리 판 1 에서 항목 별도 줄이 없어졌다 — 첫 세부항목 줄의 라벨이다 (1-c)."""
+def test7_f03_예산_구분과_항목이_병합된_칸으로_선다(admin_client, money_retreats):
+    """**2026-09-26 에 모양이 바뀌었다** (7-3) — 구분은 왼쪽 열로 빠져 병합되고,
+    세부항목이 여럿인 항목은 항목 셀이 병합된다(구글시트와 같은 모양).
+
+    그전에는 구분이 제목 줄(`l1row`)이고 항목이 첫 세부항목 줄의 라벨
+    (`itemlbl`)이었다 — 둘 다 없어졌다. 소계는 **따로 줄**로 서고 그 음영이
+    구분 칸까지 간다.
+    """
     admin_client.get(f"/board?retreat_id={money_retreats['retreat']}")
-    page = admin_client.get("/budget")
-    assert 'class="l1row"' in page.text and 'class="l2row"' not in page.text
-    assert page.text.count('class="itemlbl"') == 2          # 항목(포스터·굿즈)마다 하나
-    # 4-0 의 색만 쓴다 — 구분은 완료 배지 채움, 항목 라벨은 보조색 글자
-    assert re.search(r"\.fintbl tr\.l1row td\{[^}]*background:var\(--st-done-bg\)[^}]*font-weight:600", CSS)
-    assert re.search(r"\.budtbl \.itemlbl\{[^}]*color:var\(--ink-2\)", CSS)
+    page = admin_client.get("/budget").text
+    본문 = page.split("<tbody>")[1].split("</tbody>")[0]
+    assert 'class="l1row"' not in 본문 and 'class="itemlbl"' not in 본문
+    assert 'class="l1" rowspan=' in 본문, "구분 칸이 안 병합됐다"
+    assert 'class="l2" rowspan=' in 본문, "항목 칸이 안 병합됐다"
+    assert 'class="subtot"' in 본문, "소계 줄이 없다"
+    # 4-0 의 색만 쓴다 — 구분 칸과 소계 줄은 완료 배지의 채움이다
+    assert re.search(r"\.budtbl td\.l1\{background:var\(--st-done-bg\)", CSS)
+    assert re.search(r"\.budtbl tr\.subtot td\{[^}]*background:var\(--st-done-bg\)", CSS)
+    # 병합된 칸은 세로 가운데 정렬 (사람이 정한 확정본)
+    assert re.search(r"\.budtbl td\.l1,\.budtbl td\.l2\{vertical-align:middle", CSS)
 
 
 # ════════════════════════════════════════════════════════════════════
