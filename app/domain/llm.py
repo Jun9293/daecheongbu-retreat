@@ -36,6 +36,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from dataclasses import dataclass
@@ -155,9 +156,42 @@ class 대답:
         return self.달러 * USD_KRW
 
 
+ALLOWED_IMAGE_TYPES = ("image/png", "image/jpeg", "image/gif", "image/webp")
+
+
+def _content(user: str, images: list[tuple[str, bytes]] | None):
+    """보낼 몸통 하나를 짓는다 — 그림이 없으면 **옛 모양 그대로 글자 하나**다.
+
+    그림이 없을 때도 블록 목록으로 바꾸면 회의록 쪽 호출의 요청 모양이 통째로
+    달라진다. 같은 일을 하는 두 모양을 만들 이유가 없어 **없을 때는 안 바꾼다**.
+
+    그림을 **앞에, 글을 뒤에** 둔다 — 지시가 뒤에 있어야 그림을 보고 그
+    지시를 따른다. 종류는 허용 목록 안의 것만 받는다: 모르는 종류를 그대로
+    실어 보내면 API 가 400 으로 거절하는데, 그 답은 우리 말이 아니라
+    「응답이 400 입니다」 로만 나와 무엇이 틀렸는지 화면이 말해 주지 못한다.
+    """
+    if not images:
+        return user
+    블록 = []
+    for media_type, data in images:
+        if media_type not in ALLOWED_IMAGE_TYPES:
+            raise LlmUnavailable(f"보낼 수 없는 그림 종류입니다 — {media_type}")
+        블록.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type,
+                       "data": base64.b64encode(data).decode("ascii")},
+        })
+    블록.append({"type": "text", "text": user})
+    return 블록
+
+
 def ask(system: str, user: str, *, max_tokens: int | None = None,
-        model: str | None = None) -> 대답:
-    """한 번 부른다. **키가 없으면 부르지 않고 왜인지 말한다.**"""
+        model: str | None = None,
+        images: list[tuple[str, bytes]] | None = None) -> 대답:
+    """한 번 부른다. **키가 없으면 부르지 않고 왜인지 말한다.**
+
+    `images` 는 (종류, 바이트) 목록이다 — 넣으면 그림과 글을 한 몸통에 싣는다.
+    """
     key = read_key()
     if not key:
         raise LlmUnavailable(상태().말)
@@ -165,7 +199,7 @@ def ask(system: str, user: str, *, max_tokens: int | None = None,
         "model": model or MODEL,
         "max_tokens": max_tokens or MAX_TOKENS,
         "system": system,
-        "messages": [{"role": "user", "content": user}],
+        "messages": [{"role": "user", "content": _content(user, images)}],
     }
     try:
         r = httpx.post(
