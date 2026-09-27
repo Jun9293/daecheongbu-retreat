@@ -182,7 +182,9 @@ def test26_b01_수입이_없으면_음수_대신_수입_미입력이고_빨강�
     card = _잔액카드(page)
     assert "수입 미입력" in card and "수입을 넣으면 계산됩니다" in card
     assert "-" not in card.split("잔액")[1].split("수입")[0] and "var(--now)" not in card
-    assert "overrun" not in page.split("잔액 (총 수입")[1][:300], "수입 표의 잔액 줄이 빨갛다"
+    # 수입 표는 /income 으로 옮겼다 (7-6) — 잔액 줄도 그 화면에 있다
+    표 = admin_client.get("/income").text
+    assert "overrun" not in 표.split("잔액 (총 수입")[1][:300], "수입 표의 잔액 줄이 빨갛다"
 
 
 def test26_b02_수입이_있으면_계산하고_음수면_빨갛다(admin_client, 예산):
@@ -190,7 +192,8 @@ def test26_b02_수입이_있으면_계산하고_음수면_빨갛다(admin_client
     page = admin_client.get("/budget").text
     card = _잔액카드(page)
     assert "수입 미입력" not in card and "-5,600,000" in card and "var(--now)" in card
-    assert "overrun" in page.split("잔액 (총 수입")[1][:300]
+    표 = admin_client.get("/income").text
+    assert "overrun" in 표.split("잔액 (총 수입")[1][:300]
 
 
 def test26_b03_수입이_넉넉하면_빨강이_없다(admin_client, 예산):

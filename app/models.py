@@ -472,6 +472,38 @@ class IncomeItem(Base):
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class IncomeDeposit(Base):
+    """입금 캡처에서 읽은 입금 한 줄 (7-6).
+
+    캡처로 읽은 것은 **전부 후원금**으로 들어온다 — 이름만 보고 회비인지
+    후원금인지 가를 수 없기 때문이다(참가자 명단과 맞추는 것은 다음 판).
+    총무가 화면에서 회비로 바꾸거나 **일부만** 회비로 나눈다.
+
+    · `fee_amount` 가 회비 몫이고 **후원금 몫은 빼서 센다** — 둘 다 칸으로
+      두면 합이 금액과 어긋나는 줄이 생기고, 어느 쪽이 맞는지 화면이 말해
+      주지 못한다(2장의 그 원칙).
+    · `confirmed_at` 이 비면 **「추정」** 이다. 사람이 그 줄을 보고 저장하면
+      찍힌다 — 「회비로 바꿨나」 로 가르면 **보고서 후원금이 맞다고 정한 줄**을
+      영영 추정으로 둔다.
+    · `deposited_text` 는 캡처에 적힌 **글자 그대로**다. 은행 화면에 연도가
+      없어 날짜로 바꾸면 없는 해를 지어내게 된다 (6-9).
+    """
+
+    __tablename__ = "income_deposits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    retreat_id: Mapped[int] = mapped_column(ForeignKey("retreats.id", ondelete="CASCADE"))
+    depositor: Mapped[str] = mapped_column(String(100))
+    amount: Mapped[int] = mapped_column(Integer, default=0)
+    deposited_text: Mapped[str] = mapped_column(String(50), default="")
+    balance: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fee_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confirmed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
+    # 지우지 않는다 (0장) — 예산 항목·수입·지출과 같은 취소 표시
+    canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ScheduleDay(Base):
     __tablename__ = "schedule_days"
 

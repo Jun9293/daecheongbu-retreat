@@ -2706,3 +2706,20 @@ body.dopen:has(.drawer.inline){padding-right:0}
 .apdates[data-start=""]{color:var(--ink-2)}
 /* 까닭은 틀린 칸 바로 아래에 (4-9) — 혼자 뜻을 지는 글자라 목록 단 (4-0) */
 .aperr{display:block;font-size:var(--fz-md);color:var(--red-ink);margin-top:6px}
+
+/* ── 수입 · 입금 내역 (7-6) ───────────────────────────────────────── */
+/* 캡처 고르는 줄 — 「고른 이름」 이 보내기 앞에 보여야 무른다 */
+.capbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+/* 「추정」 은 혼자 뜻을 지는 글자다 — 배지라 장식 단이되 색은 대기 배지 그대로.
+   흐림으로 두면 「아직 아무도 안 본 줄」 이 눈에 안 띄는데, 그 줄을 보라고 있는
+   표시다 (4-0 의 흐림 자리가 아니다) */
+.guess{font-size:var(--fz-xs);background:var(--st-wait-bg);color:var(--st-wait-fg);
+  border-radius:var(--r);padding:1px 6px;margin-left:4px;white-space:nowrap}
+/* 줄을 눌러 그 자리에서 편다 (4-14 의 그 모양) */
+.deptbl tr.deprow[data-dep]{cursor:pointer}
+.deptbl tr.deprow[data-dep]:hover>td{background:var(--hover)}
+.deptbl tr.deprow.open>td{background:var(--hover)}
+.deptbl tr.deprowedit>td{background:var(--side);padding:8px 10px}
+.deptbl tr.deprowedit .editform{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.deptbl tr.deprowedit label{display:inline-flex;gap:4px;align-items:center;
+  font-size:var(--fz-md);color:var(--ink)}

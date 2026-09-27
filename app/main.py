@@ -29,6 +29,7 @@ from app.routers import (
     dashboard,
     drafts,
     expenses,
+    income,
     export,
     library,
     meetings,
@@ -175,6 +176,7 @@ app.include_router(schedule.router)
 app.include_router(tasks.router)
 app.include_router(budget.router)
 app.include_router(expenses.router)
+app.include_router(income.router)
 app.include_router(settings.router)
 app.include_router(export.router)
 # Phase 2

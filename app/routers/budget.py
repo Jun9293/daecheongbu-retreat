@@ -375,7 +375,7 @@ def toggle_category_canceled(
     return redirect(f"/budget?retreat_id={retreat.id}", message=message)
 
 
-# ── 수입 (7-3) — 예산 페이지의 섹션이다. 집행률 분모에는 안 들어간다 ────
+# ── 수입 (7-3 · 7-6) — 표는 /income 화면에 있다. 쓰는 길은 여기 하나다 ──
 
 
 @router.post("/incomes")
@@ -420,7 +420,7 @@ def create_income(
         target_id=income.id,
         summary=f"{income.name} / {income.amount:,}원",
     )
-    return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 추가했습니다.")
+    return redirect(f"/income?retreat_id={retreat.id}", message="수입을 추가했습니다.")
 
 
 @router.post("/incomes/{income_id}/update")
@@ -457,7 +457,7 @@ def update_income(
     전, 후 = _바뀐칸만(before, 값(income))
     if not 후:
         db.rollback()
-        return redirect(f"/budget?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
+        return redirect(f"/income?retreat_id={retreat.id}", message="바뀐 것이 없습니다.")
     db.commit()
     log_activity(
         db,
@@ -470,7 +470,7 @@ def update_income(
         before_value=전,
         after_value=후,
     )
-    return redirect(f"/budget?retreat_id={retreat.id}", message="수입을 고쳤습니다.")
+    return redirect(f"/income?retreat_id={retreat.id}", message="수입을 고쳤습니다.")
 
 
 @router.post("/incomes/{income_id}/cancel")
@@ -506,4 +506,4 @@ def toggle_income_canceled(
         before_value=values,
         after_value=values,
     )
-    return redirect(f"/budget?retreat_id={retreat.id}", message=message)
+    return redirect(f"/income?retreat_id={retreat.id}", message=message)

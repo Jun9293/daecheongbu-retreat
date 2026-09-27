@@ -34,6 +34,19 @@ from app.models import BudgetCategory, ExpenseEntry, ExpenseReceipt, IncomeItem,
 RETREAT_ACCOUNT = "수련회계좌"
 
 
+# 수입 종류 (7-6 · 2026-09-27 사람이 정한 확정본) — **화면에 이 이름 그대로.**
+# 목록이 여기 한 곳인 것은 추가 폼과 고치기 폼이 같은 것을 보여야 해서다.
+수입종류: tuple[str, ...] = (
+    "지원비",
+    "추가지원비",
+    "전달후원금",
+    "대형버스 실비지원비",
+    "회비",
+    "부서충당금",
+    "기타수입",
+)
+
+
 def planned_amount_of(
     unit_price: int | None, headcount: int | None, times: int | None, manual: int
 ) -> int:

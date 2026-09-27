@@ -1,0 +1,186 @@
+{% extends "retreat_base.html" %}
+{% block title %}수입 · {{ retreat.name }}{% endblock %}
+
+{% macro 종류칸(고른것='') %}
+{# 7가지는 domain/budget.수입종류 한 곳에서 온다 (7-6) — 추가 폼과 고치기 폼이
+   같은 것을 보여야 해서다. 목록 밖의 이름을 쓰던 옛 줄도 그대로 보이게
+   자기 값을 하나 더 넣는다 #}
+<select name="name" required>
+  {% for 종류 in 수입종류 %}<option{% if 종류 == 고른것 %} selected{% endif %}>{{ 종류 }}</option>{% endfor %}
+  {% if 고른것 and 고른것 not in 수입종류 %}<option selected>{{ 고른것 }}</option>{% endif %}
+</select>
+{% endmacro %}
+
+{% block body %}
+<main class="setting finwrap">
+  <h2 class="pagetitle">수입</h2>
+
+  {# 지표 — 숫자는 전부 summary 와 domain/deposits 에서 온다. 여기서 세지 않는다 #}
+  <div class="kpis">
+    <div class="kpi"><div class="l">수입 항목 합</div>
+      <div class="v">{{ summary.total_income|won }}</div>
+      <div class="d">{{ summary.active_incomes|length }}건</div></div>
+    <div class="kpi"><div class="l">입금 내역 합</div>
+      <div class="v">{{ 입금합.금액|won }}</div>
+      <div class="d">{{ 입금합.건수 }}건</div></div>
+    <div class="kpi"><div class="l">회비 · 후원금</div>
+      <div class="v">{{ 입금합.회비|won }}</div>
+      <div class="d">후원금 {{ 입금합.후원금|won }}</div></div>
+    <div class="kpi"><div class="l">확인 필요</div>
+      <div class="v">{{ 입금합.확인필요 }}건</div>
+      <div class="d">아직 사람이 안 본 줄</div></div>
+  </div>
+
+  {# ── 수입 항목 (7-3) — 잔액에만 쓴다. 홈 집행률 분모는 지출예산 총액이다 ── #}
+  <div class="fld">
+    <h3>수입 항목 <small class="cnt">{{ summary.active_incomes|length }}건 · {{ summary.total_income|won }}</small></h3>
+    <div class="tblwrap">
+      <table class="fintbl" id="inctbl">
+        <thead><tr><th>종류</th><th class="r">단가</th><th class="r">명수</th>
+          <th class="r">금액</th><th>비고</th>{% if is_admin(user) %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for income in summary.incomes %}
+          <tr{% if income.canceled_at %} class="canceled"{% endif %}>
+            <td>{{ income.name }}{% if income.canceled_at %} <span class="cancelchip">취소됨</span>{% endif %}</td>
+            <td class="r mono">{{ income.unit_price|num if income.unit_price is not none else '' }}</td>
+            <td class="r mono">{{ income.headcount if income.headcount is not none else '' }}</td>
+            <td class="r mono">{{ income.amount|num }}</td>
+            <td class="dim">{{ income.note or '' }}</td>
+            {% if is_admin(user) %}
+            {# 지우지 않는다 (0장) — 같은 단추로 취소·되살림 (7-3). 고치기는 예산 항목과 같은
+               모양이고 취소된 수입에는 안 그린다(서버도 409 · 재정 차례 5) #}
+            <td class="r">
+              {% if not income.canceled_at %}
+              <details class="rowedit"><summary>수정</summary>
+                <form method="post" action="/budget/incomes/{{ income.id }}/update" class="editform">
+                  {{ 종류칸(income.name) }}
+                  <input name="unit_price" type="number" min="0" value="{{ income.unit_price if income.unit_price is not none else '' }}" placeholder="단가">
+                  <input name="headcount" type="number" min="0" value="{{ income.headcount if income.headcount is not none else '' }}" placeholder="명수">
+                  <input name="amount" type="number" min="0" value="{{ income.amount }}" placeholder="금액 (단가·명수가 비면 직접)">
+                  <input name="note" value="{{ income.note or '' }}" placeholder="비고">
+                  <button class="sbtn p" type="submit">저장</button>
+                </form>
+              </details>
+              {% endif %}
+              <form method="post" action="/budget/incomes/{{ income.id }}/cancel"
+                  {% if not income.canceled_at %}onsubmit="return confirm('이 수입을 취소할까요? 행은 흐리게 남고 합계에서 빠집니다.')"{% endif %}>
+              <button class="sbtn" type="submit">{{ '되살리기' if income.canceled_at else '취소' }}</button></form></td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="dim">수입 항목이 없습니다 — 지원비 · 회비 · 부서충당금 등을 적습니다.</td></tr>
+          {% endfor %}
+          {# 예산 화면의 잔액 카드와 같은 규칙 — 수입이 없으면 계산하지 않는다 #}
+          <tr class="grand"><td>잔액 (총 수입 − 총 지출예산)</td><td></td><td></td>
+            {% if summary.active_incomes %}
+            <td class="r mono{% if summary.balance < 0 %} overrun{% endif %}">{{ summary.balance|num }}</td>
+            {% else %}
+            <td class="r dim">수입 미입력</td>
+            {% endif %}
+            <td></td>{% if is_admin(user) %}<td></td>{% endif %}</tr>
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_admin(user) %}
+    <details class="addbox">
+      <summary>+ 수입 추가</summary>
+      <form method="post" action="/budget/incomes" class="editform">
+        {{ 종류칸() }}
+        <input name="unit_price" type="number" min="0" placeholder="단가">
+        <input name="headcount" type="number" min="0" placeholder="명수">
+        <input name="amount" type="number" min="0" placeholder="금액 (단가·명수가 비면 직접)">
+        <input name="note" placeholder="비고">
+        <button class="sbtn p" type="submit">추가</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+
+  {# ── 회비·후원금 입금 내역 (7-6) ── #}
+  <div class="fld">
+    <h3>회비 · 후원금 입금 내역
+      <small class="cnt">{{ 입금합.건수 }}건 · {{ 입금합.금액|won }}</small></h3>
+
+    {% if is_admin(user) %}
+    <form class="capbar" method="post" action="/income/deposits/capture"
+          enctype="multipart/form-data" id="capform">
+      <input type="hidden" name="filter" value="{{ 필터 }}">
+      <label class="sbtn" for="capfile" id="caplabel">📷 입금 내역 캡처 올리기</label>
+      <input id="capfile" name="capture" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+      <span class="hint" id="capname" role="status"></span>
+      <button class="sbtn p" type="submit" id="capsend" hidden>읽기</button>
+    </form>
+    {# 조용히 안 되는 것이 가장 나쁘다 (llm.py) — 키가 없으면 왜인지 그대로 말한다 #}
+    {% if not 키상태.ok %}
+    <p class="hint lone">캡처를 읽을 수 없습니다 — {{ 키상태.말 }}</p>
+    {% endif %}
+    <p class="hint">읽은 줄은 전부 후원금 · 「추정」 으로 담깁니다. 회비는 아래에서 바꿉니다.
+      캡처에 안 보이거나 흐린 줄은 빠질 수 있으니 눈으로 맞춰 보세요.</p>
+    {% endif %}
+
+    {# 필터 칩 — 조건은 domain/deposits.걸러낸다 하나다 #}
+    <div class="chips" id="incchips">
+      {% for 값, 라벨 in [('', '전체'), ('fee', '회비만'), ('donation', '후원금 포함'), ('check', '확인 필요')] %}
+      <a class="chip{% if 필터 == 값 %} on{% endif %}"
+         href="/income?retreat_id={{ retreat.id }}{% if 값 %}&filter={{ 값 }}{% endif %}">{{ 라벨 }}</a>
+      {% endfor %}
+    </div>
+
+    <div class="tblwrap">
+      <table class="fintbl deptbl" id="deptbl">
+        <thead><tr><th>입금자</th><th class="r">금액</th><th>입금 시각</th>
+          <th>분류</th><th class="r">회비</th><th class="r">후원금</th><th class="r">잔액</th></tr></thead>
+        <tbody>
+          {% for 줄 in 입금줄들 %}
+          {% set d = 줄.d %}
+          <tr class="deprow{% if d.canceled_at %} canceled{% endif %}" data-dep="{{ d.id }}"
+              {% if is_admin(user) %}tabindex="0" role="button"{% endif %}>
+            <td>{{ d.depositor }}{% if d.canceled_at %} <span class="cancelchip">취소됨</span>{% endif %}</td>
+            <td class="r mono">{{ d.amount|num }}</td>
+            <td class="dim">{{ d.deposited_text or '—' }}</td>
+            <td>{{ 줄.분류 }}{% if 줄.추정 %} <span class="guess">추정</span>{% endif %}</td>
+            <td class="r mono">{{ 줄.회비|num if 줄.회비 else '' }}</td>
+            <td class="r mono">{{ 줄.후원금|num if 줄.후원금 else '' }}</td>
+            <td class="r mono dim">{{ d.balance|num if d.balance is not none else '' }}</td>
+          </tr>
+          {% if is_admin(user) %}
+          {# 줄을 누르면 그 자리에서 펼쳐진다 — 목록 화면이 쓰는 그 모양이다 (4-14).
+             팝업으로 두면 뜨는 자리·닫히는 규칙이 지출의 팝업과 두 벌이 된다 #}
+          <tr class="deprowedit" data-editof="{{ d.id }}" hidden>
+            <td colspan="7">
+              {% if d.canceled_at %}
+              <span class="hint">취소된 줄입니다 — 되살린 뒤에 분류를 고칩니다.</span>
+              {% else %}
+              <form method="post" action="/income/deposits/{{ d.id }}" class="editform depform">
+                <input type="hidden" name="filter" value="{{ 필터 }}">
+                <label><input type="radio" name="kind" value="후원금" {% if not 줄.회비 %}checked{% endif %}> 후원금</label>
+                <label><input type="radio" name="kind" value="회비" {% if 줄.회비 %}checked{% endif %}> 회비</label>
+                <input name="fee_amount" type="number" min="0" max="{{ d.amount }}"
+                       value="{{ 줄.회비 if 줄.회비 else '' }}" placeholder="회비 금액 (비우면 전액 {{ d.amount|num }})">
+                <button class="sbtn p" type="submit">저장</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/income/deposits/{{ d.id }}/cancel" class="editform"
+                  {% if not d.canceled_at %}onsubmit="return confirm('이 입금 줄을 취소할까요? 행은 흐리게 남고 합계에서 빠집니다.')"{% endif %}>
+                <input type="hidden" name="filter" value="{{ 필터 }}">
+                <button class="sbtn" type="submit">{{ '되살리기' if d.canceled_at else '취소' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+          {% else %}
+          <tr><td colspan="7" class="dim">
+            {% if 필터 %}이 조건에 맞는 입금이 없습니다.{% else %}입금 내역이 없습니다 — 캡처를 올리면 여기 쌓입니다.{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static('js/income.js') }}" defer></script>
+{% endblock %}

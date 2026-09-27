@@ -162,8 +162,10 @@ def test45_a02_수입_취소_되살림(admin_client, 돈):
     # 전부 취소하면 「수입 미입력」 으로 돌아간다 — 취소된 행이 있어도 계산하지 않는다
     for i in before.active_incomes:
         admin_client.post(f"/budget/incomes/{i.id}/cancel?retreat_id={rid}", follow_redirects=True)
-    page = admin_client.get(f"/budget?retreat_id={rid}").text
+    # 표는 /income 으로 옮겼다 (7-6) — 예산 화면에는 잔액 지표만 남는다
+    page = admin_client.get(f"/income?retreat_id={rid}").text
     assert "수입 미입력" in page and "취소됨" in page
+    assert "수입 미입력" in admin_client.get(f"/budget?retreat_id={rid}").text
 
 
 def test45_a03_막히는_쪽(client, admin_client, 돈):
