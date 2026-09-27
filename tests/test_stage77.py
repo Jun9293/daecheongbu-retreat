@@ -660,3 +660,91 @@ def test77_d12_활동_기록에_남는다(판):
         남은 = db.scalars(select(models.ActivityLog)
                         .where(models.ActivityLog.action == "입금_분류")).all()
         assert 남은 and 남은[-1].target_id == did
+
+
+# ── ㅅ. 금액을 올릴 때의 안내 (2026-09-27 사람이 정함 · 봐둘것 BK-d ③) ──
+#
+# **막지 않고 알린다.** 회비는 비율이 아니라 액수라(7-6) 금액을 올려 고치면
+# 회비 몫이 그대로 남고 나머지가 후원금이 되는데, 그때 아무 말이 없으면
+# **확인한 줄의 분류가 조용히 바뀝니다**(「확인 필요」 칩에도 안 뜹니다).
+#
+# 막는 코드가 아니라 **말하는 코드**라 시험도 셋이 한 벌이다 —
+# ① 말해야 할 때 말하는가 ② **말하면 안 될 때 안 하는가**(내림 · 회비 없음 ·
+# 회비와 같은 금액) ③ 말하면서 **저장은 그대로 되는가**.
+
+
+def _말(r) -> str:
+    import urllib.parse
+    return urllib.parse.unquote(r.cookies.get("dcb_flash") or "")
+
+
+def test77_g01_금액을_올리면_한_줄_알리고_저장은_그대로_된다(판):
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                data={"kind": "회비", "fee_amount": "50000"})
+    r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                    data={"depositor": "가나다", "amount": "80000"}, follow_redirects=False)
+    assert r.status_code == 303, "알리려고 막았다 — 막지 않기로 정했다"
+    말 = _말(r)
+    assert "50,000원은 그대로" in 말 and "30,000원이 후원금" in 말, 말
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert d.amount == 80000 and D.회비몫(d) == 50000, "알리느라 저장이 안 됐다"
+
+
+def test77_g02_금액을_내리면_안_알린다(판):
+    """내리면 회비를 따라 줄이므로 분류가 안 바뀐다 — 말할 것이 없다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                data={"kind": "회비", "fee_amount": "50000"})
+    r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                    data={"depositor": "가나다", "amount": "30000"}, follow_redirects=False)
+    assert "후원금이 됩니다" not in _말(r)
+
+
+def test77_g03_회비가_없으면_안_알린다(판):
+    """원래 전액 후원금이라 올려도 분류가 안 바뀐다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                    data={"depositor": "가나다", "amount": "80000"}, follow_redirects=False)
+    assert "후원금이 됩니다" not in _말(r)
+
+
+def test77_g04_회비와_같은_금액으로_올리면_안_알린다(판):
+    """여전히 전액 회비다 — 경계에서 말하면 안 될 때 말하는 쪽이 된다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                data={"kind": "회비", "fee_amount": "50000"})
+    # 30,000 으로 내리면 회비도 30,000 이 된다. 거기서 다시 50,000 으로 올린다
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "가나다", "amount": "30000"})
+    r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                    data={"depositor": "가나다", "amount": "30000"}, follow_redirects=False)
+    assert "후원금이 됩니다" not in _말(r)
+    with app_session() as db:
+        assert D.분류(db.get(models.IncomeDeposit, did)) == D.회비
+
+
+def test77_g05_판정은_domain_한_곳이다(판):
+    """문장을 화면이 지으면 두 벌이 된다 — 문이 둘인 것도 여기서 잰다."""
+    assert D.올려서_섞이나(전금액=50000, 금액=80000, 회비=50000)
+    assert not D.올려서_섞이나(전금액=80000, 금액=50000, 회비=50000), "내림"
+    assert not D.올려서_섞이나(전금액=50000, 금액=80000, 회비=None), "회비 없음"
+    assert not D.올려서_섞이나(전금액=50000, 금액=80000, 회비=0), "회비 0 은 전액 후원금"
+    assert not D.올려서_섞이나(전금액=30000, 금액=50000, 회비=50000), "여전히 전액 회비"
+    import pathlib
+    루트 = pathlib.Path(__file__).resolve().parents[1]
+    src = (루트 / "app" / "routers" / "income.py").read_text(encoding="utf-8")
+    assert "후원금이 됩니다" not in src, "라우터가 같은 문장을 또 짓는다"

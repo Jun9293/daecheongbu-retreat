@@ -216,6 +216,8 @@ def fix_deposit(
 
     **겹침 열쇠는 안 움직입니다**(`dup_key`) — 같은 캡처를 다시 올려도 그대로
     건너뜁니다.
+
+    **금액을 올려 분류가 바뀌는 줄은 막지 않고 한 줄 알립니다** (봐둘것 BK-d).
     """
     d = _그줄(db, retreat, deposit_id)
     raw = (amount or "").strip().replace(",", "")
@@ -225,7 +227,7 @@ def fix_deposit(
         raise HTTPException(status_code=400, detail="금액은 숫자로 적어주세요.") from None
     전 = {"입금자": d.depositor, "금액": d.amount}
     try:
-        D.고친다(d, 이름=depositor, 금액=값)
+        알림 = D.고친다(d, 이름=depositor, 금액=값)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     후 = {"입금자": d.depositor, "금액": d.amount}
@@ -244,7 +246,11 @@ def fix_deposit(
         before_value=전,
         after_value=후,
     )
-    return redirect(_돌아갈곳(retreat, filter), message="입금 줄을 고쳤습니다.")
+    # **막지 않고 알린다** (봐둘것 BK-d · 사람이 정함) — 금액을 올려 고치면 회비
+    # 몫은 그대로라 남는 금액이 후원금이 되는데, 아무 말이 없으면 확인한 줄의
+    # 분류가 조용히 바뀐다. 문장은 domain 한 곳이고 여기서 짓지 않는다
+    return redirect(_돌아갈곳(retreat, filter),
+                    message="입금 줄을 고쳤습니다." + (f" {알림}" if 알림 else ""))
 
 
 @router.post("/deposits/{deposit_id}/cancel")
