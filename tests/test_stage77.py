@@ -674,8 +674,15 @@ def test77_d12_활동_기록에_남는다(판):
 
 
 def _말(r) -> str:
+    """flash 한 줄. **쿠키 이름은 앱에서 받는다** (2026-09-27 커밋 전 검토 [G]) —
+    글자로 박으면 이름이 바뀔 때 `g01` 만 빨개지고 **「말하면 안 될 때」 쪽
+    셋은 빈 글자를 받아 조용히 통과**한다(아무것도 안 보는 검사가 초록을 내는
+    그 모양 · 11-3).
+    """
     import urllib.parse
-    return urllib.parse.unquote(r.cookies.get("dcb_flash") or "")
+
+    from app.templating import FLASH_COOKIE
+    return urllib.parse.unquote(r.cookies.get(FLASH_COOKIE) or "")
 
 
 def test77_g01_금액을_올리면_한_줄_알리고_저장은_그대로_된다(판):
@@ -719,20 +726,32 @@ def test77_g03_회비가_없으면_안_알린다(판):
     assert "후원금이 됩니다" not in _말(r)
 
 
-def test77_g04_회비와_같은_금액으로_올리면_안_알린다(판):
-    """여전히 전액 회비다 — 경계에서 말하면 안 될 때 말하는 쪽이 된다."""
+def test77_g04_바뀐_것이_없으면_아무_말도_안_한다(판):
+    """같은 값을 다시 보내면 라우터가 되돌리고 「바뀐 것이 없습니다」 로 끝난다.
+
+    **이 자리는 원래 경계(`금액 <= 회비`)를 재려던 것이었다** — 그런데 그
+    경계는 **라우터로는 못 밟습니다**(2026-09-27 커밋 전 검토 [B]):
+    `사람이정한다` 가 회비를 금액보다 크게 못 넣고 `고친다` 가 내릴 때 회비를
+    깎으므로 늘 `회비 <= 전금액` 이고, 올리는 갈래에서는
+    `회비 <= 전금액 < 금액` 이라 그 조건이 참이 될 수 없습니다. 그래서 그
+    경계는 **`test77_g05` 가 단위로** 재고, 여기서는 **라우터에서 실제로
+    밟히는 것**을 잽니다.
+
+    고치기 전에는 이 시험이 30,000 을 두 번 보내고 있었습니다 — 둘째 요청이
+    이 갈래(전==후)로 빠져 **단언이 늘 참**이었습니다. 이름과 주석은 다른
+    것을 말하고 있었고, 그것이 10장의 「설명과 코드를 못 가린다」 의 사촌입니다.
+    """
     client, rid = 판
     with app_session() as db:
         did = 입금(db, rid, amount=50000).id
         db.commit()
     client.post(f"/income/deposits/{did}?retreat_id={rid}",
                 data={"kind": "회비", "fee_amount": "50000"})
-    # 30,000 으로 내리면 회비도 30,000 이 된다. 거기서 다시 50,000 으로 올린다
-    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
-                data={"depositor": "가나다", "amount": "30000"})
     r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
-                    data={"depositor": "가나다", "amount": "30000"}, follow_redirects=False)
-    assert "후원금이 됩니다" not in _말(r)
+                    data={"depositor": "가나다", "amount": "50000"}, follow_redirects=False)
+    말 = _말(r)
+    assert "바뀐 것이 없습니다" in 말, 말
+    assert "후원금이 됩니다" not in 말
     with app_session() as db:
         assert D.분류(db.get(models.IncomeDeposit, did)) == D.회비
 
@@ -743,6 +762,7 @@ def test77_g05_판정은_domain_한_곳이다(판):
     assert not D.올려서_섞이나(전금액=80000, 금액=50000, 회비=50000), "내림"
     assert not D.올려서_섞이나(전금액=50000, 금액=80000, 회비=None), "회비 없음"
     assert not D.올려서_섞이나(전금액=50000, 금액=80000, 회비=0), "회비 0 은 전액 후원금"
+    # **이 줄이 그 경계를 재는 유일한 자리다** — 라우터로는 못 밟는다(`g04` 의 그 까닭)
     assert not D.올려서_섞이나(전금액=30000, 금액=50000, 회비=50000), "여전히 전액 회비"
     import pathlib
     루트 = pathlib.Path(__file__).resolve().parents[1]
