@@ -1,7 +1,7 @@
-/* 재정 화면(예산 · 지출) 상호작용 점검 — **표를 고치는 것이 실제로 되는가.**
+/* 재정 화면(예산 · 수입 · 지출) 상호작용 점검 — **표를 고치는 것이 실제로 되는가.**
  *
- * 쓰는 법: **예산(/budget) 또는 지출(/expenses)** 을 연 뒤 브라우저 콘솔에
- * 이 파일 내용을 붙여넣습니다. 두 화면에서 각각 돌립니다.
+ * 쓰는 법: **예산(/budget) · 수입(/income) · 지출(/expenses)** 중 하나를 연 뒤
+ * 브라우저 콘솔에 이 파일 내용을 붙여넣습니다. 세 화면에서 각각 돌립니다.
  *
  * **왜 따로 만들었나 — `docs/checks/drawer.js` 를 안 넓혔습니다.**
  * 그쪽은 **상세 패널이 있는 화면**(보드 · 달력 · 목록)을 전제하고 맨 앞에서
@@ -26,10 +26,15 @@
  *   · 계좌 팝업은 마우스를 옮기면 유지되고 벗어나면 닫히는가
  *   · **영수증이 없는 줄에는 「영수증 추가」 가 안 뜨는가** (막는 쪽)
  *   · **편집 중에는 팝업이 안 열리는가** (저장 안 한 칸이 사라지지 않게)
+ *   · 수입: 캡처 올리는 자리 · 필터 칩 넷 · 「추정」 배지 ·
+ *     줄을 눌러 **그 자리에서** 펼치고 한 번에 하나만 열리는가 (7-6)
  *
  * **저장을 누르지 않습니다.** 이 점검이 재는 것은 「화면이 도는가」 이고,
  * 저장은 되돌릴 수 없는 자국을 남깁니다 — 활동 기록에 줄이 남고 취소는
- * 행을 아래로 내립니다(10장 · 봐둘것 BI-j 의 그 규칙). 그래서 마지막에
+ * 행을 아래로 내립니다(10장 · 봐둘것 BI-j 의 그 규칙). **수입 화면도 같습니다**:
+ * 한 줄을 저장하면 「추정」 이 영영 풀려 `startedAt` 과 같은 자국이 됩니다 —
+ * 단추가 그 줄의 폼에 달렸는지만 보고, 서버가 저장하는지는 pytest 가 잽니다.
+ * 그래서 마지막에
  * 늘 **「되돌리기」 로 편집을 끕니다**: 표는 서버에서 다시 그려집니다.
  *
  * **자가시험** — 붙여넣기 전에 `window.__자가시험 = 1;` 을 실행하면 갈래마다
@@ -76,11 +81,14 @@ const 점검 = async () => {
 
   const 예산표 = $('budtbl');
   const 지출표 = document.querySelector('table.exptbl');
-  if (!예산표 && !지출표) return {치명: '이 화면에는 재정 표가 없습니다'
-    + ' — 예산(/budget) 이나 지출(/expenses) 에서 돌리세요.'};
+  const 수입표 = $('deptbl');
+  if (!예산표 && !지출표 && !수입표) return {치명: '이 화면에는 재정 표가 없습니다'
+    + ' — 예산(/budget) · 수입(/income) · 지출(/expenses) 에서 돌리세요.'};
   const 예산인가 = !!예산표;
-  const 표 = 예산표 || 지출표;
-  const where = 예산인가 ? '예산' : '지출';
+  /* 수입 화면에는 예산·지출 표가 아예 없다 — 셋을 그 순서로 가른다 */
+  const 수입인가 = !예산표 && !지출표;
+  const 표 = 예산표 || 지출표 || 수입표;
+  const where = 예산인가 ? '예산' : (수입인가 ? '수입' : '지출');
 
   /* **편집을 켜는 단추가 없으면 그 계정은 못 고치는 쪽이다** — 예산은
      총무팀만 고치므로(7-3) 부서 리더에게는 이 단추가 아예 없다. 그때
@@ -112,6 +120,121 @@ const 점검 = async () => {
      기기에 없으므로 그 자리는 **누름으로** 연다(아래). */
   const 폭 = window.innerWidth;
   const 호버있나 = matchMedia('(hover: hover)').matches;
+
+  /* ── 수입 화면은 여기서 갈라 재고 돌려준다 (7-6) ─────────────────
+     예산·지출과 표가 통째로 달라(고치는 것이 「전체 편집」 이 아니라 줄을
+     펼치는 것이다) 아래 갈래를 그대로 태우면 전부 빨개진다. 파일을 또 나누지
+     않는 것은 **재는 전제가 같아서**다 — 재정 화면이고 상세 패널이 없다. */
+  if (수입인가) {
+    const 입금줄 = () => [...표.querySelectorAll('tbody tr.deprow[data-dep]')];
+    const 펼친줄 = () => [...표.querySelectorAll('tbody tr.deprowedit')].filter(shown);
+
+    잰다(입금줄().length > 0, ` 입금 표에 줄이 있다 (${입금줄().length}줄)`,
+         '입금 줄이 하나도 없다 — 캡처를 올린 회차에서 돌리세요');
+
+    /* 올리는 자리 — 총무팀에게만 있다. 없는 계정에서는 ✗ 가 아니라 건너뜀이다 */
+    const 올림 = document.getElementById('caplabel');
+    const 파일칸 = document.getElementById('capfile');
+    if (!올림) results.push('· 이 계정에는 캡처 올리는 자리가 없어 건너뜀 (총무팀만)');
+    else {
+      잰다(shown(올림) && !!파일칸 && 파일칸.type === 'file',
+           ' 캡처 올리는 자리가 보인다',
+           '「입금 내역 캡처 올리기」 가 안 보이거나 파일 칸이 없다');
+      /* **읽기 단추는 고르기 전에는 없다** — 빈 채로 보내면 422 만 돌아온다 */
+      잰다(!shown(document.getElementById('capsend')),
+           ' 캡처를 고르기 전에는 「읽기」 가 안 보인다 (막는 쪽)',
+           '캡처를 안 골랐는데 보내는 단추가 보인다');
+    }
+
+    /* 필터 칩 — 넷이 있고 지금 고른 것이 **하나**다 */
+    const 칩들 = [...document.querySelectorAll('#incchips .chip')];
+    const 켠칩 = 칩들.filter(c => c.classList.contains('on'));
+    잰다(칩들.length === 4 && 켠칩.length === 1,
+         ` 필터 칩 넷이 있고 하나만 켜져 있다 (칩 ${칩들.length} · 켜짐 ${켠칩.length})`,
+         `필터 칩이 ${칩들.length}개고 ${켠칩.length}개가 켜져 있다`);
+    const 확인칩 = 칩들.find(c => c.textContent.includes('확인 필요'));
+    잰다(!!(확인칩 && /filter=check/.test(확인칩.getAttribute('href') || '')),
+         ' 「확인 필요」 칩이 그 필터로 간다',
+         '「확인 필요」 칩이 없거나 filter=check 로 안 간다');
+
+    /* 「추정」 배지 — 사람이 아직 안 본 줄에만 */
+    const 추정줄 = 입금줄().filter(tr => tr.querySelector('.guess'));
+    const 잘못붙음 = 추정줄.filter(tr => {
+      const 칸 = tr.querySelectorAll('td');
+      return 칸.length > 3 && !/추정/.test(칸[3].textContent);
+    });
+    잰다(잘못붙음.length === 0,
+         ` 「추정」 배지가 분류 칸에 붙는다 (추정 ${추정줄.length}줄)`,
+         '「추정」 배지가 분류 칸 밖에 있다');
+
+    /* 줄을 눌러 그 자리에서 편다 — 목록 화면이 쓰는 그 모양이다 (4-14) */
+    const 첫줄 = 입금줄()[0];
+    if (!첫줄) results.push('· 입금 줄이 없어 펼치기 갈래는 건너뜀');
+    else if (!표.querySelector(`tr.deprowedit[data-editof="${첫줄.dataset.dep}"]`)) {
+      results.push('· 이 계정에는 편집 줄이 없어 펼치기 갈래는 건너뜀 (총무팀만)');
+    } else {
+      첫줄.click();
+      const 폈나 = await 될때까지('줄이 펼쳐지는 것', () => 펼친줄().length === 1);
+      잰다(폈나 && 펼친줄().length === 1,
+           ' 줄을 누르면 그 자리에서 펼쳐진다',
+           '줄을 눌러도 편집 줄이 안 나온다');
+      const 편집 = 펼친줄()[0];
+      if (편집) {
+        /* **가로가 아니라 세로만 본다** — 재정 표는 가로로 넘겨 보는 표라
+           (이 파일 머리의 그 전제) 좁은 창에서 줄이 왼쪽으로 밀려 나가 있는
+           것이 정상이다. 팝업처럼 `화면안` 으로 재면 375px 에서 늘 빨갛다
+           (2026-09-27 에 실제로 그랬다). 재야 할 것은 **펼친 줄이 눈에
+           보이는 자리인가** 이고, 그건 세로다. */
+        const 칸 = 편집.getBoundingClientRect();
+        잰다(칸.height > 0 && 칸.bottom > 0 && 칸.top < window.innerHeight,
+             ' 펼쳐진 줄이 눈에 보이는 자리에 있다',
+             '펼쳐진 줄이 화면 위나 아래로 벗어났다');
+        /* **저장을 누르지 않는다** — 누르면 「추정」 이 영영 풀리고 활동 기록에
+           줄이 남는다(10장 · `startedAt` 과 같은 자리). 단추가 그 줄의 폼에
+           제대로 달렸는지만 본다. 서버가 실제로 저장하는지는 pytest 가 잰다. */
+        const 폼 = 편집.querySelector('form.depform');
+        const 저장 = 폼 && 폼.querySelector('button[type="submit"]');
+        잰다(!!(폼 && 저장 && /\/income\/deposits\//.test(폼.getAttribute('action') || '')),
+             ' 펼친 줄에 저장 폼이 그 줄을 가리킨다',
+             '편집 줄의 저장 폼이 없거나 엉뚱한 곳을 가리킨다');
+        잰다(!!폼 && 폼.querySelectorAll('input[name="kind"]').length === 2,
+             ' 분류를 회비·후원금 둘 중에서 고른다',
+             '분류 고르는 자리가 둘이 아니다');
+      }
+      /* 다른 줄을 누르면 **하나만** 열린다 — 여럿이 열리면 어느 줄을 저장하는지 흐려진다 */
+      const 둘째 = 입금줄()[1];
+      if (둘째) {
+        둘째.click();
+        await 될때까지('두 번째 줄이 펼쳐지는 것', () => 펼친줄().length >= 1);
+        잰다(펼친줄().length === 1, ' 한 번에 한 줄만 펼쳐진다',
+             `펼쳐진 줄이 ${펼친줄().length}개다`);
+      } else results.push('· 줄이 하나뿐이라 「하나만 펼쳐진다」 는 건너뜀');
+      /* 같은 줄을 다시 누르면 접힌다 */
+      const 지금 = 펼친줄()[0];
+      const 주인 = 지금 && 표.querySelector(`tr.deprow[data-dep="${지금.dataset.editof}"]`);
+      if (주인) {
+        주인.click();
+        const 접혔나 = await 될때까지('줄이 접히는 것', () => 펼친줄().length === 0);
+        잰다(접혔나, ' 같은 줄을 다시 누르면 접힌다', '다시 눌러도 안 접힌다');
+      }
+    }
+
+    const 완주 = true;
+    const 잰것수 = results.filter(r => /^[✓✗]/.test(r)).length;
+    const 건너뜀수 = results.filter(r => String(r).startsWith('·')).length;
+    /* **어느 계정으로 다시 돌려야 하는지 말한다** — 11-3 이 요구하는 줄이다.
+       세기만 하고 버리면 「건너뜀 2」 가 결과에만 찍히고 그 판을 돌린 사람은
+       무엇을 더 해야 하는지 모른다(2026-09-27 커밋 전 검토 [D]). */
+    if (건너뜀수) results.push(`· 이 계정·이 화면에서 안 재진 항목 ${건너뜀수}개 — `
+      + (올림 ? '**부서 리더**' : '**관리자**') + ' 계정으로 한 번 더 돌려 보세요');
+    if (못쟀음.length) results.push(`? 못 쟀음 ${못쟀음.length}개 — 화면이 틀린 것이`
+      + ' 아니라 이 판에서 답을 못 얻은 것입니다 (탭을 보이게 두고 다시 돌리세요)');
+    console.table(results);
+    /* 반환 모양은 본줄기와 **같은 글자**다 — 두 벌이 되면 `완주` 를 다르게 쓰는
+       날 수입 쪽만 조용히 갈린다(커밋 전 검토 [E]) */
+    return {화면: where, 폭, 호버있나, 통과: errors.length === 0 && 완주, 완주,
+            실패: errors, 항목수: 잰것수, 건너뜀: 건너뜀수, 못쟀음, 항목: results};
+  }
 
   // ── ① 표가 그려졌는가 ───────────────────────────────────────────
   잰다(줄들().length > 0, ` ${where} 표에 줄이 있다 (${줄들().length}줄)`,
@@ -529,7 +652,7 @@ const 고장들 = [
      const 걷기 = 스타일('.budtbl .grip{display:inline-block!important}');
      return () => { 손잡이.remove(); 걷기(); };
    }},
-  {갈래: '② 「전체 편집」 이 안 먹는다',
+  {갈래: '② 「전체 편집」 이 안 먹는다', 화면: ['예산', '지출'],
    나와야: '「전체 편집」 을 누르면 표가 편집 상태가 된다',
    못심음: 항목 => 항목.some(r => String(r).includes('「전체 편집」 이 없어')),
    심는다: () => 캡처막기(el => !!el.closest('.editall'))},
@@ -656,6 +779,61 @@ const 고장들 = [
    못심음: 항목 => 항목.some(r => String(r).includes('계좌가 적힌 지출이 없거나')
                           || String(r).includes('계좌번호가 없어')),
    심는다: () => 캡처막기(el => el.closest('.acctcopy'))},
+
+  /* ── 수입 화면 (7-6) ─────────────────────────────────────────── */
+  {갈래: '⑰ 줄을 눌러도 안 펼쳐진다', 화면: '수입',
+   나와야: '줄을 누르면 그 자리에서 펼쳐진다',
+   못심음: 항목 => 항목.some(r => String(r).includes('편집 줄이 없어')
+                          || String(r).includes('입금 줄이 없어')),
+   심는다: () => 캡처막기(el => el.closest('tr.deprow'))},
+  /* 여럿이 열리면 어느 줄을 저장하는지 흐려진다 — 「한 번에 하나」 가 죽는 자리 */
+  {갈래: '⑱ 펼친 줄을 안 접어 여럿이 열린다', 화면: '수입',
+   나와야: '한 번에 한 줄만 펼쳐진다',
+   못심음: 항목 => 항목.some(r => String(r).includes('줄이 하나뿐이라')
+                          || String(r).includes('편집 줄이 없어')
+                          || String(r).includes('입금 줄이 없어')),
+   심는다: () => {
+     const 표 = document.getElementById('deptbl');
+     /* **앱의 「다른 줄을 닫는다」 만 되돌린다** — 누르기 직전에 열려 있던
+        줄을 기억했다가 앱이 닫은 뒤에 도로 연다. 「지금 닫혀 있는 줄」 을
+        기억하면 **둘째를 누를 때 첫째가 이미 열려 있어** 아무것도 안 걸린다
+        (2026-09-27 에 이 갈래가 그래서 「놓침」 이었다). */
+     let 열린것 = [];
+     const 적는다 = () => {
+       열린것 = [...표.querySelectorAll('tr.deprowedit')].filter(t => !t.hidden);
+     };
+     /* **`setTimeout` 으로 미루지 않는다** — 점검은 누른 **그 자리에서** 세는데
+        미룬 것은 그다음 일감이라 아직 안 돌았다. 그래서 심어도 「놓침」 이
+        나왔다(2026-09-27). 잡는 단계(capture)에서 적고 올라온 단계(bubble)에서
+        되돌리면 둘 다 같은 누름 안이라 **셀 때는 이미 반영돼 있다.** */
+     const 되돌린다 = () => 열린것.forEach(t => { t.hidden = false; });
+     document.addEventListener('click', 적는다, true);
+     document.addEventListener('click', 되돌린다);
+     return () => { document.removeEventListener('click', 적는다, true);
+                    document.removeEventListener('click', 되돌린다);
+                    표.querySelectorAll('tr.deprowedit').forEach(t => { t.hidden = true; }); };
+   }},
+  /* 「추정」 이 안 보이면 **아직 아무도 안 본 줄**을 화면이 말해 주지 않는다 */
+  {갈래: '⑲ 「확인 필요」 칩이 그 필터로 안 간다', 화면: '수입',
+   나와야: '「확인 필요」 칩이 그 필터로 간다',
+   심는다: () => {
+     const 칩 = [...document.querySelectorAll('#incchips .chip')]
+       .find(c => c.textContent.includes('확인 필요'));
+     if (!칩) return null;
+     const 원래 = 칩.getAttribute('href');
+     칩.setAttribute('href', '/income');
+     return () => 칩.setAttribute('href', 원래);
+   }},
+  /* 고르기 전에 보내는 단추가 보이면 빈 채로 보내 422 만 돌아온다 */
+  {갈래: '⑳ 캡처를 고르기 전에도 「읽기」 가 보인다', 화면: '수입',
+   나와야: '캡처를 고르기 전에는 「읽기」 가 안 보인다',
+   못심음: 항목 => 항목.some(r => String(r).includes('캡처 올리는 자리가 없어')),
+   심는다: () => {
+     const b = document.getElementById('capsend');
+     if (!b) return null;
+     b.hidden = false;
+     return () => { b.hidden = true; };
+   }},
 ];
 
 /* **판마다 자리를 고르고 시작한다.** 앞 갈래가 편집을 켠 채 끝나면 다음
@@ -664,6 +842,12 @@ const 고장들 = [
    여기서만 시간을 기다린다 — 재는 자리가 아니라 치우는 자리다. */
 const 판정리 = async () => {
   document.querySelectorAll('.exppop').forEach(p => p.remove());
+  /* **수입의 펼친 줄도 닫는다** — 본줄기가 끝에 접지만 그 기다림이 상한에 걸리면
+     열린 채로 끝난다. 그 상태로 다음 갈래에 들어가면 첫줄을 누르는 것이 앱의
+     토글에 걸려 **오히려 닫혀서**, 심지 않은 고장이 ✗ 로 섞인다 — 11-3 이
+     drawer.js 에서 적어 둔 그 자리다(BI-m · BI-i · 2026-09-27 커밋 전 검토 [C]). */
+  document.querySelectorAll('tr.deprowedit').forEach(t => { t.hidden = true; });
+  document.querySelectorAll('tr.deprow.open').forEach(t => t.classList.remove('open'));
   for (const [표id, 되돌림id] of [['budtbl', 'budcancel'], [null, 'expcancel']]) {
     const 표 = 표id ? document.getElementById(표id) : document.querySelector('table.exptbl');
     if (!표 || !표.classList.contains('editing')) continue;
@@ -688,7 +872,12 @@ const 자가시험 = async () => {
     /* **다른 화면의 갈래는 못 심음이다** — 예산에서 지출 갈래를 심으면
        심을 자리가 아예 없다. 「안 해 봤다」 가 아니라 「그 화면에 없다」 라
        이유가 되는 자리다(11-3). */
-    if (것.화면 && 것.화면 !== 깨끗.화면) {
+    /* **`화면` 은 하나일 수도 여럿일 수도 있다** — 「전체 편집」 은 예산과
+       지출 둘에 있고 수입에는 없다. 하나만 적게 두면 그런 갈래는 `화면` 을
+       못 적고, 그러면 **없는 화면에서도 심어 늘 「놓침」** 이 된다
+       (2026-09-27 에 수입 화면을 더하며 실제로 그랬다). */
+    const 그화면 = 것.화면 && (Array.isArray(것.화면) ? 것.화면 : [것.화면]);
+    if (그화면 && !그화면.includes(깨끗.화면)) {
       못심음++;
       줄.push(`- ${것.갈래} — ${깨끗.화면} 화면에는 그 자리가 없어 **못 심음**`);
       continue;
