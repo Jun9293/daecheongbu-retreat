@@ -200,6 +200,17 @@ const 점검 = async () => {
         잰다(!!폼 && 폼.querySelectorAll('input[name="kind"]').length === 2,
              ' 분류를 회비·후원금 둘 중에서 고른다',
              '분류 고르는 자리가 둘이 아니다');
+        /* 캡처가 잘못 읽은 이름·금액을 고치는 자리 (7-6 · 2026-09-27) —
+           **취소된 줄에도 있어야 한다**(그 줄을 고쳐 되살리는 것이 그 칸이
+           생긴 까닭이다). 여기서도 **저장은 안 누른다** */
+        const 고침 = 편집.querySelector('form.fixform');
+        /* **`shown` 으로 본다** — 트리에 있는지가 아니라 눈에 보이는지다.
+           CSS 한 줄로 가려져도 사람에게는 없는 것과 같다(10장 · 속성이 아니라
+           화면을 확인한다) */
+        잰다(shown(고침) && !!고침.querySelector('input[name="depositor"]')
+                && !!고침.querySelector('input[name="amount"]'),
+             ' 펼친 줄에 이름·금액을 고치는 칸이 있다',
+             '이름·금액 칸이 없다 — 잘못 읽힌 줄을 바로잡을 길이 없다');
       }
       /* 다른 줄을 누르면 **하나만** 열린다 — 여럿이 열리면 어느 줄을 저장하는지 흐려진다 */
       const 둘째 = 입금줄()[1];
@@ -834,6 +845,15 @@ const 고장들 = [
      b.hidden = false;
      return () => { b.hidden = true; };
    }},
+  /* 그 칸이 없으면 캡처가 잘못 읽은 줄을 바로잡을 길이 화면에 없다 */
+  {갈래: '㉑ 펼친 줄에 이름·금액 칸이 없다', 화면: '수입',
+   나와야: '펼친 줄에 이름·금액을 고치는 칸이 있다',
+   못심음: 항목 => 항목.some(r => String(r).includes('편집 줄이 없어')
+                          || String(r).includes('입금 줄이 없어')),
+   /* **`!important` 가 필요하다** — CSS 의 `.deptbl tr.deprowedit .editform` 이
+      더 세서 그냥 `display:none` 은 안 먹는다(2026-09-27 에 이 갈래가 그래서
+      「놓침」 이었다 · 갈래 ① 이 같은 까닭으로 `!important` 를 쓴다) */
+   심는다: () => 스타일('.deptbl form.fixform{display:none!important}')},
 ];
 
 /* **판마다 자리를 고르고 시작한다.** 앞 갈래가 편집을 켠 채 끝나면 다음
