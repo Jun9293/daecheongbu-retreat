@@ -499,6 +499,12 @@ class IncomeDeposit(Base):
     balance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fee_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
     confirmed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    # 겹침 열쇠를 **읽은 때의 값으로 얼려 둔다** (7-6 · 2026-09-27). 이름·금액을
+    # 고칠 수 있게 되면서 생긴 칸이다 — 잘못 읽힌 금액을 고치면 `amount` 는
+    # 움직이는데 **그 캡처를 다시 올렸을 때 건너뛰는 것은 그대로여야** 한다
+    # (사람이 「취소의 뜻을 안 바꾼다」 로 정했다). NULL 로 붙으므로 옛 행은
+    # 읽는 쪽이 그 자리에서 셈한다 — `deposits.열쇠of`
+    dup_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_now)
     # 지우지 않는다 (0장) — 예산 항목·수입·지출과 같은 취소 표시
     canceled_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

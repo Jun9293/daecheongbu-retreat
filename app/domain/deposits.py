@@ -18,6 +18,10 @@ from sqlalchemy.orm import Session
 from app.domain import llm
 from app.models import IncomeDeposit
 
+# 겹침 열쇠의 칸막이 (U+001F · 단위 구분자). 사람이 적을 수 있는 글자가 아니라
+# 시각·금액·잔액 어디에도 안 들어간다 — `열쇠` 를 보라
+칸막이 = ""
+
 # 화면에 쓰는 이름 — 여기 한 곳이다
 회비 = "회비"
 후원금 = "후원금"
@@ -61,21 +65,46 @@ def 추정인가(d: IncomeDeposit) -> bool:
     return d.confirmed_at is None
 
 
-def 열쇠(시각: str, 금액: int, 잔액: int | None) -> tuple[str, int, int | None]:
-    """겹침을 가르는 열쇠 (시각·금액·잔액).
+def 열쇠(시각: str, 금액: int, 잔액: int | None) -> str:
+    """겹침을 가르는 열쇠 (시각·금액·잔액) — **한 글자줄**이다.
 
     유니크 인덱스로 안 두는 것은 **잔액이 비는 줄**이 있어서다 — SQLite 의
     유니크는 NULL 끼리를 다른 값으로 봐서, 잔액 없는 같은 줄이 올릴 때마다
     쌓인다(비품 묶음에서 겪은 그 자리 · 4-18).
+
+    **사이에 `칸막이`(U+001F)를 넣는다** — 그냥 이어붙이면 자릿수가 옮겨 가며
+    서로 다른 줄이 같은 열쇠가 된다(금액 10000·잔액 1234567 과 금액 100001·잔액
+    234567). 그러면 있는 줄이 안 담기고 「겹쳤다」 로 세어지는데 **화면에는 아무
+    표시도 안 난다.** 눈에 안 보이는 글자라 이름을 붙여 둔다 — 2026-09-27 커밋 전
+    검토가 이 자리를 「구분자가 없다」 로 읽었다(실제로는 있었다).
+
+    **글자줄인 것은 칸에 얼려 두기 때문이다** — 2026-09-27 에 이름·금액을
+    고칠 수 있게 되면서, 고친 금액이 열쇠를 움직이면 **같은 캡처를 다시 올릴
+    때 건너뛰지 않게** 된다. 사람이 「취소의 뜻을 안 바꾼다」 로 정했으므로
+    열쇠는 **읽은 때의 값**이고 `dup_key` 에 그대로 남는다.
     """
-    return ((시각 or "").strip(), int(금액), None if 잔액 is None else int(잔액))
+    return 칸막이.join((
+        (시각 or "").strip(),
+        str(int(금액)),
+        "" if 잔액 is None else str(int(잔액)),
+    ))
 
 
-def 있는열쇠들(db: Session, *, retreat_id: int) -> set[tuple[str, int, int | None]]:
+def 열쇠of(d: IncomeDeposit) -> str:
+    """그 줄의 열쇠 — **얼려 둔 값이 있으면 그것**이다.
+
+    옛 행(칸이 붙기 전에 선 줄)은 `dup_key` 가 비어 있어 그 자리에서 셈한다.
+    그 줄만은 금액을 고치면 열쇠가 따라 움직인다 — 칸이 붙기 전에 선 줄에만
+    남는 자국이고, NULL 로 붙이는 대가다(11-2 · 8장의 `scope_key` 와 같은 꼴).
+    """
+    return d.dup_key or 열쇠(d.deposited_text, d.amount, d.balance)
+
+
+def 있는열쇠들(db: Session, *, retreat_id: int) -> set[str]:
     줄들 = db.scalars(
         select(IncomeDeposit).where(IncomeDeposit.retreat_id == retreat_id)
     ).all()
-    return {열쇠(d.deposited_text, d.amount, d.balance) for d in 줄들}
+    return {열쇠of(d) for d in 줄들}
 
 
 def 목록(db: Session, *, retreat_id: int) -> list[IncomeDeposit]:
@@ -176,9 +205,47 @@ def 담는다(db: Session, *, retreat_id: int, 줄들: list[dict]) -> tuple[int,
             amount=하나["금액"],
             deposited_text=하나["시각"],
             balance=하나["잔액"],
+            dup_key=k,
         ))
         넣음 += 1
     return 넣음, 건너뜀
+
+
+def 고친다(d: IncomeDeposit, *, 이름: str, 금액: int) -> None:
+    """캡처가 잘못 읽은 **이름·금액**을 사람이 고친다 (7-6 · 2026-09-27 사람이 정함).
+
+    **겹침 열쇠는 안 움직입니다** — `dup_key` 를 안 건드리므로 같은 캡처를 다시
+    올려도 그대로 건너뜁니다. 취소의 뜻(「다시 올려도 안 되살아난다」)을 안
+    바꾸면서, 이름이 잘못 읽혀 취소한 줄을 **고쳐서 되살릴 길**을 여는 것이
+    이 함수가 있는 까닭입니다.
+
+    **취소된 줄도 고칩니다** — 분류(`사람이정한다`)는 취소된 줄에서 막히지만
+    이것은 「그때 무엇이 들어왔나」 를 바로잡는 자리라 성격이 다릅니다.
+
+    **「추정」 은 안 건드립니다** — 이름을 고친 것이 「이 줄이 회비인지 후원금인지
+    사람이 봤다」 는 뜻은 아닙니다.
+    """
+    이름 = (이름 or "").strip()
+    if not 이름:
+        raise ValueError("입금자 이름을 적어주세요.")
+    if 금액 <= 0:
+        raise ValueError("금액은 1원 이상이어야 합니다.")
+    # **칸이 붙기 전에 선 줄은 여기서 함께 언다** — 그러지 않으면 그 줄만 고친
+    # 금액을 따라 열쇠가 움직인다. 이것은 부팅이 값을 채우는 것이 아니라 **사람이
+    # 그 줄을 고칠 때 같이 채우는 것**이라 11-2 가 막은 자리가 아니다
+    # (2026-09-27 커밋 전 검토 [E])
+    if not d.dup_key:
+        d.dup_key = 열쇠(d.deposited_text, d.amount, d.balance)
+    d.depositor = 이름[:100]
+    d.amount = 금액
+    # 금액을 줄이면 회비 몫이 그보다 클 수 있다. `회비몫` 이 화면에서는
+    # 잘라 주지만 저장된 값도 맞춰 둔다 — 안 맞추면 되살린 뒤 그 줄을 열었을 때
+    # 칸에 금액보다 큰 회비가 적혀 있다
+    if d.fee_amount is not None and d.fee_amount > 금액:
+        d.fee_amount = 금액
+    # **올릴 때는 안 건드린다** — 회비는 비율이 아니라 액수라(7-6) 「5만원이 회비」 로
+    # 확인한 줄의 금액을 8만원으로 바로잡으면 회비는 5만원 그대로이고 나머지가
+    # 후원금이 된다. 그것이 뜻대로인지는 **사람이 정할 자리**다 (봐둘것 BK-d)
 
 
 def 사람이정한다(d: IncomeDeposit, *, 회비금액: int | None) -> None:

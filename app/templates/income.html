@@ -149,8 +149,17 @@
              팝업으로 두면 뜨는 자리·닫히는 규칙이 지출의 팝업과 두 벌이 된다 #}
           <tr class="deprowedit" data-editof="{{ d.id }}" hidden>
             <td colspan="7">
+              {# 캡처가 잘못 읽은 이름·금액을 고치는 자리 (7-6 · 2026-09-27 사람이 정함).
+                 **취소된 줄에도 그립니다** — 이름이 잘못 읽혀 취소한 줄을 고쳐
+                 되살리는 것이 이 칸이 생긴 까닭입니다. 겹침 열쇠는 안 움직입니다 #}
+              <form method="post" action="/income/deposits/{{ d.id }}/fix" class="editform fixform">
+                <input type="hidden" name="filter" value="{{ 필터 }}">
+                <label>입금자 <input name="depositor" value="{{ d.depositor }}" required></label>
+                <label>금액 <input name="amount" type="number" min="1" value="{{ d.amount }}" required></label>
+                <button class="sbtn" type="submit">이름·금액 저장</button>
+              </form>
               {% if d.canceled_at %}
-              <span class="hint">취소된 줄입니다 — 되살린 뒤에 분류를 고칩니다.</span>
+              <span class="hint">취소된 줄입니다 — 분류는 되살린 뒤에 고칩니다.</span>
               {% else %}
               <form method="post" action="/income/deposits/{{ d.id }}" class="editform depform">
                 <input type="hidden" name="filter" value="{{ 필터 }}">
@@ -158,6 +167,9 @@
                 <label><input type="radio" name="kind" value="회비" {% if 줄.회비 %}checked{% endif %}> 회비</label>
                 <input name="fee_amount" type="number" min="0" max="{{ d.amount }}"
                        value="{{ 줄.회비 if 줄.회비 else '' }}" placeholder="회비 금액 (비우면 전액 {{ d.amount|num }})">
+                {# 빈 값과 0 이 정반대로 가는 자리라 화면이 말해 준다 (2026-09-27 사람이 정함 ·
+                   막지 않습니다 — 0 도 사람이 보고 정한 값입니다) #}
+                <span class="hint">비우면 전액 회비, 0 을 적으면 후원금 처리됩니다</span>
                 <button class="sbtn p" type="submit">저장</button>
               </form>
               {% endif %}

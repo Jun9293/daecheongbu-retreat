@@ -444,6 +444,170 @@ def test77_d11_열람_전용은_올리지도_고치지도_못한다(판):
         assert D.추정인가(d) and d.canceled_at is None, "열람 전용이 고쳤다"
 
 
+# ── ㅂ. 이름·금액 고치기 (2026-09-27 사람이 정함 · 봐둘것 BK-c ㄴ) ──
+
+
+def test77_f01_취소된_줄도_이름과_금액을_고친다(판):
+    """**이름이 잘못 읽혀 취소한 줄을 고쳐 되살리는 것**이 이 자리가 생긴 까닭이다.
+
+    분류(`save_deposit`)는 취소된 줄에서 409 지만, 이것은 「그때 무엇이
+    들어왔나」 를 바로잡는 자리라 성격이 다르다.
+    """
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, depositor="가나다", amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}/cancel?retreat_id={rid}", data={})
+    r = client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                    data={"depositor": "라마바", "amount": "45000"}, follow_redirects=False)
+    assert r.status_code == 303
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert (d.depositor, d.amount) == ("라마바", 45000)
+        assert d.canceled_at is not None, "고치면서 되살아났다 — 되살리기는 따로다"
+    # 분류는 여전히 막힌다
+    assert client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                       data={"kind": "회비"}).status_code == 409
+
+
+def test77_f02_고쳐도_같은_캡처는_그대로_건너뛴다(판):
+    """**취소의 뜻을 안 바꾼다** (사람이 정함) — 겹침 열쇠는 읽은 때의 값이다."""
+    client, rid = 판
+    줄들 = [{"이름": "가나다", "금액": 50000, "시각": "09.15 14:22", "잔액": 1_200_000}]
+    with app_session() as db:
+        넣음, _ = D.담는다(db, retreat_id=rid, 줄들=줄들)
+        db.commit()
+        assert 넣음 == 1
+        did = D.목록(db, retreat_id=rid)[0].id
+    client.post(f"/income/deposits/{did}/cancel?retreat_id={rid}", data={})
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "라마바", "amount": "99999"})
+    with app_session() as db:
+        넣음, 건너뜀 = D.담는다(db, retreat_id=rid, 줄들=줄들)
+        db.commit()
+        assert (넣음, 건너뜀) == (0, 1), "고친 금액이 열쇠를 움직였다"
+        assert len(D.목록(db, retreat_id=rid)) == 1
+
+
+def test77_f03_금액을_줄이면_회비_몫도_따라_줄어든다(판):
+    """안 맞추면 되살린 뒤 그 줄에 금액보다 큰 회비가 적혀 있다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                data={"kind": "회비", "fee_amount": "50000"})
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "가나다", "amount": "30000"})
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert d.fee_amount == 30000 and D.회비몫(d) == 30000 and D.후원금몫(d) == 0
+
+
+def test77_f04_고쳐도_추정은_안_풀린다(판):
+    """이름을 고친 것이 「회비인지 후원금인지 봤다」 는 뜻은 아니다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid).id
+        db.commit()
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "라마바", "amount": "50000"})
+    with app_session() as db:
+        assert D.추정인가(db.get(models.IncomeDeposit, did))
+
+
+def test77_f05_빈_이름과_0원은_막는다(판):
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid).id
+        db.commit()
+    for 값 in ({"depositor": "  ", "amount": "50000"},
+               {"depositor": "가나다", "amount": "0"},
+               {"depositor": "가나다", "amount": "몰라"}):
+        assert client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                           data=값).status_code == 400, 값
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert (d.depositor, d.amount) == ("가나다", 50000), "막았는데 값이 들어갔다"
+
+
+def test77_f08_옛_줄도_고칠_때_열쇠가_언다(판):
+    """칸이 붙기 전에 선 줄(`dup_key` 가 빈 줄)도 **고치는 그 순간** 얼린다.
+
+    부팅이 값을 채우는 것이 아니라 사람이 그 줄을 고칠 때 같이 채우는 것이라
+    11-2 가 막은 자리가 아니다 (2026-09-27 커밋 전 검토 [E]).
+    """
+    client, rid = 판
+    with app_session() as db:
+        d = 입금(db, rid, amount=50000)
+        d.dup_key = None          # 칸이 붙기 전에 선 줄
+        db.commit()
+        did, 옛열쇠 = d.id, D.열쇠of(d)
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "라마바", "amount": "77000"})
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert d.dup_key == 옛열쇠, "고치는 순간에 안 얼었다"
+        assert D.열쇠of(d) == 옛열쇠, "고친 금액을 따라 열쇠가 움직였다"
+
+
+def test77_f09_열쇠는_칸막이로_갈린다():
+    """이어붙이면 자릿수가 옮겨 가며 **다른 줄이 같은 열쇠**가 된다.
+
+    걸렸을 때 화면에는 아무 표시도 안 나고 「겹쳤다」 로 세어진다 — 2026-09-27
+    커밋 전 검토가 이 자리를 짚었고(실제로는 칸막이가 있었다) 그 뒤로 여기서 잰다.
+    """
+    assert D.열쇠("", 10000, 1234567) != D.열쇠("", 100001, 234567)
+    assert D.칸막이 in D.열쇠("09.15", 1, 2)
+
+
+def test77_f10_금액을_올리면_회비는_그대로다(판):
+    """회비는 비율이 아니라 액수다 (7-6) — 그래서 분류가 바뀐다. 봐둘것 BK-d."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid, amount=50000).id
+        db.commit()
+    client.post(f"/income/deposits/{did}?retreat_id={rid}",
+                data={"kind": "회비", "fee_amount": "50000"})
+    client.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                data={"depositor": "가나다", "amount": "80000"})
+    with app_session() as db:
+        d = db.get(models.IncomeDeposit, did)
+        assert D.회비몫(d) == 50000 and D.후원금몫(d) == 30000
+        assert D.분류(d) == D.섞임
+        assert not D.추정인가(d), "「추정」 은 안 건드린다 — 그래서 확인 필요에도 안 뜬다"
+
+
+def test77_f06_화면에_이름_금액_칸과_회비_안내가_있다(판):
+    """안내 줄은 **산 줄**에만 뜬다 — 취소된 줄에는 분류 폼 자체가 없다."""
+    client, rid = 판
+    with app_session() as db:
+        did = 입금(db, rid).id
+        db.commit()
+    산것 = client.get(f"/income?retreat_id={rid}").text
+    assert "비우면 전액 회비, 0 을 적으면 후원금 처리됩니다" in 산것
+    client.post(f"/income/deposits/{did}/cancel?retreat_id={rid}", data={})
+    취소된것 = client.get(f"/income?retreat_id={rid}").text
+    assert 'name="depositor"' in 취소된것 and "이름·금액 저장" in 취소된것,         "취소된 줄에 고치는 칸이 없다"
+    assert "분류는 되살린 뒤에" in 취소된것
+
+
+def test77_f07_열람_전용은_못_고친다(판):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    _, rid = 판
+    make_user("가명열람2", "01099997777", role="viewer")
+    보는이 = TestClient(app)
+    login_as(보는이, "01099997777", name="가명열람2")
+    with app_session() as db:
+        did = 입금(db, rid).id
+        db.commit()
+    assert 보는이.post(f"/income/deposits/{did}/fix?retreat_id={rid}",
+                     data={"depositor": "라마바", "amount": "1"}).status_code == 403
+
+
 # ── ㅁ. 막는 쪽 — 보내기 전에 ────────────────────────────────────
 
 

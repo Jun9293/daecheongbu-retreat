@@ -145,6 +145,10 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "bank_name", "VARCHAR(50)"),
     ("users", "account_number", "VARCHAR(50)"),
     ("users", "account_holder", "VARCHAR(50)"),
+    # 입금 줄의 겹침 열쇠 (7-6 · 2026-09-27). **NULL 로 붙인다** — 읽는 쪽이
+    # 비었으면 그 자리에서 셈한다(`deposits.열쇠of`). 값을 채우는 전환이
+    # 아니므로 부팅이 아무것도 안 쓴다 (11-2)
+    ("income_deposits", "dup_key", "VARCHAR(80)"),
     ("expense_entries", "payer_bank", "VARCHAR(50)"),
     ("expense_entries", "payer_account_number", "VARCHAR(50)"),
     ("expense_entries", "payer_account_holder", "VARCHAR(50)"),

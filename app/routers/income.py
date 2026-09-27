@@ -162,7 +162,11 @@ def save_deposit(
     """한 줄의 분류를 정한다 — 저장하면 **「추정」 이 풀린다** (7-6)."""
     d = _그줄(db, retreat, deposit_id)
     if d.canceled_at is not None:
-        raise HTTPException(status_code=409, detail="취소된 입금 줄입니다. 되살린 뒤에 고치세요.")
+        raise HTTPException(
+            status_code=409,
+            detail="취소된 입금 줄입니다. 분류는 되살린 뒤에 고칩니다"
+                   " (이름·금액은 취소된 줄에서도 고칩니다).",
+        )
     전 = {"회비": D.회비몫(d), "후원금": D.후원금몫(d)}
     if kind == D.회비:
         raw = (fee_amount or "").strip().replace(",", "")
@@ -192,6 +196,55 @@ def save_deposit(
         after_value={"회비": D.회비몫(d), "후원금": D.후원금몫(d)},
     )
     return redirect(_돌아갈곳(retreat, filter), message="입금 줄을 저장했습니다.")
+
+
+@router.post("/deposits/{deposit_id}/fix")
+def fix_deposit(
+    deposit_id: int,
+    depositor: str = Form(...),
+    amount: str = Form(...),
+    filter: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    retreat: Retreat = Depends(get_current_retreat),
+):
+    """캡처가 잘못 읽은 **이름·금액**을 고친다 (7-6 · 2026-09-27 사람이 정함).
+
+    **취소된 줄도 고칩니다** — 분류를 고치는 `save_deposit` 은 취소된 줄에서
+    409 지만, 이것은 「그때 무엇이 들어왔나」 를 바로잡는 자리라 성격이 다르고,
+    **이름이 잘못 읽혀 취소한 줄을 고쳐 되살리는 것**이 이 자리가 생긴 까닭입니다.
+
+    **겹침 열쇠는 안 움직입니다**(`dup_key`) — 같은 캡처를 다시 올려도 그대로
+    건너뜁니다.
+    """
+    d = _그줄(db, retreat, deposit_id)
+    raw = (amount or "").strip().replace(",", "")
+    try:
+        값 = int(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="금액은 숫자로 적어주세요.") from None
+    전 = {"입금자": d.depositor, "금액": d.amount}
+    try:
+        D.고친다(d, 이름=depositor, 금액=값)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    후 = {"입금자": d.depositor, "금액": d.amount}
+    if 전 == 후:
+        db.rollback()
+        return redirect(_돌아갈곳(retreat, filter), message="바뀐 것이 없습니다.")
+    db.commit()
+    log_activity(
+        db,
+        retreat_id=retreat.id,
+        actor=user,
+        action="입금_고침",
+        target_type="income_deposit",
+        target_id=d.id,
+        summary=f"{d.depositor} / {d.amount:,}원",
+        before_value=전,
+        after_value=후,
+    )
+    return redirect(_돌아갈곳(retreat, filter), message="입금 줄을 고쳤습니다.")
 
 
 @router.post("/deposits/{deposit_id}/cancel")

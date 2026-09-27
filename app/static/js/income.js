@@ -32,7 +32,13 @@
     if (!열림) {
       줄.hidden = false;
       행.classList.add('open');
-      var 첫칸 = 줄.querySelector('input[name="fee_amount"], button');
+      /* **입력칸을 먼저 찾는다** — `querySelector` 는 쉼표 목록 중 문서 순서에서
+         앞엣것을 돌려주므로, 폼이 하나 늘면서 **제출 단추가 먼저 잡히고** 있었다
+         (2026-09-27 커밋 전 검토 [C]). Enter 로 편 직후 초점이 값을 바꾸는 단추에
+         놓이는 것은 뜻이 아니다 — 고치러 연 사람이 바로 칠 수 있는 칸에 둔다 */
+      var 첫칸 = 줄.querySelector('input[name="fee_amount"]')
+        || 줄.querySelector('input[name="depositor"]')
+        || 줄.querySelector('button');
       if (첫칸) 첫칸.focus();
     }
   }
