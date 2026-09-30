@@ -9,12 +9,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import DEFAULT_MEAL_SUBSIDY_PER_PERSON
+from app.paths import 백업자리, 백업자리_문제
 from app.db import get_db
 from app.domain import login as 로그인
 from app.domain import permissions as perm
@@ -41,6 +43,7 @@ from app.security import get_current_user, require_admin
 from app.templating import redirect, render
 from app.domain.departments import departments_of
 
+_log = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -254,17 +257,24 @@ def settings_checkup(
     names = [a.name for a in admins]
     dup_admin_names = sorted({n for n in names if names.count(n) > 1})
 
-    # 백업 마지막 시각 — data/backups 의 가장 최근 파일. 벽시계로 적는다 (5-8)
+    # 백업 마지막 시각 — **백업 자리(`app.paths.백업자리` 하나)** 의 가장 최근 판. 벽시계로 (5-8).
+    # 전에는 `data/backups` 를 박아 두고 읽어 위치를 옮기면 옛 자리를 봤다(2026-09-30).
+    # 읽기만 한다 — 폴더를 안 만든다. 못 읽으면 까닭을 화면에 내고 로그에 한 줄 남긴다.
     last_backup = None
-    try:
-        from app.config import BASE_DIR
-
-        backups = sorted((BASE_DIR / "data" / "backups").glob("app-*.db"))
-        if backups:
-            stamp = dt.datetime.fromtimestamp(backups[-1].stat().st_mtime)
-            last_backup = stamp.strftime("%Y.%m.%d %H:%M")
-    except OSError:
-        pass
+    backup_problem = None
+    자리, backup_problem = 백업자리()
+    if 자리 is not None:
+        backup_problem = 백업자리_문제(자리)
+    if backup_problem is None:
+        try:
+            backups = sorted(자리.glob("app-*.db"))
+            if backups:
+                stamp = dt.datetime.fromtimestamp(backups[-1].stat().st_mtime)
+                last_backup = stamp.strftime("%Y.%m.%d %H:%M")
+        except OSError as exc:
+            backup_problem = f"백업 폴더를 읽지 못했습니다: {자리} — {exc.strerror or exc}"
+    if backup_problem:
+        _log.warning("점검 화면 · 백업 마지막 시각: %s", backup_problem)
 
     return render(
         request,
@@ -275,6 +285,7 @@ def settings_checkup(
             "admin_count": len(admins),
             "dup_admin_names": dup_admin_names,
             "last_backup": last_backup,
+            "backup_problem": backup_problem,
             "logs": list(
                 db.scalars(
                     select(ActivityLog)

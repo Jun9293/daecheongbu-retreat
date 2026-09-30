@@ -41,11 +41,13 @@ elif [ -n "${DCB_ENV_FILE:-}" ]; then
 fi
 
 DATA="${DCB_DATA_DIR:-$ROOT/data}"
-BK="${DCB_BACKUP_DIR:-$DATA/backups}"
-case "$BK" in /*) ;; *) die 78 "DCB_BACKUP_DIR 은 절대 경로여야 합니다" ;; esac
-
 PY="$ROOT/.venv/bin/python"
 [ -x "$PY" ] || die 69 "가상환경이 없습니다: $ROOT/.venv"
+
+# 위치는 **셈하지 않고 물어본다** — DCB_BACKUP_DIR 을 읽는 곳은 app.paths.백업자리 하나다
+# (비었으면 기본값 · 상대 경로는 거절 · 끝의 / 는 정리)
+export DCB_DATA_DIR="$DATA"
+BK="$(cd "$ROOT" && "$PY" scripts/backup.py --자리 2>&1)" || die 78 "$BK"
 
 # ── 위치가 붙어 있나 ─────────────────────────────────────────────────
 # 판정은 env.sh 의 dcb_volume_problem 하나 — 백업점검.sh 와 같이 쓴다

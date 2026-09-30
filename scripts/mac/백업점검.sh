@@ -32,15 +32,17 @@ elif [ -n "${DCB_ENV_FILE:-}" ]; then
 fi
 
 DATA="${DCB_DATA_DIR:-$ROOT/data}"
-BK="${DCB_BACKUP_DIR:-$DATA/backups}"
 AGE="${DCB_BACKUP_MAX_AGE_HOURS:-30}"
-case "$BK" in /*) ;; *) say "DCB_BACKUP_DIR 은 절대 경로여야 합니다"; exit 78 ;; esac
 if ! [[ "$AGE" =~ ^[0-9]+([.][0-9]+)?$ ]] || ! awk -v a="$AGE" 'BEGIN { exit !(a > 0) }'; then
   say "DCB_BACKUP_MAX_AGE_HOURS 는 0 보다 큰 숫자여야 합니다"; exit 78
 fi
 
 PY="$ROOT/.venv/bin/python"
 [ -x "$PY" ] || { say "가상환경이 없습니다: $ROOT/.venv"; exit 69; }
+
+# 위치는 셈하지 않고 물어본다 — DCB_BACKUP_DIR 을 읽는 곳은 app.paths.백업자리 하나다
+export DCB_DATA_DIR="$DATA"
+BK="$(cd "$ROOT" && "$PY" scripts/backup.py --자리 2>&1)" || { say "$BK"; exit 78; }
 
 if why="$(dcb_volume_problem "$BK")"; then :; else say "$why"; exit 69; fi
 

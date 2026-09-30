@@ -31,7 +31,7 @@
         <span class="k">관리자 계정</span>
         <span>{{ admin_count }}명{% if dup_admin_names %} · <b style="color:var(--now)">같은 이름의 관리자가 있습니다: {{ dup_admin_names|join(', ') }}</b> (scripts/merge_users.py 로 정리){% endif %}</span>
         <span class="k">백업 마지막</span>
-        <span>{% if last_backup %}{{ last_backup }}{% else %}백업 파일이 없습니다 — scripts/backup.py 가 매일 새벽 3시에 돕니다 (11-2){% endif %}</span>
+        <span>{% if backup_problem %}{{ backup_problem }}{% elif last_backup %}{{ last_backup }}{% else %}백업 파일이 없습니다 — scripts/backup.py 가 매일 새벽 3시에 돕니다 (11-2){% endif %}</span>
       </div>
       <div class="hint">자세한 진단은 서버에서 <span class="mono">scripts/healthcheck.py</span> 를 돌립니다.</div>
     </div>

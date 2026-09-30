@@ -151,10 +151,17 @@ def check_disk() -> tuple[bool, str]:
             UPLOAD_DIR,
         )
 
+        from app.paths import 백업자리, 백업자리_문제
+
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         usage = shutil.disk_usage(UPLOAD_DIR)
         used = folder_size(UPLOAD_DIR)
-        backups = folder_size(config.DATA_DIR / "backups")
+        # 백업 자리는 `app.paths.백업자리` 하나에서 — 박아 두면 옮긴 뒤 옛 자리를 잰다(2026-09-30).
+        # **읽기만 한다**(폴더를 안 만든다). 못 읽으면 디스크 판정은 그대로 하고 그 까닭만 한 줄 붙인다
+        자리, 자리문제 = 백업자리()
+        if 자리 is not None:
+            자리문제 = 백업자리_문제(자리)
+        backups = folder_size(자리) if 자리문제 is None else None
     except Exception as exc:                                     # noqa: BLE001
         return False, f"디스크를 확인하지 못했습니다 — {exc}"
 
@@ -165,7 +172,8 @@ def check_disk() -> tuple[bool, str]:
 
     detail = (
         f"남은 공간 {mb(usage.free)} / 전체 {mb(usage.total)}\n"
-        f"        올라온 파일 {mb(used)} · 백업 {mb(backups)}"
+        + (f"        올라온 파일 {mb(used)} · 백업 {mb(backups)}" if backups is not None
+           else f"        올라온 파일 {mb(used)} · 백업 못 잼 — {자리문제}")
     )
 
     if usage.free < DISK_FREE_FLOOR_BYTES:
@@ -173,7 +181,7 @@ def check_disk() -> tuple[bool, str]:
             f"{detail}\n"
             f"        여유가 {mb(DISK_FREE_FLOOR_BYTES)} 아래입니다 — "
             "**지금 파일을 올리면 거절됩니다.**\n"
-            "        data/backups 의 오래된 것을 지우거나 다른 곳으로 옮기세요."
+            f"        백업 자리({자리 or 'DCB_BACKUP_DIR'})의 오래된 것을 지우거나 다른 곳으로 옮기세요."
         )
     if usage.free < DISK_FREE_WARN_BYTES:
         return False, (

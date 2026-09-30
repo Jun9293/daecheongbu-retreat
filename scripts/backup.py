@@ -37,7 +37,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 # **app.config 가 아니라 app.paths 에서 받는다** — config 는 읽히는 순간 폴더를 만들고 서명키를
 # 쓴다. 앱 밖 자리(--살핀다)가 data/ 가 빈 날 불려도 흔적을 남기지 않게(2026-09-13 사람이 정함).
-from app.paths import DATA_DIR, UPLOAD_DIR                       # noqa: E402
+from app.paths import DATA_DIR, UPLOAD_DIR, 백업자리              # noqa: E402
 
 KEEP = 30                      # 이만큼만 남기고 오래된 것부터 지운다
 
@@ -111,11 +111,14 @@ SUSPECT_KEEP = 7
                        " 자리를 문서가 이 이름으로 가리킨다(CLAUDE.md 14장 · 봐둘것 BF-a)",
 }
 
-# **위치는 바꿀 수 있다** (2026-09-30 · 맥 이전 3단계) — 맥에서는 외장 드라이브에 둘 수 있게
-# `DCB_BACKUP_DIR` 로 받는다. 비면 전과 같은 `data/backups`. 그 위치가 붙어 있는지·쓸 수
-# 있는지는 **부르는 쪽이 먼저 본다**(scripts/mac/백업.sh) — 여기서 폴더를 만들면 빠진
-# 드라이브 자리에 내장 디스크 폴더가 생겨 조용히 거기 쌓인다.
-BACKUP_DIR = pathlib.Path(os.environ.get("DCB_BACKUP_DIR") or (DATA_DIR / "backups"))
+# **위치는 바꿀 수 있다** (2026-09-30 · 맥 이전 3단계) — `DCB_BACKUP_DIR` 을 읽는 곳은
+# `app.paths.백업자리` 하나다(점검 화면 · 자가진단 · 맥의 셸도 그것을 부른다). 비면 전과 같은
+# `data/backups`. 그 위치가 붙어 있는지·쓸 수 있는지는 **부르는 쪽이 먼저 본다**
+# (scripts/mac/백업.sh) — 여기서 폴더를 만들면 빠진 드라이브 자리에 내장 디스크 폴더가
+# 생겨 조용히 거기 쌓인다. 값이 틀렸으면(`자리문제`) 아래 main 이 78 로 멈춘다 — 기본값으로
+# 물러서 다른 자리에 뜨지 않는다. 모듈을 읽는 자리를 죽이지 않으려고 이름은 기본값을 든다.
+_자리, 자리문제 = 백업자리()
+BACKUP_DIR = _자리 or (DATA_DIR / "backups")
 DB_PATH = DATA_DIR / "app.db"
 VAPID_PATH = DATA_DIR / "vapid_private.pem"
 UPLOADS_PATH = UPLOAD_DIR
@@ -646,6 +649,13 @@ def mb(size: int) -> str:
 
 
 if __name__ == "__main__":
+    if 자리문제:
+        print(자리문제)
+        raise SystemExit(78)
+    if sys.argv[1:] == ["--자리"]:
+        # 셸이 위치를 따로 셈하지 않게 여기서 물어본다(맥의 백업.sh · 백업점검.sh)
+        print(BACKUP_DIR)
+        raise SystemExit(0)
     if sys.argv[1:2] == ["--신선도"]:
         # 앱 밖 · 읽기만 — 0 싱싱함 · 1 오래됨(또는 판 없음). 부르는 쪽이 한 줄로 남긴다
         try:
