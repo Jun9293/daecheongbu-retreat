@@ -62,7 +62,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 글파일 = {".py", ".js", ".css", ".html", ".txt", ".bat", ".json", ".md",
         ".yml", ".yaml", ".ini", ".cfg", ".toml"}
 # **식별자를 찾는 곳은 코드뿐이다** — 아래 `저장소글` 의 이유
-코드꼴 = {".py", ".js", ".css", ".html", ".bat", ".json", ".ini",
+# `.sh` 는 맥 스크립트(scripts/mac/) — 2026-09-30 에 운영 스크립트가 되어 더했다
+코드꼴 = {".py", ".js", ".css", ".html", ".bat", ".sh", ".json", ".ini",
         ".yml", ".yaml", ".cfg", ".toml"}
 경로꼴 = re.compile(r"[\w./가-힣-]+\.(?:py|js|css|html|md|txt|bat|json|ini|yml|yaml)$")
 선택자꼴 = re.compile(r"[.#][A-Za-z][\w-]*(?:[.#][\w-]+)*$")
