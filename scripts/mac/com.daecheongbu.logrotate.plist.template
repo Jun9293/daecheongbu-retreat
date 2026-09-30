@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  로그 밀기 — LaunchAgent(사용자 권한). 한 시간마다 scripts/mac/로그밀기.sh 를 부른다.
+  serve.sh 는 뜰 때만 밀고 launchd-*.log 는 아무도 안 밀어서 둔 자리다.
+  __REPO__ 는 scripts/mac/plist-만들기.sh 가 채운다. **2단계에서는 로드하지 않는다.**
+  하루 한 번 도는 일이 아니라 계속 도는 일도 아니라서 KeepAlive 를 두지 않는다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.daecheongbu.logrotate</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/mac/로그밀기.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+
+  <!-- 이 파일도 data/launchd-*.log 라 스스로 민다 -->
+  <key>StandardOutPath</key>
+  <string>__REPO__/data/launchd-logrotate.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/data/launchd-logrotate.log</string>
+</dict>
+</plist>
