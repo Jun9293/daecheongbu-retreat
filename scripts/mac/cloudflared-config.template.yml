@@ -1,0 +1,16 @@
+# 맥의 cloudflared 설정 견본 — 채워서 ~/.cloudflared/config.yml 로 둡니다.
+# 윈도우 config.yml 과 같은 모양입니다 (docs/배포-안내.md 3장).
+#
+# **○○ 자리(자격증명 경로)만 채웁니다** — 자격증명 파일(터널 id 이름의 .json)은 비밀이라
+# 저장소에 경로도 값도 안 둡니다. 자격증명 파일 권한은 600 으로 둡니다.
+# 윈도우와 맥에서 **같은 터널을 동시에 돌리면 커넥터가 둘**이 되어
+# 요청이 두 서버로 갈립니다 — 전환하는 판에서 한쪽을 먼저 내립니다.
+
+tunnel: daecheongbu
+credentials-file: /Users/○○/.cloudflared/○○.json
+
+ingress:
+  # docs/배포-안내.md 3장 · app/config.py 의 DCB_BASE_URL 기본값과 같은 값
+  - hostname: retreat.recba12.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404
