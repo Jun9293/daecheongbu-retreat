@@ -150,7 +150,10 @@ def test25_e01_옮기는_스크립트가_소속_줄을_만들고_칸을_지운�
             db.execute(text(
                 "INSERT INTO users (name, phone_number, role, is_active, department_id, created_at) "
                 "VALUES (:n, :p, :r, 1, :d, :t)"),
-                {"n": f"옛 {i}", "p": f"0106666004{i}", "r": role, "d": 세부서[key], "t": models._now()})
+                # 날짜는 **글자로** 넘긴다 — datetime 을 그대로 넘기면 sqlite3 의 기본 날짜 어댑터를 거쳐
+                # Python 3.12+ 에서 폐기 경고가 난다(맥의 3.14 에서 3개). 어댑터가 쓰던 것과 같은 모양이라
+                # 저장되는 값은 그대로다
+                {"n": f"옛 {i}", "p": f"0106666004{i}", "r": role, "d": 세부서[key], "t": models._now().isoformat(" ")})
         db.commit()
         alive = db.execute(select(func.count()).select_from(models.Notification)).scalar_one()
         assert 모듈.칸이있나(db)
