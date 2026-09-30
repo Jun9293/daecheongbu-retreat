@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  앱 서버 — LaunchAgent(사용자 권한 · sudo 없음). 윈도우 작업 「대청부 앱」 의 자리.
+  __REPO__ 는 scripts/mac/plist-만들기.sh 가 채운다 — 저장소에 경로를 박지 않는다.
+  설정은 여기 적지 않는다: serve.sh 가 저장소의 .env 에서 읽는다.
+  로그인해야 뜬다(LaunchAgent) — docs/맥-이전.md 5장.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.daecheongbu.app</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/mac/serve.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- 어떻게 끝나든 다시 띄운다. 포트가 막혀 75 로 끝나도 30초 뒤 다시 본다 -->
+  <key>KeepAlive</key>
+  <true/>
+  <!-- 크래시 루프 방지: 다시 띄우는 간격의 하한(초) -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <!-- 끌 때 SIGTERM 뒤 이만큼 기다리고 SIGKILL -->
+  <key>ExitTimeOut</key>
+  <integer>20</integer>
+  <key>ProcessType</key>
+  <string>Standard</string>
+
+  <!-- serve.sh 가 뜨기 전에 한 말만 여기 온다. 서버 로그는 data/server.log -->
+  <key>StandardOutPath</key>
+  <string>__REPO__/data/launchd-app.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/data/launchd-app.log</string>
+</dict>
+</plist>

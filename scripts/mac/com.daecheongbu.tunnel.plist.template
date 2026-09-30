@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  터널 — LaunchAgent(사용자 권한). 윈도우 서비스 「Cloudflared」 의 자리.
+  **2단계에서는 만들기만 하고 로드하지 않는다** — 로드하는 순간 운영 주소가
+  이 맥으로 붙는다(윈도우 쪽 커넥터와 둘이 된다). 전환하는 판에서 한다.
+  __REPO__ · __HOME__ · __CLOUDFLARED__ 는 scripts/mac/plist-만들기.sh 가 채운다.
+  설정 파일은 scripts/mac/cloudflared-config.template.yml 을 채워 둔 것이다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.daecheongbu.tunnel</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CLOUDFLARED__</string>
+    <!-- 설치를 brew 가 맡으므로 스스로 바꾸지 않게 한다 -->
+    <string>--no-autoupdate</string>
+    <!-- 윈도우에서 --config 가 빠져 1067 로 죽었다 (배포-안내 8-3) — 늘 명시한다 -->
+    <string>--config</string>
+    <string>__HOME__/.cloudflared/config.yml</string>
+    <string>tunnel</string>
+    <string>run</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>ExitTimeOut</key>
+  <integer>20</integer>
+
+  <key>StandardOutPath</key>
+  <string>__REPO__/data/launchd-tunnel.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/data/launchd-tunnel.log</string>
+</dict>
+</plist>
