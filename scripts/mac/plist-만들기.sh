@@ -7,6 +7,10 @@
 #
 # 이미 같은 이름의 파일이 있으면 덮지 않고 멈춘다 — 돌고 있는 것의 정의를
 # 말없이 바꾸지 않는다. 덮으려면 먼저 그 파일을 치운다.
+#
+# **~/Library/LaunchAgents 에는 바로 만들지 않는다** — 거기 놓인 plist 는 다음
+# 로그인 때 저절로 로드되는데, 터널까지 함께 놓이면 운영 주소가 이 맥으로 붙는다.
+# 다른 폴더에 만든 뒤 필요한 것만 사람이 옮긴다 (docs/배포-안내.md 15장).
 
 set -eu
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -19,6 +23,11 @@ for v in "$ROOT" "$HOME" "$CF"; do
   case "$v" in *'|'*|*'&'*|*'\'*) echo "경로에 | & \\ 가 있어 만들 수 없습니다: $v" >&2; exit 1 ;; esac
 done
 
+case "$(cd "$(dirname "$OUT")" 2>/dev/null && pwd -P)/$(basename "$OUT")" in
+  */Library/LaunchAgents|*/Library/LaunchAgents/|*/Library/LaunchDaemons|*/Library/LaunchDaemons/)
+    echo "LaunchAgents/LaunchDaemons 폴더에는 바로 만들지 않습니다 — 다른 폴더에 만든 뒤 필요한 것만 옮기세요" >&2
+    exit 1 ;;
+esac
 mkdir -p "$OUT"
 for t in "$HERE"/*.plist.template; do
   dst="$OUT/$(basename "$t" .template)"

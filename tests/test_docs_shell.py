@@ -24,7 +24,9 @@ PSReadLine 판에 따라 갈린다. 그래서 "첫 줄이 이미 실행된 뒤�
 **소스를 읽는 시험이지만 이 자리는 그것이 맞다** — 재는 대상이 문서의
 글자 자체이지 코드의 동작이 아니다.
 
-`.bat` 는 보지 않는다. 그건 cmd 가 읽는다 (11-2 의 유일한 예외).
+`.bat` 는 보지 않는다. 그건 cmd 가 읽는다 (11-2 의 파일 예외).
+머리가 `bash`·`zsh`·`sh` 인 펜스 블록도 보지 않는다 — 맥미니에서 붙이는
+명령이다 (11-2 의 맥 예외 · 2026-09-30). 머리 없는 블록은 그대로 본다.
 
 **정본은 CLAUDE.md 11-2 다.** 위 측정표는 거기서 옮겨 온 것이고,
 한쪽만 고치면 기준 문서와 시험이 서로 반대를 말하게 된다 — 실제로
@@ -44,6 +46,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 잇기 = chr(94)
 
 울타리 = re.compile(r"^\s*(```|~~~)")
+# 맥 예외 (11-2) — 여는 울타리의 머리가 이것이면 그 블록은 PowerShell 규칙 밖이다
+맥머리 = re.compile(r"^\s*(```|~~~)\s*(bash|zsh|sh)\s*$")
 
 # `set X=값` (cmd) — `Set-Content` 나 문장 속의 "set" 은 걸리지 않게
 # 줄 첫머리 + 등호까지 본다.
@@ -130,13 +134,17 @@ def 블록줄(글: str):
     블록인용(`>`) 안의 펜스도 센다.
     """
     안 = False
+    맥 = False
     for i, 줄 in enumerate(글.split(chr(10)), 1):
         벗 = 줄.lstrip("> " + chr(9))
         if 울타리.match(줄) or 울타리.match(벗):
+            if not 안:
+                맥 = bool(맥머리.match(줄) or 맥머리.match(벗))
             안 = not 안
             continue
         if 안:
-            yield i, 줄
+            if not 맥:
+                yield i, 줄
             continue
         본 = 줄.lstrip(">")
         if 본.strip() and (len(본) - len(본.lstrip())) >= 4:
@@ -359,6 +367,22 @@ def test_껍데기_06_들여쓴_블록도_본다():
     펜스만 보면 그 파일이 통째로 검사 밖이다."""
     들여 = chr(10).join(["설명입니다.", "", "    python a.py " + 잇기, "        --b c"])
     assert [x[1] for x in 걸린줄(들여)] == ["줄 잇기"], 걸린줄(들여)
+
+
+def test_껍데기_06b_맥_bash_블록은_안_보고_머리_없는_블록은_본다():
+    """맥 예외 (11-2) — 머리가 `bash` 인 블록의 `curl` 은 맥의 curl 이다.
+    **과하게 빼도 고장이다** — 머리 없는 블록과 들여쓴 블록은 그대로 걸려야 한다."""
+    맥 = chr(10).join(["```bash", "curl -s http://127.0.0.1:8000/healthz", "```"])
+    assert 걸린줄(맥) == [], 걸린줄(맥)
+    for 머리 in ("zsh", "sh"):
+        assert 걸린줄(맥.replace("bash", 머리)) == [], 머리
+    머리없음 = chr(10).join(["```", "curl -s http://127.0.0.1:8000/healthz", "```"])
+    assert [x[1] for x in 걸린줄(머리없음)] == ["별칭"], 걸린줄(머리없음)
+    다른머리 = chr(10).join(["```powershell", "curl http://x/", "```"])
+    assert [x[1] for x in 걸린줄(다른머리)] == ["별칭"], 걸린줄(다른머리)
+    # 맥 블록이 닫힌 뒤의 블록은 다시 본다
+    이어서 = 맥 + chr(10) + 머리없음
+    assert [x[1] for x in 걸린줄(이어서)] == ["별칭"], 걸린줄(이어서)
 
 
 def test_껍데기_07_문서와_독스트링에_cmd_문법이_없다():
