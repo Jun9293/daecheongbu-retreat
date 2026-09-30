@@ -48,16 +48,8 @@ PY="$ROOT/.venv/bin/python"
 [ -x "$PY" ] || die 69 "가상환경이 없습니다: $ROOT/.venv"
 
 # ── 위치가 붙어 있나 ─────────────────────────────────────────────────
-# /Volumes/이름/… 이면 /Volumes/이름 이 **실제로 붙은 자리**여야 한다 — 장치 번호가
-# /Volumes 와 달라야 한다(빠진 드라이브는 자리가 없거나 내장 디스크의 빈 폴더다).
-case "$BK" in
-  /Volumes/*)
-    vol="/Volumes/$(printf '%s' "${BK#/Volumes/}" | cut -d/ -f1)"
-    if [ ! -d "$vol" ] || [ "$(stat -L -f '%d' "$vol" 2>/dev/null)" = "$(stat -L -f '%d' /Volumes)" ]; then
-      die 69 "백업 위치가 붙어 있지 않습니다: $vol — 드라이브를 연결한 뒤 다시 부르세요"
-    fi
-    ;;
-esac
+# 판정은 env.sh 의 dcb_volume_problem 하나 — 백업점검.sh 와 같이 쓴다
+if why="$(dcb_volume_problem "$BK")"; then :; else die 69 "$why"; fi
 
 if [ ! -d "$BK" ]; then
   mkdir -p "$BK" 2>/dev/null || die 73 "백업 위치를 만들 수 없습니다: $BK"

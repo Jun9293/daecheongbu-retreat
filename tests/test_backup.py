@@ -144,3 +144,30 @@ def test_11c_같은_초에_두_번_돌아도_앞_판을_덮지_않는다(sample,
     # 다른 스크립트가 부르는 snapshot 도 덮지 않는다
     사본 = backup.snapshot(sample["db"], sample["out"], stamp="20260930-030000")
     assert 사본.name == "app-20260930-030000-04.db"
+
+
+def test_11d_신선도는_마지막_성한_판의_나이를_보고_읽기만_한다(tmp_path):
+    """빈 판은 「백업이 있다」 에 안 센다 — 그 판으로는 되돌릴 수 없다. 옆 파일도 안 쓴다."""
+    import datetime as real_dt
+
+    out = tmp_path / "backups"
+    out.mkdir()
+    지금 = real_dt.datetime(2026, 9, 30, 12, 0, 0)
+
+    def 판(시간전, 회차):
+        p = out / f"app-{(지금 - real_dt.timedelta(hours=시간전)):%Y%m%d-%H%M%S}.db"
+        c = sqlite3.connect(p)
+        c.execute("CREATE TABLE retreats (id INTEGER PRIMARY KEY)")
+        c.executemany("INSERT INTO retreats DEFAULT VALUES", [()] * 회차)
+        c.commit()
+        c.close()
+
+    assert backup.신선도(tmp_path / "없음", 30, now=지금)[0] is False
+    assert backup.신선도(out, 30, now=지금)[0] is False          # 판이 없다
+    판(40, 2)
+    판(40.5, 2)
+    판(5, 0)                                                   # 가장 최근은 빈 판
+    괜찮나, 말 = backup.신선도(out, 30, now=지금)
+    assert 괜찮나 is False and "40.0시간" in 말
+    assert backup.신선도(out, 48, now=지금)[0] is True
+    assert not list(out.glob("*.rows.json")), "읽기만 해야 한다"

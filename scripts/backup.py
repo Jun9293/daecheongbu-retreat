@@ -506,6 +506,37 @@ def 살핀다(out_dir: pathlib.Path = BACKUP_DIR) -> list[str]:
     return [f"!! {제목}\n     {본문}" for _, 제목, 본문 in 의심말들(out_dir, 기록=False)]
 
 
+def 판의때(stamp: str) -> dt.datetime | None:
+    """판 이름 앞 15자(`YYYYmmdd-HHMMSS`)의 때. 붙인 `-02` 는 안 본다. 못 읽으면 None."""
+    try:
+        return dt.datetime.strptime(stamp[:15], "%Y%m%d-%H%M%S")
+    except ValueError:
+        return None
+
+
+def 신선도(out_dir: pathlib.Path, 시간: float, *, now: dt.datetime | None = None) -> tuple[bool, str]:
+    """**마지막 성한 판**이 `시간` 보다 오래됐는가 — (싱싱한가, 한 줄 말). **읽기만 한다.**
+
+    성한 판은 `suspects` 에 안 걸린 판이다(빈 판으로는 되돌릴 수 없으니 「백업이 있다」
+    에 안 센다). 옆 파일도 안 쓴다(`기록=False`). 맥의 점검(`scripts/mac/백업점검.sh`)이
+    부른다 — 새벽 3시가 기계가 꺼져 있어 건너뛰어졌는지, 위치가 빠져 며칠째 안 떴는지를
+    **백업 자신이 아니라 바깥에서** 본다(백업이 안 돌면 백업은 아무 말도 못 한다).
+    """
+    now = now or dt.datetime.now()
+    if not out_dir.is_dir():
+        return False, f"백업 폴더가 없습니다: {out_dir}"
+    전부 = stamps_in(out_dir)
+    빼둘 = suspects(out_dir, 전부, 기록=False)
+    성한 = [(판의때(s), s) for s in 전부 if s not in 빼둘 and 판의때(s)]
+    if not 성한:
+        return False, f"성한 판이 하나도 없습니다 (판 {len(전부)}개 · 의심 {len(빼둘)}개)"
+    때, stamp = max(성한)
+    나이 = (now - 때).total_seconds() / 3600
+    if 나이 > 시간:
+        return False, f"마지막 성한 판이 {나이:.1f}시간 전입니다 (기준 {시간:g}시간) — app-{stamp}.db"
+    return True, f"마지막 성한 판 {나이:.1f}시간 전 (기준 {시간:g}시간) — app-{stamp}.db"
+
+
 def 알린다(db_path: pathlib.Path, out_dir: pathlib.Path) -> tuple[int, str | None]:
     """의심 판마다 **총무팀 전원의 앱 알림**에 한 번 세운다 — (새로 세운 수, 못 세운 까닭).
 
@@ -615,6 +646,16 @@ def mb(size: int) -> str:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--신선도"]:
+        # 앱 밖 · 읽기만 — 0 싱싱함 · 1 오래됨(또는 판 없음). 부르는 쪽이 한 줄로 남긴다
+        try:
+            기준 = float(sys.argv[2]) if len(sys.argv) > 2 else 30.0
+        except ValueError:
+            print("--신선도 뒤에는 시간(숫자)을 줍니다")
+            raise SystemExit(78)
+        괜찮나, 말 = 신선도(BACKUP_DIR, 기준)
+        print(말)
+        raise SystemExit(0 if 괜찮나 else 1)
     if sys.argv[1:] == ["--살핀다"]:
         # 앱 밖 자리 — DB 를 안 열고 백업 폴더만 읽는다(되살아나나.ps1 이 부른다)
         줄들 = 살핀다()

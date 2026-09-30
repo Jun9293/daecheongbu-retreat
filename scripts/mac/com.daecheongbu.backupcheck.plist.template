@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  백업 신선도 점검 — LaunchAgent(사용자 권한). 하루 한 번 scripts/mac/백업점검.sh 를 부른다.
+  **읽기만 한다.** 새벽 백업(03:00)이 건너뛰어졌거나 며칠째 실패했을 때 그 사실을 로그에
+  한 줄로 남긴다 — 사람에게 닿게 하는 것은 아직 없다(docs/맥-이전.md 9장).
+  __REPO__ 는 scripts/mac/plist-만들기.sh 가 채운다. **로드하지 않는다.**
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.daecheongbu.backupcheck</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/mac/백업점검.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+
+  <!-- 백업(03:00)이 끝나고 사람이 깨어 있는 때 -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>__REPO__/data/launchd-backupcheck.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/data/launchd-backupcheck.log</string>
+</dict>
+</plist>

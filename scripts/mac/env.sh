@@ -54,3 +54,21 @@ dcb_load_env() {
     export "$key=$val"
   done <"$file"
 }
+
+# dcb_volume_problem <경로>
+#   /Volumes/이름/… 이면 /Volumes/이름 이 **실제로 붙은 드라이브**인지 본다 — 장치 번호가
+#   /Volumes 와 달라야 한다. 문제가 있으면 그 까닭을 한 줄로 내고 1, 없으면 아무것도 안 내고 0.
+#   **읽기만 한다** — 백업.sh(쓰기 전)와 백업점검.sh(읽기만)가 같이 쓴다.
+dcb_volume_problem() {
+  local p="$1" vol
+  case "$p" in
+    /Volumes/*)
+      vol="/Volumes/$(printf '%s' "${p#/Volumes/}" | cut -d/ -f1)"
+      if [ ! -d "$vol" ] || [ "$(stat -L -f '%d' "$vol" 2>/dev/null)" = "$(stat -L -f '%d' /Volumes)" ]; then
+        echo "백업 위치가 붙어 있지 않습니다: $vol — 드라이브를 연결하세요"
+        return 1
+      fi
+      ;;
+  esac
+  return 0
+}
