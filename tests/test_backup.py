@@ -104,3 +104,43 @@ def test_12_30개를_넘으면_오래된_것부터_지운다(sample):
 
 def test_12b_기본_보관_개수는_30이다():
     assert backup.KEEP == 30
+
+
+def test_11c_같은_초에_두_번_돌아도_앞_판을_덮지_않는다(sample, tmp_path, monkeypatch):
+    """판 이름이 초 단위라 같은 초에 두 번 돌면 뒤엣것이 앞 판을 덮었다 (2026-09-30 재현).
+    그 사이에 DB 가 바뀌면 앞 판을 말없이 잃는다. **이름을 붙여 둘 다 남겨야 한다.**"""
+    import datetime as real_dt
+
+    class 고정(real_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 9, 30, 3, 0, 0)
+
+    monkeypatch.setattr(backup.dt, "datetime", 고정)
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    (uploads / "a.txt").write_text("첨부", encoding="utf-8")
+    인자 = dict(db_path=sample["db"], key_path=sample["key"], uploads=uploads, out_dir=sample["out"])
+
+    첫 = backup.run(**인자)
+    conn = sqlite3.connect(sample["db"])
+    conn.execute("INSERT INTO note (body) VALUES ('다')")
+    conn.commit()
+    conn.close()
+    둘 = backup.run(**인자)
+    셋 = backup.run(**인자)
+
+    assert [첫["db"].name, 둘["db"].name, 셋["db"].name] == [
+        "app-20260930-030000.db", "app-20260930-030000-02.db", "app-20260930-030000-03.db"]
+    # 앞 판은 그대로다 — 덮였으면 3 행이다
+    n = sqlite3.connect(f"file:{첫['db']}?mode=ro", uri=True).execute("SELECT count(*) FROM note").fetchone()[0]
+    assert n == 2
+    # 날짜 묶음마다 제 짝이 있다(업로드 zip 은 이름이 달라 이어 붙는다)
+    for r in (첫, 둘, 셋):
+        stamp = r["db"].stem.split("-", 1)[1]
+        assert r["vapid"].name == f"vapid-{stamp}.pem" and r["uploads"].name == f"uploads-{stamp}.zip"
+    # 붙인 쪽이 더 최근으로 선다
+    assert backup.stamps_in(sample["out"])[:3] == ["20260930-030000-03", "20260930-030000-02", "20260930-030000"]
+    # 다른 스크립트가 부르는 snapshot 도 덮지 않는다
+    사본 = backup.snapshot(sample["db"], sample["out"], stamp="20260930-030000")
+    assert 사본.name == "app-20260930-030000-04.db"

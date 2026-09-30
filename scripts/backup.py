@@ -121,15 +121,28 @@ VAPID_PATH = DATA_DIR / "vapid_private.pem"
 UPLOADS_PATH = UPLOAD_DIR
 
 
+def 안겹치는때(out_dir: pathlib.Path, stamp: str) -> str:
+    """이 이름의 판이 이미 있으면 `-02` · `-03` … 을 붙인다 — **절대 덮지 않는다** (2026-09-30).
+
+    판 이름이 초 단위라 같은 초에 두 번 돌면 뒤엣것이 앞엣것을 같은 이름으로 덮었다.
+    같은 순간의 사본이라 대개 같은 내용이지만, 그 사이에 DB 가 바뀌었으면 **앞 판을
+    말없이 잃는다** — 재현했다(맥 이전 3단계 마무리). 붙인 이름도 `stamps_in` 이
+    그대로 읽고, 문자열로 늘어놓으면 붙인 쪽이 뒤(더 최근)로 선다.
+    """
+    후보, n = stamp, 1
+    while any(p.exists() for p in files_of(out_dir, 후보)):
+        n += 1
+        후보 = f"{stamp}-{n:02d}"   # 두 자리 — `-10` 이 `-2` 앞에 서지 않게
+    return 후보
+
+
 def snapshot(
     db_path: pathlib.Path, out_dir: pathlib.Path, *, stamp: str | None = None
 ) -> pathlib.Path:
-    """VACUUM INTO 로 일관된 사본을 만든다."""
+    """VACUUM INTO 로 일관된 사본을 만든다. **있는 판을 덮지 않는다** — 이름이 겹치면 붙인다."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = stamp or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = 안겹치는때(out_dir, stamp or dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
     target = out_dir / f"app-{stamp}.db"
-    if target.exists():
-        target.unlink()
 
     conn = sqlite3.connect(str(db_path))
     try:
@@ -552,7 +565,7 @@ def run(
     if not db_path.exists():
         return {"ok": False, "reason": f"DB 파일이 없습니다: {db_path}"}
 
-    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = 안겹치는때(out_dir, dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
     db_copy = snapshot(db_path, out_dir, stamp=stamp)
     # **행 수를 못 세도 백업은 이어 간다** — 여기서 멈추면 VAPID·업로드가 안 남는다
     try:
