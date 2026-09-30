@@ -3998,12 +3998,14 @@ ActivityLog {
 | 앱 | 작업 스케줄러 `대청부 앱` → `scripts/serve.bat` | LaunchAgent `com.daecheongbu.app` → `scripts/mac/serve.sh` |
 | 터널 | 서비스 `Cloudflared`(LocalSystem) | LaunchAgent `com.daecheongbu.tunnel` — **전환하기 전에는 로드하지 않습니다** |
 | 로그 밀기 | `serve.bat` 이 뜰 때 | `serve.sh` 이 뜰 때 + `com.daecheongbu.logrotate`(한 시간마다) |
-| 백업 · 알림 | 작업 `대청부 백업` · `대청부 알림` | **아직 없습니다** — 전환하기 전에 만듭니다 |
+| 백업 | 작업 `대청부 백업`(03:00) | LaunchAgent `com.daecheongbu.backup`(03:00) → `scripts/mac/백업.sh` → 같은 `scripts/backup.py` · 위치는 `.env` 의 `DCB_BACKUP_DIR` |
+| 알림 | 작업 `대청부 알림`(사용 안 함) | **만들지 않습니다** — 윈도우에서도 켜지 않은 것이라 옮길 것이 없습니다 |
 | 설정 | 환경변수(`setx`) | 저장소 뿌리의 `.env`(권한 600 · 저장소에 안 올라감) |
 
 - **LaunchAgent 는 로그인해야 뜹니다** — 윈도우의 「시작할 때」 와 다릅니다.
   sudo 없이 돌리려고 이쪽을 골랐고, 지금 맥미니는 자동 로그인이 켜져 있어
-  재부팅 뒤 뜹니다. 정전 뒤의 자동 켜짐은 꺼져 있습니다(`docs/맥-이전.md` 6장)
+  재부팅 뒤 뜹니다. 정전 뒤 자동 켜짐은 화면의 「전원이 연결되면 시작: 항상」
+  으로 켜져 있는 것으로 읽힙니다(`docs/맥-이전.md` 6장)
 - **앱은 여기서도 `127.0.0.1` 에만 엽니다** — `serve.sh` 는 주소를 설정으로
   못 바꾸게 되어 있고 포트만 받습니다
 - **같은 터널을 두 기계에서 함께 돌리지 않습니다.** 커넥터가 둘이면 요청이
@@ -4015,7 +4017,8 @@ ActivityLog {
 - **재시작 확인은 여기서도 PID 입니다.** launchd 가 쥔 PID 는 셸이고 8000 을
   쥔 것은 그 자식 uvicorn 이라, **포트를 쥔 PID 가 바뀌었는지**로 봅니다
 - 절차는 `docs/배포-안내.md` 15장, 옮기는 일의 기록과 점검 제안은
-  `docs/맥-이전.md` 입니다
+  `docs/맥-이전.md` 이고, **전환과 롤백의 차례는 그 8장 하나**입니다 — 다른 데
+  다시 적지 않습니다
 
 ### 전원이 내려갔다 올라오면 무엇이 스스로 서야 하나
 
