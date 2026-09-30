@@ -57,3 +57,6 @@ data/anthropic_key.txt
 # 임시 파일. **실명이 든 채점표의 사본이다** (data/*.real.md 와 같은 이유).
 data/*.bak
 data/*.tmp
+
+# 맥 launchd 가 남기는 로그 (scripts/mac)
+data/launchd-*.log
