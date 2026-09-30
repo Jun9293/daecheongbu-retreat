@@ -111,7 +111,11 @@ SUSPECT_KEEP = 7
                        " 자리를 문서가 이 이름으로 가리킨다(CLAUDE.md 14장 · 봐둘것 BF-a)",
 }
 
-BACKUP_DIR = DATA_DIR / "backups"
+# **위치는 바꿀 수 있다** (2026-09-30 · 맥 이전 3단계) — 맥에서는 외장 드라이브에 둘 수 있게
+# `DCB_BACKUP_DIR` 로 받는다. 비면 전과 같은 `data/backups`. 그 위치가 붙어 있는지·쓸 수
+# 있는지는 **부르는 쪽이 먼저 본다**(scripts/mac/백업.sh) — 여기서 폴더를 만들면 빠진
+# 드라이브 자리에 내장 디스크 폴더가 생겨 조용히 거기 쌓인다.
+BACKUP_DIR = pathlib.Path(os.environ.get("DCB_BACKUP_DIR") or (DATA_DIR / "backups"))
 DB_PATH = DATA_DIR / "app.db"
 VAPID_PATH = DATA_DIR / "vapid_private.pem"
 UPLOADS_PATH = UPLOAD_DIR
@@ -558,7 +562,12 @@ def run(
     suspect = stamp in suspects(out_dir, stamps_in(out_dir))
     key_copy = copy_vapid(key_path, out_dir, stamp=stamp)
     uploads_copy, uploads_fresh = copy_uploads(uploads, out_dir, stamp=stamp)
+    # **지우기 전에 센다** — 무엇이 몇 판 있었고 몇 판이 지워졌는지가 로그에 남아야
+    # 「어제까지 있던 판이 왜 없나」 를 되짚을 수 있다(2026-09-30)
+    전판 = stamps_in(out_dir)
+    지킬판 = sum(1 for s in 전판 if s in 지키는판)
     removed = prune(out_dir, keep=keep, max_total=max_total)
+    지운판 = len(set(전판) - set(stamps_in(out_dir)))
     알림수, 알림못함 = 알린다(db_path, out_dir)
     write_readme(out_dir)
     return {
@@ -575,6 +584,10 @@ def run(
         # 바뀐 것이 없어 지난 zip 에 이어 붙였는가
         "uploads_fresh": uploads_fresh,
         "removed": len(removed),
+        # 지우기 전 판 수 · 그중 지킬 판 · 지운 판 수 (파일 수가 아니라 날짜 묶음 수)
+        "before": len(전판),
+        "protected": 지킬판,
+        "removed_stamps": 지운판,
         "kept": len(list(out_dir.glob("app-*.db"))),
         # 이번 회차가 몇 MB 인지 · 전체가 몇 MB 인지
         "size": disk_used(files_of(out_dir, stamp)),
@@ -617,8 +630,9 @@ if __name__ == "__main__":
               f" ({mb(result['uploads'].stat().st_size)} · {note})")
     else:
         print("  · 올라온 파일이 아직 없습니다.")
-    if result["removed"]:
-        print(f"  오래된 백업 {result['removed']}개를 지웠습니다.")
+    # 지우기 전 수를 늘 찍는다 — 지운 것이 없어도 「몇 판 중에서」 가 있어야 되짚는다
+    print(f"  정리: 지우기 전 {result['before']}판 (지킬 판 {result['protected']})"
+          f" → 지운 판 {result['removed_stamps']} (파일 {result['removed']}개)")
     # 이번 회차가 몇 MB 인지 찍는다 — 안 찍으면 어느 날 갑자기 디스크가 차 있다
     print(f"  이번 백업 {mb(result['size'])} · 전체 {mb(result['total'])}"
           f" (기준 {mb(MAX_TOTAL_BYTES)})")
