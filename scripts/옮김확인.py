@@ -1,11 +1,18 @@
 """옮기는 자료가 같은지 두 기계에서 같은 방식으로 잰다 — **읽기만 한다** (docs/맥-이전.md 8장).
 
 윈도우와 맥에서 각각 돌려 **출력 두 개를 나란히 놓고** 견준다. 출력은 늘 같은 차례라
-그대로 견줄 수 있다. DB 는 읽기 전용으로 열고(`backup.count_rows`), 아무 파일도 쓰지 않는다.
+그대로 견줄 수 있다. DB 는 읽기 전용으로 열고(`backup.count_rows`), 기본으로는 아무 파일도
+쓰지 않는다 — `--저장` 일 때만 아래의 그 한 자리에 쓴다.
 
     .venv\\Scripts\\python.exe scripts\\옮김확인.py
     .venv/bin/python scripts/옮김확인.py
     .venv/bin/python scripts/옮김확인.py <데이터 폴더>
+    .venv/bin/python scripts/옮김확인.py --저장 윈도우
+
+**출력은 채팅·보고에 붙이지 않는다** — 지문이 들어 있다(값은 아니지만 옮길 이유가 없다).
+그래서 첫 줄이 늘 그 경고이고, **기본은 화면에만** 낸다. 견주려고 파일로 남길 때는
+`--저장 <이름>` 으로 **`data/옮김확인/<이름>.txt` 에만** 쓴다 — 그 폴더는 `.gitignore` 에
+있다. 다른 자리로는 쓰지 않는다(리다이렉트로 아무 데나 남기면 그 자리가 새는 곳이 된다).
 
 재는 것 — 옮길 묶음(`app.db` · `uploads/` · `vapid_private.pem` · `secret_key.txt` ·
 `anthropic_key.txt`)의 파일 수 · 바이트 · 짧은 지문(sha256 앞 12자), DB 의 무결성
@@ -82,9 +89,37 @@ def 잰다(data: pathlib.Path) -> list[str]:
     return 줄
 
 
+경고 = "!! 이 출력은 채팅·보고에 붙이지 말 것 — 지문이 들어 있습니다 (두 기계의 출력끼리만 견줍니다)"
+저장폴더이름 = "옮김확인"          # data/ 아래 — .gitignore 의 data/옮김확인/ 와 같은 이름
+
+
+def 저장할곳(data: pathlib.Path, 이름: str) -> pathlib.Path:
+    """**이름만 받는다** — 경로를 받으면 아무 데나 쓸 수 있게 된다."""
+    if not 이름 or any(c in 이름 for c in "/\\:") or 이름.startswith("."):
+        raise SystemExit(f"--저장 에는 경로가 아니라 이름만 줍니다(예: 윈도우 · 맥): {이름!r}")
+    return data / 저장폴더이름 / f"{이름}.txt"
+
+
 if __name__ == "__main__":
-    대상 = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else DATA_DIR
+    남은것 = sys.argv[1:]
+    저장이름 = None
+    if "--저장" in 남은것:
+        i = 남은것.index("--저장")
+        if i + 1 >= len(남은것):
+            raise SystemExit("--저장 뒤에 이름을 줍니다(예: --저장 윈도우)")
+        저장이름 = 남은것[i + 1]
+        del 남은것[i:i + 2]
+    대상 = pathlib.Path(남은것[0]) if 남은것 else DATA_DIR
     if not 대상.is_dir():
         print(f"데이터 폴더가 없습니다: {대상}")
         raise SystemExit(1)
-    print("\n".join(잰다(대상)))
+    글 = "\n".join([경고] + 잰다(대상))
+    if 저장이름 is None:
+        print(글)
+    else:
+        곳 = 저장할곳(대상, 저장이름)
+        곳.parent.mkdir(exist_ok=True)
+        곳.write_text(글 + "\n", encoding="utf-8")
+        # 저장할 때는 화면에 내용을 안 낸다 — 경고와 자리만
+        print(경고)
+        print(f"저장했습니다: {곳.parent.name}/{곳.name} (저장소에 안 올라갑니다)")

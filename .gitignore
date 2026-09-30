@@ -60,3 +60,6 @@ data/*.tmp
 
 # 맥 launchd 가 남기는 로그 (scripts/mac)
 data/launchd-*.log
+
+# 옮김확인.py --저장 이 쓰는 자리. **지문이 든다** — 채팅·보고·저장소로 옮기지 않는다
+data/옮김확인/
