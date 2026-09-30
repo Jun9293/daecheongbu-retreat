@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import sys
 import datetime as dt
 import importlib.util
 import pathlib
@@ -141,7 +142,7 @@ def test14_s04_지난_판이_놓친_넷을_이_도구가_찾는다(tmp_path):
 def test14_s05_지금_저장소에는_0곳이다():
     """돌려서 0 인지 — 소스를 읽지 않고 **실제로 실행**한다."""
     r = subprocess.run(
-        [str(ROOT / ".venv" / "Scripts" / "python.exe"),
+        [sys.executable,
          str(ROOT / "scripts" / "check_stale.py")],
         cwd=ROOT, capture_output=True)
     assert r.returncode == 0, r.stdout.decode("utf-8", "replace")[-1500:]

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import sys
 import importlib.util
 import json
 import pathlib
@@ -62,7 +63,7 @@ def test_검사_01_대응표에서_읽은_실명이_0개면_실패한다(tmp_pat
     빈표 = tmp_path / "빈-대응표.json"
     빈표.write_text(json.dumps({"names": [], "phones": []}), encoding="utf-8")
     r = subprocess.run(
-        [str(ROOT / ".venv" / "Scripts" / "python.exe"),
+        [sys.executable,
          str(ROOT / "scripts" / "check_names.py"), "docs"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         cwd=ROOT, env={**dict(__import__("os").environ),

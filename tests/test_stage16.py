@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import sys
 import importlib.util
 import pathlib
 import re
@@ -101,7 +102,7 @@ def test16_s04_넘김_수가_출력에_찍힌다():
         코드 = re.sub(r"#[^\n]*", "", 코드)
         if not ".txt" in 코드:
             continue
-        r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
+        r = subprocess.run([sys.executable,
                             str(SCRIPTS / f"{이름}.py")],
                            cwd=ROOT, capture_output=True, env=환경)
         출력 = r.stdout.decode("utf-8", "replace")
@@ -169,7 +170,7 @@ def test16_g04b_파이프로_넘겨도_머리가_제자리다():
     import os
 
     환경 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
+    r = subprocess.run([sys.executable,
                         str(SCRIPTS / "글검사.py")],
                        cwd=ROOT, capture_output=True, env=환경)
     출력 = r.stdout.decode("utf-8", "replace")

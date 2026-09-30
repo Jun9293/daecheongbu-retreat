@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import sys
 import datetime as dt
 import importlib.util
 import collections
@@ -353,7 +354,7 @@ def test6_g03b_막히는_쪽이_콘솔에서도_말을_한다():
     env = {k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}
     try:
         r = subprocess.run(
-            [str(ROOT / ".venv" / "Scripts" / "python.exe"),
+            [sys.executable,
              str(ROOT / "scripts" / "check_names.py")],
             capture_output=True, cwd=ROOT, env=env, timeout=120)
     finally:

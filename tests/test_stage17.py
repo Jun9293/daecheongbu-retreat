@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import sys
 import importlib.util
 import os
 import pathlib
@@ -113,7 +114,7 @@ def test17_c05_이유_없이_넘기면_실패한다(tmp_path, monkeypatch):
 def test17_c06_지금_저장소에는_0곳이다():
     """소스를 읽지 않고 **실제로 돌린다.** 0곳인 것은 이 판이 전부
     처리했기 때문이고, c01 이 그 눈이 살아 있음을 따로 잰다."""
-    r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
+    r = subprocess.run([sys.executable,
                         str(SCRIPTS / "check_counts.py")],
                        cwd=ROOT, capture_output=True)
     assert r.returncode == 0, r.stdout.decode("utf-8", "replace")[-1500:]
@@ -248,7 +249,7 @@ def test17_a05_어느_계정인지_어림하지_않는다():
 def test17_a03_글검사_출력에_넘김_수가_있다():
     """새 검사도 같은 규칙을 지킨다 — 넘김이 자라는 것이 보여야 한다."""
     환경 = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
+    r = subprocess.run([sys.executable,
                         str(SCRIPTS / "check_counts.py")],
                        cwd=ROOT, capture_output=True, env=환경)
     assert "이유와 함께 넘겨 두었습니다" in r.stdout.decode("utf-8", "replace")

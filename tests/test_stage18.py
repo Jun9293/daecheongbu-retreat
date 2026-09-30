@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import sys
 import importlib.util
 import pathlib
 import re
@@ -326,7 +327,7 @@ def test18_c02_안_넓힌_이유가_숫자로_적혀_있다():
 
 def test18_c03_지금_저장소에는_0곳이다():
     """소스를 읽지 않고 **실제로 돌린다.**"""
-    r = subprocess.run([str(ROOT / ".venv" / "Scripts" / "python.exe"),
+    r = subprocess.run([sys.executable,
                         str(SCRIPTS / "check_counts.py")],
                        cwd=ROOT, capture_output=True)
     assert r.returncode == 0, r.stdout.decode("utf-8", "replace")[-1200:]

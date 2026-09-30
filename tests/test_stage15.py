@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import sys
 import datetime as dt
 import importlib.util
 import pathlib
@@ -101,7 +102,7 @@ def test15_n03_식별자는_코드에서만_찾는다():
 def test15_n04_지금은_0곳이다():
     """소스를 읽지 않고 **실제로 돌린다.**"""
     r = subprocess.run(
-        [str(ROOT / ".venv" / "Scripts" / "python.exe"),
+        [sys.executable,
          str(ROOT / "scripts" / "check_named.py")],
         cwd=ROOT, capture_output=True)
     assert r.returncode == 0, r.stdout.decode("utf-8", "replace")[-1500:]
