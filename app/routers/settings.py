@@ -257,8 +257,10 @@ def settings_checkup(
     names = [a.name for a in admins]
     dup_admin_names = sorted({n for n in names if names.count(n) > 1})
 
-    # 백업 마지막 시각 — **백업 자리(`app.paths.백업자리` 하나)** 의 가장 최근 판. 벽시계로 (5-8).
+    # 백업 마지막 시각 — **백업 자리(`app.paths.백업자리` 하나)** 의 마지막 **성한** 판. 벽시계로 (5-8).
     # 전에는 `data/backups` 를 박아 두고 읽어 위치를 옮기면 옛 자리를 봤다(2026-09-30).
+    # **때는 판 이름에서 읽는다** — 파일 수정 시각은 옮기면 바뀐다(2026-10-01). 셈하는 곳은
+    # `scripts/backup.py` 의 `마지막성한판` 하나이고 백업점검(신선도)도 그것을 부른다.
     # 읽기만 한다 — 폴더를 안 만든다. 못 읽으면 까닭을 화면에 내고 로그에 한 줄 남긴다.
     last_backup = None
     backup_problem = None
@@ -267,10 +269,11 @@ def settings_checkup(
         backup_problem = 백업자리_문제(자리)
     if backup_problem is None:
         try:
-            backups = sorted(자리.glob("app-*.db"))
-            if backups:
-                stamp = dt.datetime.fromtimestamp(backups[-1].stat().st_mtime)
-                last_backup = stamp.strftime("%Y.%m.%d %H:%M")
+            from scripts import backup as 백업판      # 앱이 저장소 뿌리에서 뜨므로 읽힌다
+
+            마지막 = 백업판.마지막성한판(자리)
+            if 마지막:
+                last_backup = 마지막[1].strftime("%Y.%m.%d %H:%M")
         except OSError as exc:
             backup_problem = f"백업 폴더를 읽지 못했습니다: {자리} — {exc.strerror or exc}"
     if backup_problem:

@@ -27,7 +27,9 @@ for _stream in (_sys.stdout, _sys.stderr):
         pass
 
 import datetime as dt
+import logging
 import os
+import re
 import pathlib
 import shutil
 import sqlite3
@@ -38,6 +40,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 # **app.config 가 아니라 app.paths 에서 받는다** — config 는 읽히는 순간 폴더를 만들고 서명키를
 # 쓴다. 앱 밖 자리(--살핀다)가 data/ 가 빈 날 불려도 흔적을 남기지 않게(2026-09-13 사람이 정함).
 from app.paths import DATA_DIR, UPLOAD_DIR, 백업자리              # noqa: E402
+
+_log = logging.getLogger("backup")
 
 KEEP = 30                      # 이만큼만 남기고 오래된 것부터 지운다
 
@@ -509,12 +513,60 @@ def 살핀다(out_dir: pathlib.Path = BACKUP_DIR) -> list[str]:
     return [f"!! {제목}\n     {본문}" for _, 제목, 본문 in 의심말들(out_dir, 기록=False)]
 
 
+판이름꼴 = re.compile(r"(\d{8}-\d{6})(?:-\d{2,})?")
+미래허용 = dt.timedelta(minutes=5)         # 시계가 조금 어긋난 것은 미래로 안 본다
+
+
 def 판의때(stamp: str) -> dt.datetime | None:
-    """판 이름 앞 15자(`YYYYmmdd-HHMMSS`)의 때. 붙인 `-02` 는 안 본다. 못 읽으면 None."""
+    """판 이름의 때 — `YYYYmmdd-HHMMSS` 에 붙인 `-02` 까지만 받는다. 꼴이 다르면 None.
+
+    **파일 수정 시각을 쓰지 않는다** — 판을 옮기거나 복사하면 수정 시각이 그날로 바뀐다
+    (윈도우에서 옮겨 온 판이 실제로 그랬다 · 맥 이전 자잘한 정리 3). 이름은 뜬 때다.
+    """
+    맞음 = 판이름꼴.fullmatch(stamp)
+    if not 맞음:
+        return None
     try:
-        return dt.datetime.strptime(stamp[:15], "%Y%m%d-%H%M%S")
+        return dt.datetime.strptime(맞음.group(1), "%Y%m%d-%H%M%S")
     except ValueError:
         return None
+
+
+def 마지막성한판(out_dir: pathlib.Path, *, now: dt.datetime | None = None) -> tuple[str, dt.datetime] | None:
+    """**마지막 성한 판**과 그 때 — 「마지막 백업」 을 셈하는 곳은 여기 하나다 (2026-10-01).
+
+    설정 › 점검(마지막 시각)과 `신선도`(백업점검)가 같이 부른다. 전에는 점검 화면만 파일
+    수정 시각을 써서, 옮겨 온 판에서 두 자리가 다른 시각을 말했다. **읽기만 한다** — 폴더를
+    만들지 않고 옆 파일도 안 쓴다(`기록=False`). 판이 없으면 None.
+
+    건너뛰는 것 — 빈 판(`suspects` · 그 판으로는 되돌릴 수 없다), 이름에서 때를 못 읽는 판,
+    지금보다 미래인 판(시계가 틀렸던 판이 「늘 싱싱함」 을 만들지 않게). 앞의 하나는 빈 판
+    알림이 따로 말하고, 뒤의 둘은 **종류마다 로그 한 줄**로 남긴다.
+    """
+    now = now or dt.datetime.now()
+    if not out_dir.is_dir():
+        return None
+    전부 = stamps_in(out_dir)
+    빼둘 = suspects(out_dir, 전부, 기록=False)
+    못읽음, 미래, 성한 = [], [], []
+    for s in 전부:
+        때 = 판의때(s)
+        if 때 is None:                   # 이름부터 본다 — 행 수를 못 세는 판은 빈 판으로도 걸린다
+            못읽음.append(s)
+        elif s in 빼둘:
+            continue
+        elif 때 > now + 미래허용:
+            미래.append(s)
+        else:
+            성한.append((때, s))
+    if 못읽음:
+        _log.warning("백업 판 이름에서 때를 못 읽어 건너뜀 %d개: %s", len(못읽음), ", ".join(못읽음[:3]))
+    if 미래:
+        _log.warning("백업 판의 때가 지금보다 미래라 건너뜀 %d개: %s", len(미래), ", ".join(미래[:3]))
+    if not 성한:
+        return None
+    때, stamp = max(성한)
+    return stamp, 때
 
 
 def 신선도(out_dir: pathlib.Path, 시간: float, *, now: dt.datetime | None = None) -> tuple[bool, str]:
@@ -528,12 +580,10 @@ def 신선도(out_dir: pathlib.Path, 시간: float, *, now: dt.datetime | None =
     now = now or dt.datetime.now()
     if not out_dir.is_dir():
         return False, f"백업 폴더가 없습니다: {out_dir}"
-    전부 = stamps_in(out_dir)
-    빼둘 = suspects(out_dir, 전부, 기록=False)
-    성한 = [(판의때(s), s) for s in 전부 if s not in 빼둘 and 판의때(s)]
-    if not 성한:
-        return False, f"성한 판이 하나도 없습니다 (판 {len(전부)}개 · 의심 {len(빼둘)}개)"
-    때, stamp = max(성한)
+    마지막 = 마지막성한판(out_dir, now=now)          # 「마지막 백업」 은 여기 하나에서
+    if 마지막 is None:
+        return False, f"성한 판이 하나도 없습니다 (판 {len(stamps_in(out_dir))}개)"
+    stamp, 때 = 마지막
     나이 = (now - 때).total_seconds() / 3600
     if 나이 > 시간:
         return False, f"마지막 성한 판이 {나이:.1f}시간 전입니다 (기준 {시간:g}시간) — app-{stamp}.db"

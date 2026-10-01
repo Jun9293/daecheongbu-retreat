@@ -82,23 +82,18 @@ def test_bd05_셈하는_곳은_하나다():
 
 def test_bd06_점검_화면은_DCB_BACKUP_DIR_의_판을_본다(admin_client, monkeypatch, tmp_path):
     다른곳 = tmp_path / "다른곳"
-    판 = _판(다른곳, "20260930-030000")
-    os.utime(판, (1790000000, 1790000000))       # 2026-09-21 근처 — 기본 자리에는 없는 값
+    _판(다른곳, "20260921-231300")              # 기본 자리에는 없는 때
     monkeypatch.setenv("DCB_BACKUP_DIR", str(다른곳) + "/")
     본문 = admin_client.get("/settings/checkup").text
-    import datetime as dt
-    기대 = dt.datetime.fromtimestamp(1790000000).strftime("%Y.%m.%d %H:%M")
-    assert 기대 in 본문
+    # 2026-10-01 부터 때는 판 이름에서 읽는다(bd12) — 그 전에는 수정 시각을 기대했다
+    assert "2026.09.21 23:13" in 본문
 
 
 def test_bd07_점검_화면은_값이_없으면_기본_자리를_본다(admin_client, monkeypatch, tmp_path):
     monkeypatch.delenv("DCB_BACKUP_DIR", raising=False)
     monkeypatch.setattr(paths, "DATA_DIR", tmp_path)
-    판 = _판(tmp_path / "backups", "20260930-030000")
-    os.utime(판, (1780000000, 1780000000))
-    import datetime as dt
-    기대 = dt.datetime.fromtimestamp(1780000000).strftime("%Y.%m.%d %H:%M")
-    assert 기대 in admin_client.get("/settings/checkup").text
+    _판(tmp_path / "backups", "20260529-052600")
+    assert "2026.05.29 05:26" in admin_client.get("/settings/checkup").text
 
 
 def test_bd08_점검_화면은_못_읽으면_까닭을_내고_폴더를_안_만든다(admin_client, monkeypatch, tmp_path, caplog):
@@ -146,3 +141,54 @@ def test_bd11_자가진단은_못_읽으면_한_줄_붙이고_디스크_판정�
     ok, message = healthcheck.check_disk()
     assert "남은 공간" in message and "백업 못 잼" in message and "없습니다" in message
     assert not 없음.exists()
+
+
+# ── 「마지막 백업」 은 판 이름의 때로 (2026-10-01) ──────────────────────
+
+def _성한판(자리, stamp, 회차=2, 수정시각=None):
+    자리.mkdir(parents=True, exist_ok=True)
+    p = 자리 / f"app-{stamp}.db"
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE retreats (id INTEGER PRIMARY KEY)")
+    c.executemany("INSERT INTO retreats DEFAULT VALUES", [()] * 회차)
+    c.commit()
+    c.close()
+    if 수정시각 is not None:
+        os.utime(p, (수정시각, 수정시각))
+    return p
+
+
+def test_bd12_점검_화면은_옮겨_온_판에서_수정_시각이_아니라_이름의_때를_쓴다(admin_client, monkeypatch, tmp_path):
+    import datetime as dt
+
+    자리 = tmp_path / "bk"
+    _성한판(자리, "20260930-082754", 수정시각=dt.datetime(2026, 9, 30, 17, 22).timestamp())
+    monkeypatch.setenv("DCB_BACKUP_DIR", str(자리))
+    본문 = admin_client.get("/settings/checkup").text
+    assert "2026.09.30 08:27" in 본문
+    assert "2026.09.30 17:22" not in 본문
+
+
+def test_bd13_점검_화면은_빈_판_미래_판_못읽는_판을_건너뛰고_로그를_남긴다(admin_client, monkeypatch, tmp_path, caplog):
+    import datetime as dt
+
+    자리 = tmp_path / "bk"
+    _성한판(자리, "20260928-030000")
+    _성한판(자리, "20260929-030000", 회차=0)                      # 빈 판 — 더 늦다
+    _성한판(자리, "29991231-030000")                              # 미래
+    (자리 / "app-꼴이다름.db").write_bytes(b"")
+    os.utime(자리 / "app-꼴이다름.db", (dt.datetime(2026, 9, 30).timestamp(),) * 2)
+    monkeypatch.setenv("DCB_BACKUP_DIR", str(자리))
+    with caplog.at_level("WARNING"):
+        본문 = admin_client.get("/settings/checkup").text
+    assert "2026.09.28 03:00" in 본문
+    줄 = [r.getMessage() for r in caplog.records if r.name == "backup"]
+    assert any("못 읽어" in m for m in 줄) and any("미래" in m for m in 줄), 줄
+
+
+def test_bd14_점검_화면은_판이_없으면_없다고_하고_폴더를_안_만든다(admin_client, monkeypatch, tmp_path):
+    자리 = tmp_path / "bk"
+    자리.mkdir()
+    monkeypatch.setenv("DCB_BACKUP_DIR", str(자리))
+    assert "백업 파일이 없습니다" in admin_client.get("/settings/checkup").text
+    assert list(자리.iterdir()) == []

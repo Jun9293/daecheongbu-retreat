@@ -171,3 +171,64 @@ def test_11d_신선도는_마지막_성한_판의_나이를_보고_읽기만_한
     assert 괜찮나 is False and "40.0시간" in 말
     assert backup.신선도(out, 48, now=지금)[0] is True
     assert not list(out.glob("*.rows.json")), "읽기만 해야 한다"
+
+
+# ── 「마지막 백업」 은 판 이름의 때 하나로 (2026-10-01) ──────────────────
+
+def _성한판(out, stamp, 회차=2, 수정시각=None):
+    import os as _os
+
+    out.mkdir(parents=True, exist_ok=True)
+    p = out / f"app-{stamp}.db"
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE retreats (id INTEGER PRIMARY KEY)")
+    c.executemany("INSERT INTO retreats DEFAULT VALUES", [()] * 회차)
+    c.commit()
+    c.close()
+    if 수정시각 is not None:
+        _os.utime(p, (수정시각, 수정시각))
+    return p
+
+
+def test_11e_판의때는_정해진_꼴만_읽는다():
+    import datetime as real_dt
+
+    assert backup.판의때("20260930-030000") == real_dt.datetime(2026, 9, 30, 3, 0, 0)
+    assert backup.판의때("20260930-030000-02") == real_dt.datetime(2026, 9, 30, 3, 0, 0)
+    for 틀림 in ("20260930-030000x", "20260930-0300", "foo", "20261340-030000", "20260930-030000-2"):
+        assert backup.판의때(틀림) is None, 틀림
+
+
+def test_11f_마지막성한판은_이름의_때를_쓰고_빈_판_미래_판_못읽는_판을_건너뛴다(tmp_path, caplog):
+    import datetime as real_dt
+
+    out = tmp_path / "backups"
+    지금 = real_dt.datetime(2026, 10, 1, 12, 0, 0)
+    늦은수정 = real_dt.datetime(2026, 10, 1, 11, 0, 0).timestamp()
+    _성한판(out, "20260930-082754", 수정시각=늦은수정)        # 옮겨 온 판 — 수정 시각만 늦다
+    _성한판(out, "20260929-030000", 수정시각=늦은수정 + 60)
+    _성한판(out, "20260930-090000", 회차=0)                   # 더 늦은 빈 판
+    _성한판(out, "20261005-030000")                           # 미래
+    (out / "app-이름이다름.db").write_bytes(b"")              # 꼴이 다른 판
+    with caplog.at_level("WARNING", logger="backup"):
+        stamp, 때 = backup.마지막성한판(out, now=지금)
+    assert stamp == "20260930-082754" and 때 == real_dt.datetime(2026, 9, 30, 8, 27, 54)
+    줄 = [r.getMessage() for r in caplog.records if r.name == "backup"]
+    assert sum("못 읽어" in m for m in 줄) == 1 and sum("미래" in m for m in 줄) == 1, 줄
+    # 신선도는 같은 판을 말한다 — 셈하는 곳이 하나다
+    assert "app-20260930-082754.db" in backup.신선도(out, 48, now=지금)[1]
+    assert not list(out.glob("*.rows.json")), "읽기만 해야 한다"
+
+
+def test_11g_마지막성한판은_판이_없거나_폴더가_없으면_None_이고_만들지_않는다(tmp_path):
+    assert backup.마지막성한판(tmp_path / "없음") is None
+    assert not (tmp_path / "없음").exists()
+    (tmp_path / "빈").mkdir()
+    assert backup.마지막성한판(tmp_path / "빈") is None
+
+
+def test_11h_같은_때의_판이면_붙인_번호가_큰_것이_마지막이다(tmp_path):
+    out = tmp_path / "backups"
+    for s in ("20260930-030000", "20260930-030000-02", "20260930-030000-03"):
+        _성한판(out, s)
+    assert backup.마지막성한판(out)[0] == "20260930-030000-03"
