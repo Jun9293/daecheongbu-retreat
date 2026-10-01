@@ -431,7 +431,8 @@ def stamps_in(out_dir: pathlib.Path) -> list[str]:
 
 
 def prune(
-    out_dir: pathlib.Path, *, keep: int = KEEP, max_total: int = MAX_TOTAL_BYTES
+    out_dir: pathlib.Path, *, keep: int = KEEP, max_total: int = MAX_TOTAL_BYTES,
+    실패: list[tuple[str, str]] | None = None,
 ) -> list[pathlib.Path]:
     """오래된 것부터 지운다. DB · 키 · 업로드를 같은 회차로 묶어 함께 지운다.
 
@@ -449,10 +450,19 @@ def prune(
     removed: list[pathlib.Path] = []
 
     def drop(stamp: str) -> None:
+        # **하나가 안 지워져도 멈추지 않는다** (2026-10-01) — 전에는 예외가 그대로 올라가
+        # 판은 떴는데 정리·알림·안내 파일이 통째로 건너뛰어졌다. 못 지운 것은 (판, 까닭)으로
+        # `실패` 에 모아 부르는 쪽이 한 줄로 남긴다. 이미 없는 파일은 실패가 아니다
         for path in files_of(out_dir, stamp):
-            if path.exists():
-                path.unlink()
-                removed.append(path)
+            try:
+                if path.exists():
+                    path.unlink()
+                    removed.append(path)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                if 실패 is not None:
+                    실패.append((stamp, f"{path.name}: {exc.strerror or exc}"))
 
     for stamp in 의심[SUSPECT_KEEP:]:
         drop(stamp)
@@ -663,8 +673,11 @@ def run(
     # 「어제까지 있던 판이 왜 없나」 를 되짚을 수 있다(2026-09-30)
     전판 = stamps_in(out_dir)
     지킬판 = sum(1 for s in 전판 if s in 지키는판)
-    removed = prune(out_dir, keep=keep, max_total=max_total)
-    지운판 = len(set(전판) - set(stamps_in(out_dir)))
+    못지움: list[tuple[str, str]] = []
+    removed = prune(out_dir, keep=keep, max_total=max_total, 실패=못지움)
+    # 지운 판의 **이름**도 남긴다(2026-10-01) — 수만 남으면 어떤 판이 사라졌는지 되짚을 수 없다
+    지운이름 = sorted(set(전판) - set(stamps_in(out_dir)))
+    지운판 = len(지운이름)
     알림수, 알림못함 = 알린다(db_path, out_dir)
     write_readme(out_dir)
     return {
@@ -685,6 +698,9 @@ def run(
         "before": len(전판),
         "protected": 지킬판,
         "removed_stamps": 지운판,
+        "removed_names": 지운이름,
+        # 못 지운 것 — (판, 까닭). 백업 자체는 성공이라 멈추지 않고 한 줄로 알린다
+        "prune_failed": 못지움,
         "kept": len(list(out_dir.glob("app-*.db"))),
         # 이번 회차가 몇 MB 인지 · 전체가 몇 MB 인지
         "size": disk_used(files_of(out_dir, stamp)),
@@ -692,6 +708,34 @@ def run(
             path for one in stamps_in(out_dir) for path in files_of(out_dir, one)
         ),
     }
+
+
+정리줄_최대이름 = 10       # 한 줄에 이름을 이만큼까지 — 넘으면 「외 N판」
+
+
+def _이름들(이름: list[str]) -> str:
+    앞 = ", ".join(이름[:정리줄_최대이름])
+    return 앞 + (f" 외 {len(이름) - 정리줄_최대이름}판" if len(이름) > 정리줄_최대이름 else "")
+
+
+def 정리줄(result: dict) -> list[str]:
+    """정리 로그 — **지운 판이 없으면 아무 줄도 안 낸다** (2026-10-01).
+
+    지웠으면 지우기 전 수 · 지킨 판 수 · 지운 판 수 · 파일 수와 **지운 판의 이름**(앞 10개와
+    나머지 수)을 한 줄에. 못 지운 것이 있으면 그 판의 이름과 까닭을 한 줄 더.
+    매일 「지운 것 없음」 이 쌓이면 진짜 줄이 묻혀서 없을 때는 침묵한다.
+    """
+    줄 = []
+    if result.get("removed_stamps"):
+        줄.append(f"  정리: 지우기 전 {result['before']}판 (지킬 판 {result['protected']})"
+                 f" → 지운 판 {result['removed_stamps']} (파일 {result['removed']}개): "
+                 + _이름들(result.get("removed_names", [])))
+    실패 = result.get("prune_failed") or []
+    if 실패:
+        판들 = sorted({s for s, _ in 실패})
+        까닭 = 실패[0][1] + (f" 외 {len(실패) - 1}건" if len(실패) > 1 else "")
+        줄.append(f"  !! 정리하다 못 지운 판 {len(판들)}: {_이름들(판들)} — {까닭}")
+    return 줄
 
 
 def mb(size: int) -> str:
@@ -744,9 +788,9 @@ if __name__ == "__main__":
               f" ({mb(result['uploads'].stat().st_size)} · {note})")
     else:
         print("  · 올라온 파일이 아직 없습니다.")
-    # 지우기 전 수를 늘 찍는다 — 지운 것이 없어도 「몇 판 중에서」 가 있어야 되짚는다
-    print(f"  정리: 지우기 전 {result['before']}판 (지킬 판 {result['protected']})"
-          f" → 지운 판 {result['removed_stamps']} (파일 {result['removed']}개)")
+    # 지운 판이 있을 때만 이름과 함께 · 못 지운 것은 이름과 까닭 (정리줄)
+    for 줄 in 정리줄(result):
+        print(줄)
     # 이번 회차가 몇 MB 인지 찍는다 — 안 찍으면 어느 날 갑자기 디스크가 차 있다
     print(f"  이번 백업 {mb(result['size'])} · 전체 {mb(result['total'])}"
           f" (기준 {mb(MAX_TOTAL_BYTES)})")

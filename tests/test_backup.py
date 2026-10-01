@@ -232,3 +232,83 @@ def test_11h_같은_때의_판이면_붙인_번호가_큰_것이_마지막이다
     for s in ("20260930-030000", "20260930-030000-02", "20260930-030000-03"):
         _성한판(out, s)
     assert backup.마지막성한판(out)[0] == "20260930-030000-03"
+
+
+# ── 정리 로그가 지운 판의 이름을 남긴다 (2026-10-01) ─────────────────────
+
+def _실행(tmp_path):
+    """backup.py 를 **임시 폴더에 대고** 실제로 돌려 표준출력을 받는다 — 로그 줄 그 자체를 잰다."""
+    import os as _os
+    import subprocess
+    import sys as _sys
+    from pathlib import Path
+
+    뿌리 = Path(__file__).resolve().parent.parent
+    env = dict(_os.environ, DCB_DATA_DIR=str(tmp_path / "data"), DCB_BACKUP_DIR=str(tmp_path / "bk"))
+    r = subprocess.run([_sys.executable, "scripts/backup.py"], cwd=뿌리, env=env,
+                       capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stdout + r.stderr
+    return r.stdout
+
+
+def _운영과옛판(tmp_path, 옛판수):
+    (tmp_path / "data").mkdir()
+    _성한판(tmp_path / "data", "x")                           # 앱 DB 자리용 — 이름은 아래서 바꾼다
+    (tmp_path / "data" / "app-x.db").rename(tmp_path / "data" / "app.db")
+    이름 = [f"202608{d:02d}-030000" for d in range(1, 옛판수 + 1)]
+    for s in 이름:
+        _성한판(tmp_path / "bk", s)
+    return 이름
+
+
+def test_11i_정리_줄에_지운_판의_이름이_남고_재실행은_정책대로_다음_판을_지운다(tmp_path):
+    이름 = _운영과옛판(tmp_path, 32)                          # 32 + 이번 1 = 33 → 오래된 3판
+    첫 = _실행(tmp_path)
+    줄 = [l for l in 첫.splitlines() if "정리:" in l]
+    assert len(줄) == 1, 첫
+    assert "지운 판 3" in 줄[0] and ", ".join(이름[:3]) in 줄[0], 줄[0]
+    for s in 이름[:3]:
+        assert not (tmp_path / "bk" / f"app-{s}.db").exists()
+    # 재실행 — 이번 판이 하나 늘어 또 하나를 지운다(정책). 지운 이름이 정확히 다음 것이다
+    둘 = _실행(tmp_path)
+    assert [l for l in 둘.splitlines() if "정리:" in l][0].endswith(이름[3])
+
+
+def test_11j_지울_판이_없으면_정리_줄을_안_낸다(tmp_path):
+    _운영과옛판(tmp_path, 3)
+    출력 = _실행(tmp_path)
+    assert "정리:" not in 출력 and "못 지운" not in 출력, 출력
+    assert "현재 4개 보관 중" in 출력                       # 보관 수는 여전히 말한다
+
+
+def test_11k_많이_지우면_앞_10개_이름과_나머지_수만_적는다():
+    이름 = [f"202608{d:02d}-030000" for d in range(1, 16)]
+    줄 = backup.정리줄({"before": 45, "protected": 0, "removed_stamps": 15, "removed": 60,
+                        "removed_names": 이름, "prune_failed": []})
+    assert len(줄) == 1
+    assert ", ".join(이름[:10]) + " 외 5판" in 줄[0]
+    assert 이름[10] not in 줄[0]
+
+
+def test_11l_지우기_실패는_멈추지_않고_판_이름과_까닭을_한_줄로_남긴다(tmp_path, monkeypatch):
+    out = tmp_path / "bk"
+    for d in range(1, 6):
+        _성한판(out, f"202608{d:02d}-030000")
+    막을 = out / "app-20260801-030000.db"
+    진짜 = type(막을).unlink
+
+    def 가짜(self, *a, **k):
+        if self == 막을:
+            raise PermissionError(13, "Permission denied")
+        return 진짜(self, *a, **k)
+
+    monkeypatch.setattr(type(막을), "unlink", 가짜)
+    실패 = []
+    지운 = backup.prune(out, keep=2, 실패=실패)
+    assert 실패 == [("20260801-030000", "app-20260801-030000.db: Permission denied")]
+    assert not (out / "app-20260802-030000.db").exists()      # 나머지는 계속 지웠다
+    # 지운 DB 는 둘 — 행 수 옆 파일(.rows.json)도 함께 지워지므로 파일 수가 아니라 DB 를 센다
+    assert 막을.exists() and sum(p.suffix == ".db" for p in 지운) == 2
+    줄 = backup.정리줄({"removed_stamps": 2, "before": 5, "protected": 0, "removed": 2,
+                        "removed_names": ["20260802-030000", "20260803-030000"], "prune_failed": 실패})
+    assert len(줄) == 2 and "!! 정리하다 못 지운 판 1: 20260801-030000 — app-20260801-030000.db: Permission denied" == 줄[1].strip()
