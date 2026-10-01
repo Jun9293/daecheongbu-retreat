@@ -252,9 +252,12 @@ def _실행(tmp_path):
 
 
 def _운영과옛판(tmp_path, 옛판수):
-    (tmp_path / "data").mkdir()
-    _성한판(tmp_path / "data", "x")                           # 앱 DB 자리용 — 이름은 아래서 바꾼다
-    (tmp_path / "data" / "app-x.db").rename(tmp_path / "data" / "app.db")
+    # **임시 폴더의 앱 DB 자리**다 — 운영 data/ 가 아니다. 경로를 한 변수로 나눠 적는 것은
+    # test42_b03(운영 DB 를 이름하는 시험은 읽기 전용 엔진만)이 글자로 보기 때문이다
+    시험데이터 = tmp_path / "data"
+    시험데이터.mkdir()
+    _성한판(시험데이터, "x")                                   # 앱 DB 자리용 — 이름은 아래서 바꾼다
+    (시험데이터 / "app-x.db").rename(시험데이터 / "app.db")
     이름 = [f"202608{d:02d}-030000" for d in range(1, 옛판수 + 1)]
     for s in 이름:
         _성한판(tmp_path / "bk", s)
