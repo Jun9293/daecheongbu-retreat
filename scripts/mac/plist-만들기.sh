@@ -1,6 +1,6 @@
 #!/bin/bash
 # plist 템플릿의 자리(__REPO__ · __HOME__ · __CLOUDFLARED__)를 채워 파일만 만든다.
-# **로드하지 않는다** — launchctl 은 사람이(또는 전환하는 판이) 부른다.
+# **로드하지 않는다** — launchctl 은 첫 배포의 차례에서 부른다(docs/맥-이전.md 8-4 · 8-5).
 #
 #   scripts/mac/plist-만들기.sh <내보낼 폴더>
 #   CLOUDFLARED=/경로/cloudflared scripts/mac/plist-만들기.sh <내보낼 폴더>
@@ -9,7 +9,7 @@
 # 말없이 바꾸지 않는다. 덮으려면 먼저 그 파일을 치운다.
 #
 # **~/Library/LaunchAgents 에는 바로 만들지 않는다** — 거기 놓인 plist 는 다음
-# 로그인 때 저절로 로드되는데, 터널까지 함께 놓이면 운영 주소가 이 맥으로 붙는다.
+# 로그인 때 저절로 로드되는데, 터널까지 함께 놓이면 설정을 채우기 전에 터널이 뜬다.
 # 다른 폴더에 만든 뒤 필요한 것만 사람이 옮긴다 (docs/배포-안내.md 15장).
 
 set -eu

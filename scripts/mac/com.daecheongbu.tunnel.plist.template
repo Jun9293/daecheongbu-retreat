@@ -2,8 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   터널 — LaunchAgent(사용자 권한). 윈도우 서비스 「Cloudflared」 의 자리.
-  **2단계에서는 만들기만 하고 로드하지 않는다** — 로드하는 순간 운영 주소가
-  이 맥으로 붙는다(윈도우 쪽 커넥터와 둘이 된다). 전환하는 판에서 한다.
+  **만들기만 하고 저절로 로드하지 않는다** — 로드는 맥용 새 터널을 만들고 설정을
+  채운 뒤에 한다(docs/맥-이전.md 8-5). 옛 터널을 가리킨 채 로드하면 윈도우 쪽 커넥터와 둘이 된다.
   __REPO__ · __HOME__ · __CLOUDFLARED__ 는 scripts/mac/plist-만들기.sh 가 채운다.
   설정 파일은 scripts/mac/cloudflared-config.template.yml 을 채워 둔 것이다.
 -->
