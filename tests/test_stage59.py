@@ -278,7 +278,9 @@ def test59_c01_목업_예시_규칙과_0장_예외가_기준_문서에_있다():
     글 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     영 = 글[글.index("## 0. 목적과 판단 기준"):글.index("## 1. 확정된 결정사항")]
     assert "scripts/테스트시드삭제.py" in 영 and "d18a0c1" in 영
-    육구 = 글[글.index("### 6-9. 첫 세팅"):글.index("### 6-10.")]
+    # 6장 본문은 2026-10-07 에 부록으로 옮겼다 — 절 머리는 같다
+    육 = (ROOT / "docs" / "CLAUDE-부록" / "6-업무-라이브러리와-회차-세팅.md").read_text(encoding="utf-8")
+    육구 = 육[육.index("### 6-9. 첫 세팅"):육.index("### 6-10.")]
     assert re.search(r"목업.*시드", 육구)
 
 
