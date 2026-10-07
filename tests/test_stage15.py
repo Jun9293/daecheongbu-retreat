@@ -141,6 +141,36 @@ def test15_n05_아무것도_안_보면_실패한다(tmp_path, monkeypatch):
     assert named.main() == 2
 
 
+def test15_n07_부록_문서가_이름한_것도_모인다(tmp_path, monkeypatch):
+    """본문을 옮긴 문서를 안 보면 **옮긴 장의 이름이 검사 밖**이 된다 (2026-10-07).
+
+    셋을 한 번에 잰다 — 부록 폴더가 없어도 돈다 · 있으면 그 이름이 모인다 ·
+    그 이름이 저장소에 없으면 **걸린다**(모으기만 하고 안 보면 뜻이 없다).
+    """
+    named = _load("check_named")
+    본문 = tmp_path / "CLAUDE.md"
+    본문.write_text("본문은 `app/domain/tasks.py` 를 이름한다.\n", encoding="utf-8")
+    monkeypatch.setattr(named, "문서", 본문)
+    monkeypatch.setattr("sys.argv", ["check_named.py"])
+    assert named.문서들() == [본문]                    # 폴더가 없어도 오류가 없다
+    assert named.main() == 0
+
+    부록 = tmp_path / "docs" / "CLAUDE-부록"
+    부록.mkdir(parents=True)
+    (부록 / "14-구현-현황.md").write_text(
+        "옮긴 장은 `create_run` 을 이름한다.\n", encoding="utf-8")
+    이름 = named.이름들()
+    assert 이름.get("create_run") == "식별자" and 이름.get("app/domain/tasks.py") == "경로"
+    assert named.main() == 0
+
+    # 없는 이름은 **이어 붙여** 만든다 — 글자로 적으면 이 파일도 코드라
+    # 검사가 여기서 그 이름을 찾아 「있다」 고 한다
+    없는이름 = "어디에도_없는" + "_함수_x9"
+    (부록 / "14-구현-현황.md").write_text(
+        f"옮긴 장은 `{없는이름}` 을 이름한다.\n", encoding="utf-8")
+    assert named.main() == 1, "부록에만 남은 이름을 못 잡았다"
+
+
 # ════════════════════════════════════════════════════════════════════
 # 2·3. 4-0 이 정본 · 상태 메뉴 마무리
 # ════════════════════════════════════════════════════════════════════

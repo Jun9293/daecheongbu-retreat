@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """**CLAUDE.md 가 이름한 것이 저장소에 실제로 있는가** (11-3 3단계의 둘째 축).
 
+**CLAUDE.md 만이 아니라 `docs/CLAUDE-부록/` 아래 문서도 함께 읽는다**
+(2026-10-07) — 장의 본문을 그리로 옮겼고, 거기 적힌 이름도 같은 문서의 것이다.
+
 ## 왜 둘째 축인가
 
 옛말 검사(`check_stale`)는 **사람이 목록에 적어 둔 것만** 찾습니다. 그래서
@@ -58,6 +61,22 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 문서 = ROOT / "CLAUDE.md"
 넘김목록 = ROOT / "docs" / "이름-넘김.txt"
+# **본문을 옮겨 둔 문서도 함께 본다** (2026-10-07) — CLAUDE.md 가 한도를 넘어
+# 장의 본문을 이 폴더로 옮겼다. 여기를 안 보면 옮긴 장이 이름한 것은 이
+# 검사 밖이 되고, 본 이름 수만 조용히 준다
+부록폴더 = pathlib.PurePath("docs") / "CLAUDE-부록"
+
+
+def 문서들() -> list[pathlib.Path]:
+    """CLAUDE.md 와 그 옆 부록 폴더의 문서 전부.
+
+    **부록 폴더는 `문서` 옆에서 찾는다** — 고정 경로로 두면 `문서` 를 다른
+    곳으로 돌려 재는 시험이 진짜 부록을 함께 읽는다. 폴더가 없으면
+    CLAUDE.md 하나다(없는 것이 오류가 아니다).
+    **이름을 세어 두지 않는다** (10장) — 문서가 하나 늘어도 여기는 그대로다.
+    """
+    폴더 = 문서.parent / 부록폴더
+    return [문서] + (sorted(폴더.glob("*.md")) if 폴더.is_dir() else [])
 
 글파일 = {".py", ".js", ".css", ".html", ".txt", ".bat", ".json", ".md",
         ".yml", ".yaml", ".ini", ".cfg", ".toml"}
@@ -91,7 +110,7 @@ def 이름들() -> dict[str, str]:
     바꾸는 이름을 못 본다.** 대신 `지연`·`대기` 같은 강조는 **코드에
     있으면 통과**하므로 실제로 걸리는 것만 넘김에 적으면 된다.
     """
-    글 = 문서.read_text(encoding="utf-8")
+    글 = "\n".join(p.read_text(encoding="utf-8") for p in 문서들())
     # 8장 데이터 모델 코드블록 (``` 로 감싼 것) 은 표기법이 다르다
     글 = re.sub(r"```[\s\S]*?```", "", 글)
     나온것: dict[str, str] = {}
