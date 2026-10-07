@@ -293,6 +293,24 @@ def test_11j2_보관_줄은_지키는_판과_성한_판_한도를_갈라_적는�
     assert "지키는 판 0" in 줄[0] and "그 밖 4" in 줄[0] and "성한 판은 최대 30개" in 줄[0], 줄[0]
 
 
+def test_11j3_지키는_판이_있으면_그_수를_빼고_그_밖을_적는다(tmp_path):
+    # 운영 로그의 모양 그대로 — 지키는 판 때문에 보관 수가 한도 30 을 넘는 자리다.
+    # 옛 판 30 + 지키는 판 2 + 이번 1 → 성한 판 31 이라 하나를 지우고 32 = 2 + 30 이 남는다.
+    # **임시 폴더에** 지키는 판과 같은 이름의 판을 세운다 — 실제 data/ 는 안 쓴다
+    이름 = _운영과옛판(tmp_path, 30)
+    지킴 = sorted(backup.지키는판)[:2]
+    for s in 지킴:
+        _성한판(tmp_path / "bk", s)
+    출력 = _실행(tmp_path)
+    줄 = [l for l in 출력.splitlines() if "보관 중" in l]
+    assert len(줄) == 1, 출력
+    assert "보관 중 32개" in 줄[0] and "지키는 판 2" in 줄[0] and "그 밖 30" in 줄[0], 줄[0]
+    assert "성한 판은 최대 30개" in 줄[0], 줄[0]
+    for s in 지킴:                                           # 지키는 판은 안 지워졌다
+        assert (tmp_path / "bk" / f"app-{s}.db").exists()
+    assert not (tmp_path / "bk" / f"app-{이름[0]}.db").exists()   # 지운 것은 가장 오래된 성한 판
+
+
 def test_11k_많이_지우면_앞_10개_이름과_나머지_수만_적는다():
     이름 = [f"202608{d:02d}-030000" for d in range(1, 16)]
     줄 = backup.정리줄({"before": 45, "protected": 0, "removed_stamps": 15, "removed": 60,
