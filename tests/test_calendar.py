@@ -1787,7 +1787,8 @@ def test_w_19_data_이름_규약이_적혔다():
 
 
 def test_w_21_14장에_tooltip_of_가_있다():
-    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # 14장 본문은 2026-10-07 에 부록으로 옮겼다 — 그 문서는 14장뿐이다
+    text = (ROOT / "docs" / "CLAUDE-부록" / "14-구현-현황.md").read_text(encoding="utf-8")
     at = text.index("## 14. 구현 현황")
     section = text[at:]
     assert "tooltip_of" in section, "툴팁을 만드는 곳이 표에 없다"
