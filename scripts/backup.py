@@ -794,4 +794,7 @@ if __name__ == "__main__":
     # 이번 회차가 몇 MB 인지 찍는다 — 안 찍으면 어느 날 갑자기 디스크가 차 있다
     print(f"  이번 백업 {mb(result['size'])} · 전체 {mb(result['total'])}"
           f" (기준 {mb(MAX_TOTAL_BYTES)})")
-    print(f"  현재 {result['kept']}개 보관 중 (최대 {KEEP}개)")
+    # 지키는 판을 갈라 적는다 — 한 수로 적으면 한도(KEEP)를 넘은 것처럼 읽힌다. 「그 밖」 에는
+    # 의심 판도 들 수 있어 「성한 판 N」 이라고 단정하지 않는다
+    print(f"  보관 중 {result['kept']}개 (지키는 판 {result['protected']}"
+          f" + 그 밖 {result['kept'] - result['protected']} · 성한 판은 최대 {KEEP}개)")
