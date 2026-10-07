@@ -17,6 +17,7 @@ from app import models
 from app.domain import suggest as suggest_mod
 from tests.conftest import app_session, login_as, make_user
 from tests.test_stage12 import _세팅, _회의와_항목, _run_of
+from tests import 기준문서
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TODAY = dt.date.today()
@@ -417,6 +418,8 @@ def test13_c01_만들기와_파싱_자리를_세어_두지_않는다():
         ("domain/tasks.py", (ROOT / "app" / "domain" / "tasks.py").read_text(encoding="utf-8")),
         ("domain/suggest.py", (ROOT / "app" / "domain" / "suggest.py").read_text(encoding="utf-8")),
         ("CLAUDE.md", (ROOT / "CLAUDE.md").read_text(encoding="utf-8")),
+        # 본문을 옮긴 장도 본다 (2026-10-07 · tests/기준문서.py)
+        *[(f"CLAUDE-부록/{p.name}", p.read_text(encoding="utf-8")) for p in 기준문서.부록들()],
     ]:
         for 번호, 줄 in enumerate(글.split("\n"), 1):
             if any(w in 줄 for w in 센말) and any(t in 줄 for t in 주제):

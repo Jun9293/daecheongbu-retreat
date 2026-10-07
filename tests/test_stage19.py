@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import re
+from tests import 기준문서
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 점검 = ROOT / "docs" / "checks" / "drawer.js"
@@ -268,7 +269,8 @@ def test19_n01_탭_수를_글로_박지_않는다():
                    (ROOT / "app" / "templates" / "partials" / "drawer.html")
                    .read_text(encoding="utf-8"))
     assert len(set(탭)) >= 6, f"탭이 줄었다 — 4-9 를 함께 보라: {sorted(set(탭))}"
-    for p in (ROOT / "CLAUDE.md", 점검):
+    # 본문을 옮긴 장도 본다 (2026-10-07 · tests/기준문서.py)
+    for p in (*기준문서.문서들(), 점검):
         글 = p.read_text(encoding="utf-8")
         assert "탭 다섯" not in 글 and "다섯이 넘쳐" not in 글, \
             f"{p.name} 이 탭 수를 글로 박고 있다"

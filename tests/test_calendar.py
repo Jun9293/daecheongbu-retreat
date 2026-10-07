@@ -1376,7 +1376,10 @@ def test_s_08_문서가_터널_한계를_크기로_적는다():
         assert "413" in text, f"{path} 에 413 이 없다"
 
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "60MB 언저리가" not in claude and "60MB 언저리**가" not in claude, \
+    # 「없어야 한다」 는 부록까지 본다 (2026-10-07 · tests/기준문서.py)
+    from tests import 기준문서
+    전체 = 기준문서.전체()
+    assert "60MB 언저리가" not in 전체 and "60MB 언저리**가" not in 전체, \
         "낡은 근거가 아직 결론처럼 적혀 있다"
     assert "내려받기에는 이 제한이 없습니다" in claude
 
@@ -1664,7 +1667,9 @@ def test_w_07_4_0_의_뜻있는_색이_셋이_됐다():
     """규칙을 깼으면 **규칙 쪽을 고친다.** 안 고치면 문서가 거짓이 되고,
     다음 사람은 "둘뿐" 을 읽고 이 색을 지운다."""
     text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "뜻이 있는 색은 이 둘뿐" not in text, "아직 둘뿐이라고 한다"
+    # 「없어야 한다」 는 부록까지 본다 (2026-10-07 · tests/기준문서.py)
+    from tests import 기준문서
+    assert "뜻이 있는 색은 이 둘뿐" not in 기준문서.전체(), "아직 둘뿐이라고 한다"
     assert "뜻이 있는 색은 이 셋뿐" in text
     at = text.index("### 4-0.")
     section = text[at : text.index("### 4-1.", at)]
