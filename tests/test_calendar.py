@@ -1738,9 +1738,10 @@ def test_w_12_12장이_4_13_과_같은_말을_한다():
     """**"매번 먼저 읽어야 하는 유일한 기준 문서" 가 자기 자신과 어긋났다.**
     4-13 을 "그 자리에서 열린다" 로 고치고 12장을 안 고쳤다 — `__unused` 의
     이유가 낡는 것과 정확히 같은 모양이다."""
-    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # 12장 본문은 2026-10-07 에 부록으로 옮겼다 — 그 문서는 12장뿐이라 끝까지가 12장이다
+    text = (ROOT / "docs" / "CLAUDE-부록" / "12-로드맵.md").read_text(encoding="utf-8")
     at = text.index("## 12. 로드맵")
-    로드맵 = text[at : text.index("## 13.", at)]
+    로드맵 = text[at:]
     assert "/board?task=" not in 로드맵, "12장이 아직 보드로 넘긴다고 한다"
     assert "그 자리에서" in 로드맵, "지금 동작이 안 적혀 있다"
 

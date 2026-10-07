@@ -203,14 +203,16 @@ def test16_u01_되살리기가_안_뜨는_이유가_적혀_있다():
         글 = (ROOT / f).read_text(encoding="utf-8")
         자리 = 글[글.index("made_excluded") - 900: 글.index("made_excluded") + 900]
         assert "빼는 길이 아직 없다" in 자리 or "빼는 길이" in 자리, f"{f} 에 이유가 없다"
-    문서 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # 12장 본문은 2026-10-07 에 부록으로 옮겼다
+    문서 = (ROOT / "docs" / "CLAUDE-부록" / "12-로드맵.md").read_text(encoding="utf-8")
     assert "그 단추는 지금 코드로는 안 뜹니다" in 문서
 
 
 def test16_u02_빼기를_만들_때_볼_것이_12장에_있다():
     """봐둘것이 아니라 **만들 때 읽는 자리**에 둔다 — 되살리기는
     `relink_prerequisites` 를 안 부른다."""
-    문서 = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    # 12장 본문은 2026-10-07 에 부록으로 옮겼다
+    문서 = (ROOT / "docs" / "CLAUDE-부록" / "12-로드맵.md").read_text(encoding="utf-8")
     자리 = 문서[문서.index("「이번 회차에서 빼기」 를 만들 때 함께 볼 것"):][:700]
     assert "relink_prerequisites" in 자리
     assert "조용히 진행" in 자리
